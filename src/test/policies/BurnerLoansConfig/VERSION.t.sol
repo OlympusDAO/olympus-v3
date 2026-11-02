@@ -1,16 +1,18 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
-import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
+// Scenario-specific constants and deliberate narrowing are exact test boundaries.
+// forge-lint: disable-start(literal-instead-of-constant, unsafe-typecast)
 
-contract BurnerLoansConfigVersionTest is BurnerLoansTest {
-    // VERSION
-    // given config deployed
-    //  when VERSION is called
-    //   then it returns initial version
-    function test_givenConfigDeployed_VERSION_returnsInitialVersion() public view {
-        (uint8 major, uint8 minor) = burnerLoansConfig.VERSION();
-        assertEq(major, 1, "major");
-        assertEq(minor, 0, "minor");
+import {BurnerLoansConfigTest} from "./BurnerLoansConfigTest.sol";
+
+contract BurnerLoansConfigVERSIONTest is BurnerLoansConfigTest {
+    // Scenarios: BLCFG-VERSION-P01.
+    function test_whenVersionRead(address caller_, bool active_, bool enabled_) public {
+        _setPolicyState(_config, active_, enabled_);
+        vm.prank(caller_);
+        (uint8 major, uint8 minor) = _config.VERSION();
+        assertEq(major, 1, "Major version");
+        assertEq(minor, 0, "Minor version");
     }
 }

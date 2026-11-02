@@ -1,212 +1,249 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
-import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
 // Contracts
-import {Actions, Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
-import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
-import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
-import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
-import {MockBurnerLoansPolicy} from "src/test/policies/BurnerLoansConfig/fixtures/MockBurnerLoansPolicy.sol";
-
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
-
-// Scenario-specific contracts and fixtures have no cross-file consumers.
-// forge-lint: disable-start(multi-contract-file)
+import {Kernel} from "src/Kernel.sol";
+import {BurnerLoansConfigTimelock} from "src/policies/burnerloans/BurnerLoansConfigTimelock.sol";
 
 contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTest {
-    // constructor
-    // given BurnerLoans address is zero
-    //  when BurnerLoansConfigTimelock is deployed
-    //   then it reverts
-    function test_constructor_givenBurnerLoansIsZero_reverts() public {
-        vm.expectRevert(IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ZeroAddress.selector);
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(0)));
-    }
-
-    // constructor
-    // given BurnerLoans address does not implement ERC165
-    //  when BurnerLoansConfigTimelock is deployed
-    //   then it reverts
-    function test_constructor_givenBurnerLoansDoesNotImplementErc165_reverts() public {
+    // Scenarios: BLCT-CONSTRUCTOR-D01.
+    function test_givenMissingIBurnerLoansConfig_whenConstructed_reverts(address deployer_) public {
+        vm.mockCall(
+            address(_config),
+            abi.encodeWithSignature(
+                "supportsInterface(bytes4)",
+                type(IBurnerLoansConfig).interfaceId
+            ),
+            abi.encode(false)
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidBurnerLoans.selector,
-                address(usds)
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
             )
         );
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(usds)));
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
     }
 
-    // constructor
-    // given BurnerLoans address implements ERC165 but not IBurnerLoans
-    //  when BurnerLoansConfigTimelock is deployed
-    //   then it reverts
-    function test_constructor_givenBurnerLoansDoesNotSupportInterface_reverts() public {
-        MockInvalidBurnerLoans invalidBurnerLoans = new MockInvalidBurnerLoans();
-
+    // Scenarios: BLCT-CONSTRUCTOR-D02.
+    function test_givenMissingIEnabler_whenConstructed_reverts(address deployer_) public {
+        vm.mockCall(
+            address(_config),
+            abi.encodeWithSignature("supportsInterface(bytes4)", type(IEnabler).interfaceId),
+            abi.encode(false)
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidBurnerLoans.selector,
-                address(invalidBurnerLoans)
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
             )
         );
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(invalidBurnerLoans)));
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
     }
 
-    // constructor
-    // given BurnerLoansConfig does not support IEnabler
-    //  when BurnerLoansConfigTimelock is deployed
-    //   then it reverts
-    function test_constructor_givenBurnerLoansConfigDoesNotSupportEnabler_reverts() public {
-        MockNonEnablerBurnerLoansConfig invalidConfig = new MockNonEnablerBurnerLoansConfig(kernel);
-
+    // Scenarios: BLCT-CONSTRUCTOR-I03.
+    function test_givenMissingIConfigOperator_whenConstructed_reverts(address deployer_) public {
+        vm.mockCall(
+            address(_config),
+            abi.encodeWithSignature("supportsInterface(bytes4)", type(IConfigOperator).interfaceId),
+            abi.encode(false)
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidBurnerLoans.selector,
-                address(invalidConfig)
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
             )
         );
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(invalidConfig)));
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
     }
 
-    // constructor
-    // given BurnerLoansConfig does not support IConfigOperator
-    //  when BurnerLoansConfigTimelock is deployed
-    //   then it reverts
-    function test_constructor_givenBurnerLoansConfigDoesNotSupportConfigOperator_reverts() public {
-        MockNonConfigOperatorBurnerLoansConfig invalidConfig = new MockNonConfigOperatorBurnerLoansConfig(
-                kernel
-            );
-
+    // Scenarios: BLCT-CONSTRUCTOR-I01.
+    function test_givenZeroConfig_whenConstructed_reverts(address deployer_) public {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidBurnerLoans.selector,
-                address(invalidConfig)
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(0)
             )
         );
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(invalidConfig)));
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, IBurnerLoansConfig(address(0)));
     }
 
-    // constructor
-    // given BurnerLoansConfig belongs to a different Kernel
-    //  when BurnerLoansConfigTimelock is deployed
-    //   then it reverts
-    function test_constructor_givenBurnerLoansConfigHasDifferentKernel_reverts() public {
-        Kernel otherKernel = new Kernel();
-        MockBurnerLoansPolicy foreignFacility = new MockBurnerLoansPolicy(
-            otherKernel,
-            address(ohm)
-        );
-        otherKernel.executeAction(Actions.ActivatePolicy, address(foreignFacility));
-        BurnerLoansConfig foreignConfig = new BurnerLoansConfig(otherKernel, IERC20(address(ohm)));
-
+    // Scenarios: BLCT-CONSTRUCTOR-I02.
+    function test_givenEoaConfig_whenConstructed_reverts(
+        address deployer_,
+        address candidate_
+    ) public {
+        vm.assume(candidate_.code.length == 0 && candidate_ != address(0));
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_KernelMismatch.selector,
-                address(otherKernel)
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                candidate_
             )
         );
-        new BurnerLoansConfigTimelock(kernel, foreignConfig);
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, IBurnerLoansConfig(candidate_));
     }
 
-    // constructor
-    // given BurnerLoansConfig is inactive on the same Kernel
-    //  when BurnerLoansConfigTimelock is deployed
-    //   then it binds the deployment-time Config
-    function test_constructor_givenBurnerLoansConfigIsInactive_bindsConfig() public {
-        BurnerLoansConfig inactiveConfig = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
-
-        BurnerLoansConfigTimelock timelock = new BurnerLoansConfigTimelock(kernel, inactiveConfig);
-
-        assertEq(address(timelock.burnerLoans()), address(inactiveConfig), "config");
-    }
-
-    // constructor
-    // given constructor parameters are valid
-    //  when the deployed timelock is inspected
-    //   then immutable dependencies and defaults are set
-    function test_constructor_givenValidParams_setsImmutableDependencies() public view {
-        assertEq(address(configTimelock.burnerLoans()), address(burnerLoansConfig), "config");
-        assertEq(configTimelock.MIN_TIMELOCK_DELAY(), 1 days, "minimum delay");
-        assertEq(configTimelock.MAX_TIMELOCK_DELAY(), 30 days, "maximum delay");
-        assertEq(configTimelock.EXECUTION_WINDOW(), 3 days, "execution window");
-        assertEq(
-            configTimelock.gracePeriod(),
-            BurnerLoansConstants.REENABLE_GRACE_PERIOD,
-            "grace period"
+    // Scenarios: BLCT-CONSTRUCTOR-I04.
+    function test_givenInterfaceProbeReverts_whenConstructed_reverts(address deployer_) public {
+        vm.mockCallRevert(
+            address(_config),
+            abi.encodeWithSignature("supportsInterface(bytes4)"),
+            hex"deadbeef"
         );
-        assertEq(configTimelock.timelockDelay(), configTimelock.MIN_TIMELOCK_DELAY(), "delay");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
+            )
+        );
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, IBurnerLoansConfig(address(_config)));
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-I05.
+    function test_givenMalformedInterfaceProbe_whenConstructed_reverts(address deployer_) public {
+        vm.mockCall(
+            address(_config),
+            abi.encodeWithSignature("supportsInterface(bytes4)"),
+            hex"01"
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
+            )
+        );
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, IBurnerLoansConfig(address(_config)));
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D03.
+    function test_givenForeignConfigKernel_whenConstructed_reverts(address deployer_) public {
+        Kernel other = new Kernel();
+        vm.mockCall(
+            address(_config),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(address(other))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_config),
+                address(_kernel),
+                address(other)
+            )
+        );
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P01.
+    function test_givenKernelGetterReverts_whenConstructed_reverts(address deployer_) public {
+        vm.mockCallRevert(address(_config), abi.encodeWithSignature("kernel()"), hex"deadbeef");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_config)
+            )
+        );
+        vm.prank(deployer_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P02.
+    function test_givenConfigActiveTrue_givenConfigEnabledTrue_whenConstructed_thenDisabledDefaults(
+        address deployer_
+    ) public {
+        _setState(_config, true, true);
+        vm.prank(deployer_);
+        BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
+        assertEq(address(fresh.kernel()), address(_kernel), "Immutable Kernel");
+        assertEq(address(fresh.burnerLoans()), address(_config), "Immutable Config");
+        assertFalse(fresh.isEnabled(), "Starts disabled");
+        assertEq(fresh.lastTransitionAt(), 0, "Never enabled");
+        assertEq(fresh.gracePeriod(), 7 days, "Default grace");
+        assertEq(fresh.timelockDelay(), 1 days, "Default delay");
+        assertEq(fresh.EXECUTION_WINDOW(), 3 days, "Window");
+        assertEq(fresh.nextActionId(), 1, "First ID");
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P03.
+    function test_givenConfigActiveTrue_givenConfigEnabledFalse_whenConstructed_thenDisabledDefaults(
+        address deployer_
+    ) public {
+        _setState(_config, true, false);
+        vm.prank(deployer_);
+        BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
+        assertEq(address(fresh.kernel()), address(_kernel), "Immutable Kernel");
+        assertEq(address(fresh.burnerLoans()), address(_config), "Immutable Config");
+        assertFalse(fresh.isEnabled(), "Starts disabled");
+        assertEq(fresh.lastTransitionAt(), 0, "Never enabled");
+        assertEq(fresh.gracePeriod(), 7 days, "Default grace");
+        assertEq(fresh.timelockDelay(), 1 days, "Default delay");
+        assertEq(fresh.EXECUTION_WINDOW(), 3 days, "Window");
+        assertEq(fresh.nextActionId(), 1, "First ID");
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P04.
+    function test_givenConfigActiveFalse_givenConfigEnabledTrue_whenConstructed_thenDisabledDefaults(
+        address deployer_
+    ) public {
+        _setState(_config, false, true);
+        vm.prank(deployer_);
+        BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
+        assertEq(address(fresh.kernel()), address(_kernel), "Immutable Kernel");
+        assertEq(address(fresh.burnerLoans()), address(_config), "Immutable Config");
+        assertFalse(fresh.isEnabled(), "Starts disabled");
+        assertEq(fresh.lastTransitionAt(), 0, "Never enabled");
+        assertEq(fresh.gracePeriod(), 7 days, "Default grace");
+        assertEq(fresh.timelockDelay(), 1 days, "Default delay");
+        assertEq(fresh.EXECUTION_WINDOW(), 3 days, "Window");
+        assertEq(fresh.nextActionId(), 1, "First ID");
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P05.
+    function test_givenConfigActiveFalse_givenConfigEnabledFalse_whenConstructed_thenDisabledDefaults(
+        address deployer_
+    ) public {
+        _setState(_config, false, false);
+        vm.prank(deployer_);
+        BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
+        assertEq(address(fresh.kernel()), address(_kernel), "Immutable Kernel");
+        assertEq(address(fresh.burnerLoans()), address(_config), "Immutable Config");
+        assertFalse(fresh.isEnabled(), "Starts disabled");
+        assertEq(fresh.lastTransitionAt(), 0, "Never enabled");
+        assertEq(fresh.gracePeriod(), 7 days, "Default grace");
+        assertEq(fresh.timelockDelay(), 1 days, "Default delay");
+        assertEq(fresh.EXECUTION_WINDOW(), 3 days, "Window");
+        assertEq(fresh.nextActionId(), 1, "First ID");
     }
 }
-
-contract MockInvalidBurnerLoans is IERC165 {
-    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
-        return interfaceId_ == type(IERC165).interfaceId;
-    }
-}
-
-contract MockNonEnablerBurnerLoansConfig is Policy, IERC165 {
-    constructor(Kernel kernel_) Policy(kernel_) {}
-
-    function configureDependencies()
-        external
-        pure
-        override
-        returns (Keycode[] memory dependencies)
-    {
-        dependencies = new Keycode[](0);
-    }
-
-    function requestPermissions()
-        external
-        pure
-        override
-        returns (Permissions[] memory permissions)
-    {
-        permissions = new Permissions[](0);
-    }
-
-    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
-        return
-            interfaceId_ == type(IERC165).interfaceId ||
-            interfaceId_ == type(IBurnerLoansConfig).interfaceId;
-    }
-}
-
-contract MockNonConfigOperatorBurnerLoansConfig is Policy, IERC165 {
-    constructor(Kernel kernel_) Policy(kernel_) {}
-
-    function configureDependencies()
-        external
-        pure
-        override
-        returns (Keycode[] memory dependencies)
-    {
-        dependencies = new Keycode[](0);
-    }
-
-    function requestPermissions()
-        external
-        pure
-        override
-        returns (Permissions[] memory permissions)
-    {
-        permissions = new Permissions[](0);
-    }
-
-    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
-        return
-            interfaceId_ == type(IERC165).interfaceId ||
-            interfaceId_ == type(IBurnerLoansConfig).interfaceId ||
-            interfaceId_ == type(IEnabler).interfaceId;
-    }
-}
-
-// forge-lint: disable-end(multi-contract-file)

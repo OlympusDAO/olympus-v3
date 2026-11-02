@@ -1,721 +1,432 @@
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
-import {IBurnerLoansRescue} from "src/policies/interfaces/IBurnerLoansRescue.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Contracts
+import {BurnerLoansConfigTest} from "./BurnerLoansConfigTest.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {Actions} from "src/Kernel.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
 import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
-import {ReentrantPayoutToken} from "src/test/mocks/ReentrantPayoutToken.sol";
-import {BurnerLoansConfigRescueTestBase} from "src/test/policies/BurnerLoansConfig/fixtures/BurnerLoansConfigRescueTest.sol";
 
-// Only caller/lifecycle/forwarding vary here; BL owns quantity and bucket-range fuzzing.
-// forge-lint: disable-start(calls-loop,literal-instead-of-constant,unused-return)
-contract BurnerLoansConfigRescueTest is BurnerLoansConfigRescueTestBase {
-    error ForwardingMustNotRun();
+// Scenario-specific constants and deliberate narrowing are exact test boundaries.
+// forge-lint: disable-start(literal-instead-of-constant, unsafe-typecast)
 
-    /// @notice The four independent lifecycle dimensions remain visible instead of being encoded in a mask.
-    // Scenarios: L-01.
-    function test_givenConfigAndFacilityEnabled_whenAdminForwardsRescue() public {
-        _setRescueLifecycle(false, false, false, false);
+contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
+    // Scenarios: BLCRE-A01, BLCRE-I01, BLCRE-N02.
+    function test_givenAuthorizedCaller_whenCoreRescued(
+        address caller_,
+        bool admin_,
+        bool operator_,
+        uint256 amount_
+    ) public {
+        _grantConfigCaller(caller_, admin_, operator_);
+        amount_ = bound(amount_, 1, type(uint256).max);
+        MockERC20 token = new MockERC20("Rescue", "R", 6);
+        token.mint(address(_core), amount_);
+        uint256 payoutBalance = _asset.balanceOf(address(_payout));
+        vm.prank(caller_);
         assertEq(
-            burnerLoans.previewRescue(address(_asset), _destination),
-            _FORWARDING_SURPLUS,
-            "facility preview ignores forwarding lifecycle"
+            _config.previewRescue(address(token), _recipient),
+            amount_,
+            "Preview uses Config's selected Core authority"
         );
+        vm.expectEmit(address(_core));
+        emit IBurnerLoansCore.AssetRescued(address(token), _recipient, amount_);
+        vm.prank(caller_);
+        _config.rescue(address(token), _recipient);
+        assertEq(token.balanceOf(address(_core)), 0, "Entire direct Core balance rescued");
+        assertEq(token.balanceOf(_recipient), amount_, "Recipient paid exact balance");
+        assertEq(_asset.balanceOf(address(_payout)), payoutBalance, "Payout balances untouched");
+    }
 
-        _assertSurplusPayment(_asset, _destination, _FORWARDING_SURPLUS, admin);
+    // Scenarios: BLCRE-A02.
+    function test_whenCallerIsUnauthorized_thenPreviewSucceedsAndRescueReverts(
+        address caller_
+    ) public {
+        _excludeConfigCallers(caller_);
+        _asset.mint(address(_core), 7);
+        vm.prank(caller_);
         assertEq(
-            _asset.balanceOf(address(burnerLoansConfig)),
-            0,
-            "Config never takes token custody"
+            _config.previewRescue(address(_asset), _recipient),
+            7,
+            "Any caller can preview recovery through Config"
+        );
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
         );
     }
 
-    // Scenarios: L-09.
-    function test_givenFacilityDisabled_whenAdminForwardsRescue() public {
-        _setRescueLifecycle(false, false, true, false);
+    // Scenarios: BLCRE-L01.
+    function test_givenConfigInactiveEnabled_whenRescued_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        vm.expectRevert(_inactiveError(address(_config)));
+        vm.prank(_configurationCaller);
+        _config.previewRescue(address(_asset), _recipient);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            _inactiveError(address(_config))
+        );
+    }
+
+    // Scenarios: BLCRE-L02.
+    function test_givenConfigInactiveDisabled_whenRescued_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _config.disable("");
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        vm.expectRevert(_inactiveError(address(_config)));
+        vm.prank(_configurationCaller);
+        _config.previewRescue(address(_asset), _recipient);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            _inactiveError(address(_config))
+        );
+    }
+
+    // Scenarios: BLCRE-L03.
+    function test_givenConfigActiveDisabled_whenRescued_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _config.disable("");
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(_configurationCaller);
+        _config.previewRescue(address(_asset), _recipient);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            abi.encodeWithSelector(IEnabler.NotEnabled.selector)
+        );
+    }
+
+    // Scenarios: BLCRE-I02.
+    function test_givenCoreDisabled_whenRescued(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _core.disable("");
+        _asset.mint(address(_core), 1);
+        vm.prank(_configurationCaller);
         assertEq(
-            burnerLoans.previewRescue(address(_asset), _destination),
-            _FORWARDING_SURPLUS,
-            "facility preview ignores forwarding lifecycle"
+            _config.previewRescue(address(_asset), _recipient),
+            1,
+            "Core pause permits recovery quotes"
         );
-
-        _assertSurplusPayment(_asset, _destination, _FORWARDING_SURPLUS, admin);
-        assertEq(
-            _asset.balanceOf(address(burnerLoansConfig)),
-            0,
-            "Config never takes token custody"
-        );
+        vm.prank(_configurationCaller);
+        _config.rescue(address(_asset), _recipient);
+        assertEq(_asset.balanceOf(_recipient), 1, "Recovery available during pause");
+        assertEq(_asset.balanceOf(address(_core)), 0, "No balance retained");
     }
 
-    // Scenarios: L-06.
-    function test_givenConfigDisabled_whenAdminForwardsRescue_reverts() public {
-        for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled)
-            for (uint256 facilityInactive; facilityInactive < 2; ++facilityInactive) {
-                uint256 snapshot = vm.snapshotState();
-                _setRescueLifecycle(true, false, facilityDisabled != 0, facilityInactive != 0);
-                bytes memory failure;
-                failure = abi.encodeWithSelector(IEnabler.NotEnabled.selector);
-
-                vm.mockCallRevert(
-                    address(burnerLoans),
-                    abi.encodeCall(burnerLoans.rescue, (address(_asset), _destination)),
-                    abi.encodeWithSelector(ForwardingMustNotRun.selector)
-                );
-                _assertSurplusFailure(_asset, address(_asset), _destination, admin, failure);
-                _assertSurplusFailure(_asset, address(0), address(0), admin, failure);
-                vm.clearMockedCalls();
-
-                assertEq(
-                    _asset.balanceOf(address(burnerLoansConfig)),
-                    0,
-                    "Config never takes token custody"
-                );
-                assertTrue(vm.revertToState(snapshot), "restore independent forwarding lifecycle");
-            }
-    }
-
-    // Scenarios: L-07.
-    function test_givenConfigInactive_whenAdminForwardsRescue_reverts() public {
-        for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled)
-            for (uint256 facilityInactive; facilityInactive < 2; ++facilityInactive) {
-                uint256 snapshot = vm.snapshotState();
-                _setRescueLifecycle(false, true, facilityDisabled != 0, facilityInactive != 0);
-                bytes memory failure;
-                failure = abi.encodeWithSelector(
-                    IBurnerLoansConfig.BurnerLoansConfig_PolicyInactive.selector
-                );
-
-                vm.mockCallRevert(
-                    address(burnerLoans),
-                    abi.encodeCall(burnerLoans.rescue, (address(_asset), _destination)),
-                    abi.encodeWithSelector(ForwardingMustNotRun.selector)
-                );
-                _assertSurplusFailure(_asset, address(_asset), _destination, admin, failure);
-                _assertSurplusFailure(_asset, address(0), address(0), admin, failure);
-                vm.clearMockedCalls();
-
-                assertEq(
-                    _asset.balanceOf(address(burnerLoansConfig)),
-                    0,
-                    "Config never takes token custody"
-                );
-                assertTrue(vm.revertToState(snapshot), "restore independent forwarding lifecycle");
-            }
-    }
-
-    // Scenarios: L-08.
-    function test_givenConfigDisabledAndInactive_whenAdminForwardsRescue_reverts() public {
-        for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled)
-            for (uint256 facilityInactive; facilityInactive < 2; ++facilityInactive) {
-                uint256 snapshot = vm.snapshotState();
-                _setRescueLifecycle(true, true, facilityDisabled != 0, facilityInactive != 0);
-                bytes memory failure;
-                failure = abi.encodeWithSelector(
-                    IBurnerLoansConfig.BurnerLoansConfig_PolicyInactive.selector
-                );
-
-                vm.mockCallRevert(
-                    address(burnerLoans),
-                    abi.encodeCall(burnerLoans.rescue, (address(_asset), _destination)),
-                    abi.encodeWithSelector(ForwardingMustNotRun.selector)
-                );
-                _assertSurplusFailure(_asset, address(_asset), _destination, admin, failure);
-                _assertSurplusFailure(_asset, address(0), address(0), admin, failure);
-                vm.clearMockedCalls();
-
-                assertEq(
-                    _asset.balanceOf(address(burnerLoansConfig)),
-                    0,
-                    "Config never takes token custody"
-                );
-                assertTrue(vm.revertToState(snapshot), "restore independent forwarding lifecycle");
-            }
-    }
-
-    // Scenarios: L-04.
-    function test_givenFacilityInactive_whenAdminForwardsRescue_reverts() public {
-        for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled) {
-            uint256 snapshot = vm.snapshotState();
-            _setRescueLifecycle(false, false, facilityDisabled != 0, true);
-            vm.expectRevert(
-                abi.encodeWithSelector(IBurnerLoans.BurnerLoans_PolicyInactive.selector)
-            );
-            burnerLoans.previewRescue(address(_asset), _destination);
-            bytes memory failure;
-            failure = abi.encodeWithSelector(IBurnerLoans.BurnerLoans_PolicyInactive.selector);
-
-            _assertSurplusFailure(_asset, address(_asset), _destination, admin, failure);
-            _assertSurplusFailure(_asset, address(0), address(0), admin, failure);
-            vm.clearMockedCalls();
-
-            assertEq(
-                _asset.balanceOf(address(burnerLoansConfig)),
-                0,
-                "Config never takes token custody"
-            );
-            assertTrue(vm.revertToState(snapshot), "restore independent forwarding lifecycle");
-        }
-    }
-
-    // Scenarios: L-02.
-    function test_givenConfigAndFacilityEnabled_whenOperatorForwardsRescue() public {
-        _setRescueLifecycle(false, false, false, false);
-        assertEq(
-            burnerLoans.previewRescue(address(_asset), _destination),
-            _FORWARDING_SURPLUS,
-            "facility preview ignores forwarding lifecycle"
-        );
-
-        _assertSurplusPayment(_asset, _destination, _FORWARDING_SURPLUS, address(configTimelock));
-        assertEq(
-            _asset.balanceOf(address(burnerLoansConfig)),
-            0,
-            "Config never takes token custody"
+    // Scenarios: BLCRE-I03, BLCRE-I04.
+    function test_givenCoreInactive_whenRescued_reverts(
+        bool enabled_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, false, enabled_);
+        vm.expectRevert(_inactiveError(address(_core)));
+        vm.prank(_configurationCaller);
+        _config.previewRescue(address(_asset), _recipient);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            _inactiveError(address(_core))
         );
     }
 
-    // Scenarios: L-09.
-    function test_givenFacilityDisabled_whenOperatorForwardsRescue() public {
-        _setRescueLifecycle(false, false, true, false);
-        assertEq(
-            burnerLoans.previewRescue(address(_asset), _destination),
-            _FORWARDING_SURPLUS,
-            "facility preview ignores forwarding lifecycle"
-        );
-
-        _assertSurplusPayment(_asset, _destination, _FORWARDING_SURPLUS, address(configTimelock));
-        assertEq(
-            _asset.balanceOf(address(burnerLoansConfig)),
-            0,
-            "Config never takes token custody"
+    // Scenarios: BLCRE-I05.
+    function test_whenTokenIsZero_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        address token = address(0);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (token, _recipient)),
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidAsset.selector, token)
         );
     }
 
-    // Scenarios: L-06.
-    function test_givenConfigDisabled_whenOperatorForwardsRescue_reverts() public {
-        for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled)
-            for (uint256 facilityInactive; facilityInactive < 2; ++facilityInactive) {
-                uint256 snapshot = vm.snapshotState();
-                _setRescueLifecycle(true, false, facilityDisabled != 0, facilityInactive != 0);
-                bytes memory failure;
-                failure = abi.encodeWithSelector(IEnabler.NotEnabled.selector);
-
-                vm.mockCallRevert(
-                    address(burnerLoans),
-                    abi.encodeCall(burnerLoans.rescue, (address(_asset), _destination)),
-                    abi.encodeWithSelector(ForwardingMustNotRun.selector)
-                );
-                _assertSurplusFailure(
-                    _asset,
-                    address(_asset),
-                    _destination,
-                    address(configTimelock),
-                    failure
-                );
-                _assertSurplusFailure(
-                    _asset,
-                    address(0),
-                    address(0),
-                    address(configTimelock),
-                    failure
-                );
-                vm.clearMockedCalls();
-
-                assertEq(
-                    _asset.balanceOf(address(burnerLoansConfig)),
-                    0,
-                    "Config never takes token custody"
-                );
-                assertTrue(vm.revertToState(snapshot), "restore independent forwarding lifecycle");
-            }
-    }
-
-    // Scenarios: L-07.
-    function test_givenConfigInactive_whenOperatorForwardsRescue_reverts() public {
-        for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled)
-            for (uint256 facilityInactive; facilityInactive < 2; ++facilityInactive) {
-                uint256 snapshot = vm.snapshotState();
-                _setRescueLifecycle(false, true, facilityDisabled != 0, facilityInactive != 0);
-                bytes memory failure;
-                failure = abi.encodeWithSelector(
-                    IBurnerLoansConfig.BurnerLoansConfig_PolicyInactive.selector
-                );
-
-                vm.mockCallRevert(
-                    address(burnerLoans),
-                    abi.encodeCall(burnerLoans.rescue, (address(_asset), _destination)),
-                    abi.encodeWithSelector(ForwardingMustNotRun.selector)
-                );
-                _assertSurplusFailure(
-                    _asset,
-                    address(_asset),
-                    _destination,
-                    address(configTimelock),
-                    failure
-                );
-                _assertSurplusFailure(
-                    _asset,
-                    address(0),
-                    address(0),
-                    address(configTimelock),
-                    failure
-                );
-                vm.clearMockedCalls();
-
-                assertEq(
-                    _asset.balanceOf(address(burnerLoansConfig)),
-                    0,
-                    "Config never takes token custody"
-                );
-                assertTrue(vm.revertToState(snapshot), "restore independent forwarding lifecycle");
-            }
-    }
-
-    // Scenarios: L-08.
-    function test_givenConfigDisabledAndInactive_whenOperatorForwardsRescue_reverts() public {
-        for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled)
-            for (uint256 facilityInactive; facilityInactive < 2; ++facilityInactive) {
-                uint256 snapshot = vm.snapshotState();
-                _setRescueLifecycle(true, true, facilityDisabled != 0, facilityInactive != 0);
-                bytes memory failure;
-                failure = abi.encodeWithSelector(
-                    IBurnerLoansConfig.BurnerLoansConfig_PolicyInactive.selector
-                );
-
-                vm.mockCallRevert(
-                    address(burnerLoans),
-                    abi.encodeCall(burnerLoans.rescue, (address(_asset), _destination)),
-                    abi.encodeWithSelector(ForwardingMustNotRun.selector)
-                );
-                _assertSurplusFailure(
-                    _asset,
-                    address(_asset),
-                    _destination,
-                    address(configTimelock),
-                    failure
-                );
-                _assertSurplusFailure(
-                    _asset,
-                    address(0),
-                    address(0),
-                    address(configTimelock),
-                    failure
-                );
-                vm.clearMockedCalls();
-
-                assertEq(
-                    _asset.balanceOf(address(burnerLoansConfig)),
-                    0,
-                    "Config never takes token custody"
-                );
-                assertTrue(vm.revertToState(snapshot), "restore independent forwarding lifecycle");
-            }
-    }
-
-    // Scenarios: L-05.
-    function test_givenFacilityInactive_whenOperatorForwardsRescue_reverts() public {
-        for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled) {
-            uint256 snapshot = vm.snapshotState();
-            _setRescueLifecycle(false, false, facilityDisabled != 0, true);
-            vm.expectRevert(
-                abi.encodeWithSelector(IBurnerLoans.BurnerLoans_PolicyInactive.selector)
-            );
-            burnerLoans.previewRescue(address(_asset), _destination);
-            bytes memory failure;
-            failure = abi.encodeWithSelector(IBurnerLoans.BurnerLoans_PolicyInactive.selector);
-
-            _assertSurplusFailure(
-                _asset,
-                address(_asset),
-                _destination,
-                address(configTimelock),
-                failure
-            );
-            _assertSurplusFailure(_asset, address(0), address(0), address(configTimelock), failure);
-            vm.clearMockedCalls();
-
-            assertEq(
-                _asset.balanceOf(address(burnerLoansConfig)),
-                0,
-                "Config never takes token custody"
-            );
-            assertTrue(vm.revertToState(snapshot), "restore independent forwarding lifecycle");
-        }
-    }
-
-    function _setRescueLifecycle(
-        bool configDisabled_,
-        bool configInactive_,
-        bool facilityDisabled_,
-        bool facilityInactive_
-    ) internal {
-        vm.startPrank(admin);
-        if (configDisabled_) burnerLoansConfig.disable("");
-        if (facilityDisabled_) burnerLoans.disable("");
-        if (configInactive_)
-            kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
-        if (facilityInactive_) kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoans));
-        vm.stopPrank();
-    }
-
-    // Scenarios: L-03.
-    function test_givenLifecycleStates_whenCallerUnauthorized_reverts(address caller_) public {
-        vm.assume(caller_ != admin && caller_ != burnerLoansConfig.configOperator());
-        for (uint256 configDisabled; configDisabled < 2; ++configDisabled)
-            for (uint256 configInactive; configInactive < 2; ++configInactive)
-                for (uint256 facilityDisabled; facilityDisabled < 2; ++facilityDisabled)
-                    for (uint256 facilityInactive; facilityInactive < 2; ++facilityInactive) {
-                        uint256 snapshot = vm.snapshotState();
-                        _setRescueLifecycle(
-                            configDisabled != 0,
-                            configInactive != 0,
-                            facilityDisabled != 0,
-                            facilityInactive != 0
-                        );
-                        bytes memory failure = abi.encodeWithSelector(
-                            IBurnerLoansConfig
-                                .BurnerLoansConfig_UnauthorizedConfigOperator
-                                .selector,
-                            caller_
-                        );
-                        _assertSurplusFailure(
-                            _asset,
-                            address(_asset),
-                            _destination,
-                            caller_,
-                            failure
-                        );
-                        _assertSurplusFailure(_asset, address(0), address(0), caller_, failure);
-                        assertTrue(
-                            vm.revertToState(snapshot),
-                            "restore unauthorized forwarding state"
-                        );
-                    }
-    }
-
-    // Scenarios: L-03.
-    function test_givenUnauthorizedIdentities_whenSeeded_reverts() public {
-        address[3] memory callers = [address(0), emergency, burnerLoansAdmin];
-        for (uint256 c; c < callers.length; ++c)
-            test_givenLifecycleStates_whenCallerUnauthorized_reverts(callers[c]);
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(_destination);
-        test_givenLifecycleStates_whenCallerUnauthorized_reverts(address(configTimelock));
-    }
-
-    // Scenarios: P-01.
-    function test_givenOwedOrUnrelatedDestination_whenEachCallerForwards() public {
-        address[2] memory callers = [admin, address(configTimelock)];
-        address[2] memory destinations = [_keeper, _destination];
-        vm.expectCall(
-            address(burnerLoans),
-            abi.encodeCall(burnerLoans.rescue, (address(_asset), _keeper)),
-            2
+    // Scenarios: BLCRE-I06.
+    function test_whenTokenIsNoCode_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        address token = makeAddr("noTokenCode");
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (token, _recipient)),
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidAsset.selector, token)
         );
-        vm.expectCall(
-            address(burnerLoans),
-            abi.encodeCall(burnerLoans.rescue, (address(_asset), _destination)),
-            2
-        );
-        for (uint256 c; c < callers.length; ++c)
-            for (uint256 d; d < destinations.length; ++d) {
-                uint256 snapshot = vm.snapshotState();
-                if (destinations[d] == _keeper) _asset.mint(_keeper, _DESTINATION_BALANCE);
-                _assertSurplusPayment(_asset, destinations[d], _FORWARDING_SURPLUS, callers[c]);
-                assertEq(
-                    _asset.balanceOf(address(burnerLoansConfig)),
-                    0,
-                    "forwarder has no custody"
-                );
-                assertTrue(vm.revertToState(snapshot), "restore forwarded destination");
-            }
     }
 
-    // Scenarios: P-02, P-03.
-    function test_givenCustodyAtOrBelowReserve_whenEachCallerForwards() public {
-        address[2] memory callers = [admin, address(configTimelock)];
-        for (uint256 below; below < 2; ++below)
-            for (uint256 c; c < callers.length; ++c) {
-                uint256 snapshot = vm.snapshotState();
-                _asset.burn(address(burnerLoans), _FORWARDING_SURPLUS + below);
-                _assertSurplusPayment(_asset, _destination, 0, callers[c]);
-                assertTrue(vm.revertToState(snapshot), "restore forwarding no-op");
-            }
-    }
-
-    // Scenarios: AUTH-01.
-    function test_givenOperatorRotated_whenFormerOperatorRescues_reverts() public {
-        address newOperator = makeAddr("new surplus operator");
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(newOperator);
-        _assertSurplusFailure(
-            _asset,
-            address(_asset),
-            _destination,
-            address(configTimelock),
+    // Scenarios: BLCRE-I07.
+    function test_whenDestinationIsZero_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        address destination = address(0);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), destination)),
             abi.encodeWithSelector(
-                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
-                address(configTimelock)
+                IBurnerLoansErrors.BurnerLoans_InvalidRescueDestination.selector,
+                destination
             )
         );
     }
 
-    // Scenarios: AUTH-01.
-    function test_givenOperatorRotated_whenCurrentAuthorityRescues() public {
-        address newOperator = makeAddr("new surplus operator");
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(newOperator);
-        address[2] memory callers = [admin, newOperator];
-        for (uint256 c; c < callers.length; ++c) {
-            uint256 snapshot = vm.snapshotState();
-            _assertSurplusPayment(_asset, _destination, _FORWARDING_SURPLUS, callers[c]);
-            assertTrue(vm.revertToState(snapshot), "restore independent authorized payment");
-        }
-    }
-
-    // Scenarios: AUTH-01.
-    function test_givenOperatorRevoked_whenFormerOperatorOrZeroCallerRescues_reverts() public {
-        address newOperator = makeAddr("new surplus operator");
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(newOperator);
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(0));
-        address[2] memory callers = [newOperator, address(0)];
-        for (uint256 c; c < callers.length; ++c)
-            _assertSurplusFailure(
-                _asset,
-                address(_asset),
-                _destination,
-                callers[c],
-                abi.encodeWithSelector(
-                    IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
-                    callers[c]
-                )
-            );
-    }
-
-    // Scenarios: AUTH-01.
-    function test_givenOperatorRevoked_whenAdminRescues() public {
-        address newOperator = makeAddr("new surplus operator");
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(newOperator);
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(0));
-        _assertSurplusPayment(_asset, _destination, _FORWARDING_SURPLUS, admin);
-    }
-
-    // Scenarios: BIND-01.
-    function test_givenFacilityConfiguratorChanged_whenForwarded_reverts() public {
-        address replacement = address(_activateReplacementConfigurator());
-        vm.startPrank(admin);
-        burnerLoans.disable("");
-        burnerLoans.setConfigurator(replacement);
-        vm.stopPrank();
-        address[2] memory callers = [admin, address(configTimelock)];
-        for (uint256 c; c < callers.length; ++c)
-            _assertSurplusFailure(
-                _asset,
-                address(_asset),
-                _destination,
-                callers[c],
-                abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
-            );
-        assertEq(
-            burnerLoans.previewRescue(address(_asset), _destination),
-            _FORWARDING_SURPLUS,
-            "replacement does not change permissionless preview"
+    // Scenarios: BLCRE-I08.
+    function test_whenDestinationIsCore_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        address destination = address(_core);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), destination)),
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_InvalidRescueDestination.selector,
+                destination
+            )
         );
     }
 
-    // Scenarios: I-01.
-    function test_givenValidForwarder_whenTokenHasNoCode_reverts() public {
-        address[2] memory callers = [admin, address(configTimelock)];
-        for (uint256 c; c < callers.length; ++c)
-            for (uint256 disabledBL; disabledBL < 2; ++disabledBL) {
-                uint256 snapshot = vm.snapshotState();
-                if (disabledBL != 0) {
-                    vm.prank(admin);
-                    burnerLoans.disable("");
-                }
-                address[2] memory invalidAssets = [address(0), makeAddr("no-code surplus asset")];
-                for (uint256 a; a < invalidAssets.length; ++a) {
-                    bytes memory failure = abi.encodeWithSelector(
-                        IBurnerLoansRescue.BurnerLoans_InvalidAsset.selector,
-                        invalidAssets[a]
-                    );
-                    vm.expectRevert(failure);
-                    burnerLoans.previewRescue(invalidAssets[a], _destination);
-                    _assertSurplusFailure(
-                        _asset,
-                        invalidAssets[a],
-                        _destination,
-                        callers[c],
-                        failure
-                    );
-                }
-
-                assertTrue(vm.revertToState(snapshot), "restore forwarded input failure");
-            }
-    }
-
-    // Scenarios: I-02.
-    function test_givenValidForwarder_whenDestinationIsForbidden_reverts() public {
-        address[2] memory callers = [admin, address(configTimelock)];
-        for (uint256 c; c < callers.length; ++c)
-            for (uint256 disabledBL; disabledBL < 2; ++disabledBL) {
-                uint256 snapshot = vm.snapshotState();
-                if (disabledBL != 0) {
-                    vm.prank(admin);
-                    burnerLoans.disable("");
-                }
-
-                address[2] memory invalidDestinations = [address(0), address(burnerLoans)];
-                for (uint256 d; d < invalidDestinations.length; ++d) {
-                    bytes memory failure = abi.encodeWithSelector(
-                        IBurnerLoansRescue.BurnerLoans_InvalidRescueDestination.selector,
-                        invalidDestinations[d]
-                    );
-                    vm.expectRevert(failure);
-                    burnerLoans.previewRescue(address(_asset), invalidDestinations[d]);
-                    _assertSurplusFailure(
-                        _asset,
-                        address(_asset),
-                        invalidDestinations[d],
-                        callers[c],
-                        failure
-                    );
-                }
-
-                assertTrue(vm.revertToState(snapshot), "restore forwarded input failure");
-            }
-    }
-
-    // Scenarios: I-03.
-    function test_givenValidForwarder_whenBalanceQueryReverts_reverts() public {
-        address[2] memory callers = [admin, address(configTimelock)];
-        for (uint256 c; c < callers.length; ++c)
-            for (uint256 disabledBL; disabledBL < 2; ++disabledBL) {
-                uint256 snapshot = vm.snapshotState();
-                if (disabledBL != 0) {
-                    vm.prank(admin);
-                    burnerLoans.disable("");
-                }
-
-                _assertBalanceQueryFailure(_asset, callers[c]);
-                assertTrue(vm.revertToState(snapshot), "restore forwarded input failure");
-            }
-    }
-
-    // Scenarios: TX-01.
-    function test_givenPositiveSurplus_whenTransferFails_reverts() public {
-        _asset.setTransferBlocked(_destination, true);
-        address[2] memory callers = [admin, address(configTimelock)];
-        assertEq(
-            burnerLoans.previewRescue(address(_asset), _destination),
-            _FORWARDING_SURPLUS,
-            "preview omits transfer"
+    // Scenarios: BLCRE-I09.
+    function test_whenDestinationIsPayout_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        address destination = address(_payout);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), destination)),
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_InvalidRescueDestination.selector,
+                destination
+            )
         );
-        for (uint256 c; c < callers.length; ++c)
-            _assertSurplusFailure(
-                _asset,
-                address(_asset),
-                _destination,
-                callers[c],
-                abi.encodeWithSelector(ReentrantPayoutToken.TransferBlocked.selector, _destination)
-            );
     }
 
-    // Scenarios: CB-01.
-    function test_givenAuthorizedCallback_whenNestedForwardingFailureIsCaught() public {
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(this));
-        address[2] memory callers = [admin, address(this)];
-        for (uint256 c; c < callers.length; ++c) {
-            uint256 snapshot = vm.snapshotState();
-            _asset.setCallbackFrom(
-                address(burnerLoans),
-                address(this),
-                abi.encodeCall(this.observeAndReenterForwarder, ())
-            );
-            _asset.setBubbleCallbackFailure(false);
-
-            _assertSurplusPayment(_asset, _destination, _FORWARDING_SURPLUS, callers[c]);
-            assertEq(
-                _asset.callbackRevertData(),
-                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
-                "authorized nested forwarding reaches BL guard"
-            );
-
-            assertTrue(vm.revertToState(snapshot), "restore forwarding callback outcome");
-        }
-    }
-
-    // Scenarios: CB-01.
-    function test_givenAuthorizedCallback_whenNestedForwardingFailureIsPropagated_reverts() public {
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(this));
-        address[2] memory callers = [admin, address(this)];
-        for (uint256 c; c < callers.length; ++c) {
-            uint256 snapshot = vm.snapshotState();
-            _asset.setCallbackFrom(
-                address(burnerLoans),
-                address(this),
-                abi.encodeCall(this.observeAndReenterForwarder, ())
-            );
-            _asset.setBubbleCallbackFailure(true);
-
-            _assertSurplusFailure(
-                _asset,
-                address(_asset),
-                _destination,
-                callers[c],
-                abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
-            );
-            assertTrue(
-                _asset.callbackEnabled(),
-                "callback state rolls back with propagated failure"
-            );
-
-            assertTrue(vm.revertToState(snapshot), "restore forwarding callback outcome");
-        }
-    }
-
-    function observeAndReenterForwarder() external {
-        assertEq(msg.sender, address(_asset), "observer called by outer token");
-        assertEq(
-            burnerLoans.previewRescue(address(_asset), _destination),
-            0,
-            "observer sees consumed surplus"
+    // Scenarios: BLCRE-I10.
+    function test_whenDestinationIsToken_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        address destination = address(_asset);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), destination)),
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_InvalidRescueDestination.selector,
+                destination
+            )
         );
-        assertEq(
-            burnerLoans.totalPendingForTest(address(_asset)),
-            _PENDING_RESERVE,
-            "observer sees reserve retained"
-        );
-        burnerLoansConfig.rescue(address(_asset), _destination);
     }
 
-    // Current-state rows also retain a regression for explicit re-enable/reactivation histories.
-    // Scenarios: L-01.
-    function test_givenPoliciesRestored_whenRescueForwarded() public {
-        vm.startPrank(admin);
-        burnerLoans.disable("");
-        burnerLoans.reEnable();
-        burnerLoansConfig.disable("");
-        burnerLoansConfig.reEnable();
-        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoans));
-        kernel.executeAction(Actions.ActivatePolicy, address(burnerLoans));
-        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
-        kernel.executeAction(Actions.ActivatePolicy, address(burnerLoansConfig));
-        vm.stopPrank();
-        _assertSurplusPayment(_asset, _destination, _FORWARDING_SURPLUS, admin);
+    // Scenarios: BLCRE-I11.
+    function test_whenDestinationIsConfig_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        address destination = address(_config);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), destination)),
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_InvalidRescueDestination.selector,
+                destination
+            )
+        );
+    }
+
+    // Scenarios: BLCRE-I12.
+    function test_whenDestinationIsKernel_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        address destination = address(_kernel);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), destination)),
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_InvalidRescueDestination.selector,
+                destination
+            )
+        );
+    }
+
+    // Scenarios: BLCRE-N01.
+    function test_givenZeroCoreBalance_whenRescued(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.mockCallRevert(
+            address(_asset),
+            abi.encodeWithSelector(IERC20.transfer.selector),
+            abi.encodeWithSignature("UnexpectedTransfer()")
+        );
+        vm.recordLogs();
+        vm.prank(_configurationCaller);
+        _config.rescue(address(_asset), _recipient);
+        assertEq(vm.getRecordedLogs().length, 0, "Zero balance emits no rescue event");
+        assertEq(_asset.balanceOf(address(_core)), 0, "Zero remains zero");
+    }
+
+    // Scenarios: BLCRE-N02.
+    function test_whenMaximumBalanceRescued() public {
+        MockERC20 token = new MockERC20("Maximum", "MAX", 6);
+        token.mint(address(_core), type(uint256).max);
+        vm.prank(_configurationCaller);
+        _config.rescue(address(token), _recipient);
+        assertEq(token.balanceOf(_recipient), type(uint256).max, "Full-width amount transferred");
+        assertEq(token.balanceOf(address(_core)), 0, "Core fully drained");
+    }
+
+    // Scenarios: BLCRE-D01.
+    function test_givenTokenTransferFails_whenRescued(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        MockRevertingTransferToken token = new MockRevertingTransferToken(6);
+        token.mint(address(_core), 100);
+        token.setTransferReverts(_recipient, true);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(token), _recipient)),
+            abi.encodeWithSelector(MockRevertingTransferToken.TransferReverted.selector, _recipient)
+        );
+        assertEq(token.balanceOf(address(_core)), 100, "Core retains rejected transfer");
+        assertEq(token.balanceOf(_recipient), 0, "Recipient receives nothing");
+    }
+
+    // Scenarios: BLCRE-D02.
+    function test_givenCoreSelectsAnotherConfig_whenRescued_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _risk.setConfigOperator(_recipient);
+        _core.setConfigOperator(_recipient);
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+        );
+    }
+
+    // Scenarios: BLCRE-C01, BLCRE-D03.
+    function test_givenRescueCallback_whenNestedRecoveryCaught(
+        bool admin_,
+        bool operator_,
+        address tokenDeployer_
+    ) public {
+        ReentrantFeeToken token = _armConfigurationCallback(
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            admin_,
+            operator_,
+            tokenDeployer_
+        );
+        token.mint(address(_core), 100);
+        _config.rescue(address(token), _recipient);
+        assertFalse(token.callbackSucceeded(), "Nested recovery rejected");
+        assertEq(
+            token.callbackRevertData(),
+            abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
+            "Authorized nested call reaches guard"
+        );
+        assertEq(token.balanceOf(_recipient), 100, "Outer recovery paid once");
+        assertEq(token.balanceOf(address(_core)), 0, "Only outer recovery consumed balance");
+    }
+
+    // Scenarios: BLCRE-C02, BLCRE-D03.
+    function test_givenRescueCallback_whenNestedRecoveryPropagated(
+        bool admin_,
+        bool operator_,
+        address tokenDeployer_
+    ) public {
+        ReentrantFeeToken token = _armConfigurationCallback(
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            admin_,
+            operator_,
+            tokenDeployer_
+        );
+        token.mint(address(_core), 100);
+        token.setBubbleCallbackFailure(true);
+        _mutationReverts(
+            address(this),
+            abi.encodeCall(_config.rescue, (address(token), _recipient)),
+            abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
+        );
+        assertEq(token.balanceOf(address(_core)), 100, "Outer transfer rolled back");
+        assertEq(token.balanceOf(_recipient), 0, "No partial recovery");
+    }
+
+    // Scenarios: BLCRE-A03.
+    function test_givenConfigDeselected_whenAnyViewerQuotesRecovery(address viewer_) public {
+        _core.setConfigOperator(makeAddr("anotherConfig"));
+        _asset.mint(address(_core), 7);
+        vm.prank(viewer_);
+        assertEq(
+            _config.previewRescue(address(_asset), _recipient),
+            7,
+            "economic quote does not authenticate its forwarding Config"
+        );
+        assertEq(_asset.balanceOf(address(_core)), 7, "quote transfers nothing");
+        _mutationReverts(
+            address(this),
+            abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+        );
+    }
+
+    // Scenarios: BLCRE-L01, BLCRE-L02.
+    function test_givenInactive_whenUnauthorizedAndInvalid_reverts(
+        address caller_,
+        bool enabled_
+    ) public {
+        _excludeConfigCallers(caller_);
+        if (!enabled_) _config.disable("");
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_config)
+            )
+        );
+        vm.prank(caller_);
+        _config.rescue(address(0), address(0));
     }
 }
-// forge-lint: disable-end(calls-loop,literal-instead-of-constant,unused-return)

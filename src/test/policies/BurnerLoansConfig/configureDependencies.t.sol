@@ -1,117 +1,133 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
-import {Actions, Kernel, Keycode, Module, Policy, toKeycode} from "src/Kernel.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
+// Interfaces
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+
+// Contracts
+import {BurnerLoansConfigTest} from "./BurnerLoansConfigTest.sol";
+import {Actions, Keycode, Policy, toKeycode} from "src/Kernel.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
-import {MockConfigUnsupportedFloan} from "src/test/policies/BurnerLoansConfig/fixtures/MockConfigModules.sol";
-import {MockConfigUnsupportedRoles} from "src/test/policies/BurnerLoansConfig/fixtures/MockConfigUnsupportedRoles.sol";
-import {MockBurnerLoansPolicy} from "src/test/policies/BurnerLoansConfig/fixtures/MockBurnerLoansPolicy.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-contract BurnerLoansConfigConfigureDependenciesTest is BurnerLoansTest {
-    // configureDependencies
-    // given config activated
-    //  when configureDependencies is called
-    //   then it sets modules and preserves the immutable OHM dependency
-    function test_givenConfigActivated_configureDependencies_setsRolesModule() public view {
-        assertEq(address(burnerLoansConfig.ROLES()), address(roles), "ROLES");
-        assertEq(burnerLoansConfig.ohm(), address(ohm), "OHM");
+// Scenario-specific constants and deliberate narrowing are exact test boundaries.
+// forge-lint: disable-start(literal-instead-of-constant, unsafe-typecast)
+
+contract BurnerLoansConfigConfigureDependenciesTest is BurnerLoansConfigTest {
+    // Scenarios: BLCFG-DEPENDENCIES-P01.
+    function test_whenDependenciesConfigured(address caller_) public {
+        vm.prank(caller_);
+        Keycode[] memory keys = _config.configureDependencies();
+        assertEq(keys.length, 2, "Two direct modules");
+        assertEq(Keycode.unwrap(keys[0]), bytes5("FLOAN"), "FLOAN first");
+        assertEq(Keycode.unwrap(keys[1]), bytes5("ROLES"), "ROLES second");
+        vm.prank(caller_);
+        keys = _config.configureDependencies();
+        assertEq(keys.length, 2, "Repeated configuration supported");
     }
 
-    // configureDependencies
-    // given FLOAN is not installed
-    //  when Config is activated
-    //   then activation reverts for the missing module
-    function test_givenFloanMissing_reverts() public {
-        Kernel localKernel = new Kernel();
-        _expectMissingModuleRevert(
-            localKernel,
-            Module(address(0)),
-            new OlympusRoles(localKernel),
-            toKeycode("FLOAN")
+    // Scenarios: BLCFG-DEPENDENCIES-I01.
+    function test_givenFLOANMissing_whenDependenciesConfigured_reverts(address caller_) public {
+        vm.mockCall(
+            address(_kernel),
+            abi.encodeCall(_kernel.getModuleForKeycode, (toKeycode("FLOAN"))),
+            abi.encode(address(0))
+        );
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.configureDependencies, ()),
+            abi.encodeWithSelector(Policy.Policy_ModuleDoesNotExist.selector, bytes5("FLOAN"))
         );
     }
 
-    // configureDependencies
-    // given ROLES is not installed
-    //  when Config is activated
-    //   then activation reverts for the missing module
-    function test_givenRolesMissing_reverts() public {
-        Kernel localKernel = new Kernel();
-        _expectMissingModuleRevert(
-            localKernel,
-            new OlympusFixedTermLoan(localKernel),
-            Module(address(0)),
-            toKeycode("ROLES")
+    // Scenarios: BLCFG-DEPENDENCIES-I01.
+    function test_givenFLOANMajorUnsupported_whenDependenciesConfigured_reverts(
+        address caller_
+    ) public {
+        vm.mockCall(
+            address(_floan),
+            abi.encodeWithSignature("VERSION()"),
+            abi.encode(uint8(2), uint8(0))
+        );
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.configureDependencies, ()),
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidModuleVersion.selector)
         );
     }
 
-    // configureDependencies
-    // given FLOAN has an unsupported major version
-    //  when Config is activated
-    //   then activation reverts
-    function test_givenFloanVersionUnsupported_reverts() public {
-        Kernel localKernel = new Kernel();
-        _expectInvalidVersionRevert(
-            localKernel,
-            new MockConfigUnsupportedFloan(localKernel),
-            new OlympusRoles(localKernel)
+    // Scenarios: BLCFG-DEPENDENCIES-I01.
+    function test_givenROLESMissing_whenDependenciesConfigured_reverts(address caller_) public {
+        vm.mockCall(
+            address(_kernel),
+            abi.encodeCall(_kernel.getModuleForKeycode, (toKeycode("ROLES"))),
+            abi.encode(address(0))
+        );
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.configureDependencies, ()),
+            abi.encodeWithSelector(Policy.Policy_ModuleDoesNotExist.selector, bytes5("ROLES"))
         );
     }
 
-    // configureDependencies
-    // given ROLES has an unsupported major version
-    //  when Config is activated
-    //   then activation reverts
-    function test_givenRolesVersionUnsupported_reverts() public {
-        Kernel localKernel = new Kernel();
-        _expectInvalidVersionRevert(
-            localKernel,
-            new OlympusFixedTermLoan(localKernel),
-            new MockConfigUnsupportedRoles(localKernel)
+    // Scenarios: BLCFG-DEPENDENCIES-I01.
+    function test_givenROLESMajorUnsupported_whenDependenciesConfigured_reverts(
+        address caller_
+    ) public {
+        vm.mockCall(
+            address(_roles),
+            abi.encodeWithSignature("VERSION()"),
+            abi.encode(uint8(2), uint8(0))
+        );
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.configureDependencies, ()),
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidModuleVersion.selector)
         );
     }
 
-    function _expectMissingModuleRevert(
-        Kernel kernel_,
-        Module floan_,
-        Module roles_,
-        Keycode missing_
-    ) internal {
-        BurnerLoansConfig localConfig = _deployConfigWithModules(kernel_, floan_, roles_);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(Policy.Policy_ModuleDoesNotExist.selector, missing_)
+    // Scenarios: BLCFG-DEPENDENCIES-P01.
+    function test_givenCompatibleReplacement_whenDependenciesConfigured(address caller_) public {
+        OlympusFixedTermLoan replacement = new OlympusFixedTermLoan(_kernel);
+        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        vm.prank(caller_);
+        _config.configureDependencies();
+        assertEq(
+            address(_kernel.getModuleForKeycode(toKeycode("FLOAN"))),
+            address(replacement),
+            "Authoritative replacement module"
         );
-        kernel_.executeAction(Actions.ActivatePolicy, address(localConfig));
+        vm.expectCall(address(replacement), abi.encodeCall(replacement.getMarket, (_market)));
+        _validationReverts(
+            caller_,
+            _capValidation(1),
+            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, _market)
+        );
     }
 
-    function _expectInvalidVersionRevert(Kernel kernel_, Module floan_, Module roles_) internal {
-        BurnerLoansConfig localConfig = _deployConfigWithModules(kernel_, floan_, roles_);
-
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidModuleVersion.selector);
-        kernel_.executeAction(Actions.ActivatePolicy, address(localConfig));
-    }
-
-    function _deployConfigWithModules(
-        Kernel kernel_,
-        Module floan_,
-        Module roles_
-    ) internal returns (BurnerLoansConfig localConfig) {
-        MockBurnerLoansPolicy facility_ = new MockBurnerLoansPolicy(kernel_, address(ohm));
-        kernel_.executeAction(Actions.ActivatePolicy, address(facility_));
-
-        if (address(floan_) != address(0)) {
-            kernel_.executeAction(Actions.InstallModule, address(floan_));
-        }
-        if (address(roles_) != address(0)) {
-            kernel_.executeAction(Actions.InstallModule, address(roles_));
-        }
-
-        localConfig = new BurnerLoansConfig(kernel_, IERC20(address(ohm)));
+    // Scenarios: BLCFG-DEPENDENCIES-P01.
+    function test_givenCompatibleRolesReplacement_whenConfigured(address caller_) public {
+        OlympusRoles replacement = new OlympusRoles(_kernel);
+        vm.mockCall(
+            address(_kernel),
+            abi.encodeCall(_kernel.getModuleForKeycode, (toKeycode("ROLES"))),
+            abi.encode(address(replacement))
+        );
+        vm.mockCall(
+            address(replacement),
+            abi.encodeWithSignature("hasRole(address,bytes32)", _recipient, ADMIN_ROLE),
+            abi.encode(true)
+        );
+        vm.prank(caller_);
+        _config.configureDependencies();
+        vm.expectCall(
+            address(replacement),
+            abi.encodeWithSignature("hasRole(address,bytes32)", _recipient, ADMIN_ROLE)
+        );
+        vm.prank(_recipient);
+        _config.setConfigOperator(_recipient);
+        assertEq(_config.configOperator(), _recipient, "Authorization uses refreshed ROLES handle");
     }
 }

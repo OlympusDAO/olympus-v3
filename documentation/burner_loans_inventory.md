@@ -2,159 +2,106 @@
 
 ## Purpose
 
-`BurnerLoansInventory` is the OHM funding and aggregate-principal policy for
-[Burner Loans](./burner_loans.md). It lets protocol-owned OHM fund loans before MINTR creates new
-OHM, replenishes providers' aggregate claim from repayments, and keeps finite MINTR approval
-aligned with the global active-principal cap.
+`BurnerLoansInventory` holds OHM funding and records provider claims, supplied idle OHM, active principal and the global debt cap. Core settles each loan operation against FLOAN and Inventory in one transaction.
 
-Burner Loans Inventory is intentionally not a loan ledger. It does not read or write
-[FLOAN](./floan.md), does not select markets, and does not know Burner Loans lifecycle rules. Its
-exact, immutable facility reports atomic principal deltas in the same transaction as each FLOAN
-mutation.
+Inventory's Core and OHM identities are immutable. Its local config operator controls surplus recovery alongside ADMIN. That delegation does not grant control over the global cap or provider funds.
 
 ## Relationships
 
-```mermaid
-flowchart LR
-    PROVIDER["Addresses with provider role"] -->|"supply / withdraw own idle claim"| INV["BurnerLoansInventory"]
-    CONFIG["BurnerLoansConfig"] -->|"global debt cap"| INV
-    BL["BurnerLoans facility"] -->|"draw / settle / default"| INV
-    INV -->|"mint / burn / approval"| MINTR["MINTR"]
-    INV -->|"surplus only"| TRSRY["TRSRY"]
-    BL -->|"position mutations"| FLOAN["FLOAN"]
-```
+| Caller | Operations |
+| --- | --- |
+| Immutable Core | `draw`, `settleRepayment`, `settleDefault` |
+| Provider-role holder | `supply`, withdrawal of its available provider claim |
+| ADMIN | Global-cap changes and local config-operator rotation |
+| `burner_loans_admin` | `syncMintApproval` |
+| ADMIN or local config operator | `burnSurplus`, `rescueSurplus` |
 
-| Principal | Binding                                | Authority                                            |
-| --------- | -------------------------------------- | ---------------------------------------------------- |
-| Provider  | `burner_loans_inventory_provider` role | Supply OHM and withdraw only its own available claim |
-| Config    | `setConfigurator` while disabled       | Set the global cap                                   |
-| Facility  | Immutable constructor argument         | Draw, repayment settlement, and default accounting   |
-| TRSRY     | Current module dependency              | Receives only unaccounted OHM surplus                |
+Core's config-operator handoff does not change Inventory's recovery operator. Config does not forward global-cap changes: ADMIN calls Inventory directly.
 
-The facility must be deployed in Burner Loans Inventory's Kernel at construction and active when
-Burner Loans Inventory is enabled. `setConfigurator` requires an active same-Kernel Config policy
-that already points to the immutable facility. The configurator link can be replaced while Burner
-Loans Inventory is disabled. Burner Loans Inventory authenticates both exact addresses, not broad
-roles. Revoking a provider role suspends that address's supply and withdrawal access without
-erasing its claim; restoring the role restores access to whatever idle liquidity is then available.
+MINTR supplies mint/burn authority. Inventory checks that MINTR's OHM identity matches its own. A module upgrade with another token is incompatible.
 
 ## State
 
-| Value                        | Meaning                                                |
-| ---------------------------- | ------------------------------------------------------ |
-| `globalDebtCapOhm`           | Maximum aggregate active principal                     |
-| `activePrincipalOhm`         | Principal reported by the fixed facility               |
-| `suppliedOhm`                | All providers' aggregate outstanding claim             |
-| `providerClaimOhm(provider)` | One provider's outstanding claim                       |
-| `suppliedIdleOhm`            | Claim-backed OHM currently held and available          |
-| actual MINTR approval        | Amount MINTR may still mint for Burner Loans Inventory |
+| Quantity | Meaning |
+| --- | --- |
+| `globalDebtCapOhm` | Maximum active principal, in OHM decimals |
+| `activePrincipalOhm` | Outstanding principal settled through this Inventory |
+| `suppliedOhm` | Aggregate provider claim, including supplied OHM currently lent or defaulted |
+| `providerClaimOhm(provider)` | One provider's remaining claim |
+| `suppliedIdleOhm` | Claim-backed OHM held and available for draws or provider withdrawal |
+| Actual MINTR approval | OHM that MINTR can still mint for Inventory |
 
-The claim can exceed idle OHM while supplied funds are lent. A default reduces active principal
-but does not reduce the provider claim or create idle OHM. Repayments later restore the claim's
-idle backing before any excess is burned.
+Default reduces principal without reducing provider claims or creating idle OHM. Repayment restores idle backing for the provider claim before any excess is burned.
 
-## Capacity And Invariants
+## Capacity and invariants
 
 ```text
 remainingCapOhm = globalDebtCapOhm - activePrincipalOhm
-desiredApproval = remainingCapOhm > suppliedIdleOhm
-    ? remainingCapOhm - suppliedIdleOhm
-    : 0
-
-availableCapacity = min(
-    suppliedIdleOhm + actualApproval,
-    remainingCapOhm
-)
+desiredApproval = max(remainingCapOhm - suppliedIdleOhm, 0)
+availableCapacity = min(suppliedIdleOhm + actualApproval, remainingCapOhm)
 ```
 
-| Invariant                                                                           | Purpose                                            |
-| ----------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `activePrincipalOhm <= globalDebtCapOhm`                                            | Global cap cannot be bypassed                      |
-| `actualApproval <= desiredApproval` after sync or a normal transition               | Idle OHM and mint authority are not double-counted |
-| `suppliedIdleOhm <= suppliedOhm`                                                    | Idle provider funds do not exceed the claim        |
-| `suppliedIdleOhm <= OHM.balanceOf(BurnerLoansInventory)`                            | Accounted idle funds are physically held           |
-| Burner Loans Inventory and FLOAN active principal remain equal after facility calls | Funding and loan ledgers change atomically         |
+| Invariant | Consequence |
+| --- | --- |
+| `activePrincipalOhm <= globalDebtCapOhm` | Funding cannot exceed the global active-debt cap |
+| `actualApproval <= desiredApproval` after successful reconciliation | Idle provider funds and mint authority are not double-counted |
+| `suppliedIdleOhm <= suppliedOhm` | Accounted idle funds do not exceed provider claims |
+| `suppliedIdleOhm <= OHM.balanceOf(Inventory)` | Accounted idle funds remain backed |
+| Inventory principal equals Core's canonical FLOAN principal after settlement | Loan and funding accounting change together |
 
-`suppliedIdleOhm` may exceed the global cap because the cap limits active debt, not custody. The
-second capacity bound makes the excess unavailable for draws.
+The cap limits debt, not custody. Supplied idle OHM can exceed the cap. The capacity calculation prevents drawing that excess.
 
-## State Transitions
+A direct donation creates surplus. It does not create provider claims, supplied idle OHM or lending capacity.
 
-| Action       | Active principal | Supplied idle              | Claim | Token and approval effect                                                 |
-| ------------ | ---------------- | -------------------------- | ----- | ------------------------------------------------------------------------- |
-| Supply `x`   | —                | `+x`                       | `+x`  | Exact receipt; increase caller claim; reduce unsafe approval               |
-| Withdraw `x` | —                | `-x`                       | `-x`  | Best-effort approval restoration; transfer OHM                            |
-| Draw `x`     | `+x`             | Consume idle first         | —     | Mint shortfall to Burner Loans Inventory; transfer full `x` once          |
-| Repay `x`    | `-x`             | Refill claim deficit first | —     | Burn only the remainder; a failed burn remains ordinary surplus           |
-| Default `x`  | `-x`             | —                          | —     | Best-effort approval restoration                                          |
-| Cap change   | —                | —                          | —     | Exactly reconcile approval; revert the cap change if reconciliation fails |
+## State transitions
 
-The immutable OHM token is assumed to be a standard, non-fee-on-transfer token. Supply and repayment
-both measure Burner Loans Inventory's balance increase and reject an inexact receipt. Outgoing draws
-use `SafeTransferLib` without an additional recipient balance check. Burner Loans Inventory also
-performs an aggregate balance-sufficiency check before applying the authenticated settlement amount.
-Direct donations are not accounted as supplied OHM, do not create capacity, and may be burned
-through MINTR or transferred to `TRSRY` as surplus.
+| Action | Principal | Supplied idle | Provider claim | Other effects |
+| --- | --- | --- | --- | --- |
+| Supply `x` | Unchanged | `+x` | Caller and aggregate `+x` | Exact incoming receipt; reduce unsafe approval |
+| Withdraw `x` | Unchanged | `-x` | Caller and aggregate `-x` | Transfer OHM; attempt approval restoration |
+| Draw `x` | `+x` | Consume idle first | Unchanged | Mint the shortfall; transfer the full draw once |
+| Repay `x` | `-x` | Restore claim backing first | Unchanged | Burn the remainder; failed burn becomes surplus |
+| Default `x` | `-x` | Unchanged | Unchanged | Attempt approval restoration |
+| Change cap | Unchanged | Unchanged | Unchanged | Reconcile approval exactly or revert |
 
-## Operating States
+Supply and repayment require exact incoming OHM. Outgoing transfers use SafeERC20 and the protocol's admitted-token assumptions. A provider can withdraw only its available claim backed by supplied idle OHM.
 
-| Action                         | Globally enabled | Globally disabled |
-| ------------------------------ | ---------------- | ----------------- |
-| Supply                         | Allowed          | Blocked           |
-| Provider withdrawal            | Allowed          | Blocked           |
-| Draw                           | Allowed          | Blocked           |
-| Repayment / default            | Allowed          | Blocked           |
-| Admin approval sync            | Allowed          | Blocked           |
-| Burn or rescue surplus         | Allowed          | Blocked           |
-| Configurator global-cap change | Allowed          | Allowed           |
+## Operating states
 
-Global disable is a strict emergency pause for funding, lifecycle accounting, provider exits, and
-recovery actions. The Config-authorized global-cap setter remains available so deployment or
-governance can reconcile the cap and MINTR approval while Burner Loans Inventory is disabled.
-Burner Loans owns asset-level origination control; Burner Loans Inventory has no separate
-origination flag. Burner Loans Inventory can be enabled without a configurator for staged wiring,
-but Burner Loans and Config cannot enable until all reverse links agree.
+Inventory must be Kernel-active for its mutations. Funding, settlement, provider withdrawals, approval synchronization, surplus burning and cap changes also require local enablement.
 
-## MINTR Failure Semantics
+Surplus rescue and recovery-operator rotation permit local disablement. They still require Inventory activity and cannot interrupt Core settlement. Surplus recovery preserves supplied idle OHM.
 
-Approval reductions are safety-critical. A failure reverts the transition. Approval increases only
-restore capacity. A failure leaves less capacity than governance permits and emits
-`ApprovalRestorationFailed` with the amount and MINTR revert data. The failure does not undo a
-provider withdrawal, repayment, or default. In both cases, `burner_loans_admin` may call
-`syncMintApproval` while Burner Loans Inventory is enabled to restore capacity.
+Inventory can enable without a selected recovery operator. It does not require Core's or that operator's local enablement. Core checks its own downstream services separately.
 
-A repayment burn failure also does not undo settlement. `OhmBurnFailed` reports the failed amount,
-which remains on Burner Loans Inventory as ordinary surplus. An enabled admin can later burn all
-current surplus through MINTR or transfer it to `TRSRY`.
+## MINTR failure semantics
 
-Dependency configuration accepts only MINTR v1 bound to Burner Loans Inventory's immutable OHM
-token. An initial configuration or MINTR upgrade with a different token reverts before changing the
-prior burn allowance or mint-approval accounting.
+Approval reductions protect the cap and must succeed. Failure reverts the transition.
 
-| Recovery action    | Caller role          | Behavior                                                 |
-| ------------------ | -------------------- | -------------------------------------------------------- |
-| `syncMintApproval` | `burner_loans_admin` | Reconcile approval exactly; may restore unrecorded drift |
-| `burnSurplus`      | `admin`              | Burn all ordinary surplus through MINTR                  |
-| `rescueSurplus`    | `admin`              | Transfer all ordinary surplus to `TRSRY`                 |
+Approval increases restore available capacity. Failure emits `ApprovalRestorationFailed` and leaves less capacity than permitted. It does not undo a provider withdrawal, repayment or default. The operational administrator can retry `syncMintApproval` while Inventory is active and enabled.
 
-Synchronization cannot raise approval above the current desired amount. A manual approval change
-is not persistent configuration: ordinary withdrawals, repayments, defaults, and seizures may
-adjust approval back toward the current desired amount as principal and supplied-idle balances
-change. Emergency operators must use the global pause or a debt-cap change when the reduction must
-remain enforced.
+A repayment burn failure emits `OhmBurnFailed` without undoing settlement. The unburned OHM remains surplus. ADMIN or the local recovery operator can retry burning while enabled, or rescue surplus to Treasury while locally disabled.
+
+Synchronization cannot exceed the desired approval. A manual approval reduction is not persistent configuration: later transitions can restore approval. Use the debt cap or pause when a restriction must persist.
 
 ## Deployment
 
-See [Burner Loans deployment and activation](./burner_loans.md#deployment-and-activation) for the
-complete system order.
+Enable Inventory before selecting it on Core. Set the global cap directly as ADMIN while Inventory is active and enabled. See the [system deployment order](burner_loans.md#deployment-and-activation).
 
 ## Replacement
 
-Burner Loans can point to another compatible, active Burner Loans Inventory only while Burner Loans
-is globally disabled. The setter does not require the replacement to be enabled, but Burner Loans
-cannot be enabled until it is enabled and all reverse links agree. Before re-enabling Burner Loans,
-governance must ensure either that the outgoing Burner Loans Inventory has no active principal or
-that an accounting migration or per-cohort routing mechanism keeps its outstanding positions
-serviceable. V1 does not enforce this operational requirement or move live accounting and custody.
-Governance must also explicitly manage the outgoing Burner Loans Inventory's remaining provider
-claims, custody, and principal accounting.
+Core's pointer setter checks the candidate's service interfaces, Core/Kernel/OHM identity, activity and enablement. Candidate principal must equal canonical FLOAN debt. When an old Inventory is selected, old and new active principal and aggregate provider claims must match.
+
+Those checks permit prepared matching nonzero ledgers. They do not transfer OHM, copy individual provider claims, reconcile provider identities or prove that a migration is complete. The prepared-ledger acceptance tests are not a production migration mechanism.
+
+Inventory has no export/import or recapitalization API. The supported rollout procedure is to settle loans and withdraw provider funding before replacing an empty ledger. A nonzero-ledger replacement needs a separately reviewed migration design and complete provider/custody reconciliation.
+
+Default losses remain owed to providers. Supplying 100 OHM and defaulting 100 can leave a 100 OHM claim with zero active principal and idle funding. A donation alone does not replenish the supplied-idle ledger or erase that claim.
+
+Claim-free surplus can be burned or rescued separately. A zero raw token balance is not itself a pointer-replacement requirement. Core's pointer change does not disable or retire the old Inventory.
+
+### Delayed surplus recovery
+
+`BurnerLoansInventoryConfigTimelock` can be selected as Inventory's independent config operator. ADMIN or `burner_loans_admin` can propose `queueBurnSurplus` or `queueRescueSurplus`. The queue must be active/enabled and Inventory active in the same Kernel. Core settlement must be idle when the Inventory operation runs.
+
+Burning requires Inventory locally enabled. Rescue permits a local Inventory pause. Emergency cancellation requires the queue active/enabled but does not depend on Inventory readiness. Pointer/controller drift and stale commitments prevent unintended execution. See the [queue authority matrix](burner_loans_access_control.md#config-timelock-matrix).

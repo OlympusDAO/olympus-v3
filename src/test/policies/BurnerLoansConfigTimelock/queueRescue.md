@@ -1,119 +1,147 @@
 # BurnerLoansConfigTimelock.queueRescue coverage plan
 
-Scope: surplus-rescue queue validation/storage and rescue-specific integration at execution. BLCT = BurnerLoansConfigTimelock; BLC = bound BurnerLoansConfig; BL = BLC's BurnerLoans. Generic execution gates, timing boundaries, action flags, key release after cancel/expiry and malformed batch encodings belong to [execute](./execute.t.sol), [cancel](./cancel.t.sol) and [queueBatch](./queueBatch.t.sol).
+Queue admission requires own Kernel activity, then local enablement, then an accepted proposer role. Bounds, target metadata and action validation follow. Rejected admission preserves IDs, keys, payloads, custody and committed logs.
 
-## Domains and assertions
+Source: [queueRescue](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L252). Coverage is recorded in the Test column.
 
-- Queue callers: Admin = ADMIN_ROLE holder; Burner Loans Admin = BURNER_LOANS_ADMIN_ROLE holder. Test each separately. Fuzz unauthorized callers excluding exactly authorized identities; seed zero, emergency-only and operator-only callers. No dual-role case.
-- Default: BLCT/BLC enabled and Kernel-active; BLCT is BLC's current operator; BLC is BL's current Configurator; BL enabled and active. BLCT/BLC must be enabled and Kernel-active. BL may be locally disabled. A disabled or Kernel-inactive BLCT blocks queueing, execution and cancellation; direct admin recovery goes through BL. Both rescue previews reject Kernel-inactive BL, so queueing requires BL activity.
-- B = BL token custody; R = pending reserve; S = max(B−R,0), in token base units. Ordinary debt buckets: keeper rewards=10, fees=20, seizure=30; surplus=5. Queue stores token/destination, never an amount. Use fixed quantities here; BL's [rescue plan](../BurnerLoans/rescue.md) owns numeric extremes and full owner partitions.
-- Key = scope(BLC, hash(BURNER_LOANS_RESCUE, rescue selector, token)). Same-token surplus rescues conflict regardless of destination. Pending rescue uses a different selector plus token/recipient: same-token surplus and pending rescues may coexist.
-- Queued: return actionId, increment nextActionId once; store proposer, BLC target, rescue selector, exact 64-byte token/destination payload, ready/expiry, facility hash and Key owner. Assert exact ConfigStateQueued → TimelockSubActionQueued → TimelockActionQueued events. No custody, debt or configuration changes.
-- Executed: any executor at a ready timestamp; fuzz caller without exclusions. Pay live S once if positive; preserve each debt/aggregate/index and other tokens/configuration. Assert BL AssetRescued/Transfer once for positive S, then sub-action/action execution events. Mark completed and clear owned payload/guards/Key. For S=0 complete without token call or BL rescue event.
-- Unchanged: balances, debt/index/configuration, counter, action payload/guards/flags and key owner unchanged; no committed events. Failed execution retains the action for a corrected retry before expiry. Error names use their declaring interface's full prefix below.
-- Each row links to tests with reciprocal Scenarios comments.
+Required behavior: Config.rescue targets Core only. Queue validation uses Core.previewRescue directly; no Lens or Custody rescue occurs. Custody recovery has moved to [its own timelock](../BurnerLoansPayoutConfigTimelock/queueRescue.md).
 
-## Authorization and queue lifecycle
+## Domains and notation
 
-Use valid token/destination, B=65, R=60, S=5. Every successful row queues without payment, then executes a nonzero rescue.
+Scenario scope: `BLCT-QUEUE-RESCUE` identifies this contract/function.
 
-BLC and BL are Enabled and Kernel-active in the timelock table.
+Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE without ADMIN_ROLE, or both. Guarantee both exclusive classes and overlap seeds, independently of inputs, lifecycle and dependency failures. Unauthorized fuzzing excludes every holder of either role. These roles have equivalent behavior in the rows using this family.
 
-| ID | Caller | BLCT local state | BLCT Kernel membership | Operator status | Queue and execution | Test |
-| --- | --- | --- | --- | --- | --- | --- |
-| L-01 | Admin | Enabled | Active | Selected | Queued; pay 5 when ready | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| L-02 | Burner Loans Admin | Enabled | Active | Selected | Queued; pay 5 when ready | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| L-03 | Fuzz unauthorized caller | Enabled | Active | Selected | IPolicyAdmin.NotAuthorised(); Unchanged | Covered: [fuzzed callers][test_givenValidTimelock_whenUnauthorizedCallerQueues_reverts], [caller identities][test_givenUnauthorizedIdentities_whenQueueing_reverts] |
-| L-04 | Admin; Burner Loans Admin separately | Disabled | Active | Selected | Typed and batch queue revert IEnabler.NotEnabled(); no ID/guard/key or payment | Covered: [rescue queued][test_givenTimelockDisabled_whenRescueQueued_reverts] |
-| L-05 | Admin; Burner Loans Admin separately | Enabled | Inactive | Selected | BurnerLoansConfigTimelock_PolicyInactive(BLCT); Unchanged | Covered: [rescue queued][test_givenTimelockInactive_whenRescueQueued_reverts], [timelock inactive][test_givenQueuedRescue_whenTimelockInactive_reverts] |
-| L-07 | Admin; Burner Loans Admin separately | Enabled | Active | Not selected | BurnerLoansConfig_UnauthorizedConfigOperator(BLCT); Unchanged | Covered: [rescue queued][test_givenOperatorRemoved_whenRescueQueued_reverts] |
-| BLCT-E12 | Executor | Disabled after queue | Active | Selected | NotEnabled; no payment; action/key retained | Covered: [timelock disabled][test_givenQueuedRescue_whenTimelockDisabled_reverts] |
+Own-policy admission: require Kernel-active BurnerLoansConfigTimelock; own inactivity uses `BurnerLoans_PolicyNotActive(BurnerLoansConfigTimelock)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-BLCT is Enabled, Kernel-active and selected throughout the downstream table. BLC is Enabled/Active in BL rows. BL is Enabled/Active in L-06; L-08 crosses BL Enabled/Disabled while Active.
+Error ownership: local policy inactivity uses the component’s BurnerLoans_PolicyNotActive(BurnerLoansConfigTimelock) error. `PolicyDependency_NotActive(component)` identifies an unavailable external dependency; no additional lifecycle gates are implied.
 
-| ID | Caller | Policy | Local state | Kernel membership | Queue and execution | Test |
-| --- | --- | --- | --- | --- | --- | --- |
-| L-06 | Admin; Burner Loans Admin separately | BLC | Enabled | Inactive | BurnerLoansConfigTimelock_PolicyInactive(BLC); Unchanged | Covered: [rescue queued][test_givenConfigInactive_whenRescueQueued_reverts], [config inactive][test_givenQueuedRescue_whenConfigInactive_reverts] |
-| L-08 | Admin; Burner Loans Admin separately | BLC | Disabled before queue/execution | Active | NotEnabled at queue/execution; retain pending action/key and all funds | Covered: [rescue queued][test_givenConfigDisabled_whenRescueQueued_reverts], [config disabled][test_givenQueuedRescue_whenConfigDisabled_reverts] |
-| L-09 | Admin; Burner Loans Admin separately | BL | Disabled | Active | Queued; pay 5 when ready | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| L-10 | Admin; Burner Loans Admin separately | BL | Enabled/disabled | Inactive | BurnerLoans_PolicyInactive() at queue; Unchanged | Covered: [rescue queued][test_givenFacilityInactive_whenRescueQueued_reverts] |
+Queue authorization/lifecycle matrix is normative. Inputs: token,address and destination,address; payload64 bytes. Committed prestate: Core/controller identity, no token balance fields.
 
-Competing queue faults follow BLCT enablement → BLCT/BLC activity → caller authorization → operator selection → BLC enabled → preview → conflict. Exercise invalid token beside each earlier failing gate; do not reproduce generic execution gate tests here.
+Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
-## Queued surplus by bucket state
+## Scenario setup
 
-For each row use Admin and Burner Loans Admin separately. Compare BL preview before queue and preserve raw debts/indexes across queue and execution.
+This wrapper queues a Config-targeted action; it does not configure Risk directly. Risk's operator need not match Config or BLCT. Queue defaults: BLCT enabled+active; immutable Config enabled+active; Config.configOperator=BLCT; proposer ADMIN or BURNER_LOANS_ADMIN_ROLE. `queueBatch` checks own activity, local enablement and caller roles before its length bound 1..15. All wrappers enter the same queue code. Non-proposer fails `NotAuthorised()` after lifecycle checks. Keys are Config-destination-scoped selector keys: global selector; asset/token selector+address. No public wrapper exists for originations; queueBatch supports its Config selector.
 
-| ID | Caller | BL state | Queue | Ready execution / effects | Test |
+## Authorization
+
+Fixed for this table: Local enabled: true; Local active: true; Config active: true.
+
+| ID | Caller | Config enabled | Selected configOperator | Queue result | Test |
 | --- | --- | --- | --- | --- | --- |
-| P-01 | Each queue role | No pending debt; B=5 | Queued | Pay 5; custody=0 | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| P-04 | Each queue role | Only keeper rewards=10; B=15 | Queued | Pay 5; retain reward 10 | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| P-05 | Each queue role | Only fees=20; B=25 | Queued | Pay 5; retain fee 20 | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| P-06 | Each queue role | Only seizure=30; B=35 | Queued | Pay 5; retain seizure 30 | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| P-07 | Each queue role | Reward=10, fee=20; B=35 | Queued | Pay 5; retain reserve 30 | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| P-08 | Each queue role | Reward=10, seizure=30; B=45 | Queued | Pay 5; retain reserve 40 | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| P-09 | Each queue role | Fee=20, seizure=30; B=55 | Queued | Pay 5; retain reserve 50 | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| P-10 | Each queue role | All three buckets; R=60, B=65 | Queued | Pay 5; retain reserve 60 | Covered: [fuzz][test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes], [fixed fixtures][test_givenBucketSubsets_whenLocalStatesAreSeeded] |
-| P-02 | Each queue role | B=R=0 or B=R=60; transfer would reject if attempted | Queued | No-op payment; action completes without transfer/error/rescue event | Covered: [queued execution completes][test_givenNoSurplus_whenQueuedExecutionCompletes] |
-| P-03 | Each queue role | B=59 below R=60 | Queued | No-op payment; retain underfunded custody/debt; action completes | Covered: [queued execution completes][test_givenNoSurplus_whenQueuedExecutionCompletes] |
+| BLCT-QUEUE-RESCUE-A01 | Fuzz outside ADMIN and BL admin holders | true | any | NotAuthorised | Covered: [test_givenUnauthorizedProposer_givenConfigEnabled_whenQueued_reverts][test_givenUnauthorizedProposer_givenConfigEnabled_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-A02 | Fuzz outside ADMIN and BL admin holders | false | any | NotAuthorised | Covered: [test_givenUnauthorizedProposer_givenConfigDisabled_whenQueued_reverts][test_givenUnauthorizedProposer_givenConfigDisabled_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-A03 | Fuzz permitted role caller | true | another/zero | UnauthorizedConfigOperator(BLCT) | Covered: [test_givenWrongOperator_givenConfigEnabled_whenQueued_reverts][test_givenWrongOperator_givenConfigEnabled_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-A04 | Fuzz permitted role caller | false | another/zero | UnauthorizedConfigOperator(BLCT) | Covered: [test_givenWrongOperator_givenConfigDisabled_whenQueued_reverts][test_givenWrongOperator_givenConfigDisabled_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-A05 | Fuzz permitted role caller | true | BLCT | Validate payload before acquire key | Covered: [test_givenPermittedProposer_whenQueued_thenValidatedAndStored][test_givenPermittedProposer_whenQueued_thenValidatedAndStored]; [test_givenEachProposerRole_whenBoundarySeedsRun_thenScenarioHolds][test_givenEachProposerRole_whenBoundarySeedsRun_thenScenarioHolds] |
+
+## Lifecycle
+
+| ID | Caller | Local active | Local enabled | Config active | Config enabled | Selected configOperator | Queue result | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| BLCT-QUEUE-RESCUE-L01 | Any, valid-sized batch | true | false | true | true | any | NotEnabled | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L02 | Any, valid-sized batch | true | false | true | false | any | NotEnabled | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L03 | Any, valid-sized batch | true | false | false | true | any | NotEnabled | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L04 | Any, valid-sized batch | true | false | false | false | any | NotEnabled | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L05 | Any, valid-sized batch | false | false | true | true | any | BurnerLoans_PolicyNotActive(TL) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L06 | Any, valid-sized batch | false | false | true | false | any | BurnerLoans_PolicyNotActive(TL) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L07 | Any, valid-sized batch | false | false | false | true | any | BurnerLoans_PolicyNotActive(TL) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L08 | Any, valid-sized batch | false | false | false | false | any | BurnerLoans_PolicyNotActive(TL) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L09 | Any, valid-sized batch | false | true | true | true | any | BurnerLoans_PolicyNotActive(BurnerLoansConfigTimelock) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L10 | Any, valid-sized batch | false | true | true | false | any | BurnerLoans_PolicyNotActive(BurnerLoansConfigTimelock) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L11 | Any, valid-sized batch | false | true | false | true | any | BurnerLoans_PolicyNotActive(BurnerLoansConfigTimelock) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L12 | Any, valid-sized batch | false | true | false | false | any | BurnerLoans_PolicyNotActive(BurnerLoansConfigTimelock) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L13 | Any, valid-sized batch | true | true | false | true | any | PolicyDependency_NotActive(Config) | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L14 | Any, valid-sized batch | true | true | false | false | any | PolicyDependency_NotActive(Config) | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-L15 | Fuzz permitted role caller | true | true | true | false | BLCT | PolicyDependency_NotActive(Config) | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts] |
+
+Queue success increments uint64 nextActionId once, stores proposer/payload/order/queuedAt; executableAt=queuedAt+1day and expiresAt=executableAt+3days. No public delay setter exists. Record TimelockSubActionQueued, TimelockActionQueued and ConfigStateQueued exact emitter/fields/hashes. Full fee or six-field risk pre-state hashes reject any field drift; disjoint fee-vs-risk updates use different keys/hashes. Changes in live debt, token balance or vault support may leave hash unchanged but cause downstream failure instead.
+
+Execution permissionless, pending-state/time checks FIRST, then BLCT enabled, Config enabled, both active, selected operator. Cancellable-state checks FIRST, then BLCT enabled+active and EMERGENCY role only. Failed execution retains action/key and all earlier subaction writes roll back. Successful execute/cancel releases keys and deletes payload/config guards; action metadata remains. Expiry alone does not release keys. Cancellation has no Config-enabled/activity/selected-operator requirement.
+
+## Dependency lifecycle
+
+Fixed for this table: Accounting / events: No key acquired.
+
+| ID | Caller | Lifecycle state / history | Execution / return | Test |
+| --- | --- | --- | --- | --- |
+| BLCT-QUEUE-RESCUE-D01 | Fuzz permitted role caller | Core inactive; other prerequisites ready | BurnerLoans_PolicyNotActive(BurnerLoansCore) from Core.previewRescue | Covered: [test_givenCoreInactive_whenQueued_reverts][test_givenCoreInactive_whenQueued_reverts] |
 
 ## Invalid inputs
 
-One representative underlying failure proves queue-time propagation; invalid destinations also exercise the rescue-specific address restriction.
+| ID | Caller | Invalid parameter | Execution / return | Accounting / events | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCT-QUEUE-RESCUE-I01 | Fuzz permitted role caller | Token=0; destination otherwise valid | BurnerLoans_InvalidAsset(token) | No key acquired | Covered: [test_givenZeroToken_whenQueued_reverts][test_givenZeroToken_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-I02 | Fuzz permitted role caller | Token=EOA; destination otherwise valid | BurnerLoans_InvalidAsset(token) | No key acquired | Covered: [test_givenEoaToken_whenQueued_reverts][test_givenEoaToken_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-I03 | Fuzz permitted role caller | destination=0; token deployed | BurnerLoans_InvalidRescueDestination(destination) | No key acquired | Covered: [test_givenForbiddenZeroDestination_whenQueued_reverts][test_givenForbiddenZeroDestination_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-I04 | Fuzz permitted role caller | destination=Core; token deployed | BurnerLoans_InvalidRescueDestination(destination) | No key acquired | Covered: [test_givenForbiddenCoreDestination_whenQueued_reverts][test_givenForbiddenCoreDestination_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-I05 | Fuzz permitted role caller | destination=Payout; token deployed | BurnerLoans_InvalidRescueDestination(destination) | No key acquired | Covered: [test_givenForbiddenPayoutDestination_whenQueued_reverts][test_givenForbiddenPayoutDestination_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-I06 | Fuzz permitted role caller | destination=Config; token deployed | BurnerLoans_InvalidRescueDestination(destination) | No key acquired | Covered: [test_givenForbiddenConfigDestination_whenQueued_reverts][test_givenForbiddenConfigDestination_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-I07 | Fuzz permitted role caller | destination=Kernel; token deployed | BurnerLoans_InvalidRescueDestination(destination) | No key acquired | Covered: [test_givenForbiddenKernelDestination_whenQueued_reverts][test_givenForbiddenKernelDestination_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-I08 | Fuzz permitted role caller | destination=token; token deployed | BurnerLoans_InvalidRescueDestination(destination) | No key acquired | Covered: [test_givenForbiddenTokenDestination_whenQueued_reverts][test_givenForbiddenTokenDestination_whenQueued_reverts] |
+| BLCT-QUEUE-RESCUE-I09 | Fuzz permitted role caller | Core direct token balance=0 | Return ID | Zero rescue queued; execution uses live balances | Covered: [test_givenZeroDirectBalance_whenQueued_thenUsesNoBalanceCommitment][test_givenZeroDirectBalance_whenQueued_thenUsesNoBalanceCommitment] |
 
-| ID | Caller | Input | Queue / effects | Test |
+## Queue conflicts and execution
+
+| ID | Caller | Queue / execution condition | Execution / return | Accounting / events | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCT-QUEUE-RESCUE-P01 | Fuzz permitted role caller | Valid payload; scoped key free | Return next ID; store typed payload, order, times and current pre-state hash | No target mutation; one key held | Covered: [test_givenFreeKey_whenQueued_thenExactMetadata][test_givenFreeKey_whenQueued_thenExactMetadata] |
+| BLCT-QUEUE-RESCUE-P02 | Fuzz permitted role caller | Same scoped key is already pending | IConfigTimelockBatchQueue_ConfigKeyPending(key,owner) | No new ID/key/payload | Covered: [test_givenSameSetterSameAssetPending_whenQueuedAgain_reverts][test_givenSameSetterSameAssetPending_whenQueuedAgain_reverts] |
+| BLCT-QUEUE-RESCUE-P03 | Fuzz permitted role caller | Independent scoped key; old unrelated action pending | Return new ID | Original action/key unchanged; new key held | Covered: [test_givenOtherTokenRescuePending_whenQueued_thenIndependentKeys][test_givenOtherTokenRescuePending_whenQueued_thenIndependentKeys] |
+| BLCT-QUEUE-RESCUE-P04 | Fuzz all executors | Committed parameter/pre-state changes before ready execution | IConfigTimelockBatchQueue_ConfigStateChanged(id,index,key,expected,current) | Action and key retained | Covered: [test_givenCommittedStateDrift_whenExecuted_reverts][test_givenCommittedStateDrift_whenExecuted_reverts] |
+| BLCT-QUEUE-RESCUE-P05 | Fuzz all executors | Ready at executableAt; pre-state unchanged; live setter requirements pass | Execute matching setter | Canonical state/event assertions from matching setter; key released | Covered: [test_givenReadyUnchangedState_whenExecuted_thenExactSetterAndCleanup][test_givenReadyUnchangedState_whenExecuted_thenExactSetterAndCleanup] |
+
+## Live execution rejection
+
+Fixed for this table: Accounting / events: Earlier batch writes roll back; action and keys retained.
+
+| ID | Caller | Operation / pre-state | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| I-01 | Each queue role | token=0; valid destination | BurnerLoans_InvalidAsset(0); Unchanged; no ID/key consumed | Covered: [asset has no code][test_whenAssetHasNoCode_reverts] |
-| I-02 | Each queue role | destination=0, BL, token, BLC or Kernel | BurnerLoans_InvalidRescueDestination(destination); Unchanged | Covered: [destination is forbidden][test_whenDestinationIsForbidden_reverts] |
-| I-03 | Each queue role | Controlled balanceOf failure | Bubble exact preview dependency error; Unchanged | Covered: [balance query reverts][test_whenBalanceQueryReverts_reverts] |
-| I-04 | Burner Loans Admin through raw queue harness | 63 or 65 bytes instead of the exact two-word token/destination payload | ITimelockBatchQueue_ActionInvalid(BLC, selector); no preview | Unchanged; no ID/key consumed. Covered: [invalid payload length][test_whenSurplusRescuePayloadLengthIsInvalid_reverts] |
+| BLCT-QUEUE-RESCUE-P06 | Fuzz all executors | Time-valid queue; Core/controller hash unchanged; token becomes rejecting on transfer | MockRevertingTransferToken.TransferReverted(destination) | Covered: [test_givenTokenStartsRejectingTransfers_whenExecuted_reverts][test_givenTokenStartsRejectingTransfers_whenExecuted_reverts] |
 
-## Conflict keys
+## Shared assertions
 
-| ID | Caller | Existing pending request / new request | Queue / effects | Test |
-| --- | --- | --- | --- | --- |
-| Q-01 | Each queue role | Surplus rescue for same token; same or different destination | ConfigKeyPending(Key, owningId); Unchanged; original request remains usable | Covered: [same or different destination queued][test_givenSurplusKeyOwned_whenSameOrDifferentDestinationQueued_reverts] |
-| Q-02 | Each queue role | Same token: surplus rescue plus pending-payout rescue, and two distinct pending recipients; guarantee both queue orders | All accepted under independent keys; execute either rescue first using amounts valid in both orders; preserve debt except the pending payment | Covered: [queue and execution orders vary][test_givenSurplusAndTwoPendingRecipients_whenQueueAndExecutionOrdersVary] |
-| Q-05 | Each queue role | Surplus rescues for different tokens | Both queued; independent key owners; each affects only its token | Covered: [rescues queued and executed][test_givenDifferentTokens_whenRescuesQueuedAndExecuted] |
+Validate Core.previewRescue at queue; no Lens read or Custody preview. Core must be active, may be disabled. Key per token excludes destination; zero surplus queue allowed. Execution rescues the CURRENT direct Core balance, not queued quantity. Test queue-time failure independently from execution after drift. Corresponding queueBatch raw-payload cases enforce canonical ABI lengths/widths; ordinary typed wrapper cannot construct over-width input.
 
-## Changes during delay and transfers
+- [x] Review these expectations.
+- [x] Implement named Foundry tests and boundary seed drivers.
+- [x] Map every row to its scenario test and boundary seeds; retain production-blocked rows as Partial.
 
-| ID | Caller | Change after queue | Ready execution / effects | Test |
-| --- | --- | --- | --- | --- |
-| LIVE-01 | Any executor | Queue B=65/R=60; receive 7 more units | Pay live 12; retain R=60; no stale-balance rejection | Covered: [custody increases][test_givenQueuedRescue_whenCustodyIncreases] |
-| LIVE-02 | Any executor | Queue B=65/R=60; pending retry pays 10, leaving B=55/R=50 | Pay 5; preserve remaining reserve 50 | Covered: [keeper retry pays debt][test_givenQueuedRescue_whenKeeperRetryPaysDebt] |
-| LIVE-03 | Any executor | Queue B=65/R=60; new pending debt consumes the 5 surplus | No-op payment; action completes and preserves current reserve | Covered: [new debt consumes surplus][test_givenQueuedRescue_whenNewDebtConsumesSurplus] |
-| LIVE-04 | Any executor | BL becomes Kernel-inactive after queue | BurnerLoans_PolicyInactive(); Unchanged; reactivation permits payment retry | Covered: [facility becomes inactive reverts then][test_givenQueuedRescue_whenFacilityBecomesInactive_revertsThenRetries] |
-| BIND-01 | Any executor | BL selects a different Configurator | NotAuthorised(); Unchanged | Covered: [facility configurator changes][test_givenQueuedRescue_whenFacilityConfiguratorChanges_reverts] |
-| TX-01 | Any executor | Token rejects the positive payment | Preview allowed queue; exact token error at execution; Unchanged; unblock and retry once | Covered: [transfer fails then recovers][test_givenQueuedRescue_whenTransferFailsThenRecovers] |
-
-BL's transfer/callback matrix owns false-return and guard behavior. Generic reexecution/cancellation from callbacks belongs to execute/cancel tests; this wrapper needs no duplicate matrix.
-
-[test_givenBucketSubset_whenEachRoleQueuesAndExecutorExecutes]: ./queueRescue.t.sol#L38
-[test_givenBucketSubsets_whenLocalStatesAreSeeded]: ./queueRescue.t.sol#L51
-[test_givenValidTimelock_whenUnauthorizedCallerQueues_reverts]: ./queueRescue.t.sol#L106
-[test_givenUnauthorizedIdentities_whenQueueing_reverts]: ./queueRescue.t.sol#L114
-[test_givenTimelockDisabled_whenRescueQueued_reverts]: ./queueRescue.t.sol#L121
-[test_givenTimelockInactive_whenRescueQueued_reverts]: ./queueRescue.t.sol#L136
-[test_givenQueuedRescue_whenTimelockInactive_reverts]: ./queueRescue.t.sol#L217
-[test_givenOperatorRemoved_whenRescueQueued_reverts]: ./queueRescue.t.sol#L187
-[test_givenQueuedRescue_whenTimelockDisabled_reverts]: ./queueRescue.t.sol#L205
-[test_givenConfigInactive_whenRescueQueued_reverts]: ./queueRescue.t.sol#L169
-[test_givenQueuedRescue_whenConfigInactive_reverts]: ./queueRescue.t.sol#L244
-[test_givenConfigDisabled_whenRescueQueued_reverts]: ./queueRescue.t.sol#L154
-[test_givenQueuedRescue_whenConfigDisabled_reverts]: ./queueRescue.t.sol#L232
-[test_givenFacilityInactive_whenRescueQueued_reverts]: ./queueRescue.t.sol#L259
-[test_givenNoSurplus_whenQueuedExecutionCompletes]: ./queueRescue.t.sol#L89
-[test_whenAssetHasNoCode_reverts]: ./queueRescue.t.sol#L312
-[test_whenDestinationIsForbidden_reverts]: ./queueRescue.t.sol#L331
-[test_whenBalanceQueryReverts_reverts]: ./queueRescue.t.sol#L356
-[test_whenSurplusRescuePayloadLengthIsInvalid_reverts]: ./queueAction.t.sol#L202
-[test_givenSurplusKeyOwned_whenSameOrDifferentDestinationQueued_reverts]: ./queueRescue.t.sol#L383
-[test_givenSurplusAndTwoPendingRecipients_whenQueueAndExecutionOrdersVary]: ./queueRescue.t.sol#L451
-[test_givenDifferentTokens_whenRescuesQueuedAndExecuted]: ./queueRescue.t.sol#L408
-[test_givenQueuedRescue_whenCustodyIncreases]: ./queueRescue.t.sol#L536
-[test_givenQueuedRescue_whenKeeperRetryPaysDebt]: ./queueRescue.t.sol#L554
-[test_givenQueuedRescue_whenNewDebtConsumesSurplus]: ./queueRescue.t.sol#L563
-[test_givenQueuedRescue_whenFacilityBecomesInactive_revertsThenRetries]: ./queueRescue.t.sol#L286
-[test_givenQueuedRescue_whenFacilityConfiguratorChanges_reverts]: ./queueRescue.t.sol#L587
-[test_givenQueuedRescue_whenTransferFailsThenRecovers]: ./queueRescue.t.sol#L603
+[test_givenUnauthorizedProposer_givenConfigEnabled_whenQueued_reverts]: ./queueRescue.t.sol#L21
+[test_givenUnauthorizedProposer_givenConfigDisabled_whenQueued_reverts]: ./queueRescue.t.sol#L33
+[test_givenWrongOperator_givenConfigEnabled_whenQueued_reverts]: ./queueRescue.t.sol#L46
+[test_givenWrongOperator_givenConfigDisabled_whenQueued_reverts]: ./queueRescue.t.sol#L66
+[test_givenPermittedProposer_whenQueued_thenValidatedAndStored]: ./queueRescue.t.sol#L87
+[test_givenEachProposerRole_whenBoundarySeedsRun_thenScenarioHolds]: ./queueRescue.t.sol#L637
+[test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts]: ./queueRescue.t.sol#L100
+[test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts]: ./queueRescue.t.sol#L115
+[test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts]: ./queueRescue.t.sol#L130
+[test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts]: ./queueRescue.t.sol#L145
+[test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts]: ./queueRescue.t.sol#L160
+[test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts]: ./queueRescue.t.sol#L180
+[test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts]: ./queueRescue.t.sol#L200
+[test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts]: ./queueRescue.t.sol#L220
+[test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledTrue_whenQueued_reverts]: ./queueRescue.t.sol#L240
+[test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts]: ./queueRescue.t.sol#L260
+[test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts]: ./queueRescue.t.sol#L280
+[test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts]: ./queueRescue.t.sol#L300
+[test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenQueued_reverts]: ./queueRescue.t.sol#L320
+[test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts]: ./queueRescue.t.sol#L340
+[test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts]: ./queueRescue.t.sol#L360
+[test_givenCoreInactive_whenQueued_reverts]: ./queueRescue.t.sol#L604
+[test_givenZeroToken_whenQueued_reverts]: ./queueRescue.t.sol#L562
+[test_givenEoaToken_whenQueued_reverts]: ./queueRescue.t.sol#L574
+[test_givenForbiddenZeroDestination_whenQueued_reverts]: ./queueRescue.t.sol#L454
+[test_givenForbiddenCoreDestination_whenQueued_reverts]: ./queueRescue.t.sol#L472
+[test_givenForbiddenPayoutDestination_whenQueued_reverts]: ./queueRescue.t.sol#L490
+[test_givenForbiddenConfigDestination_whenQueued_reverts]: ./queueRescue.t.sol#L508
+[test_givenForbiddenKernelDestination_whenQueued_reverts]: ./queueRescue.t.sol#L526
+[test_givenForbiddenTokenDestination_whenQueued_reverts]: ./queueRescue.t.sol#L544
+[test_givenZeroDirectBalance_whenQueued_thenUsesNoBalanceCommitment]: ./queueRescue.t.sol#L591
+[test_givenFreeKey_whenQueued_thenExactMetadata]: ./queueRescue.t.sol#L380
+[test_givenSameSetterSameAssetPending_whenQueuedAgain_reverts]: ./queueRescue.t.sol#L390
+[test_givenOtherTokenRescuePending_whenQueued_thenIndependentKeys]: ./queueRescue.t.sol#L411
+[test_givenCommittedStateDrift_whenExecuted_reverts]: ./queueRescue.t.sol#L422
+[test_givenReadyUnchangedState_whenExecuted_thenExactSetterAndCleanup]: ./queueRescue.t.sol#L436
+[test_givenTokenStartsRejectingTransfers_whenExecuted_reverts]: ./queueRescue.t.sol#L620

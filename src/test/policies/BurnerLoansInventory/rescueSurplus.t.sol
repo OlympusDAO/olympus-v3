@@ -1,100 +1,135 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
-// Shared domain values use constants; scenario-specific literals remain inline for auditability.
-// forge-lint: disable-start(literal-instead-of-constant)
+// Tests use explicit boundary values and bounded casts; action effects are asserted directly.
+// Deterministic seed loops intentionally call contracts and Forge cheatcodes.
+// forge-lint: disable-start(literal-instead-of-constant,unsafe-typecast)
 
-import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+// Interfaces
+
+import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
+import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+
+// Libraries
+
+// Contracts
 import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
 
-// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
-// forge-lint: disable-start(unsafe-typecast)
+import {Actions} from "src/Kernel.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 
 contract BurnerLoansInventoryRescueSurplusTest is BurnerLoansInventoryTest {
+    // Scenarios: BLINV-RESCUE-SURPLUS-L05.
+    function test_givenInactive_whenUnauthorizedAndInvalid_reverts(bool enabled_) public {
+        if (!enabled_) _disableInventory();
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(inventory));
+        bytes32 state = _accountingState();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(inventory)
+            )
+        );
+        vm.prank(outsider);
+        inventory.rescueSurplus();
+        assertEq(_accountingState(), state, "Inactivity rejects before unauthorized no-op");
+    }
+
     function setUp() public override {
         super.setUp();
         _enableAndSetCap(DEFAULT_CAP);
     }
 
-    // rescueSurplus
-    // [X] given a direct donation, it transfers only surplus and preserves supplied accounting
-    function test_givenDonation_rescuesOnlySurplus(uint128 donation_) public {
-        donation_ = uint128(bound(donation_, 1, type(uint128).max - 100e9));
-        _supply(100e9);
-        ohm.mint(address(inventory), donation_);
-        vm.expectEmit(false, false, false, true, address(inventory));
-        emit IBurnerLoansInventory.SurplusRescued(donation_);
+    // Scenarios: BLINV-RESCUE-SURPLUS-N02, BLINV-RESCUE-SURPLUS-N03.
+    function test_givenIdle_whenSurplusRescued(uint256 surplus_) public {
+        _supply(50e9);
+        surplus_ = bound(surplus_, 1, type(uint256).max - 50e9);
+        ohm.mint(address(inventory), surplus_);
+        vm.expectEmit(address(inventory));
+        emit IBurnerLoansInventory.SurplusRescued(surplus_);
         vm.prank(admin);
         inventory.rescueSurplus();
-        assertEq(ohm.balanceOf(address(trsry)), donation_, "treasury balance");
-        assertEq(inventory.suppliedIdleOhm(), 100e9, "idle unchanged");
-        assertEq(inventory.suppliedOhm(), 100e9, "claim unchanged");
-        _assertInventoryInvariant();
+        assertEq(ohm.balanceOf(address(trsry)), surplus_, "Entire surplus reaches Treasury");
+        assertEq(ohm.balanceOf(address(inventory)), 50e9, "Only backing remains");
+        assertEq(inventory.providerClaimOhm(provider), 50e9, "Provider claim unchanged");
+        assertEq(inventory.suppliedIdleOhm(), 50e9, "Idle accounting unchanged");
     }
 
-    // rescueSurplus
-    // [X] given no surplus, it is a no-op
-    function test_givenNoSurplus_noOp() public {
-        _supply(100e9);
-        vm.prank(admin);
-        inventory.rescueSurplus();
-        assertEq(ohm.balanceOf(address(trsry)), 0, "treasury unchanged");
-        assertEq(inventory.suppliedIdleOhm(), 100e9, "idle unchanged");
-        assertEq(inventory.suppliedOhm(), 100e9, "claim unchanged");
-        _assertInventoryInvariant();
-    }
-
-    // rescueSurplus
-    // [X] given the trusted OHM transfer fails, the surplus remains in Burner Loans Inventory
-    function test_givenTransferFailure_revertsWithoutChangingSurplus() public {
-        ohm.mint(address(inventory), 25e9);
-        bytes memory failure = bytes("transfer failed");
+    function _assertRescueNoOp() internal {
+        bytes32 beforeState = _accountingState();
+        assertEq(inventory.surplusOhm(), 0, "Deficit cannot underflow surplus");
         vm.mockCallRevert(
             address(ohm),
-            abi.encodeWithSelector(ERC20.transfer.selector, address(trsry), 25e9),
-            failure
+            abi.encodeWithSelector(ohm.transfer.selector),
+            hex"deadbeef"
         );
-
-        vm.expectRevert(failure);
+        vm.recordLogs();
         vm.prank(admin);
         inventory.rescueSurplus();
-
-        assertEq(inventory.surplusOhm(), 25e9, "surplus preserved");
-        assertEq(ohm.balanceOf(address(trsry)), 0, "treasury unchanged");
-        _assertInventoryInvariant();
+        assertEq(vm.getRecordedLogs().length, 0, "No rescue event");
+        assertEq(_accountingState(), beforeState, "No transfer call or accounting change");
     }
 
-    // rescueSurplus
-    // rescueSurplus
-    // [X] given a caller without OCG admin authority, it reverts
-    function test_givenUnauthorizedCaller_reverts(address caller_) public {
-        vm.assume(caller_ != admin);
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(caller_);
-        inventory.rescueSurplus();
+    // Scenarios: BLINV-RESCUE-SURPLUS-D01.
+    function test_givenEmptyInventory_whenRescued_noOp() public {
+        _assertRescueNoOp();
     }
 
-    // rescueSurplus
-    // [X] given Burner Loans Inventory is globally disabled, surplus rescue is blocked
-    function test_givenGloballyDisabled_reverts(uint128 donation_) public {
-        donation_ = uint128(bound(donation_, 1, type(uint128).max));
-        ohm.mint(address(inventory), donation_);
-        vm.prank(emergency);
-        inventory.disable("");
+    // Scenarios: BLINV-RESCUE-SURPLUS-D01.
+    function test_givenFullyBackedIdle_whenRescued_noOp() public {
+        _supply(50e9);
+        _assertRescueNoOp();
+    }
 
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+    // Scenarios: BLINV-RESCUE-SURPLUS-N01.
+    function test_givenLostBacking_whenRescued_noOp() public {
+        _supply(50e9);
+        vm.prank(address(inventory));
+        ohm.burn(1);
+        _assertRescueNoOp();
+    }
+
+    // Scenarios: BLINV-RESCUE-SURPLUS-P01.
+    function test_givenTreasuryUpgrade_whenSurplusRescued() public {
+        _supply(50e9);
+        ohm.mint(address(inventory), 1);
+        OlympusTreasury replacement = new OlympusTreasury(kernel);
+        vm.prank(admin);
+        kernel.executeAction(Actions.UpgradeModule, address(replacement));
         vm.prank(admin);
         inventory.rescueSurplus();
+        assertEq(ohm.balanceOf(address(trsry)), 0, "Old Treasury not paid");
+        assertEq(ohm.balanceOf(address(replacement)), 1, "Current Treasury paid");
+        assertEq(inventory.suppliedIdleOhm(), 50e9, "Provider backing preserved");
+    }
 
-        assertEq(inventory.surplusOhm(), donation_, "surplus unchanged");
-        assertEq(ohm.balanceOf(address(trsry)), 0, "treasury unchanged");
+    // Scenarios: BLINV-RESCUE-SURPLUS-L04.
+    function test_givenReEnabledInventory_whenSurplusRescued() public {
+        _supply(50e9);
+        ohm.mint(address(inventory), 1);
+        _disableInventory();
+        vm.prank(admin);
+        inventory.reEnable();
+        vm.expectEmit(address(inventory));
+        emit IBurnerLoansInventory.SurplusRescued(1);
+        vm.prank(admin);
+        inventory.rescueSurplus();
+        assertEq(ohm.balanceOf(address(trsry)), 1, "Recovered after re-enable");
+        assertEq(inventory.suppliedIdleOhm(), 50e9, "Provider idle untouched");
+    }
+
+    // Scenarios: BLINV-RESCUE-SURPLUS-D01, BLINV-RESCUE-SURPLUS-N01, BLINV-RESCUE-SURPLUS-N02, BLINV-RESCUE-SURPLUS-N03.
+    function test_whenRescueBoundarySeeds() public {
+        uint256 snapshot = vm.snapshotState();
+        test_givenIdle_whenSurplusRescued(1);
+        assertTrue(vm.revertToStateAndDelete(snapshot), "Restore minimum rescue seed");
+        snapshot = vm.snapshotState();
+        test_givenIdle_whenSurplusRescued(type(uint256).max - 50e9);
+        assertTrue(vm.revertToStateAndDelete(snapshot), "Restore maximum rescue seed");
+        test_givenEmptyInventory_whenRescued_noOp();
+        test_givenLostBacking_whenRescued_noOp();
     }
 }
 
-// forge-lint: disable-end(unsafe-typecast)
-
-// forge-lint: disable-end(literal-instead-of-constant)
+// forge-lint: disable-end(literal-instead-of-constant,unsafe-typecast)

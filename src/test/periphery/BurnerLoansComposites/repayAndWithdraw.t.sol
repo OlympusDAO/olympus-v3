@@ -7,13 +7,15 @@ pragma solidity >=0.8.24;
 // Test actions assert their effects directly; return values are intentionally unused.
 // forge-lint: disable-start(unused-return)
 
-import {MockERC20} from "src/test/mocks/MockERC20.sol";
-import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
-
+// Interfaces
 import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
+
+// Contracts
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {BurnerLoansCompositesTest} from "src/test/periphery/BurnerLoansComposites/BurnerLoansCompositesTest.sol";
 
 contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest {
@@ -24,7 +26,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     ) internal view returns (IBurnerLoansComposites.RepayAndWithdrawParams memory) {
         return
             IBurnerLoansComposites.RepayAndWithdrawParams({
-                asset: address(usds),
+                asset: address(_asset),
                 maxRepayOhm: maxRepayOhm_,
                 collateralAmount: collateralAmount_,
                 recipient: recipient_
@@ -39,10 +41,10 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         _openPosition();
         uint128 repayAmount = 50e9;
         uint128 withdrawAmount = 500e6;
-        vm.prank(alice);
-        ohm.approve(address(composites), repayAmount);
+        vm.prank(_borrower);
+        _ohm.approve(address(composites), repayAmount);
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
@@ -51,16 +53,16 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
 
         assertEq(result.repaidOhm, repayAmount, "repaid OHM");
         assertEq(result.refundedOhm, 0, "refunded OHM");
-        assertEq(result.tokenOut, address(usds), "token out");
+        assertEq(result.tokenOut, address(_asset), "token out");
         assertEq(result.amountOut, withdrawAmount, "amount out");
         assertEq(result.remainingCollateral, _COLLATERAL - withdrawAmount, "remaining collateral");
         assertEq(
-            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            _lens.getPosition(address(_asset), _borrower).debtOhm,
             _BORROW - repayAmount,
             "debt"
         );
-        assertEq(usds.balanceOf(recipient), withdrawAmount, "recipient collateral");
-        _assertCompositeBalances(address(usds));
+        assertEq(_asset.balanceOf(recipient), withdrawAmount, "recipient collateral");
+        _assertCompositeBalances(address(_asset));
     }
 
     // repayAndWithdraw
@@ -70,27 +72,27 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     function test_givenMaxRepayAboveDebt_refundsExcess() public {
         _openPosition();
         uint128 maxRepay = 150e9;
-        ohm.mint(alice, maxRepay - _BORROW);
-        vm.prank(alice);
-        ohm.approve(address(composites), maxRepay);
+        _ohm.mint(_borrower, maxRepay - _BORROW);
+        vm.prank(_borrower);
+        _ohm.approve(address(composites), maxRepay);
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
-            _repayParams(maxRepay, _COLLATERAL, alice)
+            _repayParams(maxRepay, _COLLATERAL, _borrower)
         );
 
         assertEq(result.repaidOhm, _BORROW, "repaid OHM");
         assertEq(result.refundedOhm, maxRepay - _BORROW, "refunded OHM");
-        assertEq(ohm.balanceOf(alice), maxRepay - _BORROW, "caller OHM refund");
-        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 0, "position debt");
+        assertEq(_ohm.balanceOf(_borrower), maxRepay - _BORROW, "caller OHM refund");
+        assertEq(_lens.getPosition(address(_asset), _borrower).debtOhm, 0, "position debt");
         assertEq(
-            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            _lens.getPosition(address(_asset), _borrower).depositedCollateral,
             0,
             "position collateral"
         );
-        _assertCompositeBalances(address(usds));
+        _assertCompositeBalances(address(_asset));
     }
 
     // repayAndWithdraw
@@ -100,14 +102,14 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     function test_givenActiveDebt_whenRepayingPartially_whenCollateralAmountIsZero() public {
         _openPosition();
         uint128 repayAmount = 40e9;
-        vm.prank(alice);
-        ohm.approve(address(composites), repayAmount);
+        vm.prank(_borrower);
+        _ohm.approve(address(composites), repayAmount);
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
-            _repayParams(repayAmount, 0, alice)
+            _repayParams(repayAmount, 0, _borrower)
         );
 
         assertEq(result.repaidOhm, repayAmount, "repaid OHM");
@@ -122,11 +124,11 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         //        = 2_833_333_333_333_333_333 (18 decimals)
         assertEq(result.healthFactor, 2_833_333_333_333_333_333, "resulting health factor");
         assertEq(
-            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            _lens.getPosition(address(_asset), _borrower).debtOhm,
             _BORROW - repayAmount,
             "remaining debt"
         );
-        _assertCompositeBalances(address(usds));
+        _assertCompositeBalances(address(_asset));
     }
 
     // repayAndWithdraw
@@ -135,26 +137,26 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     //   then the input is refunded and the debt-free health factor is returned
     function test_givenDebtFreePosition_whenMaxRepayIsNonZero_whenCollateralAmountIsZero() public {
         _openPosition();
-        vm.startPrank(alice);
-        ohm.approve(address(burnerLoans), _BORROW);
-        burnerLoans.repay(address(usds), _BORROW, alice);
-        ohm.approve(address(composites), 1);
+        vm.startPrank(_borrower);
+        _ohm.approve(address(_core), _BORROW);
+        _debt.repay(address(_asset), _BORROW, _borrower);
+        _ohm.approve(address(composites), 1);
         vm.stopPrank();
-        ohm.mint(alice, 1);
+        _ohm.mint(_borrower, 1);
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
-            _repayParams(1, 0, alice)
+            _repayParams(1, 0, _borrower)
         );
 
         assertEq(result.repaidOhm, 0, "repaid OHM");
         assertEq(result.refundedOhm, 1, "refunded OHM");
         assertEq(result.remainingCollateral, _COLLATERAL, "remaining collateral");
         assertEq(result.healthFactor, type(uint256).max, "debt-free health factor");
-        assertEq(ohm.balanceOf(alice), 1, "caller OHM refund");
-        _assertCompositeBalances(address(usds));
+        assertEq(_ohm.balanceOf(_borrower), 1, "caller OHM refund");
+        _assertCompositeBalances(address(_asset));
     }
 
     // repayAndWithdraw
@@ -163,28 +165,28 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     //   then the withdrawal revert rolls back the preceding repayment and token pull
     function test_givenNoAuthorization_revertsAndRollsBack() public {
         _openPosition();
-        vm.prank(alice);
-        burnerLoans.cancelAuthorization(address(composites));
+        vm.prank(_borrower);
+        _core.cancelAuthorization(address(composites));
         uint128 repayAmount = 50e9;
-        vm.prank(alice);
-        ohm.approve(address(composites), repayAmount);
+        vm.prank(_borrower);
+        _ohm.approve(address(composites), repayAmount);
 
         vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
-        vm.prank(alice);
+        vm.prank(_borrower);
         composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
-            _repayParams(repayAmount, 100e6, alice)
+            _repayParams(repayAmount, 100e6, _borrower)
         );
 
-        assertEq(ohm.balanceOf(alice), _BORROW, "caller OHM");
-        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, _BORROW, "position debt");
+        assertEq(_ohm.balanceOf(_borrower), _BORROW, "caller OHM");
+        assertEq(_lens.getPosition(address(_asset), _borrower).debtOhm, _BORROW, "position debt");
         assertEq(
-            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            _lens.getPosition(address(_asset), _borrower).depositedCollateral,
             _COLLATERAL,
             "position collateral"
         );
-        _assertCompositeBalances(address(usds));
+        _assertCompositeBalances(address(_asset));
     }
 
     // repayAndWithdraw
@@ -202,11 +204,11 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
                 50e9
             )
         );
-        vm.prank(alice);
+        vm.prank(_borrower);
         composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
-            _repayParams(50e9, 100e6, alice)
+            _repayParams(50e9, 100e6, _borrower)
         );
     }
 
@@ -218,33 +220,33 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         MockERC20 vaultToken = new MockERC20("Vault Token", "vTOKEN", 18);
         _configurePrice(address(vaultToken), 1e18);
         _configureDepositManagerAsset(address(vaultToken));
-        vm.prank(admin);
-        burnerLoansConfig.addAsset(
+        vm.prank(address(this));
+        _config.addAsset(
             address(vaultToken),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
             _defaultAssetFeeConfig(),
             false
         );
-        _authorize(alice);
+        _authorize(_borrower);
         uint128 collateral = 2_000e18;
         uint256 maxFee = 10e18;
-        vaultToken.mint(alice, collateral + maxFee);
-        vm.prank(alice);
+        vaultToken.mint(_borrower, collateral + maxFee);
+        vm.prank(_borrower);
         vaultToken.approve(address(composites), collateral + maxFee);
         IBurnerLoansComposites.DepositAndBorrowParams memory depositParams = IBurnerLoansComposites
             .DepositAndBorrowParams({
                 asset: address(vaultToken),
                 collateralAmount: collateral,
                 ohmAmount: _BORROW,
-                recipient: alice,
+                recipient: _borrower,
                 maxFee: maxFee
             });
-        vm.prank(alice);
+        vm.prank(_borrower);
         composites.depositAndBorrow(_emptyAuthorization(), _emptySignature(), depositParams);
         vm.roll(block.number + 1);
-        vm.prank(alice);
-        ohm.approve(address(composites), _BORROW);
+        vm.prank(_borrower);
+        _ohm.approve(address(composites), _BORROW);
         IBurnerLoansComposites.RepayAndWithdrawParams memory repayParams = IBurnerLoansComposites
             .RepayAndWithdrawParams({
                 asset: address(vaultToken),
@@ -253,7 +255,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
                 recipient: recipient
             });
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
@@ -276,15 +278,15 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         (MockERC20 asset, MockERC4626 vault) = _addVaultAssetForTest();
         uint128 collateral = 2_000e18;
         uint256 yieldAmount = bound(yieldSeed_, 1, 20_000e18);
-        asset.mint(alice, collateral);
-        vm.startPrank(alice);
-        asset.approve(address(burnerLoans), collateral);
-        burnerLoans.depositCollateral(address(asset), collateral, alice);
+        asset.mint(_borrower, collateral);
+        vm.startPrank(_borrower);
+        asset.approve(address(_core), collateral);
+        _collateral.depositCollateral(address(asset), collateral, _borrower);
         vm.stopPrank();
-        _authorize(alice);
+        _authorize(_borrower);
         asset.mint(address(vault), yieldAmount);
-        vm.prank(admin);
-        burnerLoansConfig.setAssetWithdrawAsShares(address(asset), true);
+        vm.prank(address(this));
+        _config.setAssetWithdrawAsShares(address(asset), true);
         _makeVaultAsynchronous(vault);
 
         uint256 vaultSupplyBefore = vault.totalSupply();
@@ -298,9 +300,9 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         // / vaultAssetsBefore (asset decimals) = expectedShares (share decimals), rounded down.
         uint256 expectedShares = (uint256(withdrawalAmount) * vaultSupplyBefore) /
             vaultAssetsBefore;
-        (uint256 operatorSharesBefore, ) = depositManager.getOperatorAssets(
+        (uint256 operatorSharesBefore, ) = _depositManager.getOperatorAssets(
             IERC20(address(asset)),
-            address(burnerLoans)
+            address(_core)
         );
         IBurnerLoansComposites.RepayAndWithdrawParams memory params = IBurnerLoansComposites
             .RepayAndWithdrawParams({
@@ -310,7 +312,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
                 recipient: recipient
             });
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
@@ -326,18 +328,18 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         assertEq(vault.balanceOf(recipient), expectedShares, "recipient shares");
         assertEq(asset.balanceOf(recipient), 0, "recipient underlying");
         assertEq(
-            burnerLoans.getPosition(address(asset), alice).depositedCollateral,
+            _lens.getPosition(address(asset), _borrower).depositedCollateral,
             collateral - withdrawalAmount,
             "position collateral"
         );
         assertEq(
-            depositManager.getOperatorLiabilities(IERC20(address(asset)), address(burnerLoans)),
+            _depositManager.getOperatorLiabilities(IERC20(address(asset)), address(_core)),
             collateral - withdrawalAmount,
             "DepositManager liabilities"
         );
-        (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
+        (uint256 operatorSharesAfter, ) = _depositManager.getOperatorAssets(
             IERC20(address(asset)),
-            address(burnerLoans)
+            address(_core)
         );
         assertEq(operatorSharesBefore - operatorSharesAfter, expectedShares, "custody share debit");
         assertEq(vault.totalSupply(), vaultSupplyBefore, "vault supply unchanged");
@@ -352,11 +354,11 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     //   then the meaningless operation is rejected
     function test_givenZeroAmounts_reverts() public {
         vm.expectRevert(IBurnerLoansComposites.BurnerLoansComposites_ZeroAmount.selector);
-        vm.prank(alice);
+        vm.prank(_borrower);
         composites.repayAndWithdraw(
             _emptyAuthorization(),
             _emptySignature(),
-            _repayParams(0, 0, alice)
+            _repayParams(0, 0, _borrower)
         );
     }
 }

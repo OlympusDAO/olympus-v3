@@ -1,152 +1,107 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
+// Interfaces
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+
+// Contracts
+import {BurnerLoansConfigTest} from "./BurnerLoansConfigTest.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
+// Scenario-specific constants and deliberate narrowing are exact test boundaries.
+// forge-lint: disable-start(literal-instead-of-constant, unsafe-typecast)
 
-contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
-    // setConfigOperator
-    // given caller does not have the admin role
-    //  when setConfigOperator is called
-    //   then it reverts
-    function test_givenNonAdminCaller_reverts(address caller_) public {
-        vm.assume(caller_ != admin);
+contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansConfigTest {
+    // Scenarios: BLCFG-CONFIG-OPERATOR-A01.
+    function test_whenCallerIsNotAdmin_reverts(address caller_, address next_) public {
+        vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.setConfigOperator, (next_)),
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE)
+        );
+    }
 
+    // Scenarios: BLCFG-CONFIG-OPERATOR-A02, BLCFG-CONFIG-OPERATOR-L04, BLCFG-CONFIG-OPERATOR-P03.
+    function test_givenAdmin_whenOperatorChanged(address caller_, address next_) public {
+        vm.assume(next_ != _configurationCaller);
+        _grantAdmin(caller_);
+        bytes32 funds = _economicDigest();
+        vm.expectEmit(address(_config));
+        emit IConfigOperator.ConfigOperatorSet(next_);
         vm.prank(caller_);
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        burnerLoansConfig.setConfigOperator(makeAddr("newConfigOperator"));
+        _config.setConfigOperator(next_);
+        assertEq(_config.configOperator(), next_, "Exact delegated operator");
+        assertEq(_economicDigest(), funds, "Authority update preserves funds and loans");
     }
 
-    // setConfigOperator
-    // given the policy is disabled
-    //  when setConfigOperator is called by admin
-    //   then it reverts
-    function test_givenDisabled_reverts() public {
-        vm.prank(admin);
-        burnerLoansConfig.disable("");
-
-        vm.prank(admin);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoansConfig.setConfigOperator(makeAddr("newConfigOperator"));
-    }
-
-    // setConfigOperator
-    // given the config operator address is zero
-    //  when setConfigOperator is called by admin
-    //   then it revokes delegated access
-    function test_givenZeroAddress_clearsConfigOperator() public {
-        vm.startPrank(admin);
-        burnerLoansConfig.setConfigOperator(address(configTimelock));
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit IConfigOperator.ConfigOperatorSet(address(0));
-        burnerLoansConfig.setConfigOperator(address(0));
-        vm.stopPrank();
-
-        assertEq(burnerLoansConfig.configOperator(), address(0), "config operator cleared");
-    }
-
-    // setConfigOperator
-    // given the config operator address is zero
-    //  when an arbitrary non-admin address calls a delegated setter
-    //   then every delegated action reverts with the caller address
-    function test_givenZeroConfigOperator_whenCallerIsArbitrary_cannotExecuteActions(
-        address caller_
-    ) public {
-        vm.assume(caller_ != admin);
-
-        assertEq(burnerLoansConfig.configOperator(), address(0), "operator starts unset");
-
-        bytes memory expectedRevert = abi.encodeWithSelector(
-            IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
-            caller_
+    // Scenarios: BLCFG-CONFIG-OPERATOR-P02.
+    function test_whenOperatorCleared() public {
+        _config.setConfigOperator(address(0));
+        assertEq(_config.configOperator(), address(0), "Cleared operator");
+        _mutationReverts(
+            _configurationCaller,
+            _capCall(1),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
         );
-        IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
-        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
-
-        vm.startPrank(caller_);
-        vm.expectRevert(expectedRevert);
-        burnerLoansConfig.setAssetDebtCap(address(usds), 1);
-
-        vm.expectRevert(expectedRevert);
-        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
-
-        vm.expectRevert(expectedRevert);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
-
-        vm.expectRevert(expectedRevert);
-        burnerLoansConfig.setAssetFeeConfig(address(usds), feeConfig);
-        vm.stopPrank();
-
-        assertEq(burnerLoansConfig.configOperator(), address(0), "config operator remains cleared");
-    }
-
-    function test_givenExistingOperator_whenAdminSetsSameOperator_reverts() public {
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(configTimelock));
-
-        vm.prank(admin);
-        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
-        burnerLoansConfig.setConfigOperator(address(configTimelock));
-
-        assertEq(
-            burnerLoansConfig.configOperator(),
-            address(configTimelock),
-            "existing operator retained"
+        _mutationReverts(
+            address(0),
+            _capCall(1),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
         );
     }
 
-    function test_givenReEnabled_whenAdminSetsSameOperator_reverts() public {
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(configTimelock));
-
-        vm.warp(1);
-        vm.prank(emergency);
-        burnerLoansConfig.disable("");
-        vm.prank(admin);
-        burnerLoansConfig.reEnable();
-
-        vm.prank(admin);
-        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
-        burnerLoansConfig.setConfigOperator(address(configTimelock));
-
-        assertEq(
-            burnerLoansConfig.configOperator(),
-            address(configTimelock),
-            "operator retained after re-enable"
+    // Scenarios: BLCFG-CONFIG-OPERATOR-P01.
+    function test_whenSameOperatorSelected_reverts() public {
+        _mutationReverts(
+            address(this),
+            abi.encodeCall(_config.setConfigOperator, (_configurationCaller)),
+            abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector)
+        );
+        _config.setConfigOperator(address(0));
+        _mutationReverts(
+            address(this),
+            abi.encodeCall(_config.setConfigOperator, (address(0))),
+            abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector)
         );
     }
 
-    // setConfigOperator
-    // given the config operator is not a policy
-    //  when setConfigOperator is called by admin
-    //   then it stores the arbitrary address
-    function test_givenConfigOperatorIsNotPolicy_setsConfigOperator() public {
-        address newConfigOperator = makeAddr("nonPolicyConfigOperator");
-
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(newConfigOperator);
-
-        assertEq(burnerLoansConfig.configOperator(), newConfigOperator, "config operator");
+    // Scenarios: BLCFG-CONFIG-OPERATOR-L01.
+    function test_givenActiveDisabled_whenOperatorChanged_reverts(
+        address caller_,
+        address next_
+    ) public givenConfigDisabled {
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.setConfigOperator, (next_)),
+            abi.encodeWithSelector(IEnabler.NotEnabled.selector)
+        );
     }
 
-    // setConfigOperator
-    // given a non-zero config operator address
-    //  when setConfigOperator is called by admin
-    //   then it stores the config operator
-    function test_givenAdminCaller_setsConfigOperator() public {
-        address newConfigOperator = address(configTimelock);
+    // Scenarios: BLCFG-CONFIG-OPERATOR-L03.
+    function test_givenInactiveEnabled_whenOperatorChanged_reverts(
+        address caller_,
+        address next_
+    ) public givenConfigInactive {
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.setConfigOperator, (next_)),
+            _inactiveError(address(_config))
+        );
+    }
 
-        vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit IConfigOperator.ConfigOperatorSet(newConfigOperator);
-        burnerLoansConfig.setConfigOperator(newConfigOperator);
-
-        assertEq(burnerLoansConfig.configOperator(), newConfigOperator, "config operator");
+    // Scenarios: BLCFG-CONFIG-OPERATOR-L05.
+    function test_givenInactiveDisabled_whenOperatorChanged_reverts(
+        address caller_,
+        address next_
+    ) public givenConfigDisabled givenConfigInactive {
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.setConfigOperator, (next_)),
+            _inactiveError(address(_config))
+        );
     }
 }

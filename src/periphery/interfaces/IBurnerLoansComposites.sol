@@ -7,6 +7,16 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 /// @title Burner Loans Composites Interface
 /// @notice One-transaction borrower flows composed from Burner Loans primitives.
 interface IBurnerLoansComposites {
+    // ========== EVENTS ========== //
+
+    /// @notice Emitted when an unused input-token balance is returned to the caller.
+    /// @param token The refunded token.
+    /// @param caller The account receiving the refund.
+    /// @param amount The refunded token amount.
+    event TokenRefunded(address indexed token, address indexed caller, uint256 amount);
+
+    // ========== ERRORS ========== //
+
     /// @notice Thrown when a required address is zero.
     error BurnerLoansComposites_ZeroAddress();
 
@@ -40,6 +50,8 @@ interface IBurnerLoansComposites {
     /// @param expected The expected ending balance.
     /// @param actual The observed ending balance.
     error BurnerLoansComposites_UnexpectedBalance(address token, uint256 expected, uint256 actual);
+
+    // ========== STRUCTS ========== //
 
     /// @notice Inputs for atomically depositing collateral and borrowing OHM.
     /// @param asset The collateral asset.
@@ -84,15 +96,16 @@ interface IBurnerLoansComposites {
     }
 
     /// @notice Results from atomically repaying OHM and withdrawing collateral.
-    /// @param repaidOhm The OHM debt repaid.
-    /// @param refundedOhm The unused OHM returned to the caller.
-    /// @param tokenOut The collateral token returned by Burner Loans.
-    /// @param amountOut The collateral-token amount returned to the recipient.
-    /// @param remainingCollateral The position's remaining collateral balance.
-    /// @param healthFactor Health reported after the composite operation. Returns max uint when the
-    ///                     position is debt-free.
+    /// @param repaidOhm Principal repaid in OHM units.
+    /// @param resultingDebtOhm Outstanding principal after repayment.
+    /// @param refundedOhm Unused OHM returned to the caller.
+    /// @param tokenOut Collateral output token.
+    /// @param amountOut Output-token amount returned to the recipient.
+    /// @param remainingCollateral Resulting asset-denominated collateral balance.
+    /// @param healthFactor Resulting WAD-scaled health; max uint when debt-free.
     struct RepayAndWithdrawResult {
         uint128 repaidOhm;
+        uint128 resultingDebtOhm;
         uint256 refundedOhm;
         address tokenOut;
         uint256 amountOut;
@@ -100,16 +113,11 @@ interface IBurnerLoansComposites {
         uint256 healthFactor;
     }
 
-    /// @notice Emitted when an unused input-token balance is returned to the caller.
-    /// @param token The refunded token.
-    /// @param caller The account receiving the refund.
-    /// @param amount The refunded token amount.
-    event TokenRefunded(address indexed token, address indexed caller, uint256 amount);
+    // ========== FUNCTIONS ========== //
 
     /// @notice Deposits collateral and borrows OHM for the caller in one transaction.
-    /// @dev An optional signature may authorize this contract as the caller's Burner Loans
-    ///      operator. Reverts for invalid parameters, authorization, transfers, or underlying
-    ///      Burner Loans operations.
+    /// @dev An optional signature may authorize this contract as the caller's Burner Loans operator.
+    ///
     /// @param authorization Optional operator authorization for this contract.
     /// @param signature Signature over `authorization`.
     /// @param params Deposit and borrow parameters.
@@ -121,13 +129,13 @@ interface IBurnerLoansComposites {
     ) external returns (DepositAndBorrowResult memory result);
 
     /// @notice Repays OHM and withdraws collateral for the caller in one transaction.
-    /// @dev An optional signature may authorize this contract as the caller's Burner Loans
-    ///      operator. Any unused OHM is refunded to the caller. Reverts for invalid parameters,
-    ///      authorization, transfers, or underlying Burner Loans operations.
+    /// @dev An optional signature may authorize this contract as the caller's Burner Loans operator.
+    ///      Any unused OHM is refunded to the caller.
+    ///
     /// @param authorization Optional operator authorization for this contract.
     /// @param signature Signature over `authorization`.
     /// @param params Repayment and withdrawal parameters.
-    /// @return result The resulting repayment, refund, collateral, and health data.
+    /// @return result The resulting repayment, refund, collateral, and remaining debt data.
     function repayAndWithdraw(
         IOperatorAuth.Authorization calldata authorization,
         IOperatorAuth.Signature calldata signature,

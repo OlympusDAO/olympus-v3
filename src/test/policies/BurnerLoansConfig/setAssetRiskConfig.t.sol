@@ -1,493 +1,1008 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
-// Shared domain values use constants; scenario-specific literals remain inline for auditability.
-// forge-lint: disable-start(literal-instead-of-constant)
-
-import {MockERC20} from "src/test/mocks/MockERC20.sol";
-
+// Interfaces
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
-import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
+// Contracts
+import {BurnerLoansConfigTest} from "./BurnerLoansConfigTest.sol";
+import {Actions} from "src/Kernel.sol";
+import {BurnerLoansConfigTimelock} from "src/policies/burnerloans/BurnerLoansConfigTimelock.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 
-// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
-// forge-lint: disable-start(unsafe-typecast)
+// Scenario-specific constants and deliberate narrowing are exact test boundaries.
+// forge-lint: disable-start(literal-instead-of-constant, unsafe-typecast)
 
-contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
-    uint16 internal constant _MAX_BPS = 10_000;
-    uint16 internal constant _MAX_LTV_BPS = 10_000;
-    uint16 internal constant _MAX_BACKING_MULTIPLIER_BPS = 50_000;
-    uint48 internal constant _EXPECTED_MAX_TERM_LENGTH = 365 days;
-    uint48 internal constant _EXPECTED_MAX_MATURITY_HORIZON = 366 days;
-
-    event AssetRiskConfigSet(address indexed asset, IBurnerLoans.AssetRiskConfigInput config);
-
-    function setUp() public override {
-        super.setUp();
-        _addDefaultUsdsAsset();
-        _setDefaultConfigOperator();
-        _enableConfigTimelock();
+contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
+    function _assertConfigurationRejected(
+        address asset_,
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg_,
+        bytes memory reason_
+    ) internal {
+        _bothRevert(
+            _configurationCaller,
+            abi.encodeCall(_config.setAssetRiskConfig, (asset_, cfg_)),
+            _riskValidation(asset_, cfg_),
+            reason_
+        );
     }
 
-    // setAssetRiskConfig
-    // given caller is neither admin nor timelock
-    //  when setAssetRiskConfig is called
-    //   then it reverts before validating the config
-    function test_givenUnauthorizedCaller_reverts(address caller_) public {
-        vm.assume(caller_ != admin);
-        vm.assume(caller_ != address(configTimelock));
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxLtvBps = 0;
-
+    function _assertConfigSet(
+        address caller_,
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg_
+    ) internal {
+        IBurnerLoansCore.AssetConfig memory expected = _config.getAssetConfig(address(_asset));
+        bytes32 feeBefore = keccak256(abi.encode(_config.getAssetFeeConfig(address(_asset))));
+        expected.maxLtvBps = cfg_.maxLtvBps;
+        expected.backingMultiplierBps = cfg_.backingMultiplierBps;
+        expected.keeperRewardBps = cfg_.keeperRewardBps;
+        expected.maxKeeperReward = cfg_.maxKeeperReward;
+        expected.termLength = cfg_.termLength;
+        expected.maxMaturityHorizon = cfg_.maxMaturityHorizon;
+        vm.expectEmit(address(_config));
+        emit IBurnerLoansConfig.AssetRiskConfigSet(address(_asset), cfg_);
         vm.prank(caller_);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
-                caller_
-            )
-        );
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given the policy is disabled
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenDisabled_reverts() public {
-        vm.prank(admin);
-        burnerLoansConfig.disable("");
-
-        vm.prank(admin);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), _validRiskConfig());
-    }
-
-    // setAssetRiskConfig
-    // given asset is not configured
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenUnconfiguredAsset_reverts() public {
-        address unknownAsset = makeAddr("unknownAsset");
-
-        vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
-                unknownAsset
-            )
-        );
-        burnerLoansConfig.setAssetRiskConfig(unknownAsset, _validRiskConfig());
-    }
-
-    // setAssetRiskConfig
-    // given the asset/token pair exists only under another facility
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts because the bound facility has no market
-    function test_givenBoundFacilityMarketDoesNotExist_reverts() public {
-        uint32 marketId = burnerLoansConfig.marketId(address(usds));
-
-        _setMarketFacilityForTest(marketId, makeAddr("otherFacility"));
-
-        vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
-                address(usds)
-            )
-        );
-        burnerLoansConfig.setAssetRiskConfig(address(usds), _validRiskConfig());
-    }
-
-    // setAssetRiskConfig
-    // given maxLtvBps is zero
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenMaximumLtvIsZero_reverts() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxLtvBps = 0;
-
-        vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, 0));
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given maxLtvBps is greater than the protocol maximum
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenMaximumLtvIsAboveMax_reverts(uint16 maxLtvBps_) public {
-        maxLtvBps_ = uint16(bound(maxLtvBps_, _MAX_LTV_BPS + 1, type(uint16).max));
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxLtvBps = maxLtvBps_;
-
-        vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, maxLtvBps_)
-        );
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given backingMultiplierBps is below 100%
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenBackingMultiplierBpsBelowMin_reverts(uint16 backingMultiplierBps_) public {
-        backingMultiplierBps_ = uint16(bound(backingMultiplierBps_, 0, 9_999));
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.backingMultiplierBps = backingMultiplierBps_;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given backingMultiplierBps is above the protocol maximum
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenBackingMultiplierBpsAboveMax_reverts(uint16 backingMultiplierBps_) public {
-        backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, _MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
-        );
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.backingMultiplierBps = backingMultiplierBps_;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given keeperRewardBps is greater than 100%
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenKeeperRewardBpsAboveMax_reverts(uint16 keeperRewardBps_) public {
-        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 10_001, type(uint16).max));
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.keeperRewardBps = keeperRewardBps_;
-
-        vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, keeperRewardBps_)
-        );
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given maxKeeperReward is the maximum representable value
-    //  when setAssetRiskConfig is called by admin
-    //   then it updates the config
-    function test_givenMaxKeeperRewardAtMaximum_updatesConfig() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxKeeperReward = type(uint128).max;
-
-        vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-
+        _config.setAssetRiskConfig(address(_asset), cfg_);
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).maxKeeperReward,
-            type(uint128).max,
-            "max keeper reward"
+            keccak256(abi.encode(_config.getAssetConfig(address(_asset)))),
+            keccak256(abi.encode(expected)),
+            "Exact full risk fields; admin fields preserved"
         );
+        assertEq(
+            keccak256(abi.encode(_config.getAssetFeeConfig(address(_asset)))),
+            feeBefore,
+            "Fee curve preserved"
+        );
+        _validationSucceeds(caller_, _riskValidation(address(_asset), cfg_));
     }
 
-    // setAssetRiskConfig
-    // given termLength is zero
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenTermLengthIsZero_reverts() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.termLength = 0;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given termLength equals the expected protocol maximum
-    //  when setAssetRiskConfig is called by admin
-    //   then it updates the config
-    function test_givenTermLengthAtMaximum_updatesConfig() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.termLength = _EXPECTED_MAX_TERM_LENGTH;
-        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON;
-
-        vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(stored.termLength, _EXPECTED_MAX_TERM_LENGTH, "term length");
-        assertEq(stored.maxMaturityHorizon, _EXPECTED_MAX_MATURITY_HORIZON, "max maturity horizon");
-    }
-
-    // setAssetRiskConfig
-    // given termLength is one second above the expected protocol maximum
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenTermLengthOneAboveMaximum_reverts() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.termLength = _EXPECTED_MAX_TERM_LENGTH + 1;
-        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given termLength is above max
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenTermLengthAboveMax_reverts(uint48 termLength_) public {
-        termLength_ = uint48(bound(termLength_, _EXPECTED_MAX_TERM_LENGTH + 1, type(uint48).max));
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.termLength = termLength_;
-        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given maxMaturityHorizon equals termLength
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenMaxMaturityHorizonEqualsTermLength_reverts() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxMaturityHorizon = config.termLength;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given maxMaturityHorizon is below or equal to termLength
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenMaxMaturityHorizonBelowOrEqualToTermLength_reverts(
-        uint48 maxMaturityHorizon_
+    // Scenarios: BLCFG-RISK-CONFIG-A01, BLCFG-RISK-CONFIG-P01.
+    function test_givenAuthorizedCaller_whenCompleteConfigChanged(
+        address caller_,
+        bool admin_,
+        bool operator_
     ) public {
-        maxMaturityHorizon_ = uint48(bound(maxMaturityHorizon_, 1, 14 days));
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxMaturityHorizon = maxMaturityHorizon_;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
+        _grantConfigCaller(caller_, admin_, operator_);
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigSet(caller_, cfg);
     }
 
-    // setAssetRiskConfig
-    // given maxMaturityHorizon equals the expected protocol maximum
-    //  when setAssetRiskConfig is called by admin
-    //   then it updates the config
-    function test_givenMaxMaturityHorizonAtMaximum_updatesConfig() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON;
-
-        vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(stored.maxMaturityHorizon, _EXPECTED_MAX_MATURITY_HORIZON, "max maturity horizon");
-    }
-
-    // setAssetRiskConfig
-    // given maxMaturityHorizon is one second above the expected protocol maximum
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenMaxMaturityHorizonOneAboveMaximum_reverts() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON + 1;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given maxMaturityHorizon is above max
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenMaxMaturityHorizonAboveMax_reverts(uint48 maxMaturityHorizon_) public {
-        maxMaturityHorizon_ = uint48(
-            bound(maxMaturityHorizon_, _EXPECTED_MAX_MATURITY_HORIZON + 1, type(uint48).max)
+    // Scenarios: BLCFG-RISK-CONFIG-A02.
+    function test_whenCallerIsUnauthorized_reverts(address caller_) public {
+        _excludeConfigCallers(caller_);
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _mutationReverts(
+            caller_,
+            abi.encodeCall(_config.setAssetRiskConfig, (address(_asset), cfg)),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
         );
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxMaturityHorizon = maxMaturityHorizon_;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
+        _validationSucceeds(caller_, _riskValidation(address(_asset), cfg));
     }
 
-    // setAssetRiskConfig
-    // given risk values are inside the valid combined range
-    //  when setAssetRiskConfig is called by admin
-    //   then every risk field is replaced
-    function test_givenRiskConfigInValidRange_updatesConfig(
-        uint16 maxLtvBps_,
-        uint16 backingMultiplierBps_,
-        uint16 keeperRewardBps_,
-        uint48 termLength_,
-        uint48 maxMaturityHorizon_,
-        uint128 maxKeeperReward_
+    // Scenarios: BLCFG-RISK-CONFIG-L01.
+    function test_givenIndependentCoreState_whenChanged(
+        bool active_,
+        bool enabled_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, active_, enabled_);
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigSet(_configurationCaller, cfg);
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-L04.
+    function test_givenConfigActiveDisabled_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _config.disable("");
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IEnabler.NotEnabled.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-L08.
+    function test_givenConfigInactiveEnabled_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-L12.
+    function test_givenConfigInactiveDisabled_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _config.disable("");
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-L05.
+    function test_givenInvalidInputAndConfigActiveEnabled_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, coreActive_, coreEnabled_);
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxLtvBps = 0;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansRisk.BurnerLoans_InvalidBps.selector, uint256(0))
+        );
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-L06.
+    function test_givenInvalidInputAndConfigActiveDisabled_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _config.disable("");
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxLtvBps = 0;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IEnabler.NotEnabled.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-L07.
+    function test_givenInvalidInputAndConfigInactiveEnabled_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxLtvBps = 0;
+        _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-L08.
+    function test_givenInvalidInputAndConfigInactiveDisabled_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _config.disable("");
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxLtvBps = 0;
+        _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I01.
+    function test_whenZeroLtv_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxLtvBps = 0;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansRisk.BurnerLoans_InvalidBps.selector, uint256(0))
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I02.
+    function test_whenLtvAboveMaximum_reverts(
+        uint16 value_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxLtvBps = uint16(bound(value_, 10001, type(uint16).max));
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoans_InvalidBps.selector,
+                uint256(cfg.maxLtvBps)
+            )
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I03.
+    function test_whenBackingBelowMinimum_reverts(
+        uint16 value_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.backingMultiplierBps = uint16(bound(value_, 0, 9999));
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I04.
+    function test_whenBackingAboveMaximum_reverts(
+        uint16 value_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.backingMultiplierBps = uint16(bound(value_, 50001, type(uint16).max));
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I05.
+    function test_whenKeeperBpsAboveMaximum_reverts(
+        uint16 value_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.keeperRewardBps = uint16(bound(value_, 10001, type(uint16).max));
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoans_InvalidBps.selector,
+                uint256(cfg.keeperRewardBps)
+            )
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I06.
+    function test_whenZeroTerm_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.termLength = 0;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I07.
+    function test_whenTermAboveMaximum_reverts(
+        uint48 value_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.termLength = uint48(bound(value_, 365 days + 1, type(uint48).max));
+        cfg.maxMaturityHorizon = 366 days;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I08.
+    function test_whenZeroHorizon_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxMaturityHorizon = 0;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I09.
+    function test_whenHorizonBelowTerm_reverts(
+        uint48 term_,
+        uint48 horizon_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.termLength = uint48(bound(term_, 2, 365 days));
+        cfg.maxMaturityHorizon = uint48(bound(horizon_, 1, cfg.termLength - 1));
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I10.
+    function test_whenHorizonEqualsTerm_reverts(
+        uint48 term_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.termLength = uint48(bound(term_, 1, 365 days));
+        cfg.maxMaturityHorizon = cfg.termLength;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I11.
+    function test_whenHorizonAboveMaximum_reverts(
+        uint48 horizon_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxMaturityHorizon = uint48(bound(horizon_, 366 days + 1, type(uint48).max));
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I12.
+    function test_givenInvalidStructAndUnregisteredAsset_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxLtvBps = 0;
+        address asset = address(0);
+        _assertConfigurationRejected(
+            asset,
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansRisk.BurnerLoans_InvalidBps.selector, uint256(0))
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I13.
+    function test_givenValidStructAndUnregisteredAsset_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        address asset = address(0);
+        _assertConfigurationRejected(
+            asset,
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansCore.BurnerLoansCore_AssetNotConfigured.selector,
+                asset
+            )
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I14.
+    function test_givenIncompatibleSchema_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        address asset = address(_asset);
+        IFLOANv1.Market memory market = _floan.getMarket(_market);
+        market.configId = bytes16("invalid");
+        vm.mockCall(
+            address(_floan),
+            abi.encodeCall(_floan.getMarket, (_market)),
+            abi.encode(market)
+        );
+        _assertConfigurationRejected(
+            asset,
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_IncompatibleMarketConfig.selector,
+                _market,
+                bytes16("invalid")
+            )
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I15.
+    function test_givenMalformedMarketData_whenSetAndValidated_reverts(
+        uint256 length_,
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        address asset = address(_asset);
+        length_ = bound(length_, 0, 256);
+        vm.assume(length_ != 224);
+        vm.mockCall(
+            address(_floan),
+            abi.encodeCall(_floan.getMarketConfigData, (_market)),
+            abi.encode(new bytes(length_))
+        );
+        _assertConfigurationRejected(
+            asset,
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_InvalidMarketConfigData.selector,
+                _market,
+                length_
+            )
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-P02.
+    function test_whenConfigurationUnchanged(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigSet(_configurationCaller, cfg);
+        bytes32 beforeState = _stateDigest();
+        vm.recordLogs();
+        vm.prank(_configurationCaller);
+        _config.setAssetRiskConfig(address(_asset), cfg);
+        assertEq(vm.getRecordedLogs().length, 0, "Unchanged struct emits nothing");
+        assertEq(_stateDigest(), beforeState, "Unchanged struct writes nothing");
+        _validationSucceeds(_configurationCaller, _riskValidation(address(_asset), cfg));
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-P04.
+    function test_givenLateFloanWriteFails_whenChanged(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        bytes memory failure = abi.encodeWithSignature("ConfigDataWriteFailed()");
+        vm.mockCallRevert(
+            address(_floan),
+            abi.encodeWithSelector(IFLOANv1.setMarketConfigData.selector),
+            failure
+        );
+        _mutationReverts(
+            _configurationCaller,
+            abi.encodeCall(_config.setAssetRiskConfig, (address(_asset), cfg)),
+            failure
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-D01.
+    function test_whenChanged(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        vm.mockCallRevert(
+            address(_floan),
+            abi.encodeWithSelector(IFLOANv1.setMarketPrincipalCap.selector),
+            abi.encodeWithSignature("UnexpectedWrite()")
+        );
+        vm.mockCallRevert(
+            address(_floan),
+            abi.encodeWithSelector(IFLOANv1.setMarketBaseFee.selector),
+            abi.encodeWithSignature("UnexpectedWrite()")
+        );
+        vm.mockCallRevert(
+            address(_floan),
+            abi.encodeWithSelector(IFLOANv1.setMarketOriginationsEnabled.selector),
+            abi.encodeWithSignature("UnexpectedWrite()")
+        );
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeWithSelector(IBurnerLoansCore.registerMarket.selector),
+            abi.encodeWithSignature("UnexpectedRegistryWrite()")
+        );
+        _assertConfigSet(_configurationCaller, cfg);
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-D02.
+    function test_givenRiskHasIndependentController_whenChanged(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeWithSignature("configOperator()"),
+            hex"deadbeef"
+        );
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigSet(_configurationCaller, cfg);
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-D01.
+    function test_givenRiskUnset_whenSetAndValidated_reverts(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.mockCall(address(_core), abi.encodeWithSignature("risk()"), abi.encode(address(0)));
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        vm.expectCall(address(_core), abi.encodeWithSignature("risk()"), uint64(2));
+        _assertConfigurationRejected(address(_asset), cfg, bytes(""));
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-D02.
+    function test_givenRiskRejectsStruct_whenSetAndValidated(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        bytes memory failure = abi.encodeWithSelector(
+            IBurnerLoansErrors.BurnerLoans_InvalidParam.selector
+        );
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.validateRiskConfig.selector),
+            failure
+        );
+        _assertConfigurationRejected(address(_asset), cfg, failure);
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-D03.
+    function test_givenRiskReplaced_whenValidating(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        address replacement = makeAddr("replacementRisk");
+        vm.etch(replacement, hex"00");
+        vm.mockCall(address(_core), abi.encodeWithSignature("risk()"), abi.encode(replacement));
+        vm.mockCall(
+            replacement,
+            abi.encodeWithSelector(IBurnerLoansRisk.validateRiskConfig.selector),
+            bytes("")
+        );
+        vm.expectCall(
+            replacement,
+            abi.encodeWithSelector(IBurnerLoansRisk.validateRiskConfig.selector, cfg)
+        );
+        _validationSucceeds(_configurationCaller, _riskValidation(address(_asset), cfg));
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-L16.
+    function test_givenLocalRecovery_whenChanged(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
+        _config.disable("");
+        _config.enable("");
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigSet(_configurationCaller, cfg);
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-L17.
+    function test_givenKernelRecovery_whenChanged(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _kernel.executeAction(Actions.ActivatePolicy, address(_config));
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        _assertConfigSet(_configurationCaller, cfg);
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-N13, BLCFG-RISK-CONFIG-P03.
+    function test_whenMinimumRiskFields(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = IBurnerLoansRisk.AssetRiskConfigInput(
+            1,
+            10000,
+            0,
+            1,
+            2,
+            0
+        );
+        _assertConfigSet(_configurationCaller, cfg);
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-N14, BLCFG-RISK-CONFIG-P03.
+    function test_whenMaximumRiskFields(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = IBurnerLoansRisk.AssetRiskConfigInput(
+            10000,
+            50000,
+            10000,
+            365 days,
+            366 days,
+            type(uint128).max
+        );
+        _assertConfigSet(_configurationCaller, cfg);
+    }
+
+    // Scenarios: BLCFG-VALIDATE-RISK-N15, BLCFG-RISK-CONFIG-P03.
+    function test_whenMaximumKeeperReward(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = IBurnerLoansRisk.AssetRiskConfigInput(
+            7500,
+            12000,
+            100,
+            30 days,
+            90 days,
+            type(uint128).max
+        );
+        _assertConfigSet(_configurationCaller, cfg);
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-P01.
+    function test_whenFullValidRiskDomainIsUsed(
+        uint16 ltv_,
+        uint16 backing_,
+        uint16 keeper_,
+        uint128 reward_,
+        uint48 term_,
+        uint48 horizon_
     ) public {
-        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, _MAX_LTV_BPS));
-        backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, _MAX_BPS, _MAX_BACKING_MULTIPLIER_BPS)
-        );
-        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, _MAX_BPS));
-        termLength_ = uint48(bound(termLength_, 1, _EXPECTED_MAX_TERM_LENGTH));
-        maxMaturityHorizon_ = uint48(
-            bound(maxMaturityHorizon_, termLength_ + 1, _EXPECTED_MAX_MATURITY_HORIZON)
-        );
-        IBurnerLoans.AssetRiskConfigInput memory config = IBurnerLoans.AssetRiskConfigInput({
-            maxLtvBps: maxLtvBps_,
-            backingMultiplierBps: backingMultiplierBps_,
-            keeperRewardBps: keeperRewardBps_,
-            termLength: termLength_,
-            maxMaturityHorizon: maxMaturityHorizon_,
-            maxKeeperReward: maxKeeperReward_
-        });
-
-        vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit AssetRiskConfigSet(address(usds), config);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(stored.maxLtvBps, maxLtvBps_, "maximum LTV");
-        assertEq(stored.backingMultiplierBps, backingMultiplierBps_, "backing multiplier");
-        assertEq(stored.keeperRewardBps, keeperRewardBps_, "reward");
-        assertEq(stored.termLength, termLength_, "term length");
-        assertEq(stored.maxMaturityHorizon, maxMaturityHorizon_, "max maturity horizon");
-        assertEq(stored.maxKeeperReward, maxKeeperReward_, "max reward");
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg;
+        cfg.maxLtvBps = uint16(bound(ltv_, 1, 10000));
+        cfg.backingMultiplierBps = uint16(bound(backing_, 10000, 50000));
+        cfg.keeperRewardBps = uint16(bound(keeper_, 0, 10000));
+        cfg.maxKeeperReward = reward_;
+        cfg.termLength = uint48(bound(term_, 1, 365 days));
+        cfg.maxMaturityHorizon = uint48(bound(horizon_, cfg.termLength + 1, 366 days));
+        vm.assume(cfg.maxLtvBps != 8500);
+        _assertConfigSet(_configurationCaller, cfg);
     }
 
-    // setAssetRiskConfig
-    // given an asset has admin-only config fields
-    //  when setAssetRiskConfig is called by admin
-    //   then enabled state, decimals, and debt cap are preserved
-    function test_givenRiskConfigUpdates_preservesAdminOnlyFields() public {
-        IBurnerLoans.AssetConfig memory beforeConfig = burnerLoansConfig.getAssetConfig(
-            address(usds)
+    // Scenarios: BLCFG-RISK-CONFIG-C01.
+    function test_givenCollateralCallback_whenNestedConfigCaught_reverts(
+        bool admin_,
+        bool operator_,
+        address tokenDeployer_
+    ) public {
+        ReentrantFeeToken token = _armConfigurationCallback(
+            abi.encodeCall(_config.setAssetRiskConfig, (address(_asset), _riskConfig())),
+            admin_,
+            operator_,
+            tokenDeployer_
         );
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxLtvBps = 9_500;
-        config.maxKeeperReward = 500e6;
-
-        vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(stored.originationsEnabled, beforeConfig.originationsEnabled, "enabled");
-        assertEq(stored.collateralDecimals, beforeConfig.collateralDecimals, "decimals");
-        assertEq(stored.debtCap, beforeConfig.debtCap, "debt cap");
-        assertEq(stored.maxLtvBps, 9_500, "maximum LTV");
-        assertEq(stored.maxKeeperReward, 500e6, "max reward");
+        _assertConfigurationCallbackCaught(token);
     }
 
-    // setAssetRiskConfig
-    // given multiple assets are configured
-    //  when setAssetRiskConfig is called for one asset
-    //   then the other asset risk config is unchanged
-    function test_givenMultipleAssets_updatesOnlySpecifiedAsset() public {
-        MockERC20 otherAsset = new MockERC20("Other Asset", "OTHER", USDS_DECIMALS);
-        _configurePrice(address(otherAsset), 1e18);
-        _configureDepositManagerAsset(address(otherAsset));
-
-        IBurnerLoans.AssetConfig memory otherConfig = _defaultAssetConfig(USDS_DECIMALS);
-        otherConfig.maxLtvBps = 8_500;
-        otherConfig.backingMultiplierBps = 12_000;
-        otherConfig.keeperRewardBps = 200;
-        otherConfig.termLength = 21 days;
-        otherConfig.maxMaturityHorizon = 180 days;
-        otherConfig.maxKeeperReward = 750e6;
-
-        vm.prank(admin);
-        burnerLoansConfig.addAsset(
-            address(otherAsset),
-            uint128(otherConfig.debtCap),
-            _assetRiskConfigInputFromConfig(otherConfig),
-            _defaultAssetFeeConfig(),
-            false
+    // Scenarios: BLCFG-RISK-CONFIG-C01.
+    function test_givenCollateralCallback_whenNestedConfigPropagated(
+        bool admin_,
+        bool operator_,
+        address tokenDeployer_
+    ) public {
+        ReentrantFeeToken token = _armConfigurationCallback(
+            abi.encodeCall(_config.setAssetRiskConfig, (address(_asset), _riskConfig())),
+            admin_,
+            operator_,
+            tokenDeployer_
         );
+        _assertConfigurationCallbackPropagated(token);
+    }
 
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxLtvBps = 9_250;
-
-        vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-
-        IBurnerLoans.AssetConfig memory targetStored = burnerLoansConfig.getAssetConfig(
-            address(usds)
+    // Scenarios: BLCFG-RISK-CONFIG-A01.
+    function test_whenPermittedCallerClassesSeeded() public {
+        address adminOnly = makeAddr("adminOnly");
+        address overlap = makeAddr("adminAndOperator");
+        _rolesAdmin.grantRole(ADMIN_ROLE, adminOnly);
+        _assertConfigSet(
+            adminOnly,
+            IBurnerLoansRisk.AssetRiskConfigInput(7500, 12000, 100, 30 days, 90 days, 1e6)
         );
-        assertEq(targetStored.maxLtvBps, 9_250, "target maximum LTV");
-
-        IBurnerLoans.AssetConfig memory otherStored = burnerLoansConfig.getAssetConfig(
-            address(otherAsset)
+        _assertConfigSet(
+            _configurationCaller,
+            IBurnerLoansRisk.AssetRiskConfigInput(7501, 12000, 100, 30 days, 90 days, 1e6)
         );
-        assertEq(otherStored.maxLtvBps, otherConfig.maxLtvBps, "other maximum LTV");
+        _rolesAdmin.grantRole(ADMIN_ROLE, overlap);
+        _config.setConfigOperator(overlap);
+        _assertConfigSet(
+            overlap,
+            IBurnerLoansRisk.AssetRiskConfigInput(7502, 12000, 100, 30 days, 90 days, 1e6)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I02.
+    function test_whenMaxLtvBpsAboveMaximumEndpointsAreSeeded_reverts() public {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxLtvBps = 10001;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoans_InvalidBps.selector,
+                uint256(cfg.maxLtvBps)
+            )
+        );
+        cfg.maxLtvBps = 65535;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoans_InvalidBps.selector,
+                uint256(cfg.maxLtvBps)
+            )
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I03.
+    function test_whenBackingMultiplierBpsBelowMinimumEndpointsAreSeeded_reverts() public {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.backingMultiplierBps = 0;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+        cfg.backingMultiplierBps = 1;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+        cfg.backingMultiplierBps = 9999;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I04.
+    function test_whenBackingMultiplierBpsAboveMaximumEndpointsAreSeeded_reverts() public {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.backingMultiplierBps = 50001;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+        cfg.backingMultiplierBps = 65535;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I05.
+    function test_whenKeeperRewardBpsAboveMaximumEndpointsAreSeeded_reverts() public {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.keeperRewardBps = 10001;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoans_InvalidBps.selector,
+                uint256(cfg.keeperRewardBps)
+            )
+        );
+        cfg.keeperRewardBps = 65535;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoans_InvalidBps.selector,
+                uint256(cfg.keeperRewardBps)
+            )
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I07.
+    function test_whenTermLengthAboveMaximumEndpointsAreSeeded_reverts() public {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.termLength = 365 days + 1;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+        cfg.termLength = type(uint48).max;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I11.
+    function test_whenMaxMaturityHorizonAboveMaximumEndpointsAreSeeded_reverts() public {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.maxMaturityHorizon = 366 days + 1;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+        cfg.maxMaturityHorizon = type(uint48).max;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-A01, BLCFG-RISK-CONFIG-P01.
+    function test_givenTimelockOperator_whenQueuedAndExecuted() public {
+        BurnerLoansConfigTimelock timelock = new BurnerLoansConfigTimelock(
+            _kernel,
+            IBurnerLoansConfig(address(_config))
+        );
+        _kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        _config.setConfigOperator(address(timelock));
+        timelock.enable("");
+        assertFalse(
+            _roles.hasRole(address(timelock), ADMIN_ROLE),
+            "Forwarding operator holds no ADMIN role"
+        );
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        vm.expectCall(address(_config), _riskValidation(address(_asset), cfg));
+        uint64 id = timelock.queueSetAssetRiskConfig(address(_asset), cfg);
+        vm.warp(timelock.getQueuedAction(id).executableAt);
+        timelock.executeQueuedAction(id);
         assertEq(
-            otherStored.backingMultiplierBps,
-            otherConfig.backingMultiplierBps,
-            "other backing multiplier"
-        );
-        assertEq(otherStored.keeperRewardBps, otherConfig.keeperRewardBps, "other keeper reward");
-        assertEq(otherStored.termLength, otherConfig.termLength, "other term length");
-        assertEq(
-            otherStored.maxMaturityHorizon,
-            otherConfig.maxMaturityHorizon,
-            "other maturity horizon"
+            _config.getAssetConfig(address(_asset)).maxLtvBps,
+            cfg.maxLtvBps,
+            "Queued risk fields applied"
         );
         assertEq(
-            otherStored.maxKeeperReward,
-            otherConfig.maxKeeperReward,
-            "other max keeper reward"
+            _config.getAssetConfig(address(_asset)).maxKeeperReward,
+            cfg.maxKeeperReward,
+            "Queued full-width reward applied"
         );
     }
 
-    // setAssetRiskConfig
-    // given caller is the timelock
-    //  when setAssetRiskConfig is called with valid config
-    //   then all risk fields change
-    function test_givenTimelockCaller_updatesRiskConfig() public {
-        IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-
-        vm.prank(address(configTimelock));
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit AssetRiskConfigSet(address(usds), config);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
-
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(stored.maxLtvBps, 9_500, "maximum LTV");
-        assertEq(stored.backingMultiplierBps, 11_000, "backing multiplier");
-        assertEq(stored.termLength, 14 days, "term length");
-        assertEq(stored.maxMaturityHorizon, 120 days, "max maturity horizon");
-        assertEq(stored.maxKeeperReward, 500e6, "max reward");
+    // Scenarios: BLCFG-RISK-CONFIG-P01.
+    function test_givenExistingLoan_whenRiskTightened() public givenDebtBearingPosition {
+        uint48 maturity = _lens.getPosition(address(_asset), _borrower).maturity;
+        // $2000 collateral / max($100 / 0.85, $100 * 1.25) = 2000/125 = 16 WAD.
+        assertEq(
+            _lens.positionHealthFactor(address(_asset), 2000e6, 100e9),
+            16e18,
+            "Independent original health"
+        );
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.backingMultiplierBps = 50000;
+        cfg.termLength = 1 days;
+        cfg.maxMaturityHorizon = 2 days;
+        _assertConfigSet(_configurationCaller, cfg);
+        // $2000 / max($100 / 0.75, $100 * 5) = 2000/500 = 4 WAD.
+        assertEq(
+            _lens.positionHealthFactor(address(_asset), 2000e6, 100e9),
+            4e18,
+            "New backing rule applies immediately"
+        );
+        cfg.maxLtvBps = 1;
+        _assertConfigSet(_configurationCaller, cfg);
+        // One basis point permits LTV 0.0001. $100 / 0.0001 = $1,000,000 required.
+        // Health = $2000 / $1,000,000 * 1e18 = 2e15, below one WAD.
+        assertEq(
+            _lens.positionHealthFactor(address(_asset), 2000e6, 100e9),
+            2e15,
+            "New LTV applies to the existing loan"
+        );
+        assertTrue(_lens.isSeizable(address(_asset), _borrower), "No grandfathered health rules");
+        assertEq(
+            _lens.getPosition(address(_asset), _borrower).maturity,
+            maturity,
+            "Changing terms does not rewrite existing maturity"
+        );
+        assertEq(
+            _floan.getMarketPrincipalDue(_market),
+            100e9,
+            "Risk update does not change principal"
+        );
+        assertEq(
+            _floan.getMarketCollateral(_market),
+            2000e6,
+            "Risk update does not move collateral"
+        );
     }
 
-    function _validRiskConfig()
-        internal
-        pure
-        returns (IBurnerLoans.AssetRiskConfigInput memory config)
-    {
-        config = IBurnerLoans.AssetRiskConfigInput({
-            maxLtvBps: 9_500,
-            backingMultiplierBps: 11_000,
-            keeperRewardBps: 500,
-            termLength: 14 days,
-            maxMaturityHorizon: 120 days,
-            maxKeeperReward: 500e6
-        });
+    // Scenarios: BLCFG-RISK-CONFIG-D01.
+    function test_givenNondefaultShareMode_whenConfigurationChanged(
+        address caller_,
+        bool admin_,
+        bool operator_
+    ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        _useShareCollateral();
+        _assertConfigSet(_configurationCaller, _riskConfig());
+        assertTrue(
+            _config.getAssetConfig(address(_asset)).withdrawAsShares,
+            "Unrelated nondefault share-output bit preserved"
+        );
+    }
+
+    // Scenarios: BLCFG-RISK-CONFIG-I09, BLCFG-RISK-CONFIG-I10.
+    function test_whenHorizonRelationBoundariesSeeded_reverts() public {
+        IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
+        cfg.termLength = 365 days;
+        cfg.maxMaturityHorizon = 1;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+        cfg.maxMaturityHorizon = 365 days - 1;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+        cfg.maxMaturityHorizon = 365 days;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
+        cfg.termLength = 1;
+        cfg.maxMaturityHorizon = 1;
+        _assertConfigurationRejected(
+            address(_asset),
+            cfg,
+            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+        );
     }
 }
-
-// forge-lint: disable-end(unsafe-typecast)
-
-// forge-lint: disable-end(literal-instead-of-constant)

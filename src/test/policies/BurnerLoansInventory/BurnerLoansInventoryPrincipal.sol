@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Contracts
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 
 contract BurnerLoansInventoryPrincipal is Policy {
@@ -14,6 +15,12 @@ contract BurnerLoansInventoryPrincipal is Policy {
 
     function facility() external view returns (address) {
         return _FACILITY;
+    }
+
+    // Inventory asks Core whether a settlement is in progress. This unit fixture is idle;
+    // callback tests mock this boundary, while modular tests exercise Core's real guard.
+    function requireNotReentrant() external pure {
+        return;
     }
 
     function configureDependencies() external pure override returns (Keycode[] memory) {

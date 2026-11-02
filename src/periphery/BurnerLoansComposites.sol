@@ -1,63 +1,79 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
+import {IBurnerLoansCollateral} from "src/policies/interfaces/burnerloans/IBurnerLoansCollateral.sol";
+
+import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
+
 // Interfaces
 import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
-import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
-import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
-import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
 import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
 
 // Contracts
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
 import {ERC165} from "@openzeppelin-5.7.0/utils/introspection/ERC165.sol";
+import {SafeERC20Exact as ExactERC20} from "src/libraries/SafeERC20Exact.sol";
+import {BurnerLoansCollateral} from "src/policies/burnerloans/BurnerLoansCollateral.sol";
+import {BurnerLoansDebt} from "src/policies/burnerloans/BurnerLoansDebt.sol";
 
 /// @title Burner Loans Composites
 /// @notice One-transaction borrower flows composed from Burner Loans primitives.
-contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuardTransient {
+contract BurnerLoansComposites is
+    IBurnerLoansComposites,
+    IVersioned,
+    ERC165,
+    ReentrancyGuardTransient
+{
     using SafeERC20 for IERC20;
 
     address internal immutable _BURNER_LOANS;
     address internal immutable _OHM;
+    BurnerLoansCollateral public immutable collateral;
+    BurnerLoansDebt public immutable debt;
 
     /// @notice Binds the composite flows to one Burner Loans policy and its configured OHM token.
-    /// @dev Reverts for zero addresses, unsupported target interfaces, an unavailable target
-    ///      context, or an OHM address that differs from the target's immutable debt token.
-    constructor(address burnerLoans_, address ohm_) {
+    /// @dev Reverts if:
+    ///      - A required address is zero or a target interface is unsupported.
+    ///      - The target context is unavailable.
+    ///      - OHM differs from the target's immutable debt token.
+    constructor(
+        address burnerLoans_,
+        address ohm_,
+        BurnerLoansCollateral collateral_,
+        BurnerLoansDebt debt_
+    ) {
         if (burnerLoans_ == address(0) || ohm_ == address(0)) {
             revert BurnerLoansComposites_ZeroAddress();
         }
         if (
-            !ERC165Checker.supportsInterface(
-                burnerLoans_,
-                type(IBurnerLoansLifecycle).interfaceId
-            ) ||
-            !ERC165Checker.supportsInterface(burnerLoans_, type(IBurnerLoansView).interfaceId) ||
-            !ERC165Checker.supportsInterface(burnerLoans_, type(IOperatorAuth).interfaceId)
-        ) {
-            revert BurnerLoansComposites_InvalidBurnerLoans(burnerLoans_);
-        }
-        BurnerLoansContext memory context;
-        try IBurnerLoansSeizureContext(burnerLoans_).context() returns (
-            BurnerLoansContext memory targetContext
-        ) {
-            context = targetContext;
-        } catch {
-            revert BurnerLoansComposites_InvalidBurnerLoans(burnerLoans_);
-        }
-        address expectedOhm = address(context.ohm);
+            !ERC165Checker.supportsInterface(burnerLoans_, type(IBurnerLoansCore).interfaceId) ||
+            address(collateral_.core()) != burnerLoans_ ||
+            address(debt_.core()) != burnerLoans_
+        ) revert BurnerLoansComposites_InvalidBurnerLoans(burnerLoans_);
+        collateral = collateral_;
+        debt = debt_;
+        address expectedOhm = IBurnerLoansCore(burnerLoans_).ohm();
         if (expectedOhm != ohm_) revert BurnerLoansComposites_OhmMismatch(expectedOhm, ohm_);
         _BURNER_LOANS = burnerLoans_;
         _OHM = ohm_;
     }
 
     /// @inheritdoc IBurnerLoansComposites
+    /// @dev Reverts if:
+    ///      - An input parameter is invalid.
+    ///      - Operator authorization fails.
+    ///      - A token transfer fails.
+    ///      - An underlying Burner Loans operation fails.
     function depositAndBorrow(
         IOperatorAuth.Authorization calldata authorization_,
         IOperatorAuth.Signature calldata signature_,
@@ -73,40 +89,40 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuar
         IERC20 asset = IERC20(params_.asset);
         uint256 startingBalance = asset.balanceOf(address(this));
         uint256 inputAmount = uint256(params_.collateralAmount) + params_.maxFee;
-        asset.safeTransferFrom(msg.sender, address(this), inputAmount);
+        ExactERC20.safeTransferFromExact(asset, msg.sender, address(this), inputAmount);
         asset.forceApprove(_BURNER_LOANS, inputAmount);
 
-        (
-            result.depositedCollateral,
-            result.totalCollateral,
-            result.healthFactor
-        ) = IBurnerLoansLifecycle(_BURNER_LOANS).depositCollateral(
+        // The subsequent borrow supplies final health; deposit health is not needed.
+        // This multiline operation needs a range; the suppression ends immediately after it.
+        // forge-lint: disable-start(unused-return)
+        (result.depositedCollateral, result.totalCollateral, ) = collateral.depositCollateral(
             params_.asset,
             params_.collateralAmount,
             msg.sender
         );
-        // The borrowed principal equals the requested OHM amount, which the caller already knows.
-        // forge-lint: disable-start(unused-return)
-        (
-            ,
-            result.fee,
-            result.resultingDebtOhm,
-            result.maturity,
-            result.healthFactor
-        ) = IBurnerLoansLifecycle(_BURNER_LOANS).borrow(
+        // forge-lint: disable-end(unused-return)
+        IBurnerLoansDebt.BorrowPreview memory borrowed = debt.borrow(
             params_.asset,
             params_.ohmAmount,
             msg.sender,
             params_.recipient,
             params_.maxFee
         );
-        // forge-lint: disable-end(unused-return)
+        result.fee = borrowed.fee;
+        result.resultingDebtOhm = borrowed.resultingDebtOhm;
+        result.maturity = borrowed.maturity;
+        result.healthFactor = borrowed.resultingHealthFactor;
 
         asset.forceApprove(_BURNER_LOANS, 0);
         _refund(asset, msg.sender, startingBalance);
     }
 
     /// @inheritdoc IBurnerLoansComposites
+    /// @dev Reverts if:
+    ///      - An input parameter is invalid.
+    ///      - Operator authorization fails.
+    ///      - A token transfer fails.
+    ///      - An underlying Burner Loans operation fails.
     function repayAndWithdraw(
         IOperatorAuth.Authorization calldata authorization_,
         IOperatorAuth.Signature calldata signature_,
@@ -119,47 +135,61 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuar
         _validateRecipient(params_.recipient);
         _authorizeIfProvided(authorization_, signature_);
 
-        IBurnerLoans.Position memory position = IBurnerLoansView(_BURNER_LOANS).getPosition(
+        (, , IFLOANv1.Position memory position) = LoanPositions.forCore(
+            IBurnerLoansCore(_BURNER_LOANS),
             params_.asset,
             msg.sender
         );
-        result.repaidOhm = params_.maxRepayOhm < position.debtOhm
+        result.repaidOhm = params_.maxRepayOhm < position.principalDue
             ? params_.maxRepayOhm
-            : position.debtOhm;
+            : position.principalDue;
+        result.resultingDebtOhm = position.principalDue;
+        result.healthFactor = type(uint256).max;
 
         IERC20 ohmToken = IERC20(_OHM);
         uint256 startingOhmBalance = ohmToken.balanceOf(address(this));
         if (params_.maxRepayOhm != 0) {
-            ohmToken.safeTransferFrom(msg.sender, address(this), params_.maxRepayOhm);
+            ExactERC20.safeTransferFromExact(
+                ohmToken,
+                msg.sender,
+                address(this),
+                params_.maxRepayOhm
+            );
         }
         if (result.repaidOhm != 0) {
             ohmToken.forceApprove(_BURNER_LOANS, result.repaidOhm);
-            // The composite reports the amount repaid and resulting health, not remaining debt.
-            // forge-lint: disable-start(unused-return)
-            (, result.healthFactor) = IBurnerLoansLifecycle(_BURNER_LOANS).repay(
+            (result.resultingDebtOhm, result.healthFactor) = debt.repay(
                 params_.asset,
                 result.repaidOhm,
                 msg.sender
             );
-            // forge-lint: disable-end(unused-return)
             ohmToken.forceApprove(_BURNER_LOANS, 0);
         }
 
         if (params_.collateralAmount != 0) {
-            (
-                result.tokenOut,
-                result.amountOut,
-                result.remainingCollateral,
-                result.healthFactor
-            ) = IBurnerLoansLifecycle(_BURNER_LOANS).withdrawCollateral(
+            IBurnerLoansCollateral.WithdrawPreview memory withdrawn = collateral.withdrawCollateral(
                 params_.asset,
                 params_.collateralAmount,
                 msg.sender,
                 params_.recipient
             );
+            result.tokenOut = withdrawn.returnToken;
+            result.amountOut = withdrawn.returnAmount;
+            result.remainingCollateral = withdrawn.remainingDepositedCollateral;
+            result.healthFactor = withdrawn.resultingHealthFactor;
         } else {
-            result.remainingCollateral = position.depositedCollateral;
-            if (position.debtOhm == 0) result.healthFactor = type(uint256).max;
+            result.remainingCollateral = position.collateral;
+            if (result.repaidOhm == 0 && position.principalDue != 0) {
+                IBurnerLoansRisk evaluator = IBurnerLoansRisk(
+                    IBurnerLoansCore(_BURNER_LOANS).risk()
+                );
+                result.healthFactor = evaluator.health(
+                    evaluator.snapshot(params_.asset),
+                    IBurnerLoansCore(_BURNER_LOANS).marketId(params_.asset),
+                    position.collateral,
+                    position.principalDue
+                );
+            }
         }
 
         result.refundedOhm = _refund(ohmToken, msg.sender, startingOhmBalance);
@@ -176,8 +206,9 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuar
     }
 
     /// @inheritdoc ERC165
-    function supportsInterface(bytes4 interfaceId_) public view override returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) public view override returns (bool supported) {
         return
+            interfaceId_ == type(IVersioned).interfaceId ||
             interfaceId_ == type(IBurnerLoansComposites).interfaceId ||
             super.supportsInterface(interfaceId_);
     }
@@ -231,5 +262,10 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuar
                 finalBalance
             );
         }
+    }
+
+    /// @inheritdoc IVersioned
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        return (1, 0);
     }
 }

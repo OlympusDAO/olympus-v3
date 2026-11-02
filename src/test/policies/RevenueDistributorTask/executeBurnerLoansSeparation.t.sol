@@ -1,106 +1,137 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {Actions} from "src/Kernel.sol";
+// Interfaces
+import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
+
+// Libraries
+import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Contracts
+import {Actions, toKeycode} from "src/Kernel.sol";
 import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
 import {RevenueDistributorTask} from "src/policies/RevenueDistributorTask.sol";
-import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {BurnerLoansBorrowTestBase} from "../BurnerLoans/fixtures/BurnerLoansBorrowTestBase.sol";
+import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
 
-contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansBorrowTestBase {
-    uint128 internal constant COLLATERAL_AMOUNT = 2_000e18;
-    uint128 internal constant BORROW_AMOUNT = 100e9;
-    uint256 internal constant DISTRIBUTOR_RECEIPT = 7;
+contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansModularTest {
+    uint128 internal constant _COLLATERAL_AMOUNT = 2_000e6;
+    uint128 internal constant _BORROW_AMOUNT = 100e9;
+    uint256 internal constant _DISTRIBUTOR_RECEIPT = 7;
 
     // Scenarios: TASK-P06.
     function test_givenBurnerLoansPendingFee_taskSettlesOnlyDistributorCustody(
-        bool burnerLoansActive_
+        bool coreActive_,
+        bool payoutActive_
     ) public {
-        usds.mint(alice, COLLATERAL_AMOUNT + 100e18);
-        vm.startPrank(alice);
-        assertTrue(
-            usds.approve(address(burnerLoans), type(uint256).max),
-            "collateral approval succeeds"
-        );
-        (
-            uint256 depositedAmount,
-            uint256 resultingCollateral,
-            uint256 depositHealthFactor
-        ) = burnerLoans.depositCollateral(address(usds), COLLATERAL_AMOUNT, alice);
-        vm.stopPrank();
-        assertEq(depositedAmount, COLLATERAL_AMOUNT, "collateral deposit succeeds");
-        assertEq(resultingCollateral, COLLATERAL_AMOUNT, "position collateral matches deposit");
-        assertGt(depositHealthFactor, 0, "deposit health factor is positive");
-
-        RevenueDistributor distributor = _installFeeDistributorForTest(address(usds));
-        uint256 fee = burnerLoans.previewBorrow(address(usds), BORROW_AMOUNT, alice).fee;
+        RevenueDistributor distributor = new RevenueDistributor(_kernel);
+        _kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        distributor.enable("");
+        distributor.setAssetRoutes(address(_asset), 0, new IRevenueDistributor.AssetRoute[](0));
+        _payout.setRevenueDistributor(address(distributor));
+        _payout.setSendFeesToDistributor(true);
+        vm.prank(_borrower);
+        _collateral.depositCollateral(address(_asset), _COLLATERAL_AMOUNT, _borrower);
         vm.mockCallRevert(
-            address(usds),
-            abi.encodeWithSelector(usds.transfer.selector, address(distributor)),
-            abi.encodeWithSignature("Error(string)", "blacklisted")
+            address(_asset),
+            abi.encodeWithSelector(_asset.transfer.selector, address(distributor)),
+            abi.encodeWithSignature("TransferBlocked()")
         );
-        vm.prank(alice);
-        (
-            uint256 borrowed,
-            uint256 chargedFee,
-            uint256 resultingDebt,
-            uint48 maturity,
-            uint256 borrowHealthFactor
-        ) = burnerLoans.borrow(address(usds), BORROW_AMOUNT, alice, alice, fee);
-        assertEq(borrowed, BORROW_AMOUNT, "borrow principal matches request");
-        assertEq(chargedFee, fee, "borrow fee matches preview");
-        assertGt(resultingDebt, 0, "borrow creates debt");
-        assertGt(maturity, block.timestamp, "borrow maturity is in the future");
-        assertGt(borrowHealthFactor, 0, "borrow health factor is positive");
+        vm.prank(_borrower);
+        IBurnerLoansDebt.BorrowPreview memory borrowed = _debt.borrow(
+            address(_asset),
+            _BORROW_AMOUNT,
+            _borrower,
+            _borrower,
+            type(uint256).max
+        );
+        assertGt(borrowed.fee, 0, "Real borrow creates a fee");
+        assertEq(borrowed.resultingDebtOhm, _BORROW_AMOUNT, "Real borrow records principal");
+        assertEq(_ohm.balanceOf(_borrower), _BORROW_AMOUNT, "Borrower receives OHM");
+        assertEq(
+            _asset.balanceOf(address(_payout)),
+            borrowed.fee,
+            "Deferred fee remains in Payout custody"
+        );
         vm.clearMockedCalls();
-        if (!burnerLoansActive_) _deactivatePolicy(address(burnerLoans));
 
         address heart = makeAddr("revenue distributor heart");
-        vm.startPrank(admin);
         RevenueDistributorTask task = new RevenueDistributorTask(
-            kernel,
+            _kernel,
             address(distributor),
             5_000_000
         );
-        kernel.executeAction(Actions.ActivatePolicy, address(task));
-        rolesAdmin.grantRole(HEART_ROLE, heart);
+        _kernel.executeAction(Actions.ActivatePolicy, address(task));
+        _rolesAdmin.grantRole(HEART_ROLE, heart);
         task.enable("");
-        vm.stopPrank();
-        usds.mint(address(distributor), DISTRIBUTOR_RECEIPT);
-        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        if (!coreActive_) _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        if (!payoutActive_) _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        _asset.mint(address(distributor), _DISTRIBUTOR_RECEIPT);
+        address treasury = address(_kernel.getModuleForKeycode(toKeycode("TRSRY")));
+        uint256 treasuryBefore = _asset.balanceOf(treasury);
 
         vm.prank(heart);
         task.execute();
 
         assertEq(
-            usds.balanceOf(address(trsry)) - treasuryBefore,
-            DISTRIBUTOR_RECEIPT,
-            "RD custody settles"
+            _asset.balanceOf(treasury) - treasuryBefore,
+            _DISTRIBUTOR_RECEIPT,
+            "Task settles distributor custody only"
         );
         assertEq(
-            burnerLoans.pendingFeeForTest(address(usds)),
-            fee,
-            "Burner Loans fee bucket unchanged"
+            _payout.pendingPayout(address(_asset), address(distributor)),
+            borrowed.fee,
+            "Task leaves deferred Burner Loans fee owed"
         );
-        assertEq(
-            burnerLoans.pendingPayout(address(usds), address(distributor)),
-            fee,
-            "fee remains owed to distributor"
+        (uint256 pendingFee, uint256 seized, uint256 total) = _payout.payoutReserves(
+            address(_asset)
         );
+        assertEq(pendingFee, borrowed.fee, "Raw fee bucket is unchanged");
+        assertEq(seized, 0, "No seizure liability created");
+        assertEq(total, borrowed.fee, "Aggregate Payout reserve is unchanged");
+        assertEq(_asset.balanceOf(address(_payout)), borrowed.fee, "Payout custody is untouched");
 
-        if (!burnerLoansActive_) _activatePolicy(address(burnerLoans));
-        uint256 transferred = burnerLoans.transferPendingPayout(
-            address(usds),
-            address(distributor)
+        // Distributor settlement is independent of Payout membership; a direct retry is not.
+        if (!payoutActive_) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                    address(_payout)
+                )
+            );
+            _payout.transferPendingPayout(address(_asset), address(distributor));
+            assertEq(
+                _payout.pendingPayout(address(_asset), address(distributor)),
+                borrowed.fee,
+                "Inactive retry preserves fee"
+            );
+            assertEq(
+                _asset.balanceOf(address(_payout)),
+                borrowed.fee,
+                "Inactive retry preserves custody"
+            );
+            _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        }
+        // Active Payout recovery remains independent of Core membership.
+        assertEq(
+            _payout.transferPendingPayout(address(_asset), address(distributor)),
+            borrowed.fee,
+            "Direct retry transfers fee once"
         );
-        assertEq(transferred, fee, "direct retry transfers pending fee");
         vm.prank(heart);
         task.execute();
         assertEq(
-            usds.balanceOf(address(trsry)) - treasuryBefore,
-            DISTRIBUTOR_RECEIPT + fee,
-            "direct retry then task settles fee once"
+            _asset.balanceOf(treasury) - treasuryBefore,
+            _DISTRIBUTOR_RECEIPT + borrowed.fee,
+            "Task settles fee only after direct delivery"
         );
-        assertEq(burnerLoans.pendingFeeForTest(address(usds)), 0, "fee bucket clears once");
+        assertEq(
+            _payout.pendingPayout(address(_asset), address(distributor)),
+            0,
+            "Fee entitlement clears once"
+        );
+        assertEq(_asset.balanceOf(address(_payout)), 0, "Payout custody clears once");
+        assertEq(_asset.balanceOf(address(distributor)), 0, "Distributor custody is fully settled");
     }
 }

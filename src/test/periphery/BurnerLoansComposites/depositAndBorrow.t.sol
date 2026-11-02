@@ -4,12 +4,15 @@ pragma solidity >=0.8.24;
 // Test actions assert their effects directly; return values are intentionally unused.
 // forge-lint: disable-start(unused-return)
 
+// Interfaces
 import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
-
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
+
+// Contracts
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
 import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 import {BurnerLoansCompositesTest} from "src/test/periphery/BurnerLoansComposites/BurnerLoansCompositesTest.sol";
 
@@ -19,18 +22,18 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
     //  when depositing and borrowing
     //   then one transaction creates the position, pays the fee, and leaves no residual tokens
     function test_givenPreAuthorization_depositsAndBorrows() public {
-        _authorize(alice);
-        _fundAndApproveCollateral(address(usds), alice, _COLLATERAL + _MAX_FEE);
-        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        _authorize(_borrower);
+        _fundAndApproveCollateral(address(_asset), _borrower, _COLLATERAL + _MAX_FEE);
+        uint256 treasuryBefore = _asset.balanceOf(address(_treasury));
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         IBurnerLoansComposites.DepositAndBorrowResult memory result = composites.depositAndBorrow(
             _emptyAuthorization(),
             _emptySignature(),
-            _depositParams(address(usds), alice)
+            _depositParams(address(_asset), _borrower)
         );
 
-        IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
+        IBurnerLoansCore.Position memory position = _lens.getPosition(address(_asset), _borrower);
         assertEq(result.depositedCollateral, _COLLATERAL, "deposited collateral");
         assertEq(result.totalCollateral, _COLLATERAL, "total collateral");
         assertEq(result.resultingDebtOhm, _BORROW, "resulting debt");
@@ -44,10 +47,10 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         //        = 1_699_999_999_999_999_999 (18 decimals)
         assertEq(result.healthFactor, 1_699_999_999_999_999_999, "health factor");
         assertEq(position.debtOhm, _BORROW, "position debt");
-        assertEq(ohm.balanceOf(alice), _BORROW, "borrowed OHM");
-        assertEq(usds.balanceOf(address(trsry)), treasuryBefore + result.fee, "treasury fee");
-        assertEq(usds.balanceOf(alice), _MAX_FEE - result.fee, "fee refund");
-        _assertCompositeBalances(address(usds));
+        assertEq(_ohm.balanceOf(_borrower), _BORROW, "borrowed OHM");
+        assertEq(_asset.balanceOf(address(_treasury)), treasuryBefore + result.fee, "treasury fee");
+        assertEq(_asset.balanceOf(_borrower), _MAX_FEE - result.fee, "fee refund");
+        _assertCompositeBalances(address(_asset));
     }
 
     // depositAndBorrow
@@ -55,19 +58,19 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
     //  when depositing and borrowing
     //   then borrowed OHM is routed only to that recipient
     function test_givenThirdPartyRecipient_routesBorrowedOhm() public {
-        _authorize(alice);
-        _fundAndApproveCollateral(address(usds), alice, _COLLATERAL + _MAX_FEE);
+        _authorize(_borrower);
+        _fundAndApproveCollateral(address(_asset), _borrower, _COLLATERAL + _MAX_FEE);
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         composites.depositAndBorrow(
             _emptyAuthorization(),
             _emptySignature(),
-            _depositParams(address(usds), recipient)
+            _depositParams(address(_asset), recipient)
         );
 
-        assertEq(ohm.balanceOf(recipient), _BORROW, "recipient OHM");
-        assertEq(ohm.balanceOf(alice), 0, "caller OHM");
-        _assertCompositeBalances(address(usds));
+        assertEq(_ohm.balanceOf(recipient), _BORROW, "recipient OHM");
+        assertEq(_ohm.balanceOf(_borrower), 0, "caller OHM");
+        _assertCompositeBalances(address(_asset));
     }
 
     // depositAndBorrow
@@ -80,23 +83,23 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
             IOperatorAuth.Authorization memory authorization,
             IOperatorAuth.Signature memory signature
         ) = _signedAuthorization(borrower, privateKey);
-        _fundAndApproveCollateral(address(usds), borrower, _COLLATERAL + _MAX_FEE);
+        _fundAndApproveCollateral(address(_asset), borrower, _COLLATERAL + _MAX_FEE);
 
         vm.prank(borrower);
         composites.depositAndBorrow(
             authorization,
             signature,
-            _depositParams(address(usds), borrower)
+            _depositParams(address(_asset), borrower)
         );
 
         assertEq(
-            burnerLoans.authorizationDeadlines(borrower, address(composites)),
+            _core.authorizationDeadlines(borrower, address(composites)),
             authorization.authorizationDeadline,
             "authorization deadline"
         );
-        assertEq(burnerLoans.authorizationNonces(borrower), 1, "authorization nonce");
-        assertEq(ohm.balanceOf(borrower), _BORROW, "borrowed OHM");
-        _assertCompositeBalances(address(usds));
+        assertEq(_core.authorizationNonces(borrower), 1, "authorization nonce");
+        assertEq(_ohm.balanceOf(borrower), _BORROW, "borrowed OHM");
+        _assertCompositeBalances(address(_asset));
     }
 
     // depositAndBorrow
@@ -105,23 +108,23 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
     //   then Burner Loans rejects the operation and all input remains with the caller
     function test_givenNoAuthorization_revertsAndRollsBack() public {
         uint256 input = _COLLATERAL + _MAX_FEE;
-        _fundAndApproveCollateral(address(usds), alice, input);
+        _fundAndApproveCollateral(address(_asset), _borrower, input);
 
         vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
-        vm.prank(alice);
+        vm.prank(_borrower);
         composites.depositAndBorrow(
             _emptyAuthorization(),
             _emptySignature(),
-            _depositParams(address(usds), alice)
+            _depositParams(address(_asset), _borrower)
         );
 
-        assertEq(usds.balanceOf(alice), input, "caller collateral");
+        assertEq(_asset.balanceOf(_borrower), input, "caller collateral");
         assertEq(
-            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            _lens.getPosition(address(_asset), _borrower).depositedCollateral,
             0,
             "position collateral"
         );
-        _assertCompositeBalances(address(usds));
+        _assertCompositeBalances(address(_asset));
     }
 
     // depositAndBorrow
@@ -129,8 +132,8 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
     //  when depositing and borrowing
     //   then the token transfer reverts before any position mutation
     function test_givenMissingTokenApproval_reverts() public {
-        _authorize(alice);
-        usds.mint(alice, _COLLATERAL + _MAX_FEE);
+        _authorize(_borrower);
+        _asset.mint(_borrower, _COLLATERAL + _MAX_FEE);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -140,11 +143,11 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
                 _COLLATERAL + _MAX_FEE
             )
         );
-        vm.prank(alice);
+        vm.prank(_borrower);
         composites.depositAndBorrow(
             _emptyAuthorization(),
             _emptySignature(),
-            _depositParams(address(usds), alice)
+            _depositParams(address(_asset), _borrower)
         );
     }
 
@@ -153,25 +156,25 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
     //  when depositing and borrowing
     //   then the deposit, transfers, and authorization state all roll back
     function test_givenFeeAboveMax_revertsAndRollsBack() public {
-        _authorize(alice);
-        _fundAndApproveCollateral(address(usds), alice, _COLLATERAL);
+        _authorize(_borrower);
+        _fundAndApproveCollateral(address(_asset), _borrower, _COLLATERAL);
         IBurnerLoansComposites.DepositAndBorrowParams memory params = _depositParams(
-            address(usds),
-            alice
+            address(_asset),
+            _borrower
         );
         params.maxFee = 0;
 
-        vm.expectPartialRevert(IBurnerLoans.BurnerLoans_FeeExceedsMax.selector);
-        vm.prank(alice);
+        vm.expectPartialRevert(IBurnerLoansDebt.BurnerLoans_FeeExceedsMax.selector);
+        vm.prank(_borrower);
         composites.depositAndBorrow(_emptyAuthorization(), _emptySignature(), params);
 
-        assertEq(usds.balanceOf(alice), _COLLATERAL, "caller collateral");
+        assertEq(_asset.balanceOf(_borrower), _COLLATERAL, "caller collateral");
         assertEq(
-            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            _lens.getPosition(address(_asset), _borrower).depositedCollateral,
             0,
             "position collateral"
         );
-        _assertCompositeBalances(address(usds));
+        _assertCompositeBalances(address(_asset));
     }
 
     // depositAndBorrow
@@ -189,11 +192,15 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
             abi.encodeWithSelector(
                 IBurnerLoansComposites.BurnerLoansComposites_InvalidAuthorizationAccount.selector,
                 borrower,
-                alice
+                _borrower
             )
         );
-        vm.prank(alice);
-        composites.depositAndBorrow(authorization, signature, _depositParams(address(usds), alice));
+        vm.prank(_borrower);
+        composites.depositAndBorrow(
+            authorization,
+            signature,
+            _depositParams(address(_asset), _borrower)
+        );
     }
 
     // depositAndBorrow
@@ -204,26 +211,26 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         ReentrantFeeToken token = new ReentrantFeeToken();
         _configurePrice(address(token), 1e18);
         _configureDepositManagerAsset(address(token));
-        vm.prank(admin);
-        burnerLoansConfig.addAsset(
+        vm.prank(address(this));
+        _config.addAsset(
             address(token),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
             _defaultAssetFeeConfig(),
             false
         );
-        _authorize(alice);
+        _authorize(_borrower);
         uint128 collateral = 2_000e18;
         uint256 maxFee = 10e18;
-        token.mint(alice, collateral + maxFee);
-        vm.prank(alice);
+        token.mint(_borrower, collateral + maxFee);
+        vm.prank(_borrower);
         token.approve(address(composites), collateral + maxFee);
         IBurnerLoansComposites.DepositAndBorrowParams memory params = IBurnerLoansComposites
             .DepositAndBorrowParams({
                 asset: address(token),
                 collateralAmount: collateral,
                 ohmAmount: _BORROW,
-                recipient: alice,
+                recipient: _borrower,
                 maxFee: maxFee
             });
         token.setCallback(
@@ -234,7 +241,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
             )
         );
 
-        vm.prank(alice);
+        vm.prank(_borrower);
         composites.depositAndBorrow(_emptyAuthorization(), _emptySignature(), params);
 
         assertFalse(token.callbackSucceeded(), "callback succeeded");
@@ -243,7 +250,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
             ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector,
             "callback revert"
         );
-        assertEq(burnerLoans.getPosition(address(token), alice).debtOhm, _BORROW, "position debt");
+        assertEq(_lens.getPosition(address(token), _borrower).debtOhm, _BORROW, "position debt");
         _assertCompositeBalances(address(token));
     }
 }

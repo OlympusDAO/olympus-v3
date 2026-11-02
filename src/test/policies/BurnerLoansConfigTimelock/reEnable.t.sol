@@ -1,159 +1,393 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
+// Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
-import {Actions} from "src/Kernel.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
-import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
+// Libraries
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
+// Contracts
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
-
-// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
-// forge-lint: disable-start(unsafe-typecast)
+import {Actions, Kernel} from "src/Kernel.sol";
+import {BurnerLoansConfigTimelock} from "src/policies/burnerloans/BurnerLoansConfigTimelock.sol";
 
 contract BurnerLoansConfigTimelockReEnableTest is BurnerLoansConfigTimelockTest {
-    uint48 internal constant _DISABLED_AT = 1234;
-
-    event Enabled();
-    event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
-
-    // reEnable
-    // given caller has neither admin nor burner_loans_admin role
-    //  when reEnable is called within the grace period
-    //   then it reverts
-    function test_givenNonAdminOrBurnerLoansAdminCaller_reverts(address caller_) public {
-        vm.assume(caller_ != admin);
-        vm.assume(caller_ != burnerLoansAdmin);
-
-        vm.prank(emergency);
-        configTimelock.disable("");
-
-        vm.prank(caller_);
-        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
-        configTimelock.reEnable();
-    }
-
-    // reEnable
-    // given the policy is already enabled
-    //  when reEnable is called by burner_loans_admin
-    //   then it reverts
-    function test_givenAlreadyEnabled_reverts() public {
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(IEnabler.NotDisabled.selector);
-        configTimelock.reEnable();
-    }
-
-    // reEnable
-    // given the constructor-bound Burner Loans Config is no longer active
-    //  when admin re-enables within the grace period
-    //   then it reverts
-    function test_givenBurnerLoansConfigInactive_reverts() public {
-        vm.prank(emergency);
-        configTimelock.disable("");
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
-
-        vm.expectRevert(
+    // Scenarios: BLCT-REENABLE-D01.
+    function test_givenConfigActiveFalse_givenConfigEnabledTrue_whenReenable_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _timelock.disable("");
+        _setState(_config, false, true);
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
             abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidBurnerLoans.selector,
-                address(burnerLoansConfig)
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_config)
             )
         );
-        vm.prank(admin);
-        configTimelock.reEnable();
     }
 
-    // reEnable
-    // given the policy re-enable grace period has elapsed
-    //  when reEnable is called by burner_loans_admin
-    //   then it reverts
-    function test_givenGracePeriodElapsed_reverts(
-        uint32 gracePeriod_,
-        uint48 elapsedAfterDeadline_
+    // Scenarios: BLCT-REENABLE-D02.
+    function test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_reverts(
+        address caller_,
+        uint8 role_
     ) public {
-        uint32 gracePeriod = uint32(bound(gracePeriod_, 1, type(uint32).max));
-        uint48 elapsedAfterDeadline = uint48(bound(elapsedAfterDeadline_, 1, 365 days));
-
-        vm.prank(admin);
-        configTimelock.setGracePeriod(gracePeriod);
-
-        vm.warp(_DISABLED_AT);
-        vm.prank(emergency);
-        configTimelock.disable("");
-
-        uint48 deadline = uint48(_DISABLED_AT + uint48(gracePeriod));
-        vm.warp(uint256(deadline) + elapsedAfterDeadline);
-
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(
-            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, deadline)
-        );
-        configTimelock.reEnable();
-    }
-
-    // reEnable
-    // given caller has burner_loans_admin role and a fuzzed timestamp within the grace period
-    //  when reEnable is called
-    //   then the policy is re-enabled
-    function test_givenBurnerLoansAdminCallerWithinGracePeriod_reenablesPolicy(
-        uint48 disabledAt_,
-        uint32 elapsed_
-    ) public {
-        uint48 disabledAt = uint48(
-            bound(
-                disabledAt_,
-                1,
-                uint256(type(uint48).max) - BurnerLoansConstants.REENABLE_GRACE_PERIOD
+        _proposer(caller_, role_);
+        _timelock.disable("");
+        _setState(_config, true, false);
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_config)
             )
         );
-        uint32 elapsed = uint32(bound(elapsed_, 0, BurnerLoansConstants.REENABLE_GRACE_PERIOD));
-
-        vm.warp(disabledAt);
-        vm.prank(emergency);
-        configTimelock.disable("");
-
-        assertFalse(configTimelock.isEnabled(), "disabled");
-        assertEq(configTimelock.lastTransitionAt(), disabledAt, "disabled at");
-
-        vm.warp(uint256(disabledAt) + elapsed);
-        vm.prank(burnerLoansAdmin);
-        vm.expectEmit(address(configTimelock));
-        emit Enabled();
-        vm.expectEmit(true, true, false, true, address(configTimelock));
-        emit Transition(burnerLoansAdmin, true, "", uint48(block.timestamp));
-        configTimelock.reEnable();
-
-        assertTrue(configTimelock.isEnabled(), "enabled");
-        assertEq(configTimelock.lastTransitionAt(), uint48(block.timestamp), "last transition");
     }
 
-    // reEnable
-    // given caller has admin role and the configured grace period is active
-    //  when reEnable is called
-    //   then the policy is re-enabled
-    function test_givenAdminCallerWithinConfiguredGracePeriod_reenablesPolicy() public {
-        uint32 gracePeriod = 2 days;
+    // Scenarios: BLCT-REENABLE-D03.
+    function test_givenConfigActiveFalse_givenConfigEnabledFalse_whenReenable_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _timelock.disable("");
+        _setState(_config, false, false);
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_config)
+            )
+        );
+    }
 
-        vm.prank(admin);
-        configTimelock.setGracePeriod(gracePeriod);
+    // Scenarios: BLCT-REENABLE-D04.
+    function test_givenForeignConfigKernel_whenReenable_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _timelock.disable("");
+        Kernel other = new Kernel();
+        vm.mockCall(
+            address(_config),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(address(other))
+        );
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_config),
+                address(_kernel),
+                address(other)
+            )
+        );
+    }
 
-        vm.warp(_DISABLED_AT);
-        vm.prank(emergency);
-        configTimelock.disable("");
+    // Scenarios: BLCT-REENABLE-L03.
+    function test_givenOwnPolicyInactive_whenReenable_reverts(address caller_, uint8 role_) public {
+        _proposer(caller_, role_);
+        _setState(_timelock, false, false);
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_timelock)
+            )
+        );
+    }
 
-        vm.warp(_DISABLED_AT + gracePeriod);
-        vm.prank(admin);
-        vm.expectEmit(address(configTimelock));
-        emit Enabled();
-        vm.expectEmit(true, true, false, true, address(configTimelock));
-        emit Transition(admin, true, "", uint48(block.timestamp));
-        configTimelock.reEnable();
+    // Scenarios: BLCT-REENABLE-D06.
+    function test_givenRiskOperatorIndependent_whenReenable_thenEnabled(
+        address caller_,
+        uint8 role_,
+        bool zero_
+    ) public {
+        _proposer(caller_, role_);
+        _timelock.disable("");
+        _risk.setConfigOperator(zero_ ? address(0) : _recipient);
+        _expectTransition(caller_, true, "");
+        vm.prank(caller_);
+        _timelock.reEnable();
+        assertTrue(_timelock.isEnabled(), "Risk controller does not constrain activation");
+    }
 
-        assertTrue(configTimelock.isEnabled(), "enabled");
-        assertEq(configTimelock.lastTransitionAt(), uint48(block.timestamp), "last transition");
+    // Scenarios: BLCT-REENABLE-A01.
+    function test_givenUnauthorizedWithinGrace_whenReEnabled_thenAuthorizationFirst(
+        address caller_
+    ) public {
+        _outsider(caller_);
+        _timelock.disable("");
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+        );
+    }
+
+    // Scenarios: BLCT-REENABLE-A02.
+    function test_givenUnauthorizedExpiredGraceWithUnavailableConfig_whenReEnabled_thenAuthorizationFirst(
+        address caller_
+    ) public {
+        _outsider(caller_);
+        _timelock.disable("");
+        vm.warp(uint256(_timelock.lastTransitionAt()) + _timelock.gracePeriod() + 1);
+        _setState(_config, false, false);
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+        );
+    }
+
+    // Scenarios: BLCT-REENABLE-L01.
+    function test_givenAlreadyEnabled_whenReEnabled_thenStateError(
+        address caller_,
+        bool active_
+    ) public {
+        _setState(_timelock, active_, true);
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(IEnabler.NotDisabled.selector)
+        );
+    }
+
+    // Scenarios: BLCT-REENABLE-L02.
+    function test_givenNeverEnabledActivated_whenReEnabled_thenNeverEnabledFirst(
+        address caller_
+    ) public {
+        _timelock = new BurnerLoansConfigTimelock(_kernel, _config);
+        _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(IReEnabler.NeverEnabled.selector)
+        );
+    }
+
+    // Scenarios: BLCT-REENABLE-L04.
+    function test_givenNeverEnabledUninitialized_whenReEnabled_thenNeverEnabledFirst(
+        address caller_
+    ) public {
+        _timelock = new BurnerLoansConfigTimelock(_kernel, _config);
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(IReEnabler.NeverEnabled.selector)
+        );
+    }
+
+    // Scenarios: BLCT-REENABLE-P01.
+    function test_givenBeforeDeadline_whenReEnabled_thenExactTransition(
+        address caller_,
+        uint8 role_,
+        uint48 last_,
+        uint32 grace_,
+        uint48 now_
+    ) public {
+        _proposer(caller_, role_);
+        grace_ = uint32(bound(grace_, 1, type(uint32).max));
+        last_ = uint48(bound(last_, 1, uint256(type(uint48).max) - grace_));
+        _timelock.setGracePeriod(grace_);
+        vm.warp(last_);
+        _timelock.disable("");
+        uint256 deadline = uint256(last_) + grace_;
+        vm.warp(bound(now_, last_, deadline - 1));
+        _expectTransition(caller_, true, "");
+        vm.prank(caller_);
+        _timelock.reEnable();
+        assertTrue(_timelock.isEnabled(), "Inclusive grace transition");
+        assertEq(_timelock.lastTransitionAt(), vm.getBlockTimestamp(), "Exact new history");
+    }
+
+    // Scenarios: BLCT-REENABLE-P02.
+    function test_givenAtDeadline_whenReEnabled_thenExactTransition(
+        address caller_,
+        uint8 role_,
+        uint48 last_,
+        uint32 grace_
+    ) public {
+        _proposer(caller_, role_);
+        grace_ = uint32(bound(grace_, 1, type(uint32).max));
+        last_ = uint48(bound(last_, 1, uint256(type(uint48).max) - grace_));
+        _timelock.setGracePeriod(grace_);
+        vm.warp(last_);
+        _timelock.disable("");
+        uint256 deadline = uint256(last_) + grace_;
+        vm.warp(deadline);
+        _expectTransition(caller_, true, "");
+        vm.prank(caller_);
+        _timelock.reEnable();
+        assertTrue(_timelock.isEnabled(), "Inclusive grace transition");
+        assertEq(_timelock.lastTransitionAt(), vm.getBlockTimestamp(), "Exact new history");
+    }
+
+    // Scenarios: BLCT-REENABLE-P03.
+    function test_givenAfterDeadline_whenReEnabled_reverts(
+        address caller_,
+        uint8 role_,
+        uint48 last_,
+        uint32 grace_,
+        uint48 now_
+    ) public {
+        _proposer(caller_, role_);
+        grace_ = uint32(bound(grace_, 1, type(uint32).max));
+        last_ = uint48(bound(last_, 1, uint256(type(uint48).max) - grace_ - 1));
+        _timelock.setGracePeriod(grace_);
+        vm.warp(last_);
+        _timelock.disable("");
+        uint256 deadline = uint256(last_) + grace_;
+        vm.warp(bound(now_, deadline + 1, type(uint48).max));
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, uint48(deadline))
+        );
+    }
+
+    // Scenarios: BLCT-REENABLE-N01.
+    function test_givenOverflowDeadline_whenReEnabled_reverts(
+        address caller_,
+        uint8 role_,
+        uint48 last_,
+        uint32 grace_
+    ) public {
+        _proposer(caller_, role_);
+        grace_ = uint32(bound(grace_, 1, type(uint32).max));
+        last_ = uint48(bound(last_, uint256(type(uint48).max) - grace_ + 1, type(uint48).max));
+        _timelock.setGracePeriod(grace_);
+        vm.warp(last_);
+        _timelock.disable("");
+        uint256 deadline = uint256(last_) + grace_;
+        _transitionReverts(
+            abi.encodeCall(_timelock.reEnable, ()),
+            caller_,
+            abi.encodeWithSelector(
+                SafeCast.SafeCastOverflowedUintDowncast.selector,
+                uint8(48),
+                deadline
+            )
+        );
+    }
+
+    // Scenarios: BLCT-REENABLE-P01.
+    function test_givenGraceP01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds()
+        public
+    {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 role; role < 3; ++role) {
+            for (uint256 period; period < 2; ++period) {
+                uint32 grace = period == 0 ? 1 : type(uint32).max;
+                for (uint256 endpoint; endpoint < 2; ++endpoint) {
+                    uint48 last = endpoint == 0 ? uint48(1) : type(uint48).max - grace;
+                    test_givenBeforeDeadline_whenReEnabled_thenExactTransition(
+                        address(0xabc1),
+                        role,
+                        last,
+                        grace,
+                        last
+                    );
+                    _restore(checkpoint);
+                    test_givenBeforeDeadline_whenReEnabled_thenExactTransition(
+                        address(0xabc1),
+                        role,
+                        last,
+                        grace,
+                        last + grace - 1
+                    );
+                    _restore(checkpoint);
+                }
+            }
+        }
+    }
+
+    // Scenarios: BLCT-REENABLE-P02.
+    function test_givenGraceP02RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds()
+        public
+    {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 role; role < 3; ++role) {
+            for (uint256 period; period < 2; ++period) {
+                uint32 grace = period == 0 ? 1 : type(uint32).max;
+                for (uint256 endpoint; endpoint < 2; ++endpoint) {
+                    uint48 last = endpoint == 0 ? uint48(1) : type(uint48).max - grace;
+                    test_givenAtDeadline_whenReEnabled_thenExactTransition(
+                        address(0xabc1),
+                        role,
+                        last,
+                        grace
+                    );
+                    _restore(checkpoint);
+                }
+            }
+        }
+    }
+
+    // Scenarios: BLCT-REENABLE-P03.
+    function test_givenGraceP03RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds()
+        public
+    {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 role; role < 3; ++role) {
+            for (uint256 period; period < 2; ++period) {
+                uint32 grace = period == 0 ? 1 : type(uint32).max;
+                for (uint256 endpoint; endpoint < 2; ++endpoint) {
+                    uint48 last = endpoint == 0 ? uint48(1) : type(uint48).max - grace - 1;
+                    test_givenAfterDeadline_whenReEnabled_reverts(
+                        address(0xabc1),
+                        role,
+                        last,
+                        grace,
+                        last + grace + 1
+                    );
+                    _restore(checkpoint);
+                    test_givenAfterDeadline_whenReEnabled_reverts(
+                        address(0xabc1),
+                        role,
+                        last,
+                        grace,
+                        type(uint48).max
+                    );
+                    _restore(checkpoint);
+                }
+            }
+        }
+    }
+
+    // Scenarios: BLCT-REENABLE-N01.
+    function test_givenGraceN01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds()
+        public
+    {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 role; role < 3; ++role) {
+            for (uint256 period; period < 2; ++period) {
+                uint32 grace = period == 0 ? 1 : type(uint32).max;
+                for (uint256 endpoint; endpoint < 2; ++endpoint) {
+                    uint48 last = endpoint == 0 ? type(uint48).max - grace + 1 : type(uint48).max;
+                    test_givenOverflowDeadline_whenReEnabled_reverts(
+                        address(0xabc1),
+                        role,
+                        last,
+                        grace
+                    );
+                    _restore(checkpoint);
+                }
+            }
+        }
     }
 }
-
-// forge-lint: disable-end(unsafe-typecast)

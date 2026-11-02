@@ -1,16 +1,22 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
-import {BurnerLoansConfigTimelockTest} from "src/test/policies/BurnerLoansConfigTimelock/BurnerLoansConfigTimelockTest.sol";
+// Contracts
+import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
-contract BurnerLoansConfigTimelockVersionTest is BurnerLoansConfigTimelockTest {
-    // VERSION
-    // given timelock deployed
-    //  when VERSION is called
-    //   then it returns initial version
-    function test_givenTimelockDeployed_VERSION_returnsInitialVersion() public view {
-        (uint8 major, uint8 minor) = configTimelock.VERSION();
-        assertEq(major, 1, "major");
-        assertEq(minor, 0, "minor");
+contract BurnerLoansConfigTimelockVERSIONTest is BurnerLoansConfigTimelockTest {
+    // Scenarios: BLCT-VERSION-P01.
+    function test_givenAnyCaller_whenVersionRead_thenOneZero(
+        address caller_,
+        bool active_,
+        bool enabled_
+    ) public {
+        _setState(_timelock, active_, enabled_);
+        bytes32 beforeState = _lifecycleDigest();
+        vm.prank(caller_);
+        (uint8 major, uint8 minor) = _timelock.VERSION();
+        assertEq(major, 1, "Major");
+        assertEq(minor, 0, "Minor");
+        assertEq(_lifecycleDigest(), beforeState, "Pure version has no effects");
     }
 }

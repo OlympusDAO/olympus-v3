@@ -2,160 +2,93 @@
 
 ## Purpose
 
-`BurnerLoans` is a fixed-term, 0% interest OHM shorting facility. A borrower deposits an approved
-collateral asset, draws OHM, and later repays OHM. The draw may use protocol-supplied OHM, newly
-minted OHM, or both. If a position matures or becomes unhealthy, anyone can seize it. Seizure
-records its principal as defaulted, pays any permitted keeper reward, and sends the remaining
-collateral to `TRSRY`.
+Burner Loans lends OHM against approved collateral for a fixed term. It charges an upfront collateral-denominated fee instead of interest. Loans draw supplied OHM first, then mint any shortfall within the global debt cap.
 
-The generic [FLOAN module](./floan.md) owns markets, positions, and principal indexes. Burner Loans
-adds collateral custody, pricing, fees, health rules, funding inventory, and automated seizure.
+Borrowers repay OHM. Anyone can seize a position after maturity or when its health factor falls below `1e18`. Seizure defaults its principal, pays any permitted keeper reward and sends the remaining collateral to Treasury.
+
+This guide describes the modular contracts in this branch, not a deployed configuration or activation approval. See the [access-control reference](burner_loans_access_control.md) for permissions and the [Inventory reference](burner_loans_inventory.md) for OHM accounting.
 
 ## Architecture
 
+Public action contracts validate requests and call `BurnerLoansCore` for complete settlement. The component table identifies each contract in the modular implementation.
+
 ```mermaid
 flowchart LR
-    USER["Borrower or operator"] -->|"collateral and debt actions"| BL["BurnerLoans"]
-    CONFIG["BurnerLoansConfig"] -->|"market configuration"| FLOAN["FLOAN"]
-    CONFIG -->|"fee and yield destination flags"| BL
-    CONFIG -->|"global debt cap"| INV["BurnerLoansInventory"]
-    TIMELOCK["BurnerLoansConfigTimelock"] -->|"delayed delegated changes"| CONFIG
-    BL -->|"positions and principal"| FLOAN
-    BL -->|"draw, repay, default"| INV
-    INV -->|"mint, burn, approval"| MINTR["MINTR"]
-    INV -->|"surplus rescue"| TRSRY["TRSRY"]
-    BL --> CACHE["PriceCache (optional)"]
-    CACHE --> PRICE["PRICE"]
-    BL -.->|"fallback"| PRICE
-    BL --> BACKING["backing oracle"]
-    BL --> DM["DepositManager / ERC-4626"]
-    BL -->|"configured fee and yield receipts"| RD["RevenueDistributor"]
-    RD -->|"governed shares"| YRF["Yield repurchase recipient"]
-    RD -->|"governed shares"| DIRECT["Other recipients"]
-    RD -->|"exact remainder"| TRSRY
-    HEART["Heart"] --> CACHER["PriceCacher"]
-    CACHER -->|"configured pairs"| CACHE
-    HEART --> SEIZER["BurnerLoansSeizer"]
-    SEIZER -->|"bounded scan and seize"| BL
-    HEART --> YC["BurnerLoansYieldClaimer"]
-    YC -->|"claim custody yield"| BL
-    HEART --> DT["RevenueDistributorTask"]
-    DT -->|"distribute received tokens"| RD
+    USER[Borrower or operator] --> COL[Collateral]
+    USER --> DEBT[Debt]
+    KEEPER[Keeper] --> SEIZE[Seize]
+    COL --> CORE[Core]
+    DEBT --> CORE
+    SEIZE --> CORE
+    COL --> RISK[Risk]
+    DEBT --> RISK
+    SEIZE --> RISK
+    CORE --> FLOAN[FLOAN]
+    CORE --> DM[DepositManager]
+    CORE --> INV[Inventory]
+    CORE --> PAYOUT[Payout]
+    RISK --> CACHE[Optional PriceCache]
+    RISK --> PRICE[PRICE]
+    RISK --> BACKING[Backing oracle]
+    PAYOUT --> RD[RevenueDistributor]
+    PAYOUT --> TRSRY[Treasury]
 ```
 
-| Component                                                                              | Responsibility                                                                |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `BurnerLoans`                                                                          | User lifecycle, health, custody, and pending fee or seizure payouts           |
-| [`BurnerLoansInventory`](./burner_loans_inventory.md)                                  | OHM custody, provider claim, global cap, principal total, and MINTR authority |
-| `BurnerLoansConfig`                                                                    | Authorized market, debt-cap, and destination flag forwarding                  |
-| [`BurnerLoansConfigTimelock`](./burner_loans_access_control.md#config-timelock-matrix) | Timelocked delegate for bounded Config setters                                |
-| `BurnerLoansSeizer`                                                                    | Gas-bounded, fail-open periodic seizure                                       |
-| `BurnerLoansYieldClaimer` | Periodic custody-yield claims to the selected destination |
-| [`RevenueDistributor`](./revenue_distributor.md) | Allocation and retry of its own fee and yield receipts |
-| `RevenueDistributorTask` | Gas-bounded periodic distribution with a resumable cursor |
-| `PriceCacher`                                                                          | Generic fail-soft warming of independently configured PriceCache pairs        |
-| `PriceCache`                                                                           | Reusable timestamped snapshots sourced from the installed PRICE module        |
-| `FLOAN`                                                                                | Generic fixed-term market, position, active-index, and aggregate state        |
-| `DepositManager`                                                                       | Collateral custody and optional ERC-4626 routing                              |
+| Component | Responsibility |
+| --- | --- |
+| `BurnerLoansCore` | Permanent FLOAN facility and DepositManager operator; authorization grants, asset registry, transfers and accounting settlement |
+| `BurnerLoansCollateral` | Deposit and withdrawal validation, quotes and execution |
+| `BurnerLoansDebt` | Borrowing, repayment and extension validation, quotes and execution |
+| `BurnerLoansSeize` | Permissionless batch liquidation and keeper validation |
+| `BurnerLoansRisk` | Prices, health, fees, configuration validation and keeper-reward calculations |
+| `BurnerLoansInventory` | OHM funding, provider claims, active principal and MINTR approval |
+| `BurnerLoansPayout` | Received fees, seized collateral, keeper obligations, payout retries and recovery |
+| `BurnerLoansConfig` | FLOAN market configuration, Core registry updates, Risk cache-age forwarding and Core surplus recovery |
+| `BurnerLoansConfigTimelock` | Delayed delegated Config changes and Core surplus recovery |
+| `BurnerLoansPayoutConfigTimelock` | Delayed Payout flags and recovery, independently of the market-configuration queue |
+| `BurnerLoansInventoryConfigTimelock` | Delayed Inventory surplus burning or rescue through Inventory's independent controller |
+| `BurnerLoansLens` | Position views and bounded seizure scans; no independent policy lifecycle |
+| `BurnerLoansSeizerTask` | One managed asset visit per Heart execution |
+| `BurnerLoansYieldClaimerTask` | Direct yield claims and bounded iteration over Core's asset registry |
+| `BurnerLoansComposites` | Combined public actions in one transaction |
 
-Burner Loans Config requires exactly one FLOAN market for its facility, collateral token, and OHM
-pair when reading or updating configuration. FLOAN itself permits another contract to create an
-additional matching market. Lifecycle, quote, view, and seizure paths deliberately continue using
-the earliest matching market so that such an external market creation cannot block servicing of
-existing Burner Loans positions. Config lookups fail closed when the pair is missing or ambiguous.
+FLOAN stores positions, market configuration and principal indexes. DepositManager stores collateral liabilities, vault shares and receipt accounting. Core stores the selected market ID and withdrawal mode for each registered asset. Actions and Lens use that record rather than discovering a market by token-pair order.
 
-Burner Loans is deployed before Burner Loans Inventory. `BurnerLoansInventory` permanently binds
-that Burner Loans address as its facility, while Burner Loans stores a replaceable
-`BurnerLoansInventory` pointer. Burner Loans Config is deployed without a facility link. After all
-three policies are active, admin links Config to Burner Loans, Burner Loans Inventory to Config,
-and Burner Loans to both policies while each destination contract is disabled. Enablement
-revalidates the complete relationship before Burner Loans becomes operational.
+Core grants no economic guarantee merely because a caller has a settlement role. It authenticates the operation-specific role and settles the supplied request. Governance must grant those roles only to reviewed action contracts. Core does not require a role holder to report a Kernel or have active-policy membership.
 
-## Position Lifecycle
+## Position lifecycle
 
-Burner Loans uses the first FLOAN position for a borrower and market. FLOAN remains generic and can
-store multiple positions. A completed Burner Loans debt episode reuses its position ID.
+A borrower uses one canonical position per registered asset market. Later debt episodes reuse its position ID.
 
-> **Important: one position has one maturity for all of its debt.** The first borrow in a debt
-> episode fixes an absolute maturity using the term configured at that time. A later borrow adds to
-> the same aggregate principal without changing that maturity, even if governance has since reduced
-> the term length or maturity horizon. A later extension is different: it applies the term length
-> and maturity horizon configured when the extension is requested to the position's entire
-> outstanding principal. Neither a future borrow nor a future extension is guaranteed; current
-> enablement, capacity, health, price, fee, and other validation still apply.
+The first borrow fixes an absolute maturity. Additional borrowing adds principal without changing that maturity. An extension applies the current term and maturity horizon to the entire outstanding principal. Configuration changes do not rewrite a stored maturity.
 
-**Integration warning:** a preview does not lock the term configuration. `borrow` and `extend`
-protect the accepted fee with `maxFee`, but they do not accept a maturity-slippage bound. Clients
-should refresh the preview immediately before submission and display the resulting maturity
-prominently for confirmation.
+For example, a later term reduction does not shorten an existing loan. A future extension uses the reduced term and must fit within the current horizon.
 
-For example, suppose a position has 1,000 OHM of principal with a maturity established under a
-30-day term and a 90-day horizon. If governance later changes the configuration to a 15-day term
-and 30-day horizon, borrowing another 1 OHM does not shorten or otherwise reset the existing
-maturity. The complete 1,001 OHM remains due at that same timestamp. If the borrower later extends,
-the then-current 15-day term advances the shared maturity for all 1,001 OHM, and the resulting
-maturity must fit within the then-current 30-day horizon.
+| Action | Effect | Main condition |
+| --- | --- | --- |
+| Deposit | Adds the underlying-denominated credit reported by DepositManager | First deposits and top-ups are allowed with originations enabled or disabled, subject to the other deposit checks |
+| Borrow | Adds principal and, for a new debt episode, sets maturity | Originations enabled, healthy position, valid maturity and available capacity |
+| Repay | Reduces principal and returns OHM to Inventory | Payer supplies its own OHM; repayment is not in the latest borrow block |
+| Withdraw | Removes collateral credit and returns underlying or shares | Any remaining debt stays healthy |
+| Extend | Advances the shared maturity | Originations enabled, valid term/horizon, health and accepted fee |
+| Seize | Defaults all principal and removes collateral | Nonzero debt is matured or health is below `1e18` |
+| Claim yield | Transfers custody surplus to the current yield recipient | Valid custody path and operational claim dependencies |
 
-Configuration changes therefore do not rewrite an active position's stored maturity. They do
-govern new debt episodes and future extensions. A borrower is protected from a retroactive
-shortening of an agreed maturity, but is not promised that current configuration or origination
-availability will remain available for a later borrow or extension.
+Full repayment clears the debt episode. Seizure also removes collateral and updates cumulative default accounting. Neither operation requires a new position ID for a later episode.
 
-```mermaid
-stateDiagram-v2
-    [*] --> CollateralOnly: deposit collateral
-    CollateralOnly --> Active: borrow starts a term
-    Active --> Active: borrow / partial repay / collateral change / extend
-    Active --> CollateralOnly: full repayment
-    Active --> Empty: seizure
-    Empty --> CollateralOnly: later deposit reuses position
-    CollateralOnly --> [*]: full withdrawal
-```
+## Operating states
 
-| Action              | Effect                                                        | Main condition                                                     |
-| ------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Deposit collateral  | Adds DepositManager credit to the position                    | Burner Loans and asset originations are enabled                    |
-| Borrow              | Adds principal; a new debt episode also fixes its maturity    | Position is healthy, within both caps, and not matured             |
-| Repay               | Reduces principal and settles OHM into Burner Loans Inventory | Not in the borrow block; live PRICE unless repayment clears debt   |
-| Withdraw collateral | Removes credit and returns custody assets                     | Remaining debt stays healthy                                       |
-| Extend              | Advances the shared maturity of all debt by current terms     | Position stays healthy and maturity remains within current horizon |
-| Seize               | Defaults all principal and removes all collateral             | Position is matured or below the health boundary                   |
-| Claim yield         | Sends custody surplus to Treasury or Revenue Distributor     | Custody and the withdrawal mode remain valid                       |
+Kernel activity and local enablement are independent. Ordinary action execution requires the action and its required downstream services to be operational. A local pause is separate from an asset's `originationsEnabled` flag.
 
-Full repayment and seizure clear the episode's financial fields and active indexes. The position
-ID remains reusable. `PositionClosed` and `PositionDefaulted` events contain the pre-clear snapshot;
-market cumulative-default accounting preserves defaulted principal.
+Disabling asset originations blocks borrowing and extensions. First deposits, top-ups, repayments, withdrawals, seizures and yield claims remain available, subject to their other checks.
 
-## Operating States
+Disabling an action or a settlement dependency can still block servicing. To stop new borrowing while preserving exits, close asset originations rather than pausing every component.
 
-Asset `originationsEnabled` pauses new risk while allowing exits. The Burner Loans global
-`enabled` flag pauses borrower actions, seizure, yield claims, and ordinary payout retries.
-Authorized rescue remains available while locally disabled, provided Burner Loans is Kernel-active.
+Pausing Payout stops new credits. Retries and authorized Payout recovery require Kernel activity, including after Core selects a replacement. Local pause does not block recovery. They require Core settlement to be idle. Core surplus recovery requires Core's Kernel activity but permits local disablement. See the [authority matrix](burner_loans_access_control.md) for each path.
 
-| Burner Loans action | Asset originations enabled | Asset originations disabled | Burner Loans disabled |
-| ------------------- | -------------------------- | --------------------------- | --------------------- |
-| Deposit collateral  | Allowed                    | Blocked                     | Blocked               |
-| Borrow              | Allowed                    | Blocked                     | Blocked               |
-| Extend              | Allowed                    | Blocked                     | Blocked               |
-| Repay               | Allowed                    | Allowed                     | Blocked               |
-| Withdraw collateral | Allowed                    | Allowed                     | Blocked               |
-| Seize               | Allowed                    | Allowed                     | Blocked               |
-| Claim yield         | Allowed                    | Allowed                     | Blocked               |
-| Retry pending payout | Allowed                   | Allowed                     | Blocked               |
-| Authorized rescue   | Allowed                    | Allowed                     | Allowed               |
+## Health, pricing and fees
 
-Burner Loans Inventory has only its global enabled state; Burner Loans owns origination control at
-the asset level. See
-[Burner Loans Inventory operating states](./burner_loans_inventory.md#operating-states) for its
-complete action table and manual MINTR synchronization behavior.
-
-## Health, Pricing, And Fees
-
-Health is WAD-scaled; `1e18` is the seizure boundary.
-
-All USD values in the calculation use `PRICE.decimals()`. The backing oracle's 18-decimal value is
-rounded up into that scale before `backingRequirementUsd` is calculated, so debt, collateral, and
-both requirements share one scale.
+Risk calculates health using the current FLOAN market configuration. Prices and USD values use `PRICE.decimals()`. The backing oracle returns 18-decimal USD per OHM; Risk converts it to the PRICE scale, rounding up.
 
 ```text
 marketRequirementUsd = ceil(debtValueUsd * 10_000 / maxLtvBps)
@@ -164,613 +97,193 @@ requiredCollateralUsd = max(marketRequirementUsd, backingRequirementUsd)
 healthFactor = floor(collateralValueUsd * 1e18 / requiredCollateralUsd)
 ```
 
-`debtBackingValueUsd` is the backing value of the outstanding OHM debt.
+Debt value and collateral requirements round up. Collateral value and health round down. Token quantities use their own token decimals. Vault yield does not increase position collateral credit or borrower health.
 
-Collateral uses its gross current oracle value; no separate haircut is applied. `maxLtvBps`
-converts debt market value into the market collateral requirement, so one parameter supplies the
-market-value buffer.
-
-`backingMultiplierBps` protects the liquid backing per backed OHM rate when OHM trades below its
-backing value. Protecting that rate means the backing branch requires each borrowed OHM to have
-collateral whose oracle value is at least its liquid backing multiplied by the configured factor.
-At 100%, the position could be originated with collateral equal to liquid backing. A value above
-100% requires additional collateral above that backing value.
-
-The protocol uses the larger of the market and backing requirements, so a position cannot borrow
-below either its maximum-LTV requirement or its backing requirement. The stricter branch changes at
-this OHM market-price-to-backing-value ratio:
+`maxLtvBps` supplies the market-value buffer. `backingMultiplierBps` supplies a separate backing-value requirement. The stricter branch changes at this OHM market-price-to-backing-value ratio:
 
 ```text
-crossover ratio = maxLtvBps / 10_000 * backingMultiplierBps / 10_000
+crossover = (maxLtvBps / 10_000) * (backingMultiplierBps / 10_000)
 ```
 
-Above the crossover, maximum LTV is stricter. Below it, the backing multiplier is stricter. Keeper
-rewards are calculated separately and cannot consume collateral required by the backing branch.
+| Position state | Health rule |
+| --- | --- |
+| No debt | Health is `type(uint256).max`; the position is not seizable |
+| Health at least `1e18` | Health permits new risk, subject to the remaining checks |
+| Health below `1e18` | New risk is rejected; the position is health-seizable |
+| Maturity reached with debt | The position is seizable regardless of its health |
 
-| State                      | Borrow or withdraw                | Seizure                       |
-| -------------------------- | --------------------------------- | ----------------------------- |
-| No debt                    | Debt-free health is max `uint256` | Not seizable                  |
-| `healthFactor > 1e18`      | Allowed if other checks pass      | Not health-seizable           |
-| `healthFactor == 1e18`     | Exact boundary is allowed         | Not health-seizable           |
-| `healthFactor < 1e18`      | New risk is blocked               | Seizable with current prices  |
-| Maturity reached with debt | New risk is blocked               | Seizable without a price read |
+### Price selection
 
-PRICE values use `PRICE.decimals()`. OHM and collateral amounts use their token scales. The
-backing oracle returns 18-decimal USD per OHM. Rounding is conservative for the protocol: debt USD,
-backing conversion, collateral requirements, required collateral-token amounts, utilization, and
-final transferred fees round up. Gross collateral values, health factors, and fee-curve slope
-contributions round down.
+Risk owns `backingOracle`, `priceCache` and `priceCacheMaxAge`. Zero cache selects direct PRICE reads. A configured cache is used only while active and enabled; otherwise Risk uses PRICE. Cache compatibility and lifecycle errors remain distinct, including the shared Kernel-mismatch error.
 
-Every borrower lifecycle action and position-action preview reports the resulting health factor.
-`depositCollateral` and `previewDepositCollateral` return credited collateral, resulting collateral,
-and resulting health. `repay` and `previewRepay` report actual or projected health after the debt
-reduction rather than an unknown-health sentinel. A debt-free result is `type(uint256).max` and does
-not read PRICE.
+Views use a fresh cached snapshot or read PRICE without writing the cache. Price-dependent actions refresh an operational cache when necessary. An error from an operational cache propagates. Debt-free health does not need a price read.
 
-`positionHealthFactorAtPrice(asset, borrower, collateralUsdPrice, ohmUsdPrice)` lets any caller
-project the first existing borrower position in that collateral market at two supplied USD prices.
-Both price arguments use `PRICE.decimals()` (not the health-factor scale); the sole return value is
-the health factor scaled by `1e18` and rounded down. It uses the position's current collateral and
-outstanding OHM principal, current market risk configuration, and current canonical OHM backing.
-It does not read PriceCache or live OHM/collateral PRICE observations; `PRICE.decimals()` is read to
-scale backing when principal is positive. The view remains callable while Burner Loans or asset
-originations are disabled. A missing market reverts before position or price validation; an absent
-borrower position reverts before price validation. An existing zero-principal position returns
-`type(uint256).max`, but either zero supplied price still reverts first. Maturity does not change
-the projected number: use the existing seizure views to determine actual seizability.
+A full repayment has a debt-free result, but it still applies custody, amount and same-block validation. Repaid positions with remaining debt use current pricing for their resulting health.
 
-These are untrusted caller-supplied scenarios, not prices that borrow, preview, or seizure actions
-will execute against. For an off-chain sweep across several price pairs, pin the same block number
-in each `eth_call` so the position, configuration, and backing do not drift between samples. Do not
-substitute this view for the cache-aware execution, preview, or seizure checks.
+Cache age is a `uint48` number of seconds with no additional protocol maximum. Config forwards age changes to the selected Risk. Risk has its own `configOperator`. Config forwarding requires selecting Config there. The queue's cache-age helper instead calls Risk directly and requires selecting ConfigTimelock there. A Core Config rotation does not update Risk's authority automatically.
 
-Previews expose unhealthy hypothetical outcomes instead of reverting solely because health is below
-`1e18`. Borrow, withdrawal, and extension previews set `executable` to `false`; their corresponding
-writes still revert. Deposits and repayments remain executable when they improve a position but
-leave health below `1e18`.
+### Fees
 
-When resulting debt is nonzero, these returns require the standard collateral and OHM pricing
-inputs. A zero PriceCache address selects direct PRICE mode. A configured PriceCache is used only
-while its policy is active and enabled; otherwise Burner Loans falls back to PRICE without probing
-the cache. A nonzero cache must implement the cache, enabler, and version interfaces, report
-PriceCache major version 1, and belong to the same Kernel. OCG admin may rotate or clear it
-while Burner Loans is enabled or disabled. `setPriceCache` intentionally permits an inactive cache
-so governance can stage or repair the dependency separately. If Burner Loans remains enabled, an
-inactive cache is stored but ignored in favor of PRICE. Enabling or re-enabling Burner Loans requires
-the configured nonzero cache to be an active policy; it may be locally disabled because that state
-has a defined PRICE fallback. See [Price Cache](./price_cache.md) for cache behavior and lifecycle
-details.
-
-`priceCacheMaxAge` is a `uint48` value set through BurnerLoansConfig and delayed through
-BurnerLoansConfigTimelock. It deliberately has no protocol upper bound. Ordinary views use a cached
-snapshot no older than this value and otherwise read PRICE without mutating the cache. Actions call
-`cachePriceIfNecessary` once when pricing is required and use the returned snapshot throughout the
-calculation. A failure from an operational cache propagates; Burner Loans does not reinterpret it
-as availability failure and retry PRICE. Full repayment and debt-free collateral operations remain
-available without either source because their health is unambiguous.
-
-Borrow and extension fees are charged upfront in the collateral asset and collected by Burner Loans
-when the loan is originated or extended. Burner Loans forwards them to the selected destination or
-records a pending payout if that destination rejects the transfer. Fees do not accrue as interest due or reduce credited
-collateral; outstanding debt and health remain principal-based. The fee curve uses pre-action market
-utilization; the global cap is not a fee input.
+Borrow and extension fees are collected separately in the collateral token. They do not reduce credited collateral or accrue as interest. Fees use pre-action market utilization; the global debt cap is not a fee input.
 
 ```text
 utilization = ceil(marketPrincipalDue * 1e18 / marketPrincipalCap)
-baseFee = baseFeeBps * 1e14
+base = baseFeeBps * 1e14
 kink = kinkBps * 1e14
-preKinkSlope = preKinkSlopeBps * 1e14
-postKinkSlope = postKinkSlopeBps * 1e14
+preSlope = preKinkSlopeBps * 1e14
+postSlope = postKinkSlopeBps * 1e14
 
-zero kink (single slope):
-feeRate = baseFee + floor(utilization * preKinkSlope / 1e18)
+at or below a nonzero kink:
+feeRate = base + floor(utilization * preSlope / kink)
 
-at or before a non-zero kink:
-feeRate = baseFee + floor(utilization * preKinkSlope / kink)
-
-after kink:
-feeRate = baseFee
-        + preKinkSlope
-        + floor((utilization - kink) * postKinkSlope / (1e18 - kink))
+after the kink:
+feeRate = base + preSlope
+        + floor((utilization - kink) * postSlope / (1e18 - kink))
 ```
 
-`utilization`, `baseFee`, `kink`, both slopes, and `feeRate` are WAD-scaled. The stored fee
-parameters are basis points and are converted to WAD before applying the piecewise curve.
+The rate and utilization are WAD-scaled. A zero-kink configuration requires zero slopes and gives a constant base rate. Final token-denominated fees round up. Borrowing charges the incremental required collateral; extension charges the required collateral for the extended debt and requested terms.
 
-The final fee rounds up so a non-zero rate cannot disappear through token-decimal truncation.
-`maxFee` protects execution against a fee above the caller's accepted amount.
+`maxFee` bounds the accepted fee. Neither borrow nor extend accepts a maturity-slippage bound. Clients must quote the current terms and show the resulting maturity before submission.
 
-## Launch Parameters
+## Collateral custody
 
-See [Burner Loans launch parameters](./burner_loans_launch_parameters.md) for the proposed USDS and
-USDe configuration, parameter rationale, and worked normal and stress cases.
+Core is the DepositManager operator and spender for settlement. User authorization remains on Core when an action contract is replaced. FLOAN records the underlying-denominated credit returned by DepositManager, including vault rounding.
 
-## Burner Loans Inventory Accounting
+The market's `withdrawAsShares` setting selects underlying or share output for withdrawals, seizures and yield claims. DepositManager validates that the selected mode is supported. Configure routes for the actual output token, including share tokens, rather than assuming that every payout uses the underlying asset.
 
-FLOAN owns each market cap. Burner Loans Inventory owns the facility-wide cap, OHM funding, provider
-claims, and MINTR authority. Burner Loans changes the FLOAN and Burner Loans Inventory principal
-ledgers in one transaction. See [Burner Loans Inventory](./burner_loans_inventory.md) for the
-formulas, state transitions, invariants, and failure behavior.
+Governance must review token and vault behavior before asset admission. Fee-on-transfer and rebasing collateral are unsupported. Core, Inventory and DepositManager enforce exact receipt at their respective mandatory incoming boundaries. Outgoing transfers still depend on the admitted token moving the requested amount when it reports success.
 
-## Funding And Settlement Flows
+Token-moving entry points use reentrancy guards. Composites execute complete settlements in sequence; a later failure rolls back the entire transaction.
 
-```mermaid
-sequenceDiagram
-    actor User
-    participant BL as BurnerLoans
-    participant F as FLOAN
-    participant I as BurnerLoansInventory
-    participant M as MINTR
+See [Deposit Manager](deposit_manager.md) for custody modes and [Inventory](burner_loans_inventory.md) for OHM accounting and MINTR failure handling.
 
-    User->>BL: borrow(amount)
-    BL->>F: increaseDebt(amount)
-    BL->>I: draw(User, amount)
-    I->>I: consume supplied idle first
-    opt shortfall remains
-        I->>M: mintOhm(BurnerLoansInventory, shortfall)
-    end
-    I->>User: transfer full amount once
-```
+## Yield routing
 
-```mermaid
-sequenceDiagram
-    actor Payer
-    participant BL as BurnerLoans
-    participant F as FLOAN
-    participant O as OHM
-    participant I as BurnerLoansInventory
-    participant M as MINTR
+Payout chooses one recipient for fees and one for custody yield. A false send flag selects Treasury. A true flag selects the configured RevenueDistributor. These flags belong to Payout, not Config or Core.
 
-    Payer->>BL: repay(amount)
-    BL->>F: decreaseDebt(amount)
-    BL->>O: transferFrom(Payer, BurnerLoansInventory, amount)
-    BL->>I: settleRepayment(amount)
-    I->>I: replenish provider claim deficit
-    opt excess remains
-        I->>M: burnOhm(excess)
-    end
-```
+Core transfers collected fees and seizure output to its selected Payout. Payout reserves incoming obligations before best-effort delivery. A failed optional transfer remains pending there. Yield is different: DepositManager sends the actual output token directly to Payout's selected yield recipient. A failed yield transfer leaves the yield claimable in DepositManager.
 
-FLOAN, Burner Loans Inventory, collateral fees, and token transfers normally change atomically.
-Repayment is deliberately resilient to a MINTR burn failure: principal settlement remains valid,
-the unburned OHM becomes ordinary surplus, and `OhmBurnFailed` reports the failure. A failed
-approval increase is also conservative: the principal transition remains valid, the shortfall is
-reported by event, and an admin may reconcile it later. Approval reductions are safety-critical;
-a reduction failure reverts the transition.
-
-## Collateral Custody
-
-DepositManager owns the collateral held for Burner Loans and may keep it idle or route it through a
-configured vault. FLOAN records the underlying-denominated collateral credit returned by
-DepositManager, not the number of vault shares. Vault yield therefore does not increase a borrower's
-health factor. `claimYield` distributes only custody surplus and does not alter Burner Loans
-Inventory, OHM capacity, or MINTR approval.
-
-### Withdrawal Mode
-
-DepositManager V1.1 supports share output for ERC-7540 asynchronous-redemption vaults and other
-ERC-4626 vaults that cannot redeem synchronously, such as sUSDe while its cooldown is enabled.
-`BurnerLoansConfig` stores `withdrawAsShares` for each asset. The admin chooses its initial value
-when adding the asset. Later changes call `BurnerLoansConfig.setAssetWithdrawAsShares()` through
-the admin or selected config operator. Selecting `BurnerLoansConfigTimelock` as the operator adds
-its delay; selecting another operator permits that operator to call directly. The setting selects
-underlying or share output for collateral withdrawals, seizures, borrowing withdrawals, and yield
-claims. It is independent of whether originations are enabled. See
-[Burner Loans access control](./burner_loans_access_control.md#configuration-matrix) for the complete
-caller and lifecycle requirements.
-
-DepositManager validates the selected mode and returns the token actually transferred. See
-[Deposit Manager](deposit_manager.md#supported-custody-configurations) for the supported vault and
-withdrawal-token combinations.
-
-### Token Requirements
-
-| Stage                        | Enforcement or assumption                                                                                                                           |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Asset admission              | Governance reviews the collateral token and configured vault path                                                                                   |
-| Collateral deposit           | Burner Loans and DepositManager each require exact incoming underlying transfers                                                                    |
-| Vault deposit                | The vault must consume approved underlying according to ERC-4626; DepositManager requires reported shares to equal its share-token balance increase |
-| Provider supply and draw     | Supply requires exact receipt; outgoing OHM uses the trusted-token assumption                                                                       |
-| Repayment                    | Burner Loans Inventory requires its exact OHM balance increase before settlement                                                                    |
-| Outgoing collateral and fees | Safe transfers rely on the admitted token's exact-transfer behavior                                                                                 |
-| Token callbacks              | Token-moving lifecycle functions use storage-backed reentrancy guards                                                                               |
-
-Fee-on-transfer, rebasing, and otherwise balance-changing collateral is unsupported. ERC-20 has no
-reliable capability flag, and an admission-time transfer probe can be bypassed by amount-, address-,
-or upgrade-dependent behavior. Asset admission is therefore a governance-reviewed invariant.
-Exact receipt applies to the underlying token at each incoming custody boundary. It does not require
-an ERC-4626 deposit to produce collateral credit equal to the transferred amount: FLOAN credits the
-actual underlying-denominated amount returned by DepositManager after vault rounding.
-
-## Yield Routing
-
-Burner Loans chooses one destination for each fee or custody-yield receipt. The
-[Revenue Distributor](revenue_distributor.md) owns token-specific allocations. The
-[Burner Loans access-control document](burner_loans_access_control.md) covers the source-side flag
-timelock, and the
-[Revenue Distributor access-control document](revenue_distributor_access_control.md) covers its
-route, recipient, and rescue timelock.
-
-The `admin` role sets `revenueDistributor` while Burner Loans is enabled and Kernel-active.
-A new nonzero candidate must be enabled, Kernel-active, compatible, and bound to the same Kernel.
-The address starts at zero. Setting it to its current value is a no-op. It may be cleared only while
-both `sendFeesToDistributor` and `sendYieldToDistributor` are false. Burner Loans Config exposes
-those two independent flags, and Burner Loans Config Timelock queues their changes under separate
-keys. A pointer rotation makes any pending flag change stale.
-
-Changing either flag requires Config and Burner Loans to be enabled and Kernel-active. A
-false-to-true change validates distributor identity, enablement, activity, and Kernel binding. Burner
-Loans does not check its token list when a flag, asset, or withdrawal mode changes. A vault share
-output and its underlying token need separate routes for automatic distribution. An unlisted
-receipt can be routed later or rescued to a specified address; rescue bypasses the intended allocation, so
-the rollout must configure expected routes before enabling a source flag.
-
-`claimYield(asset)` checks custody surplus and asks DepositManager to send the actual output token
-directly to the selected recipient. Borrow and extend fees are collected into Burner Loans before
-their outgoing transfer. With a flag false, Treasury is the destination. With a flag true and a
-nonzero address, the stored distributor is the destination. An unexpected true flag with a zero
-pointer falls back to Treasury, although ordinary setters prohibit that state.
-
-Borrow, extend, and claim do not query the distributor's status or token route. If an outgoing fee
-or seizure transfer fails, Burner Loans keeps the amount owed. Anyone can discover tokens and
-recipients through `getPendingPayoutTokens()` and `getPendingPayoutRecipients(token)`, then call
-`transferPendingPayout(token, recipient)`. Retries require Burner Loans to be Kernel-active and
-enabled. No periodic task retries these pending payouts; a caller must submit each retry manually.
-The function returns the total amount delivered to that recipient. `pendingPayout` returns
-the amount currently owed. Treasury payouts follow the current TRSRY module;
-keeper rewards stay owed to the original keeper. Optional payouts use OpenZeppelin
-`SafeERC20.trySafeTransfer`; a transfer that reverts or returns false stays pending.
-A token that exhausts the transaction's gas can still revert the borrower action or seizure; asset
-admission must account for that behavior.
-
-### Rescue
-
-`BurnerLoansConfigTimelock` can queue `rescue(token, destination)` to sweep the full live
-unreserved balance of any token after the delay. Burner Loans reserves pending fees, seized
-collateral, and original keeper rewards before calculating surplus. For a pending obligation,
-`rescuePendingPayout(token, recipient, destination, amount)` redirects an exact positive amount
-from the combined entitlement reported by `pendingPayout(token, recipient)`. Role liabilities
-follow the current fee recipient and Treasury; keeper rewards stay owed to the original keeper.
-When liabilities overlap, rescue debits keeper reward first, then fee, then seized collateral.
-Each nonzero debit emits `PendingSeizureRewardRescued`, `PendingFeeRescued`, or
-`PendingSeizureRescued`, respectively. The total is transferred once to the specified destination.
-
-The matching `previewRescue*` functions validate inputs and return the current surplus or combined
-entitlement. They require Burner Loans to be Kernel-active, but do not restrict the caller or
-require local enablement. Surplus is zero when custody is at or below the total pending reserve.
-
-Burner Loans accepts rescue calls from its bound Config or directly from `admin`, including while
-Burner Loans is locally disabled. Config forwarding requires Config to be enabled and Kernel-active;
-its caller must be `admin` or the selected config operator. The selected config timelock adds its delay
-and must itself be enabled and Kernel-active. If Config or its timelock is unavailable, `admin`
-can call Burner Loans directly. Burner Loans must remain Kernel-active on every path.
-
-Both rescue functions reject tokens without contract code and destinations equal to zero,
-Burner Loans, the token, the bound Config, or the Kernel. Other valid destinations may already have
-pending entitlements; receiving rescued tokens does not settle those separate liabilities.
-
-Pending rescue queue conflicts are scoped to token and recipient. Different recipients for the
-same token may be queued concurrently. Surplus rescue has a separate token key. Execution
-resolves current routing: if a retry or routing change leaves the queued recipient owed less than
-the requested amount, execution reverts and preserves the queued action.
-Failed transfers revert and leave liability and custody unchanged. A matured queued action can
-be retried within its execution window. Ordinary pending payout retries remain permissionless
-while the facility is enabled and Kernel-active; they are manual and have no periodic task.
-
-| State or input | `rescue` | `rescuePendingPayout` |
-| --- | --- | --- |
-| Unreserved balance | Transfers the entire live surplus to the specified destination | Transfers only the requested amount from the recipient's combined entitlement |
-| Zero eligible surplus | Succeeds without transferring or emitting `AssetRescued` | Not applicable |
-| Zero amount | Not applicable; no amount argument | Reverts during preview and execution |
-| No pending balance or amount above entitlement | Not applicable; no amount argument | A positive amount reverts during preview; execution reverts if the balance fell below the queued amount |
-| Zero payout recipient | Not applicable | Reverts during preview and execution |
-| Token without code or forbidden destination | Reverts during preview and execution | Reverts during preview and execution |
-| Burner Loans locally disabled | Authorized rescue succeeds | Authorized rescue succeeds |
-| Burner Loans Kernel-inactive | Preview and execution revert | Preview and execution revert |
-| Destination token transfer reverts | Rescue reverts; custody remains | Rescue reverts; liability and custody remain |
-| Other pending liabilities exist | Reserves them all | Debits matching liabilities in order; leaves other recipients' entitlements unchanged |
-
-Incoming fee collection remains strict and can still fail if Burner Loans itself cannot receive
-the token. A rejected yield destination reverts only the claim, leaving the yield claimable in
-DepositManager custody for a later task attempt.
+Borrow, extend and yield claims do not depend on a RevenueDistributor token route being configured. Configure the expected underlying and share-token routes before enabling a source flag.
 
 ### Seizure proceeds and deferred payouts
 
-Seizure output first pays the permitted keeper reward. The entire remainder goes to the TRSRY
-module, even when both Revenue Distributor flags are enabled. That remainder can contain recovered
-backing, so Revenue Distributor routes never receive it. A protocol seizer has no keeper reward;
-all of its seizure output goes to TRSRY.
+Seizure pays a permitted keeper reward and sends the entire remainder to Treasury. The remainder never follows RevenueDistributor flags. A caller with `heart` or `burner_loans_seizer` receives no keeper reward.
 
-| Deferred amount      | Accounting key                    | Destination when retried                                    |
-| -------------------- | --------------------------------- | ----------------------------------------------------------- |
-| Borrow or extend fee | Token                             | Current fee destination selected by `sendFeesToDistributor` |
-| Keeper reward        | Token and original keeper address | Original keeper                                             |
-| Seizure remainder    | Token only                        | Current TRSRY module address                                |
+| Pending amount | Destination when retried |
+| --- | --- |
+| Borrow or extension fee | Current Payout fee recipient |
+| Keeper reward | Original keeper |
+| Seizure remainder | Current TRSRY module |
 
-The seizure remainder does not store the Treasury address from seizure time. If governance upgrades
-the TRSRY module while that amount is pending, Burner Loans rebinds its module dependency and sends
-the full pending amount to the new TRSRY on retry. A failed retry leaves the same token-denominated
-amount pending. Direct retries use the current TRSRY address.
+Each Payout instance owns its received tokens and pending ledger. Anyone can use `getPendingPayoutTokens()`, `getPendingPayoutRecipients(token)` and `transferPendingPayout(token, recipient)` on that instance. Retries remain available after local pause, replacement or deactivation, outside Core settlement. Failed transfers retain their reserves.
 
-Seizure does not compare Burner Loans' output-token balance with the amount reported by
-DepositManager or with the amounts reported as transferred to the keeper and Treasury. A short
-receipt or residual balance does not roll back the debt default. A token that returns success
-without moving the requested amount can leave collateral in Burner Loans even though that payout
-is considered complete. Authorized surplus rescue can recover an unreserved residual, but cannot
-repair a false report of payment. Governance must vet token behavior before admitting collateral
-or its share token.
+### Rescue
 
-`previewClaimYield` reports the selected `recipient`, the actual output token, the expected
-output amount, and custody executability. It does not validate current distributor health.
-`YieldClaimed` records the intended destination and amount claimed in the output token's units;
-`PayoutDeferred` and `PayoutTransferred` identify fee, seized collateral, or keeper reward
-in their `kind` field. Indexers must use
-`tokenOut` and not assume that output decimals equal the collateral asset's decimals.
+Core's `rescue` recovers tokens held directly by Core. It does not consume Payout obligations. Config and ConfigTimelock provide a delegated path for Core surplus recovery.
 
-`BurnerLoansYieldClaimer` remains a fail-soft Heart task. A Kernel-inactive or locally disabled
-YieldClaimer returns before its self-call. An available YieldClaimer also returns without reading the
-registry while Burner Loans is Kernel-inactive or locally disabled. Otherwise, it starts from a
-stored cursor and visits the append-only asset registry in circular order. Before each isolated
-`claimYield(asset)` call, it advances the cursor and retains a configurable cleanup-gas reserve of
-at least 100,000 gas. An ordinary revert or a claim that exhausts its forwarded gas is reported for
-that asset without rolling back earlier claims or cursor progress. When the remaining task gas is at
-or below `minimumGasToAttempt`, execution pauses before the next lookup and resumes from the first
-unattempted asset on the next beat. OCG admin or `burner_loans_admin` can tune the threshold and
-reserve or manually select `nextAssetIndex`, including while the task is locally disabled or
-Kernel-inactive. Zero always resets the cursor; a nonzero manual index must be below the live
-registry count. A registry getter failure can still fail the complete self-call and roll back that
-beat. Permissionless `claimYield(asset)` remains available for direct recovery. Configure Heart to
-run this claimer before the Revenue Distributor Task, which uses the same gas-aware cursor approach
-for its active asset set. Permissionless `distribute(asset)` allows immediate settlement between
-beats.
+Payout's `rescue` transfers only unreserved surplus. Its `rescuePendingPayout` redirects an exact positive amount from a recipient's live entitlement. The latter debits keeper reward, then fee, then seized collateral when those buckets resolve to the same recipient. A failed mandatory rescue transfer rolls back the accounting changes.
 
-Revenue allocations are configured on Revenue Distributor; Burner Loans has no per-asset yield
-split or repurchase-recipient route.
+Payout recovery accepts ADMIN or its local nonzero config operator. PayoutConfigTimelock delays delegated flag and recovery changes; direct ADMIN repair remains available.
 
-## Seizure Automation
+Payout validates token code and destination restrictions, including zero, itself, Core, the token, its config operator and Kernel. Recovery does not bypass those restrictions or the live entitlement checks. Its preview functions are permissionless and do not reserve funds for later execution.
 
-Seizure clears the full debt episode, routes the capped ordinary-keeper reward, sends remaining
-collateral to `TRSRY`, and records the default in FLOAN and Burner Loans Inventory atomically.
+## Seizure automation
 
-Direct seizure is permissionless. Protocol-operated seizure does not receive a product keeper
-reward. See the [user and automation access matrix](./burner_loans_access_control.md#user-and-automation-matrix)
-for the exact role paths.
+SeizerTask binds Lens and Seize directly. They must report the same Core, and Seize must belong to the task's Kernel. Adding an asset requires a configured market. The task visits one managed asset per `execute()` call, then rotates to the next asset even if that visit fails.
 
-The seizer bounds both its scan and its complete self-execution gas. A scan or seizure failure
-preserves that asset's borrower cursor, while the asset cursor advances to the next asset. Failure
-of the complete self-call rolls back both cursors and does not fail Heart. The seizer does not
-reconcile MINTR approval. If automatic restoration does not occur, `burner_loans_admin` must call `syncMintApproval`.
+Within an asset, the scan has independent check and seizure limits. The task stores a borrower cursor per asset. Before a nonzero scan, it checks the current borrower count and resets an out-of-range cursor within the same visit. A successful seizure rewinds for borrower-list compaction. Scan or seizure failures retain borrower progress; a failed complete self-call still rotates the asset in the outer call.
 
-Seizure views follow the same source selection as other price-dependent views: they use an
-operational cache snapshot no older than `priceCacheMaxAge`, otherwise they read PRICE without mutating
-the cache. `seize` is self-sufficient and refreshes the cache when necessary using the same age. A
-caller can warm the cache before previewing to make preview and execution select the same snapshot
-within that freshness window; separate transactions do not guarantee that another permissionless
-cache update will not intervene.
+An inactive task rejects execution. An active but disabled task returns without work. Inner work has a gas limit and an outer reserve for failure reporting and rotation. Operators can change either cursor through the task's explicit setters.
 
-The generic PriceCacher can be placed before Seizer in Heart. Its asset pairs are configured
-independently from Seizer's managed assets; the intended Burner Loans deployment starts with
-OHM/USDS and OHM/USDe. OCG admin may add or remove pairs while PriceCacher is enabled or disabled,
-and removal may reorder the remaining pairs. Every pair is attempted with `maxAge = 0`.
-Because timestamps have block granularity, a same-block snapshot can satisfy that call even if
-another caller wrote it first. PriceCacher contains ordinary aggregate and per-pair reverts and
-no-ops when its cache is inactive or disabled. It deliberately has no configurable gas limit, so
-pathological gas consumption can prevent later pair attempts, later Heart tasks, or Heart
-finalization. OCG admin must keep the configured pair set and pricing cost operationally bounded.
-OCG admin can rotate its cache independently while enabled or disabled, subject to interface,
-version, same-Kernel, and configured pair validation. See
-[Price Cacher Access Control](./price_cacher_access_control.md) for its independent authority model.
+YieldClaimerTask instead iterates Core's append-only asset registry. It advances its cursor before each isolated claim, retains cleanup gas and stops before another attempt when the budget is too low. Its inactive execution reverts; local disablement returns without work. It skips the body while Core is unavailable. A registry-read failure can roll back the whole self-call, including that beat's cursor changes.
 
-## Configuration Model
+Configure Heart to warm prices before seizure, then claim yield before RevenueDistributorTask. PriceCacherTask has an independent pair set and no configurable execution gas limit. Keep its workload bounded. See [Price Cacher Task](price_cacher_task_access_control.md) and [Revenue Distributor](revenue_distributor.md).
 
-See [Burner Loans Access Control](./burner_loans_access_control.md) for the function-level role and
-timelock matrices. That document distinguishes the Burner Loans timelock from the external OCG
-governance delay.
+## Configuration model
 
-Backing-oracle rotation is intentionally available only while Burner Loans is enabled. It changes
-health and seizure economics, so it cannot be performed while borrower actions are paused.
+ADMIN selects Core's Risk, Inventory, Payout and config operator. Risk, Inventory, Payout and Config each have separate delegated controllers. Rotating Core's controller does not rotate those other controllers.
 
-PriceCache rotation is instead an availability and integration repair operation and is allowed
-while Burner Loans is enabled or disabled. The PriceCacher has its own cache reference, so a cache
-migration must update and verify Burner Loans and PriceCacher separately. The two policies do not
-derive configuration from one another.
+Config manages complete risk and fee structs, asset caps, withdrawal mode and origination state. New assets are ADMIN-only and start with originations enabled. The facility-wide debt cap is an ADMIN-only Inventory setter. Config has no `setGlobalDebtCap`, routing-flag setter or `setFacility` wiring step.
 
-Config creates one market per collateral/OHM pair under its currently bound Burner Loans facility.
-Each market stores Config as its manager and Burner Loans as its facility: Config is the
-Kernel-permissioned pass-through for market configuration, while Burner Loans services positions.
-Config finds those markets by the bound facility, collateral token, and OHM debt-token tuple.
+ConfigTimelock targets one Config. PayoutConfigTimelock targets one Payout. InventoryConfigTimelock targets one Inventory and exposes typed burn/rescue proposals. Queued actions commit their destination, configuration domains and pre-state. Drift can invalidate execution. Valid execution is permissionless within the delay/expiry window, subject to the concrete queue's checks. Batches are atomic. The direct Risk-age action can remain usable while Config and Core are paused or inactive; it requires the queue and Risk operational.
+
+Distributor pointer replacement is ADMIN-only on Payout and is not a PayoutConfigTimelock action, including in a batch. Disable both routing flags before clearing the pointer. Flags have separate keys, so a delayed batch can turn both off before a later direct ADMIN clear.
 
 ### Replacing Burner Loans Config
 
-Replacing Config keeps the existing Burner Loans facility, Inventory, FLOAN markets, positions, and
-DepositManager operator namespace. The handoff changes the Config address stored by Burner Loans and
-Inventory and transfers every registered FLOAN market's manager from the outgoing Config to the
-replacement.
+Config is constructor-bound to Core. `Core.setConfigOperator(replacement)` updates the selected authority and hands off each registered FLOAN market manager atomically. It uses Core's stored market IDs; an unrelated matching token-pair market is not included.
 
-The replacement Config must be an active policy in the same Kernel, use the same OHM token, and be
-bound to the existing Burner Loans facility. `BurnerLoans.setConfigurator` remains callable only by
-OCG admin while Burner Loans is disabled. During replacement it uses Burner Loans' explicit FLOAN
-permission to transfer each market manager as that market's facility. FLOAN still rejects a facility
-that lacks Kernel permission for `setMarketManager`.
+Core rejects zero and unchanged authorities. It does not validate the upstream operator's interface, Kernel or lifecycle. Governance must choose the correct constructor-bound Config and initialize its own dependencies.
 
-The initial Config assignment and a same-address assignment validate and update the Config pointer
-without writing any FLOAN market. A replacement validates the new Config before attempting a market
-rotation.
+A replacement procedure is:
 
-Perform the migration as one governance batch:
+1. Deploy the replacement Config bound to the existing Core and activate it.
+2. Deploy and activate any replacement ConfigTimelock; leave local controller selection until Config is enabled.
+3. Select the intended independent Risk controller: replacement Config for forwarding, or its ConfigTimelock for direct delayed cache-age actions.
+4. Call `Core.setConfigOperator(replacement)` in the same governed batch where appropriate.
+5. Enable the replacement Config, select its local config operator, then enable its queue after their binding checks pass.
+6. Verify registered market managers and independent controller assignments. Inspect unregistered markets before retiring the outgoing Config and queue.
 
-1. Deploy the replacement `BurnerLoansConfig(kernel, ohm)` and activate it in the Kernel. Leave its
-   application-level state disabled.
-2. Call `ReplacementConfig.setFacility(BurnerLoans)`.
-3. Deploy and activate a replacement ConfigTimelock if delegated configuration will continue.
-4. Disable the outgoing Config, Burner Loans Inventory, and Burner Loans so no configuration or user
-   operation can race the handoff.
-5. Call `BurnerLoansInventory.setConfigurator(ReplacementConfig)`.
-6. Call `BurnerLoans.setConfigurator(ReplacementConfig)`. This call validates the replacement,
-   requires every registered asset to resolve to at least one market and every matching market to be
-   managed by the outgoing Config, transfers all matching market managers, and then stores the
-   replacement Config address.
-7. Enable the replacement Config. If applicable, set its config operator to the replacement
-   ConfigTimelock and enable that timelock.
-8. Re-enable Burner Loans Inventory and then Burner Loans after their dependency checks pass.
-9. For every registered asset, query FLOAN for every matching market and verify that each names the
-   replacement Config as manager. When exactly one market matches, also verify that the replacement
-   Config returns the expected risk, fee, cap, and origination state. Only then deactivate the
-   outgoing Config and its ConfigTimelock in the Kernel.
+Inventory's recovery operator and Payout's routing controller remain separate. Simulate the full manager handoff against live state: the registry has no protocol asset-count bound, and the handoff is not paginated. A failed market handoff reverts all earlier handoffs and the Core pointer change.
 
-Migration transfers every matching manager but does not resolve pre-existing market ambiguity. If
-multiple markets match an asset, Config's getters and setters that resolve a specific market
-continue to revert because they require a unique market. Inspect every manager through FLOAN and
-remediate the ambiguity separately before relying on Config for that asset.
+## Deployment and activation
 
-The market-manager transfers and Burner Loans pointer update are atomic. A missing market, an
-unexpected current manager on any matching market, an invalid replacement, or any failed FLOAN call
-reverts the entire `setConfigurator` transaction, so there is no partial migration to repair. Retry
-only after correcting a transient preflight or permission failure. A missing market or unexpected
-manager can require a separate, explicitly governed remediation or FLOAN module upgrade before the
-handoff can proceed.
+This is a dependency order, not a reviewed production deployment script. Confirm addresses, roles, module permissions and transaction ordering in the deployment proposal.
 
-The migration intentionally has no on-chain asset-count maximum or batching path: a replacement is
-atomic over the complete append-only asset registry and every matching market. Call-only gas
-snapshots measured 78,046 gas for zero registered assets, 126,822 gas for one asset with one market,
-160,832 gas for one asset with two markets, and 211,081 gas for three assets with one matching market
-each in the test environment. These snapshots are operational references, not transaction guarantees.
-Before a live migration, simulate or estimate the exact call against current state and confirm that
-all registered assets and matching markets fit safely below the live chain's transaction gas limit.
-If they do not, governance must remediate the market or module design before attempting the handoff;
-a partial manager rotation is not supported.
+1. Install the required ROLES, FLOAN, MINTR, PRICE and TRSRY modules. Deploy and activate DepositManager and its receipt infrastructure.
+2. Deploy Core with its permanent OHM and DepositManager identities, then activate it while disabled.
+3. Deploy Core-bound Inventory, Payout, Config and Risk, plus Lens and the required actions and tasks.
+4. Activate the policies and grant their operation-specific roles. Prepare the independent Risk, Inventory and Payout controllers.
+5. Verify DepositManager is active and enabled. Enable Inventory, Payout and Risk, then select those services on Core using ADMIN.
+6. Select Config on Core. Enable Core, then Config and the public actions after their dependency checks pass. After enabling Config, select its local config operator.
+7. Grant Core `deposit_operator` and register its DepositManager operator name. Configure custody and enabled period-1 routes for Core, plus required prices. Add each asset through Config and set Inventory capacity.
+8. Configure RevenueDistributor routes and Payout flags before relying on routed fee or yield receipts.
+9. Enable each required queue and task after its own target/binding checks pass, then configure Heart ordering.
 
-`Config.setFacility` is disabled-state, one-time deployment wiring. Rebinding only Config would
-switch that lookup tuple without updating the manager or facility stored in existing markets, so
-Config would remain their configuration authority but could no longer discover them. It would
-also leave custody, liabilities, and receipt-token state keyed to the old Burner Loans address in
-DepositManager. After a non-zero facility is stored, Config therefore rejects every rebind.
+Risk can bind a precomputed Core address at construction; Core checks the returned identity when selecting it. Lens has no Kernel activation or enable step. Payout uses Enabler without a separate re-enable/grace API.
 
-Burner Loans-specific fields use `bytes16("Burner Loans v1")`; standard fixed-term fields remain
-typed in FLOAN. Config resolves Burner Loans Inventory through Burner Loans, so it follows an
-approved Burner Loans Inventory pointer change without maintaining a second link. Burner Loans
-Inventory's facility is immutable in v1.
+## Policy replacement and wind-down
 
-`BurnerLoansConfig` uses the shared `ConfigOperatorSingleStep` mix-in. Config advertises the shared
-`IConfigOperator` interface. The operator can be set to zero to revoke delegated access.
+Replacing an action preserves FLOAN positions, Core authorizations and DepositManager's operator namespace. Grant the replacement its settlement role, enable it after dependency checks, then revoke the old role. Update immutable Composites and task bindings when their actions change.
 
-## Deployment And Activation
+Risk replacement selects new pricing and economic code for existing positions. It requires a compatible, active, enabled, same-Kernel, same-Core Risk with the same OHM token. It does not copy controller settings from the old Risk.
 
-The order below establishes every link through an active-policy check without introducing a
-circular enablement dependency.
+Payout replacement redirects future settlements. It neither migrates nor erases old balances and obligations. Keep recovery access to every obligations-bearing instance. Keep those policies active during Kernel migration so their Kernel bindings are updated. A deactivated Payout does not receive automatic module-dependency refreshes.
 
-1. Install the required FLOAN, MINTR, PRICE, ROLES, and TRSRY modules.
-2. Deploy `BurnerLoans(...)`. Its Burner Loans Inventory and Config pointers are initially zero, so
-   enabling it will revert.
-3. Deploy `BurnerLoansInventory(kernel, ohm, facility = BurnerLoans)`. The immutable facility may
-   be inactive at construction, but must already be deployed and belong to the same Kernel.
-4. Deploy `BurnerLoansConfig(kernel, ohm)` without a facility link. If delegated configuration is
-   required, deploy ConfigTimelock with that Config address.
-5. Activate DepositManager, Burner Loans, Burner Loans Inventory, Config, any deployed
-   ConfigTimelock, and the other required policies. Link setters require their policy arguments to
-   be active in the same Kernel.
-6. Grant the roles and exact-address permissions listed in
-   [Burner Loans Access Control](./burner_loans_access_control.md#authorities-and-expected-assignments).
-7. While the destination policies remain globally disabled, OCG admin calls, in order:
-   `Config.setFacility(BurnerLoans)`, `BurnerLoansInventory.setConfigurator(Config)`,
-   `BurnerLoans.setInventory(BurnerLoansInventory)`, and
-   `BurnerLoans.setConfigurator(Config)`. Each setter validates the relationship it can observe;
-   enablement later validates the complete reverse links.
-8. Enable DepositManager and Config. Config can enable while Burner Loans and Burner Loans
-   Inventory are globally disabled, but both linked policies must remain active and all reverse
-   links must agree.
-9. Optionally call `Config.setConfigOperator(ConfigTimelock)` and enable ConfigTimelock. Setting the
-   operator to zero disables delegated execution. Delayed execution requires Config and
-   ConfigTimelock to remain enabled and ConfigTimelock to remain the configured operator.
-10. Through Config, set the Burner Loans Inventory global cap. Its cap setter remains available
-    while Burner Loans Inventory is globally disabled so deployment can reconcile MINTR approval
-    before user operations begin.
-11. Deploy and configure Burner Loans' optional PriceCache. A configured nonzero cache must be
-    Kernel-active before Burner Loans is enabled. A disabled cache is permitted and falls back to
-    PRICE. If using PriceCacher, configure its pairs independently from Seizer's assets.
-12. Enable Burner Loans Inventory, then Burner Loans. Burner Loans requires active Config and
-    DepositManager policies plus an active, enabled, compatible Inventory. Set `priceCacheMaxAge`
-    through Config after Burner Loans is enabled.
-13. Configure each collateral asset's DepositManager custody path and PRICE support, then add its
-    FLOAN market through Config with the cap, risk parameters, fee curve, and withdrawal mode.
-    Both Config and Burner Loans must be enabled to add an asset; originations start enabled.
-14. If using Revenue Distributor, activate and enable it, configure its yield recipient and exact
-    fee and yield output tokens, then select and enable its config timelock and periodic task.
-    Set its address on Burner Loans and enable the desired send flags through Config or ConfigTimelock.
-15. Configure and enable Seizer, YieldClaimer, and any PriceCacher, including their asset sets and
-    applicable gas limits. In Heart, run PriceCacher before Seizer and YieldClaimer before the
-    Revenue Distributor Task.
+Inventory pointer replacement checks canonical principal and matching aggregate ledgers. It does not migrate individual provider claims or OHM balances. See the [replacement procedure and limits](burner_loans_inventory.md#replacement).
 
-V1 launches with zero Burner Loans Inventory active principal, supplied idle, and provider claim.
-Importing a non-zero live Burner Loans Inventory ledger requires a future migration design. See
-[replacing Burner Loans Inventory](./burner_loans_inventory.md#replacement) for the v1 replacement
-constraints.
+Core itself and its DepositManager operator namespace have no built-in live-state migration. A new Core needs a separate stack. Keep repayment, withdrawal and seizure available while winding down the old stack.
 
-## Policy Replacement And Wind-Down
+### Retirement checklist
 
-A live Burner Loans policy address and its DepositManager operator namespace are not migratable in
-v1. Replacement is side by side: the old stack services its own positions to zero while a fresh
-stack originates separate positions.
+Before retiring an old Core stack:
 
-```mermaid
-flowchart LR
-    OLDUSER["Existing borrowers"] --> OLD["Old Burner Loans (facility)"]
-    OLDC["Old Config (manager)"] --> OLDM["Old FLOAN markets"]
-    OLD --> OLDM
-    OLD --> OLDI["Old Inventory"]
-    OLD --> OLDDM["Old DepositManager namespace"]
-    OLDS["Old Seizer"] --> OLD
-    NEWUSER["New originations"] --> NEW["New Burner Loans (facility)"]
-    NEWC["Fresh Config (manager)"] --> NEWM["Fresh FLOAN markets"]
-    NEW --> NEWM
-    NEW --> NEWI["Fresh Inventory"]
-    NEW --> NEWDM["Fresh DepositManager namespace"]
-    NEWS["Fresh Seizer"] --> NEW
-```
+- Disable originations in every old market and finish repayment, collateral withdrawal or seizure.
+- Reconcile FLOAN collateral, principal, interest and active-borrower indexes against the old facility.
+- Clear DepositManager liabilities and borrowed balances, and resolve remaining yield and dust.
+- Reconcile Inventory provider claims, active principal, idle funding, cap and MINTR approval.
+- Settle or govern recovery of liabilities on every old Payout, including deselected instances.
+- Disable automation only after its servicing work is complete.
+- Revoke settlement and custody authority after user exits and recovery are complete.
 
-The replacement deploys a fresh Config and Burner Loans pair, plus a fresh Inventory, Seizer,
-FLOAN markets, and DepositManager operator namespace. The old Config remains the manager of the old
-markets, and the old Burner Loans remains their facility until wind-down completes. The same
-DepositManager contract may host both namespaces, but they remain keyed to different policy
-addresses. `Config.setFacility` links each fresh pair once during deployment; it is not a migration
-operation. FLOAN's generic `setMarketFacility` remains available for products that can coordinate
-their own custody and authority transition, but Burner Loans cannot use it to transfer this
-policy-scoped state.
+## Preview semantics
 
-| Path         | Old stack during wind-down                                          | New stack                                              |
-| ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
-| Originations | Disable each old asset; deposit, borrow, and extend are blocked     | Originate only in fresh markets and custody accounting |
-| Servicing    | Keep the old policy globally enabled for repay, withdraw, and seize | Service only new positions                             |
-| Automation   | Keep the old Seizer operational until no position requires seizure  | Configure a fresh Seizer independently                 |
-| Retirement   | Allowed only after every condition below is reconciled              | Independent of old position IDs and balances           |
+Previews belong to their actions: Collateral, Debt, Seize and YieldClaimerTask. Core and Payout expose previews for their own rescue operations. Lens supplies position views and scans.
 
-Active-borrower membership can be reconciled from current positions, but its set order is not
-guaranteed. A fresh Seizer must reset or reconcile both `nextAssetIndex` and each per-asset
-`assetCursor`; it must not copy cursors against an assumed borrower order.
+Previews are permissionless and apply the relevant input, lifecycle and economic checks. Invalid requests revert. Collateral, Debt and Seize previews have no `executable` field. `ClaimYieldPreview` retains that boolean in its ABI and returns it as true on a successful quote; it does not report invalid requests as false. Execution still checks borrower/operator authority and required token transfers. Seizure quotes use the supplied keeper context where that changes the reward.
 
-### Retirement Checklist
+A preview does not reserve prices, fees, capacity, custody output or maturity. Another transaction or a permissionless cache write can change the result before execution. Use the same block for related off-chain reads and retain execution fee limits.
 
-| Area                   | Required state before retiring the old stack                                                                                                                                              |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FLOAN markets          | Originations disabled; collateral, principal due, interest due, and active borrowers are zero for every old market                                                                        |
-| Facility accounting    | `getFacilityPrincipalDue(oldFacility, debtToken)` is zero for every debt token used by the old facility                                                                                   |
-| DepositManager         | Liabilities and borrowed balances are zero for every old collateral asset; remaining vault yield and dust are claimed or explicitly accepted                                              |
-| Burner Loans Inventory | Active principal, provider claims, and supplied idle are zero; the global cap and actual MINTR approval are zero; residual OHM is burned, withdrawn, or rescued through the intended path |
-| Automation             | The old Seizer has completed all required seizure work and is then disabled                                                                                                               |
-| Pending payouts        | All fee, seizure, and keeper liabilities are paid or rescued; any unreserved facility token balances are recovered                                                                        |
-| Authority              | DepositManager operator rights and operational Burner Loans roles are revoked only after user exits and seizure work are complete; Config and lifecycle policies are deactivated last     |
+## Launch parameters
 
-## Preview Semantics
+The [launch-parameter proposal](burner_loans_launch_parameters.md) contains the proposed USDS and USDe settings, rationale and stress examples. Those values require governance approval and are not a statement of deployed configuration.
 
-| Preview     | Includes                                                  | Does not guarantee                                                      |
-| ----------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Deposit     | Expected custody credit, resulting collateral, and health | Future vault state                                                      |
-| Borrow      | Fee, debt, maturity, health, and local capacity           | Caller authorization, token approval, recipient, or `maxFee` acceptance |
-| Repay       | Applied repayment, remaining debt, and resulting health   | Payer balance or approval                                               |
-| Withdraw    | Return token/amount, remaining collateral, and health     | Successful future vault redemption                                      |
-| Extend      | Fee, resulting maturity, and health                       | Caller token approval or `maxFee` acceptance                            |
-| Seize       | Debt, collateral, reward, and treasury amount             | Unchanged prices or custody at execution                                |
-| Claim yield | Current surplus, output token, and selected destination   | Future distributor health or later transfer success                     |
+## Gas verification
 
-Previews enforce deterministic local eligibility. Execution return values and events remain
-authoritative.
+Commit `58f911187c` contains the latest formatted gas snapshots. The focused deploy-profile run passed 381 tests across 21 suites, including 16 pinned-mainnet fork cases. Seventeen snapshot files changed; four groups reproduced their committed values. The count includes ordinary regression tests in the selected files, not only gas measurements.
+
+The run used solc 0.8.36, optimizer 400, Prague, transaction isolation and snapshot emission. Use `FOUNDRY_PROFILE=deploy` for a gas run and `pnpm run format:snapshots` before committing the output. The tests and snapshot labels define each measurement's scope. This result is not a full repository campaign or deployment approval.
+
+The fork tests pin mainnet block `25_894_485`. They verify the deployed PRICEv1.2 version, feeds and exact prices, then override VERSION metadata to satisfy Risk's major-version admission. Pricing calls, storage and tokens remain fork code. This fixture does not prove that Risk activates unchanged against the deployed module.
+
+First borrowing measures 1,513,683 gas with direct fork PRICE and 618,763 with fresh PriceCache. A healthy 500-position scan measures 21,966,410 gas in the scan fixture. The recovery test reduces the page to 100 positions to make progress within a ten-million-gas task budget. Estimate limits against the actual deployed state.

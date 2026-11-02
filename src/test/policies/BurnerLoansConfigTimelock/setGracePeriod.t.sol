@@ -1,92 +1,163 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+// Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+
+// Libraries
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
+// Contracts
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
-// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
-// forge-lint: disable-start(unsafe-typecast)
-
 contract BurnerLoansConfigTimelockSetGracePeriodTest is BurnerLoansConfigTimelockTest {
-    // setGracePeriod
-    // given the policy is constructed
-    //  when gracePeriod is queried
-    //   then it returns the default Burner Loans re-enable grace period
-    function test_givenConstructed_setsDefaultGracePeriod() public view {
-        assertEq(
-            configTimelock.gracePeriod(),
-            BurnerLoansConstants.REENABLE_GRACE_PERIOD,
-            "grace period"
+    // Scenarios: BLCTLGR-A01.
+    function test_givenUnauthorizedCaller_whenPeriodOne_thenRoleError(address caller_) public {
+        vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        _transitionReverts(
+            abi.encodeCall(_timelock.setGracePeriod, (uint32(1))),
+            caller_,
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE)
         );
     }
 
-    // setGracePeriod
-    // given caller does not have the admin role
-    //  when setGracePeriod is called while enabled
-    //   then it reverts
-    function test_givenNonAdminCaller_reverts(address caller_) public {
-        vm.assume(caller_ != admin);
+    // Scenarios: BLCTLGR-A02.
+    function test_givenUnauthorizedCaller_whenPeriodZero_thenRoleError(address caller_) public {
+        vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        _transitionReverts(
+            abi.encodeCall(_timelock.setGracePeriod, (uint32(0))),
+            caller_,
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE)
+        );
+    }
 
+    // Scenarios: BLCTLGR-L01.
+    function test_givenDisabled_whenPeriodOne_thenStateError(address caller_) public {
+        _timelock.disable("");
+        _transitionReverts(
+            abi.encodeCall(_timelock.setGracePeriod, (uint32(1))),
+            caller_,
+            abi.encodeWithSelector(IEnabler.NotEnabled.selector)
+        );
+    }
+
+    // Scenarios: BLCTLGR-L02.
+    function test_givenDisabled_whenPeriodZero_thenStateError(address caller_) public {
+        _timelock.disable("");
+        _transitionReverts(
+            abi.encodeCall(_timelock.setGracePeriod, (uint32(0))),
+            caller_,
+            abi.encodeWithSelector(IEnabler.NotEnabled.selector)
+        );
+    }
+
+    // Scenarios: BLCTLGR-I01.
+    function test_givenAdmin_whenPeriodZero_reverts(address caller_) public {
+        _admin(caller_);
+        _transitionReverts(
+            abi.encodeCall(_timelock.setGracePeriod, (uint32(0))),
+            caller_,
+            abi.encodeWithSelector(IGracePeriod.GracePeriod_ZeroPeriod.selector)
+        );
+    }
+
+    // Scenarios: BLCTLGR-L03.
+    function test_givenOwnPolicyInactive_whenPeriodSet_reverts(address caller_) public {
+        _admin(caller_);
+        _setState(_timelock, false, true);
+        _transitionReverts(
+            abi.encodeCall(_timelock.setGracePeriod, (uint32(1))),
+            caller_,
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_timelock)
+            )
+        );
+    }
+
+    // Scenarios: BLCTLGR-N01.
+    function test_givenAdmin_whenFullWidthPeriodSet_thenOneEvent(
+        address caller_,
+        uint32 period_
+    ) public {
+        _admin(caller_);
+        period_ = uint32(bound(period_, 1, type(uint32).max));
+        uint48 last = _timelock.lastTransitionAt();
+        bytes32 funds = _economicDigest();
+        vm.expectEmit(address(_timelock));
+        emit IGracePeriod.GracePeriodSet(period_);
         vm.prank(caller_);
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        configTimelock.setGracePeriod(BurnerLoansConstants.REENABLE_GRACE_PERIOD);
+        _timelock.setGracePeriod(period_);
+        assertEq(_timelock.gracePeriod(), period_, "Exact grace");
+        assertEq(_timelock.lastTransitionAt(), last, "No lifecycle transition");
+        assertEq(_economicDigest(), funds, "No economic changes");
     }
 
-    // setGracePeriod
-    // given new grace period is zero
-    //  when setGracePeriod is called by admin while enabled
-    //   then it reverts
-    function test_givenZeroGracePeriod_reverts() public {
-        vm.prank(admin);
-        vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
-        configTimelock.setGracePeriod(0);
+    // Scenarios: BLCTLGR-P01.
+    function test_givenAdmin_whenSamePeriodSet_thenOneEvent(
+        address caller_,
+        uint32 period_
+    ) public {
+        _admin(caller_);
+        period_ = uint32(bound(period_, 1, type(uint32).max));
+        _timelock.setGracePeriod(period_);
+        uint48 last = _timelock.lastTransitionAt();
+        bytes32 funds = _economicDigest();
+        vm.expectEmit(address(_timelock));
+        emit IGracePeriod.GracePeriodSet(period_);
+        vm.prank(caller_);
+        _timelock.setGracePeriod(period_);
+        assertEq(_timelock.gracePeriod(), period_, "Exact grace");
+        assertEq(_timelock.lastTransitionAt(), last, "No lifecycle transition");
+        assertEq(_economicDigest(), funds, "No economic changes");
     }
 
-    // setGracePeriod
-    // given the policy is disabled
-    //  when setGracePeriod is called by admin
-    //   then it reverts
-    function test_givenDisabled_reverts() public {
-        vm.prank(emergency);
-        configTimelock.disable("");
-
-        vm.prank(admin);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        configTimelock.setGracePeriod(BurnerLoansConstants.REENABLE_GRACE_PERIOD);
+    // Scenarios: BLCTLGR-N01.
+    function test_givenGraceN01Endpoints_whenBoundarySeedsRun_thenScenarioHolds() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenAdmin_whenFullWidthPeriodSet_thenOneEvent(address(0xabc1), uint32(1));
+        _restore(checkpoint);
+        test_givenAdmin_whenFullWidthPeriodSet_thenOneEvent(address(0xabc1), uint32(7 days));
+        _restore(checkpoint);
+        test_givenAdmin_whenFullWidthPeriodSet_thenOneEvent(address(0xabc1), type(uint32).max);
+        _restore(checkpoint);
     }
 
-    // setGracePeriod
-    // given new grace period is non-zero
-    //  when setGracePeriod is called by admin while enabled
-    //   then it stores the grace period
-    function test_givenAdminCaller_setsGracePeriod(uint32 gracePeriod_) public {
-        gracePeriod_ = uint32(bound(gracePeriod_, 1, type(uint32).max));
-
-        vm.prank(admin);
-        vm.expectEmit(false, false, false, true, address(configTimelock));
-        emit IGracePeriod.GracePeriodSet(gracePeriod_);
-        configTimelock.setGracePeriod(gracePeriod_);
-
-        assertEq(configTimelock.gracePeriod(), gracePeriod_, "grace period");
+    // Scenarios: BLCTLGR-P01.
+    function test_givenGraceP01Endpoints_whenBoundarySeedsRun_thenScenarioHolds() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenAdmin_whenSamePeriodSet_thenOneEvent(address(0xabc1), uint32(1));
+        _restore(checkpoint);
+        test_givenAdmin_whenSamePeriodSet_thenOneEvent(address(0xabc1), uint32(7 days));
+        _restore(checkpoint);
+        test_givenAdmin_whenSamePeriodSet_thenOneEvent(address(0xabc1), type(uint32).max);
+        _restore(checkpoint);
     }
 
-    // setGracePeriod
-    // given new grace period is the maximum uint32 value
-    //  when setGracePeriod is called by admin while enabled
-    //   then it stores the grace period
-    function test_givenMaxUint32GracePeriod_setsGracePeriod() public {
-        vm.prank(admin);
-        vm.expectEmit(false, false, false, true, address(configTimelock));
-        emit IGracePeriod.GracePeriodSet(type(uint32).max);
-        configTimelock.setGracePeriod(type(uint32).max);
-
-        assertEq(configTimelock.gracePeriod(), type(uint32).max, "grace period");
+    // Scenarios: BLCTLGR-L04.
+    function test_givenPolicyInactive_givenBrokenRoles_whenGraceSet_reverts(
+        address caller_,
+        bool enabled_,
+        uint32 period_
+    ) public {
+        _setState(_timelock, false, enabled_);
+        vm.etch(address(_timelock.ROLES()), hex"fe");
+        uint32 beforePeriod = _timelock.gracePeriod();
+        uint48 beforeAt = _timelock.lastTransitionAt();
+        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_timelock)
+            )
+        );
+        vm.prank(caller_);
+        _timelock.setGracePeriod(period_);
+        assertEq(_timelock.gracePeriod(), beforePeriod, "Rejected setter preserves period");
+        assertEq(_timelock.lastTransitionAt(), beforeAt, "Rejected setter preserves history");
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected setter commits no logs");
     }
 }
-
-// forge-lint: disable-end(unsafe-typecast)

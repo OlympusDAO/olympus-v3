@@ -1,66 +1,64 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC20} from "src/interfaces/IERC20.sol";
-import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
 
 // Contracts
-import {Actions, Kernel, Policy, toKeycode} from "src/Kernel.sol";
-import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
-import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
-import {MockConfigUnsupportedRoles} from "src/test/policies/BurnerLoansConfig/fixtures/MockConfigUnsupportedRoles.sol";
-import {MockBurnerLoansPolicy} from "src/test/policies/BurnerLoansConfig/fixtures/MockBurnerLoansPolicy.sol";
-
-import {BurnerLoansConfigTimelockTest} from "src/test/policies/BurnerLoansConfigTimelock/BurnerLoansConfigTimelockTest.sol";
+import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+import {Actions, Kernel, Keycode, Policy} from "src/Kernel.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 
 contract BurnerLoansConfigTimelockConfigureDependenciesTest is BurnerLoansConfigTimelockTest {
-    // configureDependencies
-    // given policy activated
-    //  when configureDependencies is called
-    //   then it sets roles module
-    function test_givenPolicyActivated_configureDependencies_setsRolesModule() public view {
-        assertEq(address(configTimelock.ROLES()), address(roles), "ROLES");
-    }
-
-    // configureDependencies
-    // given ROLES is not installed
-    //  when the timelock is activated
-    //   then activation reverts for the missing module
-    function test_givenRolesModuleMissing_reverts() public {
-        Kernel localKernel = new Kernel();
-        BurnerLoansConfigTimelock localTimelock = _deployTimelock(localKernel);
-
+    // Scenarios: BLCT-DEPENDENCIES-I01.
+    function test_givenMissingOrUnsupportedRoles_whenDependenciesConfigured_reverts(
+        address caller_,
+        uint8 major_
+    ) public {
+        Kernel empty = new Kernel();
+        vm.prank(address(_kernel));
+        _timelock.changeKernel(empty);
         vm.expectRevert(
-            abi.encodeWithSelector(Policy.Policy_ModuleDoesNotExist.selector, toKeycode("ROLES"))
+            abi.encodeWithSelector(Policy.Policy_ModuleDoesNotExist.selector, bytes5("ROLES"))
         );
-        localKernel.executeAction(Actions.ActivatePolicy, address(localTimelock));
-    }
-
-    // configureDependencies
-    // given ROLES has an unsupported major version
-    //  when the timelock is activated
-    //   then activation reverts with the timelock's version error
-    function test_givenRolesModuleVersionUnsupported_reverts() public {
-        Kernel localKernel = new Kernel();
-        BurnerLoansConfigTimelock localTimelock = _deployTimelock(localKernel);
-        localKernel.executeAction(
-            Actions.InstallModule,
-            address(new MockConfigUnsupportedRoles(localKernel))
+        vm.prank(caller_);
+        _timelock.configureDependencies();
+        vm.prank(address(empty));
+        _timelock.changeKernel(_kernel);
+        vm.assume(major_ != 1);
+        vm.mockCall(
+            address(_roles),
+            abi.encodeWithSignature("VERSION()"),
+            abi.encode(major_, uint8(0))
         );
-
         vm.expectRevert(
-            IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidModuleVersion.selector
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidModuleVersion.selector
+            )
         );
-        localKernel.executeAction(Actions.ActivatePolicy, address(localTimelock));
+        vm.prank(caller_);
+        _timelock.configureDependencies();
+        assertEq(
+            address(_timelock.ROLES()),
+            address(_roles),
+            "Rejected hook preserves cached ROLES"
+        );
     }
 
-    function _deployTimelock(
-        Kernel kernel_
-    ) internal returns (BurnerLoansConfigTimelock localTimelock) {
-        MockBurnerLoansPolicy facility = new MockBurnerLoansPolicy(kernel_, address(ohm));
-        kernel_.executeAction(Actions.ActivatePolicy, address(facility));
-        BurnerLoansConfig localConfig = new BurnerLoansConfig(kernel_, IERC20(address(ohm)));
-        localTimelock = new BurnerLoansConfigTimelock(kernel_, localConfig);
+    // Scenarios: BLCT-DEPENDENCIES-P01.
+    function test_givenCompatibleRoles_whenDependenciesRefreshed_thenExactKeyAndPointer(
+        address caller_
+    ) public {
+        vm.prank(caller_);
+        Keycode[] memory keys = _timelock.configureDependencies();
+        assertEq(keys.length, 1, "One dependency");
+        assertEq(Keycode.unwrap(keys[0]), bytes5("ROLES"), "ROLES keycode");
+        vm.prank(caller_);
+        _timelock.configureDependencies();
+        OlympusRoles replacement = new OlympusRoles(_kernel);
+        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        vm.prank(caller_);
+        _timelock.configureDependencies();
+        assertEq(address(_timelock.ROLES()), address(replacement), "Replacement cache refreshed");
     }
 }

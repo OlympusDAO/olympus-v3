@@ -1,4 +1,6 @@
-# Burner Loans Launch Parameters
+# Burner Loans launch parameter proposal
+
+These are proposed settings, not a record of deployed configuration. Governance must approve the complete market configuration before activation.
 
 | Parameter                | USDS             | USDe             | Rationale                                                 |
 | ------------------------ | ---------------- | ---------------- | --------------------------------------------------------- |
@@ -12,7 +14,7 @@
 
 ## External Collateral And Liquidation Precedents
 
-The values below were reviewed on 27 August 2026. Platform parameters can change after this date.
+The comparison below records the research checkpoint from 27 August 2026. It is historical context, not a current on-chain parameter survey.
 Each platform uses different liquidation mechanics, so similar percentages do not always measure
 the same risk boundary.
 
@@ -99,35 +101,34 @@ Protocol seizure callers receive no product reward.
 ## Worked Normal And Stress Cases
 
 The examples use 100 OHM debt, $10.00 backing per OHM, an 85% maximum LTV, a 125% backing
-multiplier, and $1.00 collateral unless stated otherwise. Their exact base-unit calculations are
-covered by named tests in `BurnerLoansMath.t.sol`.
+multiplier, and $1.00 collateral unless stated otherwise. The tables show illustrative arithmetic. Current economic tests are under `src/test/policies/BurnerLoansRisk/`.
 
 ### Market And Backing Branches
 
-| OHM market price | Debt market value | Market requirement | Backing requirement | Required collateral | Test                                                                          |
-| ---------------- | ----------------- | ------------------ | ------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| $12.00           | $1,200.00         | $1,411.77          | $1,250.00           | $1,411.77           | `test_requiredCollateralUsd_whenMarketBranchDominates_usesMaximumLtv`         |
-| $10.00           | $1,000.00         | $1,176.48          | $1,250.00           | $1,250.00           | `test_requiredCollateralUsd_whenBackingBranchDominates_usesBackingMultiplier` |
+| OHM market price | Debt market value | Market requirement | Backing requirement | Required collateral |
+| ---------------- | ----------------- | ------------------ | ------------------- | ------------------- |
+| $12.00           | $1,200.00         | $1,411.77          | $1,250.00           | $1,411.77           |
+| $10.00           | $1,000.00         | $1,176.48          | $1,250.00           | $1,250.00           |
 
-Displayed values round up to two decimal places. The tests assert the exact integer arithmetic.
+Displayed values round up to two decimal places.
 
 ### Collateral Depeg Stress
 
 A boundary position has 1,250 collateral tokens.
 
-| Collateral price | Collateral value | Health factor | Value versus backing | Outcome                       | Test                                                                          |
-| ---------------- | ---------------- | ------------- | -------------------- | ----------------------------- | ----------------------------------------------------------------------------- |
-| $0.95            | $1,187.50        | 0.95          | 118.75%              | Seizable                      | `test_launchStress_givenFivePercentCollateralDepeg_healthIsNinetyFivePercent` |
-| $0.80            | $1,000.00        | 0.80          | 100%                 | Covers liquid backing exactly | `test_launchStress_givenTwentyPercentCollateralDepeg_coversBackingExactly`    |
+| Collateral price | Collateral value | Health factor | Value versus backing | Outcome |
+| ---------------- | ---------------- | ------------- | -------------------- | ----------------------------- |
+| $0.95            | $1,187.50        | 0.95          | 118.75%              | Seizable                      |
+| $0.80            | $1,000.00        | 0.80          | 100%                 | Covers liquid backing exactly |
 
 A collateral value below $1,000.00 does not cover the liquid backing of the borrowed OHM.
 
 ### Keeper Reward Stress
 
-| Seized collateral | Configured reward | Backing surplus | Keeper receives | Treasury receives | Test                                                                        |
-| ----------------- | ----------------- | --------------- | --------------- | ----------------- | --------------------------------------------------------------------------- |
-| $1,300.00         | $13.00            | $50.00          | $13.00          | $1,287.00         | `test_launchStress_givenRewardBelowBackingSurplus_paysConfiguredOnePercent` |
-| $1,255.00         | $12.55            | $5.00           | $5.00           | $1,250.00         | `test_launchStress_givenRewardAboveBackingSurplus_preservesBackingFloor`    |
+| Seized collateral | Configured reward | Backing surplus | Keeper receives | Treasury receives |
+| ----------------- | ----------------- | --------------- | --------------- | ----------------- |
+| $1,300.00         | $13.00            | $50.00          | $13.00          | $1,287.00         |
+| $1,255.00         | $12.55            | $5.00           | $5.00           | $1,250.00         |
 
 See [Burner Loans](./burner_loans.md#health-pricing-and-fees) for the general health, pricing,
 backing, and fee mechanics.

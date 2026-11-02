@@ -1,238 +1,418 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
-import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
+import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
-// Shared domain values use constants; scenario-specific literals remain inline for auditability.
-// Reverting queue calls intentionally leave their return values unused.
-// forge-lint: disable-start(literal-instead-of-constant,unused-return)
-
-contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is
-    BurnerLoansConfigTimelockConfigGuardsTest
-{
-    // when caller has no configuration role
-    //  then the call reverts
-    function test_whenCallerHasNoConfigurationRole_reverts(address caller_) public {
-        vm.assume(caller_ != admin);
-        vm.assume(caller_ != burnerLoansAdmin);
-
-        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansConfigTimelockTest {
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-A05.
+    function test_givenPermittedProposer_whenAgeQueued_thenStored(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectQueue(_single(a), caller_);
         vm.prank(caller_);
-        configTimelock.queueSetPriceCacheMaxAge(1);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
     }
 
-    // given the caller is admin
-    //  when PriceCache max age is zero
-    //   then it queues the canonical payload
-    function test_givenAdmin_whenPriceCacheMaxAgeIsZero_queuesCanonicalPayload() public {
-        bytes memory payload = abi.encode(uint48(0));
-        _expectSingleActionQueued(
-            configTimelock.nextActionId(),
-            admin,
-            IBurnerLoansConfig.setPriceCacheMaxAge.selector,
-            payload
-        );
-
-        vm.prank(admin);
-        uint64 actionId = configTimelock.queueSetPriceCacheMaxAge(0);
-
-        (address target, bytes4 selector, bytes memory storedPayload) = configTimelock
-            .getQueuedSubAction(actionId, 0);
-        assertEq(target, address(burnerLoansConfig), "target");
-        assertEq(selector, IBurnerLoansConfig.setPriceCacheMaxAge.selector, "selector");
-        assertEq(storedPayload, payload, "canonical uint48 payload");
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D03.
+    function test_givenOperationalRisk_whenAgeQueued_thenStored(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectQueue(_single(a), caller_);
+        vm.prank(caller_);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
     }
 
-    // given the caller is Burner Loans admin
-    //  when PriceCache max age is maximum
-    //   then it queues and executes the action
-    function test_givenBurnerLoansAdmin_whenPriceCacheMaxAgeIsMaximum_queuesAndExecutes() public {
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueSetPriceCacheMaxAge(type(uint48).max);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(
-            burnerLoans.priceCacheMaxAge(),
-            type(uint48).max,
-            "maximum cache age should accept uint48 maximum"
-        );
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-P01.
+    function test_givenFreeRiskKey_whenAgeQueued_thenExactDirectTarget(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectQueue(_single(a), caller_);
+        vm.prank(caller_);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
     }
 
-    // given an action is queued
-    //  when executed before delay
-    //   then the call reverts
-    function test_givenActionQueued_whenExecutedBeforeDelay_reverts() public {
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueSetPriceCacheMaxAge(1);
-        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-P07.
+    function test_givenSameAge_whenQueued_thenStillCommitted(
+        address caller_,
+        uint8 role_,
+        uint48 age_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _risk.setPriceCacheMaxAge(age_);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(age_);
+        _expectQueue(_single(a), caller_);
+        vm.prank(caller_);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
+    }
 
-        vm.expectRevert(
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-I01.
+    function test_givenNonzeroOldAge_whenZeroQueued_thenAccepted(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _risk.setPriceCacheMaxAge(1);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(0);
+        _expectQueue(_single(a), caller_);
+        vm.prank(caller_);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-N01.
+    function test_givenChangedAge_whenFullWidthAgeQueued_thenCanonicalPayload(
+        address caller_,
+        uint8 role_,
+        uint48 age_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        age_ = uint48(bound(age_, 1, type(uint48).max));
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(age_);
+        _expectQueue(_single(a), caller_);
+        vm.prank(caller_);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-A01.
+    function test_givenUnauthorizedProposer_whenAgeQueued_reverts(address caller_) public {
+        _outsider(caller_);
+        _risk.setConfigOperator(address(_timelock));
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-A03.
+    function test_givenRiskOperatorDifferent_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(_recipient);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-A04.
+    function test_givenRiskOperatorCleared_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(0));
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-L01.
+    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _setState(_timelock, true, false);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-L05.
+    function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _setState(_timelock, false, false);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(
             abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_ActionNotReady.selector,
-                actionId,
-                action.executableAt
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_timelock)
             )
         );
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(burnerLoans.priceCacheMaxAge(), 0, "maximum cache age should remain unchanged");
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
     }
 
-    // given an action is queued
-    //  when executed after expiry
-    //   then the call reverts
-    function test_givenActionQueued_whenExecutedAfterExpiry_reverts() public {
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueSetPriceCacheMaxAge(1);
-        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
-        vm.warp(uint256(action.expiresAt) + 1);
-
-        vm.expectRevert(
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-L09.
+    function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _setState(_timelock, false, true);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(
             abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_ActionExpired.selector,
-                actionId,
-                action.expiresAt
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_timelock)
             )
         );
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(burnerLoans.priceCacheMaxAge(), 0, "maximum cache age should remain unchanged");
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
     }
 
-    // given an action is cancelled
-    //  when executed
-    //   then the call reverts
-    function test_givenActionCancelled_whenExecuted_reverts() public {
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueSetPriceCacheMaxAge(1);
-        vm.prank(emergency);
-        configTimelock.cancelQueuedAction(actionId);
-
-        vm.expectRevert(
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D04.
+    function test_givenRiskActiveFalse_givenRiskEnabledTrue_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _setState(_risk, false, true);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(
             abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_ActionCancelled.selector,
-                actionId
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_risk)
             )
         );
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(burnerLoans.priceCacheMaxAge(), 0, "maximum cache age should remain unchanged");
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
     }
 
-    // given a PriceCache max-age action is pending
-    //  when a duplicate is queued
-    //   then the call reverts
-    function test_givenPriceCacheMaxAgeActionPending_whenDuplicateQueued_reverts() public {
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueSetPriceCacheMaxAge(1);
-        bytes32 key = _scopedPriceCacheMaxAgeKey();
-
-        vm.expectRevert(
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D05.
+    function test_givenRiskActiveTrue_givenRiskEnabledFalse_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _setState(_risk, true, false);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(
             abi.encodeWithSelector(
-                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector,
-                key,
-                actionId
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_risk)
             )
         );
-        vm.prank(burnerLoansAdmin);
-        configTimelock.queueSetPriceCacheMaxAge(2);
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
     }
 
-    // when payload is malformed
-    //  then the call reverts
-    function test_whenPayloadIsMalformed_reverts() public {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
-        actions[0] = _singleAction(
-            IBurnerLoansConfig.setPriceCacheMaxAge.selector,
-            abi.encodePacked(uint48(1))
-        );
-
-        vm.expectRevert(
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D06.
+    function test_givenRiskActiveFalse_givenRiskEnabledFalse_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _setState(_risk, false, false);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(
             abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
-                address(burnerLoansConfig),
-                IBurnerLoansConfig.setPriceCacheMaxAge.selector
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_risk)
             )
         );
-        vm.prank(burnerLoansAdmin);
-        configTimelock.queueBatch(actions);
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
     }
 
-    // when uint48 payload is non-canonical
-    //  then the call reverts
-    function test_whenUint48PayloadIsNonCanonical_reverts() public {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
-        actions[0] = _singleAction(
-            IBurnerLoansConfig.setPriceCacheMaxAge.selector,
-            abi.encode(uint256(type(uint48).max) + 1)
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D07.
+    function test_givenForeignRiskKernel_whenAgeQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        vm.mockCall(
+            address(_risk),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(address(0x1234))
         );
-
-        vm.expectRevert(
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectRejectedQueue(
             abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
-                address(burnerLoansConfig),
-                IBurnerLoansConfig.setPriceCacheMaxAge.selector
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_risk),
+                address(_kernel),
+                address(0x1234)
             )
         );
-        vm.prank(burnerLoansAdmin);
-        configTimelock.queueBatch(actions);
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
     }
 
-    // given the current PriceCache max age has changed after queuing
-    //  when the queued action is processed
-    //   then the call reverts
-    function test_givenCurrentPriceCacheMaxAgeChangesAfterQueue_reverts() public {
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueSetPriceCacheMaxAge(2);
-        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D08.
+    function test_givenConfigUnavailable_whenAgeQueued_thenNoLifecycleGate(
+        address caller_,
+        uint8 role_,
+        bool active_,
+        bool enabled_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _config.setConfigOperator(_recipient);
+        _setState(_config, active_, enabled_);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectQueue(_single(a), caller_);
+        vm.prank(caller_);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
+    }
 
-        vm.prank(admin);
-        burnerLoansConfig.setPriceCacheMaxAge(1);
-        bytes32 currentHash = keccak256(abi.encode(address(burnerLoans), uint48(1)));
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D09.
+    function test_givenCoreUnavailable_whenAgeQueued_thenNoLifecycleGate(
+        address caller_,
+        uint8 role_,
+        bool active_,
+        bool enabled_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _setState(_core, active_, enabled_);
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectQueue(_single(a), caller_);
+        vm.prank(caller_);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
+    }
 
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-P02.
+    function test_givenRiskKeyPending_whenAgeQueuedAgain_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        _expectQueue(_single(a), caller_);
+        vm.prank(caller_);
+        uint64 id = _queue(a);
+        _assertQueued(id, _single(a), caller_);
+        bytes32 original = _queueDigest(id);
+        a.payload = abi.encode(uint48(7200));
+        _expectRejectedQueue(_pending(a, id));
+        vm.prank(caller_);
+        _queue(a);
+        _assertRejectedQueue(_single(a));
+        assertEq(_queueDigest(id), original, "Original Risk action preserved");
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-P03.
+    function test_givenMarketKeyPending_whenAgeQueued_thenIndependent(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _independentActions(_capAction(address(_asset), 200000e9), _ageAction(3600), caller_);
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-A05.
+    function test_givenEachProposerRole_whenBoundarySeedsRun_thenScenarioHolds() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenPermittedProposer_whenAgeQueued_thenStored(address(0xabc1), 0);
+        _restore(checkpoint);
+        test_givenPermittedProposer_whenAgeQueued_thenStored(address(0xabc1), 1);
+        _restore(checkpoint);
+        test_givenPermittedProposer_whenAgeQueued_thenStored(address(0xabc1), 2);
+        _restore(checkpoint);
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-N01.
+    function test_givenCacheAgeN01Endpoints_whenBoundarySeedsRun_thenScenarioHolds() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenChangedAge_whenFullWidthAgeQueued_thenCanonicalPayload(
+            address(0xabc1),
+            uint8(1),
+            uint48(1)
+        );
+        _restore(checkpoint);
+        test_givenChangedAge_whenFullWidthAgeQueued_thenCanonicalPayload(
+            address(0xabc1),
+            uint8(1),
+            type(uint48).max
+        );
+        _restore(checkpoint);
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-P07.
+    function test_givenUnchangedCacheAgeEndpoints_whenBoundarySeedsRun_thenScenarioHolds() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenSameAge_whenQueued_thenStillCommitted(address(0xabc1), uint8(1), uint48(0));
+        _restore(checkpoint);
+        test_givenSameAge_whenQueued_thenStillCommitted(
+            address(0xabc1),
+            uint8(1),
+            type(uint48).max
+        );
+        _restore(checkpoint);
+    }
+
+    function _queue(ITimelockBatchQueue.BatchAction memory a_) internal returns (uint64) {
+        return _timelock.queueSetPriceCacheMaxAge(abi.decode(a_.payload, (uint48)));
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-L10.
+    function test_givenInactiveDisabled_givenBrokenFacility_whenPriceAgeQueued_reverts(
+        address caller_
+    ) public {
+        _setState(_timelock, false, false);
+        vm.mockCallRevert(
+            address(_config),
+            abi.encodeWithSignature("facility()"),
+            abi.encodeWithSignature("Unavailable()")
+        );
+        uint64 next = _timelock.nextActionId();
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
-                actionId,
-                uint256(0),
-                key,
-                expectedHash,
-                currentHash
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_timelock)
             )
         );
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(burnerLoans.priceCacheMaxAge(), 1, "direct configuration should remain active");
-    }
-
-    // when a batch combines max age and fee
-    //  then it executes atomically
-    function test_whenBatchCombinesMaxAgeAndFee_executesAtomically() public {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        actions[0] = _feeAction(30);
-        actions[1] = _singleAction(
-            IBurnerLoansConfig.setPriceCacheMaxAge.selector,
-            abi.encode(uint48(1))
-        );
-
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueBatch(actions);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(burnerLoans.priceCacheMaxAge(), 1, "maximum cache age");
-        assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "fee update");
+        vm.prank(caller_);
+        _timelock.queueSetPriceCacheMaxAge(0);
+        assertEq(_timelock.nextActionId(), next, "Rejected wrapper consumes no ID");
     }
 }
-
-// forge-lint: disable-end(literal-instead-of-constant,unused-return)
