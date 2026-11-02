@@ -4,13 +4,47 @@ pragma solidity >=0.8.24;
 /// @title Operator Authorization
 /// @notice Reusable operator authorization surface for policies that support on-behalf-of actions.
 interface IOperatorAuth {
+    // ========== EVENTS ========== //
+
+    /// @notice Emitted when an operator grant is set, updated or cancelled.
+    /// @param caller Account submitting the direct change or relaying the signed authorization.
+    /// @param account Account whose operator authorization changed.
+    /// @param authorized Operator receiving or losing authority.
+    /// @param authorizationDeadline Inclusive grant deadline in seconds; zero denotes cancellation.
+    event AuthorizationSet(
+        address indexed caller,
+        address indexed account,
+        address indexed authorized,
+        uint48 authorizationDeadline
+    );
+
     // ========== ERRORS ========== //
 
+    /// @notice The caller has no valid authorization to act for the requested account.
     error OperatorAuth_UnauthorizedOnBehalfOf();
+
+    /// @notice The proposed operator authorization deadline has passed.
+    /// @param authorizationDeadline Expired inclusive authorization deadline, in seconds.
     error OperatorAuth_ExpiredAuthorization(uint48 authorizationDeadline);
+
+    /// @notice The deadline for submitting the signed authorization has passed.
+    /// @param signatureDeadline Expired inclusive signature submission deadline, in seconds.
     error OperatorAuth_ExpiredSignature(uint48 signatureDeadline);
+
+    /// @notice A signed authorization uses a nonce other than the account's current nonce.
+    /// @param nonce Nonce supplied in the signed authorization.
     error OperatorAuth_InvalidNonce(uint256 nonce);
+
+    /// @notice The account cannot consume another authorization nonce.
+    /// @param account Account whose nonce reached uint256.max.
+    error OperatorAuth_NonceExhausted(address account);
+
+    /// @notice The recovered signer differs from the account granting authorization.
+    /// @param signer Address recovered from the authorization signature.
+    /// @param expectedSigner Account whose signature is required.
     error OperatorAuth_InvalidSigner(address signer, address expectedSigner);
+
+    /// @notice An account attempted to grant an operator authorization to itself.
     error OperatorAuth_SelfAuthorization();
 
     // ========== STRUCTS ========== //
@@ -38,15 +72,6 @@ interface IOperatorAuth {
         bytes32 r;
         bytes32 s;
     }
-
-    // ========== EVENTS ========== //
-
-    event AuthorizationSet(
-        address indexed caller,
-        address indexed account,
-        address indexed authorized,
-        uint48 authorizationDeadline
-    );
 
     // ========== VIEW FUNCTIONS ========== //
 
@@ -84,18 +109,13 @@ interface IOperatorAuth {
 
     /// @notice Sets or updates operator authorization for the caller.
     /// @dev Invalidates authorization signatures prepared with the caller's current nonce.
-    ///      Reverts with `OperatorAuth_SelfAuthorization` when `authorized_` is the caller and
-    ///      `OperatorAuth_ExpiredAuthorization` when `authorizationDeadline_` is in the past.
     /// @param authorized_ Operator to authorize.
     /// @param authorizationDeadline_ Timestamp until which the operator is authorized, in seconds.
     function setAuthorization(address authorized_, uint48 authorizationDeadline_) external;
 
     /// @notice Sets operator authorization using an EIP-712 signature from the account.
-    /// @dev Reverts with `OperatorAuth_ExpiredSignature` when the signature deadline has passed,
-    ///      `OperatorAuth_ExpiredAuthorization` when the authorization deadline has passed,
-    ///      `OperatorAuth_InvalidNonce` when the signed nonce is not current,
-    ///      `OperatorAuth_InvalidSigner` when the signature is not from the account, or
-    ///      `OperatorAuth_SelfAuthorization` when the account authorizes itself.
+    /// @dev Any relayer may submit the payload; the account's signature grants authority and consumes
+    ///      its current nonce. The authorization and signature deadlines are independently inclusive.
     /// @param authorization_ Signed authorization payload.
     /// @param signature_ ECDSA signature over `authorization_`.
     function setAuthorizationWithSig(

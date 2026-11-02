@@ -22,7 +22,7 @@ library SafeCallDecoder {
         bytes4 selector_
     ) internal view returns (bool success, address value) {
         uint256 raw;
-        (success, raw) = _safeReadWord(target_, selector_);
+        (success, raw) = safeReadUint256(target_, selector_);
         success = success && raw <= type(uint160).max;
         if (!success) return (success, value);
 
@@ -42,16 +42,22 @@ library SafeCallDecoder {
         bytes4 selector_
     ) internal view returns (bool success, bool value) {
         uint256 raw;
-        (success, raw) = _safeReadWord(target_, selector_);
+        (success, raw) = safeReadUint256(target_, selector_);
         success = success && raw <= 1;
         if (!success) return (success, value);
         value = raw == 1;
     }
 
-    function _safeReadWord(
+    /// @notice Static-calls a no-argument getter and decodes an exact ABI uint256 word.
+    /// @dev Returns failure for failed calls or short/oversized responses; copies at most 33 bytes.
+    /// @param target_ The contract to query.
+    /// @param selector_ The selector of the no-argument getter to call.
+    /// @return success True when the call succeeds and returns exactly one ABI word.
+    /// @return value The decoded integer, or zero when success is false.
+    function safeReadUint256(
         address target_,
         bytes4 selector_
-    ) private view returns (bool success, uint256 value) {
+    ) internal view returns (bool success, uint256 value) {
         bytes memory result;
         (success, result) = target_.safeStaticCall(
             gasleft(),

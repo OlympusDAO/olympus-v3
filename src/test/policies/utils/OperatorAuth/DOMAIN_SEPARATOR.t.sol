@@ -13,7 +13,7 @@ contract OperatorAuthDomainSeparatorTest is OperatorAuthTest {
     }
 
     function test_DOMAIN_SEPARATOR_givenChainIdChanges_usesCurrentChain() public {
-        uint256 newChainId = block.chainid + 1;
+        uint256 newChainId = vm.getChainId() + 1;
         vm.chainId(newChainId);
 
         assertEq(

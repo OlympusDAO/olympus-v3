@@ -101,8 +101,13 @@ contract ReentrantFeeToken is MockERC20 {
                 // forge-lint: disable-next-line(unsafe-typecast)
                 callbackRevertSelector = bytes4(returnData);
             }
-            if (!callbackSucceeded && bubbleCallbackFailure) revert CallbackFailed();
+            if (!callbackSucceeded && bubbleCallbackFailure) _revertCallbackFailure(returnData);
         }
+    }
+
+    /// @dev Default failure remains stable; fixtures may require exact dependency revert data.
+    function _revertCallbackFailure(bytes memory) internal pure virtual {
+        revert CallbackFailed();
     }
 }
 

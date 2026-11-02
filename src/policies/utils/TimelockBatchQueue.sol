@@ -5,7 +5,7 @@ pragma solidity ^0.8.24;
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Contracts
-import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
+import {ERC165} from "@openzeppelin-5.7.0/utils/introspection/ERC165.sol";
 
 /// @title  TimelockBatchQueue
 /// @notice Reusable queue implementation for atomic batched timelocked actions.

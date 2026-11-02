@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
-import {ECDSA} from "@openzeppelin-5.3.0/utils/cryptography/ECDSA.sol";
+import {ECDSA} from "@openzeppelin-5.7.0/utils/cryptography/ECDSA.sol";
 
 /// @title OperatorAuth
 /// @notice Reusable MonoCooler-style operator authorization for on-behalf-of actions.
@@ -55,16 +55,18 @@ abstract contract OperatorAuth is IOperatorAuth {
     // ========== AUTHORIZATION ========== //
 
     /// @inheritdoc IOperatorAuth
-    /// @dev Reverts with `OperatorAuth_ExpiredAuthorization` when `authorizationDeadline_` is
-    ///      before the current block timestamp.
-    ///      Reverts with `OperatorAuth_SelfAuthorization` when `authorized_` is the caller.
-    ///      Invalidates authorization signatures prepared with the caller's current nonce.
+    /// @dev Invalidates authorization signatures prepared with the caller's current nonce.
+    ///      Reverts if:
+    ///      - The authorization deadline is before the current block timestamp.
+    ///      - The caller attempts to authorize itself.
+    ///      - The caller's authorization nonce is exhausted.
     /// @param authorized_ Operator to authorize.
     /// @param authorizationDeadline_ Timestamp until which the operator is authorized, in seconds.
     function setAuthorization(
         address authorized_,
         uint48 authorizationDeadline_
     ) external override {
+        _beforeSetAuthorization();
         // Condition: self-authorization is redundant because the account itself is always
         // authorized to act on its own behalf.
         if (authorized_ == msg.sender) {
@@ -77,7 +79,7 @@ abstract contract OperatorAuth is IOperatorAuth {
         // Condition: direct authorization is scoped to `msg.sender`; callers cannot set
         // authorization for any other account through this function. Incrementing the account
         // nonce prevents an earlier signature from overwriting this direct authorization.
-        authorizationNonces[msg.sender]++;
+        _consumeAuthorizationNonce(msg.sender);
         emit AuthorizationSet(msg.sender, msg.sender, authorized_, authorizationDeadline_);
         authorizationDeadlines[msg.sender][authorized_] = authorizationDeadline_;
     }
@@ -96,6 +98,7 @@ abstract contract OperatorAuth is IOperatorAuth {
         Authorization calldata authorization_,
         Signature calldata signature_
     ) external override {
+        _beforeSetAuthorization();
         // Condition: the signature can only be submitted through its signed deadline.
         // Signature deadlines use chain time and tolerate normal validator drift.
         // forge-lint: disable-next-line(block-timestamp)
@@ -113,9 +116,10 @@ abstract contract OperatorAuth is IOperatorAuth {
         }
 
         // Condition: the nonce must match exactly; old, replayed, or skipped nonces fail.
-        if (authorization_.nonce != authorizationNonces[authorization_.account]++) {
+        if (authorization_.nonce != authorizationNonces[authorization_.account]) {
             revert OperatorAuth_InvalidNonce(authorization_.nonce);
         }
+        _consumeAuthorizationNonce(authorization_.account);
 
         // Condition: the recovered signer must be the signed account. The transaction caller
         // is only a relayer and cannot substitute themselves for the account.
@@ -144,7 +148,7 @@ abstract contract OperatorAuth is IOperatorAuth {
         // Condition: cancellation is scoped to `msg.sender`; callers cannot clear
         // authorization for any other account through this function. Incrementing the account
         // nonce prevents an earlier signature from restoring the cancelled authorization.
-        authorizationNonces[msg.sender]++;
+        _consumeAuthorizationNonce(msg.sender);
         emit AuthorizationSet(msg.sender, msg.sender, authorized_, 0);
         authorizationDeadlines[msg.sender][authorized_] = 0;
     }
@@ -159,6 +163,20 @@ abstract contract OperatorAuth is IOperatorAuth {
             // Authorization deadlines use chain time and tolerate normal validator drift.
             // forge-lint: disable-next-line(block-timestamp)
             block.timestamp <= authorizationDeadlines[onBehalfOf_][sender_];
+    }
+
+    /// @notice Allows a consumer to restrict grant creation before input or signature validation.
+    /// @dev Default consumers impose no additional admission. Cancellation deliberately bypasses
+    ///      this hook so grants can be revoked while a consumer is paused or unavailable.
+    function _beforeSetAuthorization() internal view virtual {}
+
+    /// @notice Invalidates the account's current authorization nonce.
+    /// @dev Reverts if incrementing would exceed uint256.max.
+    /// @param account_ Account whose nonce is consumed.
+    function _consumeAuthorizationNonce(address account_) private {
+        uint256 nonce = authorizationNonces[account_];
+        if (nonce == type(uint256).max) revert OperatorAuth_NonceExhausted(account_);
+        authorizationNonces[account_] = nonce + 1;
     }
 
     /// @notice Reverts if `sender_` is not authorized to act on behalf of `onBehalfOf_`.

@@ -5,8 +5,8 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 
 /// @title  IDepositReceiptToken
 /// @notice Interface for a deposit receipt token
-/// @dev    This interface adds additional metadata to the IERC20 interface that is necessary for deposit receipt tokens.
-interface IDepositReceiptToken is IERC20 {
+/// @dev    Receipt-specific metadata; ERC20 functionality is exposed separately through IERC20.
+interface IDepositReceiptToken {
     // ========== ERRORS ========== //
 
     error OnlyOwner();
