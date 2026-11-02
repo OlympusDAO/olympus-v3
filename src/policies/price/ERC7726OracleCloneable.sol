@@ -3,17 +3,20 @@
 pragma solidity ^0.8.15;
 
 // Interfaces
-import {IPriceOracle} from "src/policies/interfaces/price/IPriceOracle.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {IERC7726OraclePriceCache} from "src/policies/interfaces/price/IERC7726OraclePriceCache.sol";
-import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IPriceOracle} from "src/policies/interfaces/price/IPriceOracle.sol";
 
 // Libraries
-import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {String} from "src/libraries/String.sol";
+
+// Contracts
+import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
 
 /// @title  ERC7726OracleCloneable
 /// @author OlympusDAO
@@ -36,20 +39,22 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @notice The maximum allowed age for cached prices
     /// @dev    Does not revert.
     function maxAge() public pure override returns (uint48) {
-        return uint48(_getArgUint64(0x14));
+        return SafeCast.toUint48(_getArgUint64(0x14));
     }
 
     /// @inheritdoc IPriceOracle
     /// @dev        Does not revert.
     function name() external pure override returns (string memory) {
-        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x1C))));
+        return String.bytes32ToString(bytes32(_getArgUint256(0x1C)));
     }
 
     /// @notice Returns the enabled price cache policy for this oracle.
-    /// @dev    Calls `factory().getOracleContext(address(this))` to read the enabled state and
-    ///         price cache address for the current contract. Reverts with `ERC7726Oracle_NotEnabled()`
-    ///         when the returned enabled flag is false. Assumes the factory returns a valid
-    ///         `IPriceCache` address.
+    /// @dev Reverts if:
+    ///      - The returned factory context is disabled (ERC7726Oracle_NotEnabled).
+    ///      - The factory context lookup fails.
+    ///
+    /// @dev Reads oracle liveness and the configured cache through factory().getOracleContext(address(this)).
+    ///      Assumes the factory returns a valid IPriceCache address.
     ///
     /// @return priceCache_ The enabled price cache policy for this oracle.
     function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
@@ -153,6 +158,8 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {
         if (timestamp_ == 0) return true;
         unchecked {
+            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+            // forge-lint: disable-next-line(block-timestamp)
             return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
         }
     }
@@ -168,6 +175,8 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @param maxAge_             Maximum acceptable age, in seconds.
     /// @return latestPermissible_ Oldest acceptable timestamp, or 0 if no positive lower bound exists.
     function _latestPermissibleTimestamp(uint48 maxAge_) internal view returns (uint256) {
+        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp <= uint256(maxAge_)) return 0;
         unchecked {
             return block.timestamp - uint256(maxAge_);

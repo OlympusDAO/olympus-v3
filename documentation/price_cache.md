@@ -7,7 +7,7 @@ snapshot stores the USD value of both legs, the source timestamp, and a pair-loc
 consumer can use one snapshot throughout an operation instead of repeating the underlying oracle
 lookups.
 
-The cache is a generic policy. It is not owned by Burner Loans or by `PriceCacher`.
+The cache is a generic policy. It is not owned by Burner Loans or by `PriceCacherTask`.
 
 ## Dependencies And Version
 
@@ -15,9 +15,7 @@ The cache is a generic policy. It is not owned by Burner Loans or by `PriceCache
 after a `PRICE` module upgrade advances the cache epoch, which invalidates every snapshot written
 against the prior module.
 
-PriceCache has not been deployed, so the returned snapshot from `cachePriceIfNecessary` and
-`validateAssetPair` are part of version 1.0. Integrations that rely on those behaviors must require
-major version 1.
+`cachePriceIfNecessary` returns the selected snapshot. `validateAssetPair` checks pair support without writing a snapshot. The implementation advertises its supported interfaces and reports version 1.0; each consumer defines its own compatibility checks.
 
 ## Supported Pairs
 
@@ -63,29 +61,37 @@ created a new oracle observation.
 ## Consumer Fallback
 
 `PriceCache` does not define fallback behavior. Each consumer decides whether an inactive,
-disabled, missing, or stale cache should cause a revert or a direct `PRICE` lookup. Burner Loans,
+disabled, missing, or stale cache should cause a revert or a direct `PRICE` lookup. BurnerLoansRisk,
 for example, falls back to `PRICE` for unavailable or stale view reads and refreshes an operational
 cache during price-dependent actions.
 
-An error from an otherwise operational cache should normally propagate. Retrying `PRICE` after an
-unexpected cache error can hide an invalid pair or integration fault and makes preview/action
-behavior harder to reason about.
+BurnerLoansRisk propagates errors from an operational cache. It does not retry PRICE after that failure, which could hide an invalid pair or integration fault.
 
 ## Access Control
 
 | Function                                                  | Authorized caller          | State requirement                   |
 | --------------------------------------------------------- | -------------------------- | ----------------------------------- |
 | `cachePrice`, `cachePriceIfNecessary`                     | Any address                | Policy is active and enabled        |
-| `setNonContractAssetMetadata`, `removeNonContractAssetMetadata` | `price_admin` or `admin` | Policy is enabled                   |
-| `enable`                                                  | `admin`                    | Policy is disabled                  |
+| `setNonContractAssetMetadata`, `removeNonContractAssetMetadata` | `price_admin` or `admin` | Policy is active and enabled                   |
+| `enable`                                                  | `admin`                    | Policy is active and disabled       |
 | `disable`                                                 | `admin` or `emergency`     | Policy is enabled                   |
+| `reEnable`                                                | `price_admin` or `admin`    | Policy is active, paused after initialization, and within grace |
+| `setGracePeriod`                                          | `admin`                    | Policy is enabled; period is nonzero uint32 seconds |
 | `validateAssetPair`                                       | Any address                | None                                |
+
+The initial re-enable grace period is seven days. Each pause starts a new inclusive grace
+window from `lastTransitionAt`; `reEnable()` revalidates the same membership requirement as
+`enable("")`. After grace expires, governance can still restore service through `enable("")`.
+Both activation routes preserve cached snapshots and non-contract metadata. Transitions emit
+the legacy `Enabled` or `Disabled` event followed by `Transition`, and update `lastTransitionAt`.
+Lifecycle payloads must be empty. Pausing remains available while the policy is Kernel-inactive
+or PRICE cannot serve prices; ROLES must remain usable to authorize the caller.
 
 The expected `admin` holder is the OCG Timelock. The contract itself does not impose a delay on an
 admin call.
 
 ## Periodic Warming
 
-`PriceCacher` is the generic Heart task for warming a governance-configured pair set. It is
+`PriceCacherTask` is the generic Heart task for warming a governance-configured pair set. It is
 documented separately in
-[Price Cacher Access Control](./price_cacher_access_control.md).
+[Price Cacher Task Access Control](./price_cacher_task_access_control.md).

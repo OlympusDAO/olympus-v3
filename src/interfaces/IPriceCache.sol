@@ -116,8 +116,6 @@ interface IPriceCache {
 
     /// @notice Validate that an asset/quote pair can be served by this cache
     /// @dev This check is independent of the policy's active and enabled states.
-    ///      Reverts when either address is zero, both addresses are identical, a non-unit asset is
-    ///      not approved by PRICE, or an asset's decimals cannot be resolved.
     ///
     /// @param asset_   Asset in requested orientation
     /// @param quote_   Quote in requested orientation
@@ -173,4 +171,9 @@ interface IPriceCache {
         address quote_,
         uint48 maxAge_
     ) external view returns (bool stale);
+
+    /// @notice Lifecycle payloads must be empty.
+    error PriceCache_InvalidData();
+    /// @notice Initial operation requires Kernel membership.
+    error PriceCache_PolicyInactive();
 }

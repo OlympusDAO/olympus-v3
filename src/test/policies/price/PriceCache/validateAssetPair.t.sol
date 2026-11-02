@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.15;
 
+// Interfaces
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
+// Contracts
 import {PriceCacheTest} from "./PriceCacheTest.sol";
 
 contract PriceCacheValidateAssetPairTest is PriceCacheTest {
     // when asset is zero
     //  then the call reverts
+    // Scenarios: PCACHE-VALIDATE-PAIR-I01.
     function test_whenAssetIsZero_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -22,6 +25,7 @@ contract PriceCacheValidateAssetPairTest is PriceCacheTest {
 
     // when quote is zero
     //  then the call reverts
+    // Scenarios: PCACHE-VALIDATE-PAIR-I02.
     function test_whenQuoteIsZero_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -35,6 +39,7 @@ contract PriceCacheValidateAssetPairTest is PriceCacheTest {
 
     // when asset equals quote
     //  then the call reverts
+    // Scenarios: PCACHE-VALIDATE-PAIR-I03.
     function test_whenAssetEqualsQuote_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -48,6 +53,7 @@ contract PriceCacheValidateAssetPairTest is PriceCacheTest {
 
     // when asset is not approved
     //  then the call reverts
+    // Scenarios: PCACHE-VALIDATE-PAIR-I04.
     function test_whenAssetIsNotApproved_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, unapprovedAsset)
@@ -57,6 +63,7 @@ contract PriceCacheValidateAssetPairTest is PriceCacheTest {
 
     // when quote is not approved
     //  then the call reverts
+    // Scenarios: PCACHE-VALIDATE-PAIR-I05.
     function test_whenQuoteIsNotApproved_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, unapprovedAsset)
@@ -66,6 +73,7 @@ contract PriceCacheValidateAssetPairTest is PriceCacheTest {
 
     // when an approved non-contract asset has no cache decimals
     //  then the call reverts
+    // Scenarios: PCACHE-VALIDATE-PAIR-I06.
     function test_whenApprovedNonContractAssetHasNoCacheDecimals_reverts() public {
         _registerNonContractAsset(unapprovedAsset);
         priceModule.setPrice(unapprovedAsset, 1e18);
@@ -82,6 +90,7 @@ contract PriceCacheValidateAssetPairTest is PriceCacheTest {
     // given PriceCache is disabled
     //  when pair is supported
     //   then validation succeeds
+    // Scenarios: PCACHE-VALIDATE-PAIR-L01.
     function test_givenCacheIsDisabled_whenPairIsSupported() public {
         vm.prank(admin);
         cache.disable("");
@@ -92,6 +101,7 @@ contract PriceCacheValidateAssetPairTest is PriceCacheTest {
     // given PriceCache is inactive
     //  when pair is supported
     //   then validation succeeds
+    // Scenarios: PCACHE-VALIDATE-PAIR-L02.
     function test_givenCacheIsInactive_whenPairIsSupported() public {
         _deactivateCachePolicy();
 
@@ -101,8 +111,52 @@ contract PriceCacheValidateAssetPairTest is PriceCacheTest {
     // when caller is arbitrary
     //  when pair is supported
     //   then validation succeeds
+    // Scenarios: PCACHE-VALIDATE-PAIR-P01.
     function test_whenCallerIsArbitrary_whenPairIsSupported(address caller_) public {
         vm.prank(caller_);
         cache.validateAssetPair(address(assetToken), address(quoteToken));
+    }
+
+    // Scenarios: PCACHE-VALIDATE-PAIR-I07.
+    function test_whenBothAssetsAreZero_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_InvalidPair.selector,
+                address(0),
+                address(0)
+            )
+        );
+        cache.validateAssetPair(address(0), address(0));
+    }
+
+    // Scenarios: PCACHE-VALIDATE-PAIR-I08.
+    function test_whenBothAssetsUnapproved_revertsForAsset() public {
+        address quote = makeAddr("UNAPPROVED_QUOTE");
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, unapprovedAsset)
+        );
+        cache.validateAssetPair(unapprovedAsset, quote);
+    }
+
+    // Scenarios: PCACHE-VALIDATE-PAIR-I09.
+    function test_whenQuoteMetadataMissing_reverts() public {
+        address nca = makeAddr("MISSING_METADATA");
+        _registerNonContractAsset(nca);
+        priceModule.setPrice(nca, 3e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered.selector,
+                nca
+            )
+        );
+        cache.validateAssetPair(address(assetToken), nca);
+    }
+
+    // Scenarios: PCACHE-VALIDATE-PAIR-P02.
+    function test_whenUnitIsEitherLeg(address caller_) public {
+        vm.startPrank(caller_);
+        cache.validateAssetPair(_unitOfAccount(), address(assetToken));
+        cache.validateAssetPair(address(assetToken), _unitOfAccount());
+        vm.stopPrank();
     }
 }

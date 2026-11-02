@@ -5,14 +5,14 @@ pragma solidity ^0.8.15;
 // Interfaces
 import {IOracle} from "src/interfaces/morpho/IOracle.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
-import {SafeCast} from "@openzeppelin-4.8.0/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {String} from "src/libraries/String.sol";
 
@@ -73,11 +73,14 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     }
 
     /// @notice The maximum allowed age for cached prices
-    /// @dev    Does not revert.
+    /// @dev Reverts if:
+    ///      - Malformed immutable data exceeds uint48.
+    ///
+    /// @dev Factory-created clones store a uint48 in the eight-byte slot.
     ///
     /// @return uint48 The max age stored in immutable args
     function maxAge() public pure override returns (uint48) {
-        return uint48(_getArgUint64(0x3C));
+        return SafeCast.toUint48(_getArgUint64(0x3C));
     }
 
     /// @notice The name of the oracle
@@ -85,14 +88,16 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///
     /// @return string The name stored in immutable args
     function name() public pure returns (string memory) {
-        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x44))));
+        return String.bytes32ToString(bytes32(_getArgUint256(0x44)));
     }
 
     /// @notice Returns the enabled price cache policy for this oracle.
-    /// @dev    Calls `factory().getOracleContext(address(this))` to read the enabled state and
-    ///         price cache address for the current contract. Reverts with `MorphoOracle_NotEnabled()`
-    ///         when the returned enabled flag is false. Assumes the factory returns a valid
-    ///         `IPriceCache` address.
+    /// @dev Reverts if:
+    ///      - The returned factory context is disabled (MorphoOracle_NotEnabled).
+    ///      - The factory context lookup fails.
+    ///
+    /// @dev Reads oracle liveness and the configured cache through factory().getOracleContext(address(this)).
+    ///      Assumes the factory returns a valid IPriceCache address.
     ///
     /// @return priceCache_ The enabled price cache policy for this oracle.
     function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
@@ -150,13 +155,12 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     }
 
     /// @notice Calculates the current Morpho scale factor from the active price cache
-    /// @dev    Morpho expects prices scaled by 1e36, adjusted for collateral and loan token
-    ///         decimals: `10 ** (36 + loanDecimals - collateralDecimals)`.
-    ///         For non-contract assets, decimals are PriceCache metadata and can change when
-    ///         `PriceCache.setNonContractAssetMetadata()` updates them, so the scale factor is
-    ///         recalculated instead of read from immutable args.
-    ///         Reverts if the exponent is negative or greater than 77, since `10 ** 78` exceeds
-    ///         `uint256`.
+    /// @dev Reverts if:
+    ///      - The scale-factor exponent is negative.
+    ///      - The scale-factor exponent exceeds 77.
+    ///
+    /// @dev Morpho uses 10^(36 + loanDecimals - collateralDecimals). An exponent of 78 exceeds uint256.
+    ///      The scale is recalculated from active cache metadata because non-contract asset decimals can change.
     ///
     /// @param  priceCache_     The price cache used to resolve the current asset decimals
     /// @return scaleFactor_    The current Morpho scale factor
@@ -186,11 +190,15 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {
         if (timestamp_ == 0) return true;
         unchecked {
+            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+            // forge-lint: disable-next-line(block-timestamp)
             return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
         }
     }
 
     function _latestPermissibleTimestamp(uint48 maxAge_) internal view returns (uint256) {
+        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp <= uint256(maxAge_)) return 0;
         unchecked {
             return block.timestamp - uint256(maxAge_);

@@ -8,7 +8,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 
 contract MockPriceCache is IPriceCache, IEnabler, IERC165, IVersioned {
     address internal constant _UNIT_OF_ACCOUNT = address(0x348);
@@ -206,7 +206,7 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165, IVersioned {
         address asset_,
         address quote_,
         uint48 maxAge_
-    ) external override returns (CachedPrice memory cachedPrice) {
+    ) public virtual override returns (CachedPrice memory cachedPrice) {
         if (!policyActive) revert IPriceCache.PriceCache_PolicyNotActive();
         if (!isEnabled) revert NotEnabled();
 

@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 /// @title IOlympusBackingOracle
-/// @notice The interface for the OlympusBackingOracle policy, which serves as the canonical OHM backing value.
+/// @notice Versioned canonical OHM backing value and its administrative update API.
 interface IOlympusBackingOracle {
     // ============ EVENTS ============ //
 
@@ -43,6 +43,6 @@ interface IOlympusBackingOracle {
     // ============ VIEW FUNCTIONS ============ //
 
     /// @notice Returns the current OHM backing value (the reserve per OHM, 18 decimals).
-    /// @return The current backing value (18 decimals).
-    function backing() external view returns (uint256);
+    /// @return value The current backing value (18 decimals).
+    function backing() external view returns (uint256 value);
 }

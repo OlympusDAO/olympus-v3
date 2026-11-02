@@ -5,7 +5,7 @@ pragma solidity ^0.8.15;
 // Interfaces
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
@@ -15,8 +15,9 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Libraries
+import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
-import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
 /// @title  BaseOracleFactory
 /// @author OlympusDAO
@@ -76,7 +77,8 @@ abstract contract BaseOracleFactory is
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Constructs a new BaseOracleFactory
-    /// @dev    Reverts if `priceCache_` is not a valid IPriceCache policy for this Kernel.
+    /// @dev Reverts if:
+    ///      - priceCache_ is not a valid IPriceCache policy for this Kernel.
     ///
     /// @param  kernel_ The Kernel address
     /// @param  priceCache_ The price cache policy address
@@ -92,7 +94,8 @@ abstract contract BaseOracleFactory is
     // ========== POLICY SETUP ========== //
 
     /// @inheritdoc Policy
-    /// @dev        Reverts if the configured ROLES module major version is unsupported.
+    /// @dev Reverts if:
+    ///      - The configured ROLES module major version is unsupported.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
         dependencies[0] = toKeycode(_ROLES_KEYCODE);
@@ -120,7 +123,9 @@ abstract contract BaseOracleFactory is
 
     // ========== ACCESS CONTROL ========== //
 
-    /// @notice Reverts if this policy is not active in the Kernel.
+    /// @notice Requires own Kernel activity.
+    /// @dev Reverts if:
+    ///      - This policy is not active in the Kernel.
     modifier onlyPolicyActive() {
         _onlyPolicyActive();
         _;
@@ -148,13 +153,17 @@ abstract contract BaseOracleFactory is
         }
     }
 
-    /// @notice Modifier that reverts if the caller does not have the oracle_manager or admin role
+    /// @notice Requires oracle management or governance authority.
+    /// @dev Reverts if:
+    ///      - The caller holds neither oracle_manager nor admin.
     modifier onlyOracleManagerOrAdminRole() {
         _onlyOracleManagerOrAdminRole();
         _;
     }
 
-    /// @notice Modifier that reverts if the caller does not have the oracle_manager, admin, or emergency role
+    /// @notice Requires oracle management, governance or emergency authority.
+    /// @dev Reverts if:
+    ///      - The caller holds none of oracle_manager, admin or emergency.
     modifier onlyOracleManagerOrAdminOrEmergencyRole() {
         _onlyOracleManagerOrAdminOrEmergencyRole();
         _;
@@ -204,9 +213,10 @@ abstract contract BaseOracleFactory is
     )
         external
         override
+        nonReentrant
+        onlyPolicyActive
         onlyEnabled
         onlyOracleManagerOrAdminRole
-        nonReentrant
         returns (address oracle)
     {
         // Check if creation is enabled
@@ -306,9 +316,10 @@ abstract contract BaseOracleFactory is
     function enableCreation()
         external
         override
+        nonReentrant
+        onlyPolicyActive
         onlyEnabled
         onlyOracleManagerOrAdminRole
-        nonReentrant
     {
         if (isCreationEnabled) revert OracleFactory_CreationAlreadyEnabled();
 
@@ -324,9 +335,10 @@ abstract contract BaseOracleFactory is
     function disableCreation()
         external
         override
+        nonReentrant
+        onlyPolicyActive
         onlyEnabled
         onlyOracleManagerOrAdminOrEmergencyRole
-        nonReentrant
     {
         if (!isCreationEnabled) revert OracleFactory_CreationAlreadyDisabled();
 
@@ -338,10 +350,12 @@ abstract contract BaseOracleFactory is
     /// @dev        Reverts if:
     ///             - The factory is disabled
     ///             - The caller is not admin
+    ///             - `policy_` is already the selected cache (UnchangedAddress)
     ///             - `policy_` is zero, not IPriceCache-compatible, or bound to a different Kernel
     function setPriceCache(
         address policy_
-    ) external override onlyEnabled onlyAdminRole nonReentrant {
+    ) external override nonReentrant onlyPolicyActive onlyEnabled onlyAdminRole {
+        if (policy_ == address(priceCache)) revert OracleFactory_UnchangedAddress(policy_);
         // Intentionally does not check `IEnabler(policy_).isEnabled()`: this setter validates
         // compatibility/kernel only and allows admin-led cache policy rotations regardless of runtime state.
         _setPriceCache(policy_);
@@ -359,7 +373,7 @@ abstract contract BaseOracleFactory is
     ///             - The oracle is already enabled
     function enableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrAdminRole nonReentrant {
+    ) external override nonReentrant onlyPolicyActive onlyEnabled onlyOracleManagerOrAdminRole {
         if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
@@ -383,7 +397,14 @@ abstract contract BaseOracleFactory is
     ///             - The oracle is already disabled
     function disableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrAdminOrEmergencyRole nonReentrant {
+    )
+        external
+        override
+        nonReentrant
+        onlyPolicyActive
+        onlyEnabled
+        onlyOracleManagerOrAdminOrEmergencyRole
+    {
         if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
         if (!_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyDisabled(oracle_);
 
@@ -435,7 +456,7 @@ abstract contract BaseOracleFactory is
     function cachePrice(
         address baseToken_,
         address quoteToken_
-    ) external override onlyPolicyActive onlyEnabled nonReentrant {
+    ) external override nonReentrant onlyPolicyActive onlyEnabled {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         priceCache.cachePrice(baseToken_, quoteToken_);
@@ -452,7 +473,7 @@ abstract contract BaseOracleFactory is
     function cachePriceIfNecessary(
         address baseToken_,
         address quoteToken_
-    ) external override onlyPolicyActive onlyEnabled nonReentrant {
+    ) external override nonReentrant onlyPolicyActive onlyEnabled {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         _cachePriceIfNecessary(msg.sender, baseToken_, quoteToken_);
@@ -479,7 +500,8 @@ abstract contract BaseOracleFactory is
         // This avoids any drift between caller-provided values and configured oracle policy.
         uint48 maxAge_ = configuredMaxAge;
         // The factory caller only needs the cache freshness side effect.
-        // forge-lint: disable-next-line(unused-return)
+        // The external entry point holds nonReentrant across this call and subsequent state updates.
+        // forge-lint: disable-next-line(reentrancy-no-eth,unused-return)
         priceCache.cachePriceIfNecessary(baseToken_, quoteToken_, maxAge_);
     }
 
@@ -516,10 +538,14 @@ abstract contract BaseOracleFactory is
             bytes32 pairKey = _oraclePairKey(baseToken, quoteToken);
 
             if (!_hasOracleVariant(pairKey)) {
+                // Every selected pair must be validated and recached; caller-sized batches revert atomically.
+                // forge-lint: disable-next-line(require-revert-in-loop)
                 revert OracleFactory_InvalidTokenPair(baseToken, quoteToken);
             }
 
             if (_hasEnabledOracleVariant(pairKey)) {
+                // Every selected pair must be validated and recached; caller-sized batches revert atomically.
+                // forge-lint: disable-next-line(calls-loop)
                 priceCache.cachePrice(baseToken, quoteToken);
             }
 
@@ -549,9 +575,9 @@ abstract contract BaseOracleFactory is
     }
 
     function _setPriceCache(address policy_) internal {
-        if (policy_ == address(0) || !_implementsIPriceCache(policy_) || !_hasSameKernel(policy_)) {
+        if (policy_ == address(0) || !_implementsIPriceCache(policy_))
             revert OracleFactory_InvalidPriceCache(policy_);
-        }
+        PolicyDependency.requireSameKernel(policy_, address(kernel));
         priceCache = IPriceCache(policy_);
         emit PriceCacheSet(policy_);
     }
@@ -567,16 +593,6 @@ abstract contract BaseOracleFactory is
         );
 
         return success && returnData.length >= 32 && abi.decode(returnData, (bool));
-    }
-
-    function _hasSameKernel(address policy_) internal view returns (bool) {
-        (bool success, bytes memory returnData) = policy_.staticcall(
-            abi.encodeWithSignature("kernel()")
-        );
-        if (!success || returnData.length < 32) return false;
-
-        address cacheKernel = abi.decode(returnData, (address));
-        return cacheKernel == address(kernel);
     }
 
     function _validateCachingCaller(address caller_) internal view {

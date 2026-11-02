@@ -2,12 +2,16 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity ^0.8.15;
 
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+// Interfaces
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+
+// Contracts
 import {PriceCacheTest} from "./PriceCacheTest.sol";
 
 contract PriceCacheGetCachedPriceTest is PriceCacheTest {
+    // Scenarios: PCACHE-GET-CACHED-L01.
     function test_whenPolicyDisabled_reverts() public {
         vm.prank(admin);
         cache.disable("");
@@ -18,6 +22,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 
+    // Scenarios: PCACHE-GET-CACHED-P01.
     function test_givenPairIsCached_getCachedPrice_returnsSeparateUsdLegs() public {
         _cachePair();
 
@@ -46,6 +51,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         assertEq(quoteAsset.roundId, assetQuote.roundId, "Pair roundId should be shared");
     }
 
+    // Scenarios: PCACHE-DEPENDENCIES-P03.
     function test_whenPRICEModuleIsUpgraded_invalidatesExistingSnapshots() public {
         _cachePair();
         IPriceCache.CachedPrice memory beforeUpgrade = _cachedPair();
@@ -53,13 +59,10 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
 
         _upgradePriceModuleAndReconfigure(18);
 
-        IPriceCache.CachedPrice memory afterUpgrade = _cachedPair();
-        assertEq(afterUpgrade.assetPriceUsd, 0, "Asset leg should be invalidated");
-        assertEq(afterUpgrade.quotePriceUsd, 0, "Quote leg should be invalidated");
-        assertEq(afterUpgrade.updatedAt, 0, "Timestamp should be invalidated");
-        assertEq(afterUpgrade.roundId, 0, "Round should be invalidated");
+        _assertUncached(address(assetToken), address(quoteToken));
     }
 
+    // Scenarios: PCACHE-GET-CACHED-I01.
     function test_whenAssetRemovedFromPRICE_reverts() public {
         _cachePair();
         priceModule.removeAsset(address(assetToken));
@@ -72,6 +75,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 
+    // Scenarios: PCACHE-GET-CACHED-I02.
     function test_whenQuoteRemovedFromPRICE_reverts() public {
         _cachePair();
         priceModule.removeAsset(address(quoteToken));
@@ -84,6 +88,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 
+    // Scenarios: PCACHE-METADATA-P04.
     function test_whenUnitOfAccountDecimalsChange_invalidatesPairsInBothOrientations() public {
         address unitOfAccount = _unitOfAccount();
         _setNonContractAssetMetadata(unitOfAccount, 2, "NCA");
@@ -98,26 +103,11 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
 
         _setNonContractAssetMetadata(unitOfAccount, 3, "NCA");
 
-        IPriceCache.CachedPrice memory forward = cache.getCachedPrice(
-            address(assetToken),
-            unitOfAccount
-        );
-        IPriceCache.CachedPrice memory reverse = cache.getCachedPrice(
-            unitOfAccount,
-            address(assetToken)
-        );
-
-        assertEq(forward.assetPriceUsd, 0, "Forward asset leg should be invalidated");
-        assertEq(forward.quotePriceUsd, 0, "Forward quote leg should be invalidated");
-        assertEq(forward.updatedAt, 0, "Forward timestamp should be invalidated");
-        assertEq(forward.roundId, 0, "Forward round should be invalidated");
-
-        assertEq(reverse.assetPriceUsd, 0, "Reverse asset leg should be invalidated");
-        assertEq(reverse.quotePriceUsd, 0, "Reverse quote leg should be invalidated");
-        assertEq(reverse.updatedAt, 0, "Reverse timestamp should be invalidated");
-        assertEq(reverse.roundId, 0, "Reverse round should be invalidated");
+        _assertUncached(address(assetToken), unitOfAccount);
+        _assertUncached(unitOfAccount, address(assetToken));
     }
 
+    // Scenarios: PCACHE-METADATA-P05.
     function test_whenRegisteredNonContractAssetDecimalsChange_invalidatesPairsInBothOrientations()
         public
     {
@@ -136,26 +126,11 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
 
         _setNonContractAssetMetadata(nonContractAsset, UPDATED_NON_CONTRACT_DECIMALS, "NCA");
 
-        IPriceCache.CachedPrice memory forward = cache.getCachedPrice(
-            address(assetToken),
-            nonContractAsset
-        );
-        IPriceCache.CachedPrice memory reverse = cache.getCachedPrice(
-            nonContractAsset,
-            address(assetToken)
-        );
-
-        assertEq(forward.assetPriceUsd, 0, "Forward asset leg should be invalidated");
-        assertEq(forward.quotePriceUsd, 0, "Forward quote leg should be invalidated");
-        assertEq(forward.updatedAt, 0, "Forward timestamp should be invalidated");
-        assertEq(forward.roundId, 0, "Forward round should be invalidated");
-
-        assertEq(reverse.assetPriceUsd, 0, "Reverse asset leg should be invalidated");
-        assertEq(reverse.quotePriceUsd, 0, "Reverse quote leg should be invalidated");
-        assertEq(reverse.updatedAt, 0, "Reverse timestamp should be invalidated");
-        assertEq(reverse.roundId, 0, "Reverse round should be invalidated");
+        _assertUncached(address(assetToken), nonContractAsset);
+        _assertUncached(nonContractAsset, address(assetToken));
     }
 
+    // Scenarios: PCACHE-METADATA-P06.
     function test_whenUnrelatedNonContractAssetDecimalsChange_pairRemainsCached() public {
         address unitOfAccount = _unitOfAccount();
         address otherNonContractAsset = makeAddr("OTHER_NON_CONTRACT_ASSET");
@@ -174,33 +149,13 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
 
         _setNonContractAssetMetadata(otherNonContractAsset, UPDATED_NON_CONTRACT_DECIMALS, "NCA");
 
-        IPriceCache.CachedPrice memory afterUpdate = cache.getCachedPrice(
-            address(assetToken),
-            unitOfAccount
-        );
-
-        assertEq(
-            afterUpdate.assetPriceUsd,
-            beforeUpdate.assetPriceUsd,
-            "Asset leg should remain cached for unrelated decimals changes"
-        );
-        assertEq(
-            afterUpdate.quotePriceUsd,
-            beforeUpdate.quotePriceUsd,
-            "Quote leg should remain cached for unrelated decimals changes"
-        );
-        assertEq(
-            afterUpdate.updatedAt,
-            beforeUpdate.updatedAt,
-            "Timestamp should remain cached for unrelated decimals changes"
-        );
-        assertEq(
-            afterUpdate.roundId,
-            beforeUpdate.roundId,
-            "Round should remain cached for unrelated decimals changes"
+        _assertCachedPriceEq(
+            cache.getCachedPrice(address(assetToken), unitOfAccount),
+            beforeUpdate
         );
     }
 
+    // Scenarios: PCACHE-GET-CACHED-L02.
     function test_whenPolicyIsDeactivated_reverts() public {
         _deactivateCachePolicy();
 
@@ -208,6 +163,138 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         // The expected revert makes the return value unreachable.
         // forge-lint: disable-next-line(unused-return)
         cache.getCachedPrice(address(assetToken), address(quoteToken));
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-I03.
+    function test_whenAssetZero_reverts(address caller_) public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_InvalidPair.selector,
+                address(0),
+                address(quoteToken)
+            )
+        );
+        vm.prank(caller_);
+        cache.getCachedPrice(address(0), address(quoteToken));
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-I04.
+    function test_whenQuoteZero_reverts(address caller_) public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_InvalidPair.selector,
+                address(assetToken),
+                address(0)
+            )
+        );
+        vm.prank(caller_);
+        cache.getCachedPrice(address(assetToken), address(0));
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-I05.
+    function test_whenSamePair_reverts(address caller_) public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_InvalidPair.selector,
+                address(assetToken),
+                address(assetToken)
+            )
+        );
+        vm.prank(caller_);
+        cache.getCachedPrice(address(assetToken), address(assetToken));
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-I06.
+    function test_whenAssetMetadataMissing_reverts(address caller_) public {
+        address nca = makeAddr("MISSING_METADATA");
+        _registerNonContractAsset(nca);
+        priceModule.setPrice(nca, 3e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered.selector,
+                nca
+            )
+        );
+        vm.prank(caller_);
+        cache.getCachedPrice(nca, address(quoteToken));
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-I07.
+    function test_whenQuoteMetadataMissing_reverts(address caller_) public {
+        address nca = makeAddr("MISSING_METADATA");
+        _registerNonContractAsset(nca);
+        priceModule.setPrice(nca, 3e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered.selector,
+                nca
+            )
+        );
+        vm.prank(caller_);
+        cache.getCachedPrice(address(assetToken), nca);
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-L03.
+    function test_givenInactivePaused_whenCalled_reverts(
+        address caller_
+    ) public givenCachePaused givenCacheInactive {
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        vm.prank(caller_);
+        cache.getCachedPrice(address(assetToken), address(quoteToken));
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-L04.
+    function test_givenReEnabled_whenCalled(address caller_) public givenCacheReEnabled {
+        _cachePair();
+        vm.prank(caller_);
+        IPriceCache.CachedPrice memory snapshot = cache.getCachedPrice(
+            address(assetToken),
+            address(quoteToken)
+        );
+        assertEq(snapshot.assetPriceUsd, 2e18, "asset price restored");
+        assertEq(snapshot.quotePriceUsd, 1e18, "quote price restored");
+        assertEq(snapshot.roundId, 1, "exact round after restoration");
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-L04.
+    function test_givenReactivated_whenCalled(address caller_) public givenCacheReactivated {
+        _cachePair();
+        vm.prank(caller_);
+        IPriceCache.CachedPrice memory snapshot = cache.getCachedPrice(
+            address(assetToken),
+            address(quoteToken)
+        );
+        assertEq(snapshot.assetPriceUsd, 2e18, "asset price restored");
+        assertEq(snapshot.quotePriceUsd, 1e18, "quote price restored");
+        assertEq(snapshot.roundId, 1, "exact round after restoration");
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-P02.
+    function test_whenUncachedPairReadAvoidsLivePrice(address caller_) public {
+        vm.mockCallRevert(
+            address(priceModule),
+            abi.encodeWithSignature("getPrice(address,uint8)"),
+            abi.encodeWithSelector(MetadataReadFailed.selector)
+        );
+        vm.prank(caller_);
+        IPriceCache.CachedPrice memory snapshot = cache.getCachedPrice(
+            address(assetToken),
+            address(quoteToken)
+        );
+        IPriceCache.CachedPrice memory zero;
+        _assertCachedPriceEq(snapshot, zero);
+    }
+
+    // Scenarios: PCACHE-GET-CACHED-P03.
+    function test_whenStaleSnapshotRemainsReadable(address caller_) public {
+        _cachePair();
+        IPriceCache.CachedPrice memory beforeSnapshot = _cachedPair();
+        vm.warp(uint256(beforeSnapshot.updatedAt) + 1 days);
+        vm.prank(caller_);
+        _assertCachedPriceEq(
+            cache.getCachedPrice(address(assetToken), address(quoteToken)),
+            beforeSnapshot
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

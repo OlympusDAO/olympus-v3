@@ -2,16 +2,20 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
 pragma solidity ^0.8.15;
 
-import {Test} from "@forge-std-1.16.2/Test.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
-
-import {Actions, Kernel} from "src/Kernel.sol";
+// Interfaces
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+
+// Libraries
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Contracts
+import {Test} from "@forge-std-1.16.2/Test.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
 abstract contract PriceCacheTest is Test {
@@ -80,7 +84,7 @@ abstract contract PriceCacheTest is Test {
     }
 
     function _setPriceTimestampAtCurrentBlock() internal {
-        priceModule.setTimestamp(SafeCast.toUint48(block.timestamp));
+        priceModule.setTimestamp(SafeCast.toUint48(vm.getBlockTimestamp()));
     }
 
     function _deactivateCachePolicy() internal {
@@ -137,6 +141,57 @@ abstract contract PriceCacheTest is Test {
         );
 
         kernel.executeAction(Actions.UpgradeModule, address(newPrice_));
+    }
+
+    error MetadataReadFailed();
+
+    modifier givenCachePaused() {
+        _pauseCache();
+        _;
+    }
+
+    modifier givenCacheInactive() {
+        _deactivateCachePolicy();
+        _;
+    }
+
+    modifier givenCacheReEnabled() {
+        _pauseCache();
+        vm.prank(admin);
+        cache.reEnable();
+        _;
+    }
+
+    modifier givenCacheReactivated() {
+        _deactivateCachePolicy();
+        kernel.executeAction(Actions.ActivatePolicy, address(cache));
+        _;
+    }
+
+    function _pauseCache() internal {
+        vm.prank(admin);
+        cache.disable("");
+    }
+
+    function _metadataAsset() internal returns (address asset_) {
+        asset_ = makeAddr("METADATA_ASSET");
+        _registerNonContractAsset(asset_);
+        priceModule.setPrice(asset_, NON_CONTRACT_PRICE_USD);
+        _setNonContractAssetMetadata(asset_, NON_CONTRACT_DECIMALS, "NCA");
+    }
+
+    function _grantMetadataRole(bytes32 role_, address caller_) internal {
+        if (!roles.hasRole(caller_, role_)) rolesAdmin.grantRole(role_, caller_);
+    }
+
+    function _assertUncached(address asset_, address quote_) internal view {
+        IPriceCache.CachedPrice memory zero;
+        _assertCachedPriceEq(cache.getCachedPrice(asset_, quote_), zero);
+    }
+
+    function _expectMetadataAbiFailure() internal {
+        // Solidity's decoder supplies no typed error for malformed external metadata returns.
+        vm.expectRevert(bytes(""));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
