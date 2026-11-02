@@ -17,6 +17,30 @@ when it predicts or exposes the state established by that action and coverage is
 standalone file when a read function has independent behavior that is not naturally established by
 one action.
 
+Keep an action's boundary and recovery cases in its test file when they share its fixture. Use one
+contract per file. When callbacks or integration cases require a different fixture, use an
+action-qualified filename and matching contract, such as `burnSurplusCallback.t.sol` and
+`BurnerLoansInventoryBurnSurplusCallbackTest`. Put reusable setup and helper contracts in separate
+named files under `fixtures/` or the suite's base contract. Avoid a catch-all callback suite spanning
+unrelated actions.
+
+### Test Body Shape and Helper Boundaries
+
+Use one expected outcome per test. Split functions whose flags or `if/else` chains select success,
+different errors, caught versus propagated callbacks, or distinct recovery paths. Fuzz equivalent
+callers, numeric ranges and independent setup states together when the expected outcome stays the
+same. Keep deterministic boundary drivers explicit; do not make them choose unrelated outcomes.
+
+Extract repeated setup and assertions into small, semantic helpers: enabling or disabling a policy,
+changing Kernel membership, funding and approving a payer, configuring a dependency-view failure,
+and matching a frequently repeated exact error. Reuse existing helpers first. Helpers should share
+mechanics and common assertions, while the test makes its action and expected result clear. Moving
+an outcome-selecting branch into a generic runner does not simplify the test.
+
+Before moving or splitting tests, identify the retained states, fuzz domains, deterministic seeds
+and assertions. Update scenario references and reciprocal IDs, then run the affected suites. Keep
+the file and contract names consistent with the action they test.
+
 **Examples:**
 
 - `src/test/modules/DEPOS/mint.t.sol` - Tests for the `mint()` function
@@ -253,11 +277,43 @@ Before implementation, classify every changed external function against each cat
 focused tests for every applicable matrix cell. Record why a category is not applicable instead of
 silently omitting it.
 
+### Baseline Coverage
+
+Use this as the minimum review for each changed external function before adding feature-specific
+cases. A single happy-path test does not satisfy the baseline.
+
+| Concern | Baseline proof |
+| --- | --- |
+| Valid execution | Exercise a representative valid call and assert return values, emitted events, storage changes, and authoritative balance or custody deltas that apply. |
+| Caller authorization | Test every permitted caller class separately. Fuzz unauthorized callers while excluding permitted identities and only those addresses that intentionally exercise a different branch. Keep `address(0)` in the caller domain unless the contract gives it distinct behavior. Fuzz callers for permissionless functions. |
+| Local enabled state | For contracts with an enabler, cover enabled, disabled, and re-enabled states. Prove explicitly when a function remains callable while disabled. |
+| Kernel policy state | For Kernel policies, cover active, inactive, and reactivated states. Prove explicitly when a function remains callable while inactive. |
+| Input boundaries | Cover zero, one, semantic limits, values adjacent to limits, and the numeric type maximum. Cover zero addresses, empty collections, duplicates, and malformed encodings where applicable. |
+| State transitions | Cover absent and existing state, first and repeated execution, and exact before, at, and after transition points where applicable. |
+| External effects | Assert accounting and custody consistency, rollback on failed external calls, and reentrancy behavior for untrusted calls. |
+| Read/write agreement | Check the corresponding preview or getter against successful execution and equivalent failure conditions. |
+
+Treat the local enabled state and Kernel policy membership as independent axes. The normal baseline
+for an enabled Kernel policy is:
+
+1. enabled and policy-active;
+2. disabled and policy-active;
+3. enabled and policy-inactive;
+4. re-enabled and policy-active; and
+5. enabled and policy-reactivated.
+
+Add cross-product cases when changing one axis can affect the other. Lifecycle functions such as
+`enable`, `disable`, and `reEnable` use their own transition matrix. If a function intentionally
+ignores one axis, keep the applicable tests and state that independence in the coverage matrix.
+
 ### Caller Authorization
 
 - Cover every permitted caller class separately.
-- Fuzz unauthorized callers. Exclude every authorized identity and any address with distinct
-    semantics, such as `address(0)`, with `vm.assume()`.
+- Fuzz unauthorized callers. Exclude every authorized identity and only addresses that intentionally
+    exercise a different behavior covered by another test.
+- Do not exclude `address(0)` merely because it is zero. A fuzzed caller is `msg.sender`, not an
+    address input being validated, and `vm.prank(address(0))` is valid. Keep it in the unauthorized
+    caller domain unless the contract assigns the zero caller distinct semantics.
 - Fuzz the caller for permissionless functions to prove execution does not depend on one fixed
     address.
 - Cover direct and delegated authorization, expiry, cancellation, and self-authorization when the
@@ -267,7 +323,6 @@ silently omitting it.
 function test_whenCallerIsNotAuthorized_reverts(address caller_) public {
     vm.assume(caller_ != owner);
     vm.assume(caller_ != operator);
-    vm.assume(caller_ != address(0));
 
     vm.expectRevert(abi.encodeWithSelector(IContract.NotAuthorized.selector));
     vm.prank(caller_);
@@ -284,9 +339,26 @@ function test_givenActionIsReady(address caller_) public {
 
 ### Contract State
 
-Classify each function as enabled-only, intentionally callable while disabled, independent of the
-enabled state, or dependent on re-enable validation. Test enabled and disabled behavior explicitly.
-Test the re-enabled state separately when re-enablement can refresh dependencies or assumptions.
+For Default Framework policy enable/disable/reEnable tests, apply the shared
+[policy-lifecycle](../../../.agents/skills/policy-lifecycle/SKILL.md) guide. Its transition matrix,
+dependency direction, binding rules and enable/reEnable parity also govern the scenario plans.
+Record missing implementation checks explicitly and write failing tests before closing those gaps.
+
+Classify the function separately for both lifecycle axes:
+
+- **Local enabled state:** enabled-only, callable while disabled, independent of local state, or
+    dependent on re-enable validation.
+- **Kernel policy state:** active-only, callable while inactive, independent of membership, or
+    dependent on activation or reactivation.
+
+Test the expected behavior in each baseline state above. A disabled-state test does not cover
+Kernel inactivity, and a re-enabled test does not cover policy reactivation. For functions that are
+intentionally callable while disabled or inactive, assert successful effects in those states rather
+than only proving that another function reverts.
+
+In test names, use `givenPolicyActive`, `givenPolicyInactive`, and `givenPolicyReactivated` for
+Kernel policy membership. Use `givenEnabled`, `givenDisabled`, and `givenReEnabled` for the
+contract's local enabler state. Do not call Kernel deactivation "disabled."
 
 ### Input Boundaries
 
@@ -524,7 +596,11 @@ function test_whenArrayLengthIsBetweenOneAndTen(uint8 length) public {
 | Exact invalid numeric interval | `bound()`     | `bound(amount, 1001, type(uint256).max)` for a revert test |
 | Non-numeric constraints        | `vm.assume()` | `vm.assume(addr != address(0))`                            |
 | Complex multi-variable         | `vm.assume()` | `vm.assume(x > y)`                                         |
-| Address is not zero            | `vm.assume()` | `vm.assume(addr != address(0))`                            |
+| Address input must not be zero | `vm.assume()` | `vm.assume(recipient != address(0))`                       |
+
+The non-zero address guidance applies to function inputs whose behavior requires a non-zero value.
+It does not apply automatically to fuzzed callers. For authorization tests, retain the zero caller
+unless it is authorized or has a separate behavior that another test covers.
 
 **Why `bound()` is better for numeric ranges:**
 
@@ -552,7 +628,6 @@ function bound(uint256 x, uint256 min, uint256 max) pure returns (uint256) {
 
 function test_whenCallerIsNotAdmin_reverts(address caller_) public {
     vm.assume(caller_ != admin);
-    vm.assume(caller_ != address(0));
 
     vm.expectRevert(
         abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
@@ -705,7 +780,6 @@ function _expectRevertInvalidParams(string memory param) internal {
 // Usage
 function test_whenCallerIsNotAdmin_reverts(address caller_) public {
     vm.assume(caller_ != admin);
-    vm.assume(caller_ != address(0));
 
     _expectRevertNotAdmin();
     vm.prank(caller_);
@@ -797,7 +871,10 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
       `bound()` maps into that interval, while `vm.assume()` handles non-numeric or complex constraints
 - [ ] Caller matrix covers every authorized class, fuzzed unauthorized callers, and fuzzed callers
         for permissionless functions
-- [ ] Enabled, disabled, and re-enabled behavior is covered where applicable
+- [ ] Enabled, disabled, and re-enabled behavior is covered for each changed external function on
+      a contract with local enabled state
+- [ ] Policy-active, policy-inactive, and policy-reactivated behavior is covered independently for
+      each changed external function on a Kernel policy
 - [ ] Numeric tests cover valid and invalid ranges, exact semantic boundaries, adjacent values, and
         the type's maximum representable value with explicit boundary tests
 - [ ] State-transition tests assert the resulting state, not only queue or preview behavior

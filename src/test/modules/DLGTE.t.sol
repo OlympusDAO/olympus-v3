@@ -1173,19 +1173,12 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         );
 
         vm.startPrank(policy);
-        uint256 totalRescinded;
-        uint256 newUndelegatedBalance;
-        uint256 gasBefore = gasleft();
-        (totalRescinded, newUndelegatedBalance) = dlgte.rescindDelegations(
-            ALICE,
-            totalCollateral,
-            type(uint256).max
-        );
-        // Isolated execution starts with cold delegate escrows and storage, which is what a real
-        // transaction pays. That more than doubles the measurement: this rescind costs 1,359,884
-        // gas without isolation and 2,961,509 gas with it.
+        // Measure cold, isolated execution net of storage-clear refunds.
+        // gasleft() differences subtract refunds on Forge 1.8.1, but not on 1.8.6.
+        vm.startSnapshotGas("rescindDelegations");
+        dlgte.rescindDelegations(ALICE, totalCollateral, type(uint256).max);
         assertLt(
-            gasBefore - gasleft(),
+            vm.stopSnapshotGas(),
             3_100_000,
             "cold rescindDelegations gas should remain below the regression limit"
         );

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.20;
 
+import {stdError} from "@forge-std-1.16.2/StdError.sol";
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -321,7 +322,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         givenAddressHasReserveToken(recipient, 1e18)
     {
         // Expect revert
-        vm.expectRevert("TRANSFER_FROM_FAILED");
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);

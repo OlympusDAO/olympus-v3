@@ -5,14 +5,14 @@ pragma solidity ^0.8.15;
 // Interfaces
 import {AggregatorV2V3Interface, AggregatorInterface, AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
-import {SafeCast} from "@openzeppelin-4.8.0/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {String} from "src/libraries/String.sol";
 
@@ -66,11 +66,14 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     }
 
     /// @notice The maximum allowed age for cached prices
-    /// @dev    Does not revert.
+    /// @dev Reverts if:
+    ///      - Malformed immutable data exceeds uint48.
+    ///
+    /// @dev Factory-created clones store a uint48 in the eight-byte slot.
     ///
     /// @return uint48 The max age stored in immutable args
     function maxAge() public pure override returns (uint48) {
-        return uint48(_getArgUint64(0x3D));
+        return SafeCast.toUint48(_getArgUint64(0x3D));
     }
 
     /// @notice The name of the oracle
@@ -78,16 +81,16 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///
     /// @return string The name stored in immutable args
     function name() public pure override returns (string memory) {
-        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x45))));
+        return String.bytes32ToString(bytes32(_getArgUint256(0x45)));
     }
 
     /// @notice Returns the enabled price cache policy for this oracle.
-    /// @dev    Calls `factory().getOracleContext(address(this))` to read the oracle liveness
-    ///         context and configured cache policy from the factory. Reverts with
-    ///         `ChainlinkOracle_NotEnabled()` if the returned context is disabled or if the
-    ///         factory does not provide a valid price cache address. Reverts from
-    ///         `getOracleContext` bubble up, including when the factory policy is inactive or
-    ///         this oracle was not created by the factory.
+    /// @dev Reverts if:
+    ///      - The returned factory context is disabled (ChainlinkOracle_NotEnabled).
+    ///      - The returned price cache address is zero (ChainlinkOracle_NotEnabled).
+    ///      - The factory context lookup fails, including inactive factory or unknown oracle.
+    ///
+    /// @dev Reads oracle liveness and the configured cache through factory().getOracleContext(address(this)).
     ///
     /// @return priceCache_ The configured price cache policy, expected to be a non-zero address.
     function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
@@ -198,6 +201,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ) internal view returns (bool) {
         if (timestamp_ == 0) return true;
         unchecked {
+            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+            // forge-lint: disable-next-line(block-timestamp)
             return block.timestamp > timestamp_ + uint256(maxAge_);
         }
     }
@@ -209,6 +214,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @param maxAge_             Maximum acceptable age, in seconds.
     /// @return latestPermissible_ Oldest acceptable timestamp, or 0 if no positive lower bound exists.
     function _latestPermissibleTimestamp(uint48 maxAge_) internal view returns (uint256) {
+        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp <= uint256(maxAge_)) return 0;
         unchecked {
             return block.timestamp - uint256(maxAge_);
@@ -216,8 +223,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     }
 
     /// @notice Returns latest round data after enforcing `maxAge()` freshness.
-    /// @dev    Reverts with `ChainlinkOracle_Stale(updatedAt, latestPermissibleTimestamp)` when
-    ///         the returned `updatedAt` is stale according to `_isStaleFromTimestamp(updatedAt, maxAge())`.
+    /// @dev Reverts if:
+    ///      - The returned updatedAt is stale under maxAge() (ChainlinkOracle_Stale).
     ///
     /// @return roundId         Latest round identifier.
     /// @return answer          Latest answer.
@@ -283,9 +290,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     }
 
     /// @inheritdoc AggregatorV3Interface
-    /// @dev        Only supports the latest round. For any other round ID, reverts with ChainlinkOracle_NoDataPresent().
+    /// @dev        Only supports the latest round.
     ///
     ///             This function will revert if:
+    ///             - The requested round ID is not the latest round (ChainlinkOracle_NoDataPresent)
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
     ///             - The cache policy is deactivated in Kernel or the cache contract is disabled

@@ -2,11 +2,14 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity ^0.8.15;
 
-import {Actions} from "src/Kernel.sol";
-import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
+// Interfaces
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+
+// Contracts
+import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
+import {Actions} from "src/Kernel.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
 contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {

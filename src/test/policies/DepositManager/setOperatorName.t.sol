@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
 
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -25,17 +30,24 @@ contract DepositManagerSetOperatorNameTest is DepositManagerTest {
         depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
     }
 
-    // when the caller is not the admin or manager
+    // when the caller is not admin
     //  [X] it reverts
 
-    function test_givenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+    function test_whenCallerIsNotAdmin_reverts(address caller_) public givenIsEnabled {
+        vm.assume(caller_ != ADMIN);
 
-        // Expect revert
-        _expectRevertNotManagerOrAdmin();
+        _expectRevertNotAdmin();
 
         // Call function
         vm.prank(caller_);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
+    }
+
+    function test_givenConfigOperator_whenSettingOperatorName_reverts() public givenIsEnabled {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        _expectRevertNotAdmin();
+        vm.prank(CONFIG_OPERATOR);
         depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
     }
 
@@ -114,7 +126,7 @@ contract DepositManagerSetOperatorNameTest is DepositManagerTest {
         uint8 index_,
         bytes1 character_
     ) public givenIsEnabled {
-        index_ = uint8(bound(index_, 0, 2));
+        index_ %= 3;
 
         // Ensure character is not a lowercase letter
         if (
@@ -191,4 +203,18 @@ contract DepositManagerSetOperatorNameTest is DepositManagerTest {
             "Operator name not set correctly"
         );
     }
+
+    // Scenarios: DM-SET-OPERATOR-NAME-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        // Expect revert
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        // Call function
+        vm.prank(ADMIN);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
+    }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

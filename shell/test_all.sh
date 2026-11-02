@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 print_test_event() {
     echo -e "\033[1m$1\033[0m"
