@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant, reentrancy-no-eth, unused-return)
@@ -604,6 +606,24 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             _depositManagerSharesBefore - _expectedWithdrawnShares,
             5,
             "vault balance"
+        );
+    }
+
+    // Scenarios: DM-BORROWING-WITHDRAW-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        // Expect revert
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        // Call function
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: BORROW_AMOUNT
+            })
         );
     }
 }

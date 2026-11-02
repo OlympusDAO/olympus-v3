@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant, unused-return)
@@ -717,6 +719,25 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             _assetDepositCapUtilization(iAsset),
             previousDepositorDepositActualAmount - amount_,
             "zero-output withdrawal should release burned principal"
+        );
+    }
+
+    // Scenarios: DM-WITHDRAW-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.withdraw(
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                isWrapped: false
+            })
         );
     }
 }

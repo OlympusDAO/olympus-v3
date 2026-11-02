@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-// Shared domain values use constants; scenario-specific literals remain inline for auditability.
-// Revert-path calls deliberately ignore return values.
-// forge-lint: disable-start(literal-instead-of-constant, unused-return)
-
 // Interfaces
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Contracts
@@ -17,16 +12,22 @@ import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTe
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// Revert-path calls deliberately ignore return values.
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
+
 contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTimelockTest {
-    // Scenarios: DMCT-A03.
+    // Scenarios: DMCT-A03, DMCT-QUEUE-CAP-A02.
     function test_whenCallerIsUnauthorized_reverts(address caller_) public {
         vm.assume(caller_ != ADMIN && caller_ != DEPOSIT_MANAGER_ADMIN);
-
-        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
-        vm.prank(caller_);
-        _configTimelock.queueSetAssetDepositCap(iAsset, 100e18);
+        _assertQueueRejected(
+            caller_,
+            abi.encodeCall(_configTimelock.queueSetAssetDepositCap, (iAsset, 100e18)),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+        );
     }
 
+    // Scenarios: DMCT-QUEUE-CAP-I02.
     function test_givenUnconfiguredAsset_reverts(address asset_) public {
         vm.assume(asset_ != address(iAsset));
 
@@ -35,6 +36,7 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         _configTimelock.queueSetAssetDepositCap(IERC20(asset_), 100e18);
     }
 
+    // Scenarios: DMCT-QUEUE-CAP-N02.
     function test_whenDepositCapIsBelowMinimum_reverts() public {
         vm.prank(ADMIN);
         depositManager.setAssetMinimumDeposit(iAsset, 2);
@@ -51,6 +53,7 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         _configTimelock.queueSetAssetDepositCap(iAsset, 1);
     }
 
+    // Scenarios: DMCT-QUEUE-MINIMUM-N02.
     function test_whenMinimumDepositExceedsCap_reverts() public {
         vm.prank(ADMIN);
         depositManager.setAssetDepositCap(iAsset, 1);
@@ -67,9 +70,10 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         _configTimelock.queueSetAssetMinimumDeposit(iAsset, 2);
     }
 
+    // Scenarios: DMCT-QUEUE-CAP-N03.
     function test_givenDepositManagerAdmin_queuesAndExecutesDepositCap(
         address executor_,
-        uint128 cap_
+        uint256 cap_
     ) public {
         uint64 actionId = _queueDepositCap(iAsset, cap_);
         _warpReady();
@@ -84,9 +88,10 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         );
     }
 
+    // Scenarios: DMCT-QUEUE-MINIMUM-N03.
     function test_givenDepositManagerAdmin_queuesAndExecutesMinimumDeposit(
         address executor_,
-        uint128 minimumDeposit_
+        uint256 minimumDeposit_
     ) public {
         uint64 actionId = _queueMinimumDeposit(iAsset, minimumDeposit_);
         _warpReady();
@@ -101,6 +106,7 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         );
     }
 
+    // Scenarios: DMCT-QUEUE-CAP-N03.
     function test_whenDepositCapIsUint256Max_queuesAndExecutes() public {
         vm.prank(ADMIN);
         depositManager.setAssetDepositCap(iAsset, 1);
@@ -116,6 +122,7 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         );
     }
 
+    // Scenarios: DMCT-QUEUE-MINIMUM-N03.
     function test_whenMinimumDepositIsUint256Max_queuesAndExecutes() public {
         uint64 actionId = _queueMinimumDeposit(iAsset, type(uint256).max);
         _warpReady();
@@ -129,18 +136,18 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         );
     }
 
+    // Scenarios: DMCT-QUEUE-MINIMUM-P01.
     function test_givenPendingCap_whenMinimumIsQueuedForSameAsset_reverts() public {
         uint64 owner = _queueDepositCap(iAsset, 100e18);
 
-        vm.expectPartialRevert(
-            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector
-        );
+        _expectPendingKey(_limitsKey(iAsset), owner);
         vm.prank(DEPOSIT_MANAGER_ADMIN);
         _configTimelock.queueSetAssetMinimumDeposit(iAsset, 1e18);
 
         assertEq(_configTimelock.nextActionId(), owner + 1, "failed queue should not consume id");
     }
 
+    // Scenarios: DMCT-QUEUE-MINIMUM-P03.
     function test_givenPendingCap_whenMinimumIsQueuedForAnotherAsset_succeeds() public {
         MockERC20 secondAsset = new MockERC20("Second", "SECOND", 18);
         MockERC4626 secondVault = new MockERC4626(secondAsset, "Second Vault", "svSECOND");
@@ -158,16 +165,16 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         assertEq(second, first + 1, "different assets should have independent limit keys");
     }
 
+    // Scenarios: DMCT-QUEUE-CAP-D02.
     function test_givenQueuedCap_whenMinimumChanges_executionRevertsAsStale() public {
         uint64 actionId = _queueDepositCap(iAsset, 100e18);
         vm.prank(ADMIN);
         depositManager.setAssetMinimumDeposit(iAsset, 1);
         _warpReady();
 
-        vm.expectPartialRevert(
-            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector
-        );
+        _expectStale(actionId, 0, keccak256(abi.encode(true, type(uint256).max, uint256(1))));
         _configTimelock.executeQueuedAction(actionId);
+        _assertPending(actionId);
     }
 }
 

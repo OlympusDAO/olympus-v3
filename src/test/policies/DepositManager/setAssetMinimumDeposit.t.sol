@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
@@ -108,6 +111,17 @@ contract DepositManagerSetAssetMinimumDepositTest is DepositManagerTest {
         IAssetManager.AssetConfiguration memory configuration = depositManager
             .getAssetConfiguration(iAsset);
         assertEq(configuration.minimumDeposit, minimumDeposit_, "minimumDeposit mismatch");
+    }
+
+    // Scenarios: DM-SET-ASSET-MINIMUM-DEPOSIT-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        // Expect revert
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        vm.prank(ADMIN);
+        depositManager.setAssetMinimumDeposit(iAsset, 1e18);
     }
 }
 

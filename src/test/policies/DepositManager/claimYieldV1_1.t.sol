@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {Actions} from "src/Kernel.sol";
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // Setup and revert-path calls assert state changes or revert data instead of return values.
@@ -705,6 +706,15 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
             })
         );
         externalVault.setAssetsPerShare(2e12);
+    }
+
+    // Scenarios: DM-CLAIM-YIELD-L02.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst_V1_1() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+        vm.prank(DEPOSIT_OPERATOR);
+        IDepositManagerV1_1(address(depositManager)).claimYield(iAsset, RECIPIENT, 1, true);
     }
 }
 

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Scenario-specific literals and established test variable names remain inline for auditability.
 // Setup calls intentionally ignore return values when subsequent assertions verify their effects.
@@ -332,6 +334,17 @@ contract DepositManagerRescueTest is DepositManagerTest {
             tokenAmount,
             "Treasury should receive the rescued tokens"
         );
+    }
+
+    // Scenarios: DM-RESCUE-L01.
+    function test_givenInactiveAndDisabled_whenUnauthorizedCallerRescues_revertsActivityFirst(
+        address caller_
+    ) public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+        vm.prank(caller_);
+        depositManager.rescue(address(0));
     }
 }
 

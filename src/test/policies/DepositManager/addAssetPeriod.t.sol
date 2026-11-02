@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {Actions} from "src/Kernel.sol";
 
 // Revert-path calls deliberately ignore return values.
 // forge-lint: disable-start(unused-return)
@@ -147,7 +148,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         bool found = false;
         for (uint256 i; i < depositAssets.length; ++i) {
             if (
-                address(depositAssets[i].asset) == asset_ &&
+                depositAssets[i].asset == asset_ &&
                 depositAssets[i].depositPeriod == depositPeriod_ &&
                 depositAssets[i].operator == facility_
             ) {
@@ -679,6 +680,16 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
             address(0),
             "Unknown token wrapped token should return zero address"
         );
+    }
+
+    // Scenarios: DM-ADD-ASSET-PERIOD-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 }
 

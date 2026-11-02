@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {Actions} from "src/Kernel.sol";
 
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
@@ -70,5 +73,14 @@ contract DepositManagerSetConfigOperatorTest is DepositManagerTest {
             CONFIG_OPERATOR,
             "operator retained after re-enable"
         );
+    }
+
+    // Scenarios: DM-SET-CONFIG-OPERATOR-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+        vm.prank(ADMIN);
+        depositManager.setConfigOperator(CONFIG_OPERATOR);
     }
 }

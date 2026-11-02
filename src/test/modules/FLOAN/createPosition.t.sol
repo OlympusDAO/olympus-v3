@@ -101,25 +101,23 @@ contract FLOANCreatePositionTest is FLOANTest {
     // createPosition
     // given market originations are disabled
     //  when createPosition is called
-    //   then it reverts without consuming a position ID or updating indexes
-    function test_givenOriginationsDisabled_revertsWithoutStateChange() public {
+    //   then collateral-only positions remain available for servicing
+    function test_givenOriginationsDisabled_createsCollateralOnlyPosition() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.prank(manager);
         floan.setMarketOriginationsEnabled(marketId, false);
 
         vm.prank(facility);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_OriginationsDisabled.selector, marketId)
-        );
-        floan.createPosition(marketId, borrower);
+        uint64 positionId = floan.createPosition(marketId, borrower);
 
-        assertEq(floan.getPositionCount(), 0, "position count");
-        assertEq(floan.getPositionIdsForBorrower(borrower).length, 0, "borrower positions");
-        assertEq(floan.getPositionIdsForMarket(marketId).length, 0, "market positions");
+        assertEq(floan.getPositionCount(), 1, "position count");
+        assertEq(floan.getPosition(positionId).principalDue, 0, "No debt originated");
+        assertEq(floan.getPositionIdsForBorrower(borrower).length, 1, "borrower positions");
+        assertEq(floan.getPositionIdsForMarket(marketId).length, 1, "market positions");
         assertEq(
             floan.getPositionIdsForMarketAndBorrower(marketId, borrower).length,
-            0,
+            1,
             "market borrower positions"
         );
     }

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Vault variants exercise the same deposit action and are intentionally co-located.
 // Scenario-specific literals and ignored revert-path return values remain explicit.
@@ -1285,6 +1287,24 @@ contract DepositManagerDepositTest is DepositManagerTest {
             creditedAssets,
             custodyShares * _ASSETS_PER_SHARE,
             "maximum preview credit should round down through vault conversion"
+        );
+    }
+
+    // Scenarios: DM-DEPOSIT-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        vm.prank(ADMIN);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
         );
     }
 }

@@ -15,20 +15,6 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 ///      check both DepositManager interface IDs and the separate `IAssetManagerV1_1` interface ID:
 ///      Solidity excludes inherited functions from an interface ID.
 interface IDepositManagerV1_1 is IDepositManager {
-    // ========== ERRORS ========== //
-
-    /// @notice Thrown when a withdrawal recipient would retain output in DepositManager custody.
-    /// @param recipient The invalid recipient.
-    error DepositManager_InvalidRecipient(address recipient);
-
-    /// @notice Thrown when a borrowing withdrawal would transfer no output token.
-    error DepositManager_ZeroOutput();
-
-    /// @notice Error if an explicitly registered operator does not hold the deposit_operator role
-    ///         when a new asset-period route is created for it
-    /// @param operator The registered operator that lacks the deposit_operator role
-    error DepositManager_DepositOperatorRoleNotHeld(address operator);
-
     // ========== EVENTS ========== //
 
     /// @notice Emitted when DepositManager processes a share-mode withdrawal request.
@@ -84,6 +70,26 @@ interface IDepositManagerV1_1 is IDepositManager {
         uint256 amountOut
     );
 
+    // ========== ERRORS ========== //
+
+    /// @notice Lifecycle payloads must be empty.
+    error DepositManager_InvalidData();
+
+    /// @notice Initial or resumed operation requires Kernel membership.
+    error DepositManager_PolicyInactive();
+
+    /// @notice Thrown when a withdrawal recipient would retain output in DepositManager custody.
+    /// @param recipient The invalid recipient.
+    error DepositManager_InvalidRecipient(address recipient);
+
+    /// @notice Thrown when a borrowing withdrawal would transfer no output token.
+    error DepositManager_ZeroOutput();
+
+    /// @notice Error if an explicitly registered operator does not hold the deposit_operator role
+    ///         when a new asset-period route is created for it
+    /// @param operator The registered operator that lacks the deposit_operator role
+    error DepositManager_DepositOperatorRoleNotHeld(address operator);
+
     // ========== ASSET CONFIGURATION ========== //
 
     /// @notice Configures an asset and records whether it requires share-token withdrawals.
@@ -108,9 +114,8 @@ interface IDepositManagerV1_1 is IDepositManager {
     function setAssetShareWithdrawalRequired(IERC20 asset_, bool required_) external;
 
     /// @notice Validates whether an asset-period-operator route can be created now.
-    /// @dev Reverts if the asset is not configured, the period or operator is zero, the route
-    ///      already exists, the operator is not registered, or the operator lacks the
-    ///      `deposit_operator` role. Does not check caller authorization or enabled state.
+    /// @dev Validation is permissionless and independent of local enablement.
+    ///
     /// @param asset_ The configured underlying asset.
     /// @param depositPeriod_ The deposit period, in months.
     /// @param operator_ The registered operator holding the deposit_operator role.

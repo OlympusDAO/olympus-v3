@@ -202,6 +202,58 @@ contract FLOANSetMarketManagerTest is FLOANTest {
 
         assertEq(floan.getMarket(_marketId).manager, otherManager, "market manager");
     }
+
+    function test_givenCurrentManager_whenManagerUnchanged()
+        public
+        givenMarketExists(manager, facility)
+    {
+        _assertManagerUnchanged(manager);
+    }
+
+    function test_givenCurrentFacility_whenManagerUnchanged()
+        public
+        givenMarketExists(manager, facility)
+    {
+        _assertManagerUnchanged(facility);
+    }
+
+    function test_givenManagerIsFacility_whenManagerUnchanged()
+        public
+        givenMarketExists(manager, manager)
+    {
+        _assertManagerUnchanged(manager);
+    }
+
+    function test_givenUnrelatedManager_whenManagerUnchanged_reverts()
+        public
+        givenMarketExists(manager, facility)
+    {
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, _marketId, otherManager)
+        );
+        vm.prank(otherManager);
+        floan.setMarketManager(_marketId, manager);
+    }
+
+    function test_givenCallerWithoutKernelPermission_whenManagerUnchanged_reverts(
+        address caller_
+    ) public givenMarketExists(manager, facility) {
+        _expectKernelPermissionRevert(caller_);
+        floan.setMarketManager(_marketId, manager);
+    }
+
+    function _assertManagerUnchanged(address caller_) internal {
+        IFLOANv1.Market memory before = floan.getMarket(_marketId);
+        vm.recordLogs();
+        vm.record();
+        vm.prank(caller_);
+        floan.setMarketManager(_marketId, before.manager);
+
+        (, bytes32[] memory writes) = vm.accesses(address(floan));
+        assertEq(writes.length, 0, "Unchanged manager writes no storage");
+        assertEq(vm.getRecordedLogs().length, 0, "Unchanged manager emits no event");
+        _assertMarket(_marketId, before);
+    }
 }
 
 // forge-lint: disable-end(literal-instead-of-constant)

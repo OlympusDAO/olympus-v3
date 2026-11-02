@@ -12,10 +12,13 @@ import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/ID
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+// Contracts
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
 contract DepositManagerConfigTimelockSupportsInterfaceTest is DepositManagerConfigTimelockTest {
-    function test_supportsExpectedInterfaces() public view {
+    // Scenarios: DMCT-INTERFACES-P01.
+    function test_supportsExpectedInterfaces(address caller_) public {
+        vm.startPrank(caller_);
         assertTrue(
             _configTimelock.supportsInterface(type(IERC165).interfaceId),
             "IERC165 unsupported"
@@ -52,15 +55,35 @@ contract DepositManagerConfigTimelockSupportsInterfaceTest is DepositManagerConf
             _configTimelock.supportsInterface(type(IVersioned).interfaceId),
             "IVersioned unsupported"
         );
+        vm.stopPrank();
     }
 
+    // Scenarios: DMCT-INTERFACES-I01.
     function test_whenInterfaceIsUnsupported_returnsFalse() public view {
         assertFalse(_configTimelock.supportsInterface(0xffffffff), "unknown interface supported");
     }
 
-    function test_versionIsInitialDeploymentVersion() public view {
-        (uint8 major, uint8 minor) = _configTimelock.VERSION();
-        assertEq(major, 1, "config timelock major version");
-        assertEq(minor, 0, "config timelock minor version");
+    // Scenarios: DMCT-INTERFACES-L01.
+    function test_givenPausedInactive_whenInterfacesQueried(address caller_) public {
+        _pausePolicy(address(_configTimelock));
+        _setPolicyActive(address(_configTimelock), false);
+        test_supportsExpectedInterfaces(caller_);
+    }
+
+    // Scenarios: DMCT-INTERFACES-I01.
+    function test_whenUnknownInterfaceQueried(address caller_, bytes4 id_) public {
+        vm.assume(
+            id_ != type(IERC165).interfaceId &&
+                id_ != type(IEnabler).interfaceId &&
+                id_ != type(IEnablerV2).interfaceId &&
+                id_ != type(IReEnabler).interfaceId &&
+                id_ != type(IGracePeriod).interfaceId &&
+                id_ != type(ITimelockBatchQueue).interfaceId &&
+                id_ != type(IConfigTimelockBatchQueue).interfaceId &&
+                id_ != type(IDepositManagerConfigTimelock).interfaceId &&
+                id_ != type(IVersioned).interfaceId
+        );
+        vm.prank(caller_);
+        assertFalse(_configTimelock.supportsInterface(id_), "unknown interface rejected");
     }
 }

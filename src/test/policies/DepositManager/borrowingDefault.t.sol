@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Tuple components not relevant to these scenarios are intentionally ignored.
 // forge-lint: disable-start(unused-return)
@@ -428,6 +430,25 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             IERC20(externalVault.share()).balanceOf(address(depositManager)),
             (_ASYNC_DEPOSIT_AMOUNT - _ASYNC_BORROW_AMOUNT) / 1e12,
             "default should not move external shares"
+        );
+    }
+
+    // Scenarios: DM-BORROWING-DEFAULT-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        // Expect revert
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        // Call function
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingDefault(
+            IDepositManager.BorrowingDefaultParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                payer: DEPOSITOR,
+                amount: BORROW_AMOUNT
+            })
         );
     }
 }

@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 
 /// @title Fixed-Term Loan Module Interface
 /// @notice Dependency-free ledger for fixed-term loan markets and positions.
@@ -406,6 +406,7 @@ interface IFLOANv1 is IERC165 {
     function setMarketConfigData(uint32 marketId_, bytes calldata configData_) external;
 
     /// @notice Transfers market configuration authority.
+    ///         Supplying the current manager succeeds without storage writes or events.
     /// @dev Kernel-permissioned. The current market manager or current market facility may call.
     /// @param marketId_ Market to configure.
     /// @param manager_ New manager address.
@@ -427,7 +428,7 @@ interface IFLOANv1 is IERC165 {
 
     /// @notice Creates an empty position with the next sequential identifier.
     /// @dev Kernel-permissioned. Reverts for an invalid market, a caller other than its facility,
-    ///      disabled originations, or a zero borrower.
+    ///      or a zero borrower. Available while originations are disabled because it creates no debt.
     /// @param marketId_ Market that owns the position.
     /// @param borrower_ Position borrower.
     /// @return positionId Assigned position identifier.
@@ -438,7 +439,7 @@ interface IFLOANv1 is IERC165 {
 
     /// @notice Increases credited collateral on a position.
     /// @dev Kernel-permissioned. Reverts for an invalid position, a caller other than the position
-    ///      market's facility, disabled originations, or a zero amount.
+    ///      market's facility, or a zero amount. Available while originations are disabled.
     /// @param positionId_ Position to mutate.
     /// @param amount_ Collateral increase in collateral-token decimals.
     /// @return collateral Resulting credited collateral.

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {Actions} from "src/Kernel.sol";
 
 // Vault variants exercise the same withdrawal action and are intentionally co-located.
 // Scenario-specific literals and ignored setup or revert-path return values remain explicit.
@@ -1160,6 +1161,14 @@ contract DepositManagerWithdrawV1_1Test is DepositManagerTest {
         assertEq(address(tokenOut), address(expectedToken), "output token");
         assertEq(amountOut, expectedAmount, "output amount");
         assertEq(expectedToken.balanceOf(RECIPIENT), expectedAmount, "recipient output");
+    }
+
+    // Scenarios: DM-WITHDRAW-L02.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst_V1_1() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+        _withdrawUnderlying(1);
     }
 }
 

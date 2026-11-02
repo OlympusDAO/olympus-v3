@@ -76,8 +76,8 @@ contract FLOANAddCollateralTest is FLOANTest {
     // addCollateral
     // given market originations are disabled
     //  when addCollateral is called
-    //   then it reverts without changing collateral
-    function test_givenOriginationsDisabled_revertsWithoutStateChange()
+    //   then the borrower can improve collateral without originating debt
+    function test_givenOriginationsDisabled_addsCollateral()
         public
         givenMarketAndPositionAreCreated
     {
@@ -85,13 +85,11 @@ contract FLOANAddCollateralTest is FLOANTest {
         floan.setMarketOriginationsEnabled(_marketId, false);
 
         vm.prank(facility);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_OriginationsDisabled.selector, _marketId)
-        );
         floan.addCollateral(_positionId, 1);
 
-        assertEq(floan.getPosition(_positionId).collateral, 0, "position collateral unchanged");
-        assertEq(floan.getMarketCollateral(_marketId), 0, "market collateral unchanged");
+        assertEq(floan.getPosition(_positionId).collateral, 1, "position collateral credited");
+        assertEq(floan.getMarketCollateral(_marketId), 1, "market collateral credited");
+        assertEq(floan.getPosition(_positionId).principalDue, 0, "No debt originated");
     }
 
     // addCollateral

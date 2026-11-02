@@ -13,6 +13,7 @@ import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTok
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
@@ -90,6 +91,20 @@ contract DepositManager is
     mapping(bytes32 key => uint256 borrowedAmount) internal _borrowedAmounts;
 
     // ========== MODIFIERS ========== //
+
+    /// @notice Requires own Kernel activity followed by local enablement for ordinary actions.
+    modifier onlyOperational() {
+        _requireOperational();
+        _;
+    }
+
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive.
+    ///      - This policy is locally disabled.
+    function _requireOperational() internal view {
+        _requireOwnPolicyActive();
+        _requireEnabled();
+    }
 
     function _getAssetPeriodTokenId(
         IERC20 asset_,
@@ -179,7 +194,7 @@ contract DepositManager is
     )
         external
         nonReentrant
-        givenEnabled
+        onlyOperational
         onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (uint256 receiptTokenId, uint256 actualAmount)
     {
@@ -253,7 +268,7 @@ contract DepositManager is
     )
         external
         nonReentrant
-        givenEnabled
+        onlyOperational
         onlyRole(DEPOSIT_OPERATOR_ROLE)
         onlyConfiguredAsset(asset_)
         returns (uint256 actualAmount)
@@ -280,7 +295,7 @@ contract DepositManager is
     )
         external
         nonReentrant
-        givenEnabled
+        onlyOperational
         onlyRole(DEPOSIT_OPERATOR_ROLE)
         onlyConfiguredAsset(asset_)
         returns (IERC20 tokenOut, uint256 amountOut)
@@ -345,7 +360,7 @@ contract DepositManager is
     )
         external
         nonReentrant
-        givenEnabled
+        onlyOperational
         onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (uint256 actualAmount)
     {
@@ -370,7 +385,7 @@ contract DepositManager is
     )
         external
         nonReentrant
-        givenEnabled
+        onlyOperational
         onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (IERC20 tokenOut, uint256 amountOut)
     {
@@ -414,12 +429,13 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManagerV1_1
-    /// @dev Conversion and current-cap estimate only, not a reservation or guarantee of credit or
-    ///      successful execution. A zero-credit estimate returns zero. A positive estimate is
-    ///      checked against aggregate credited principal, including lent-out principal. Vault
-    ///      state, the cap, or utilization can change before execution; permissions, enabled
-    ///      state, minimum deposits, and balances are not checked. Reverts if the asset is not
-    ///      configured or the positive estimated credit exceeds current aggregate headroom.
+    /// @dev Reverts if:
+    ///      - The asset is not configured.
+    ///      - Positive estimated credit exceeds current aggregate headroom.
+    ///
+    /// @dev Conversion and current-cap estimate only; it reserves no capacity and guarantees no credit or execution.
+    ///      A zero-credit estimate returns zero. Positive credit includes lent-out principal in utilization.
+    ///      Vault state, cap and utilization can change. Permissions, enabled state, minimum deposits and balances are not checked.
     function previewDeposit(
         IERC20 asset_,
         uint256 assetAmount_
@@ -443,11 +459,13 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManagerV1_1
-    /// @dev Conversion estimate only, not a guarantee of delivery or successful execution.
-    ///      Later vault state, redemption restrictions, permissions, balances, and solvency
-    ///      can change the result or cause execution to revert. Reverts if the asset is not
-    ///      configured, share output is requested without a configured vault, or underlying
-    ///      output is requested for an asset that requires share withdrawal.
+    /// @dev Reverts if:
+    ///      - The asset is not configured.
+    ///      - Share output is requested without a configured vault.
+    ///      - Underlying output is requested for an asset requiring share withdrawal.
+    ///
+    /// @dev Conversion estimate only; delivery and execution remain subject to later vault state, redemption restrictions,
+    ///      permissions, balances and solvency.
     function previewWithdraw(
         IERC20 asset_,
         uint256 assetAmount_,
@@ -553,7 +571,7 @@ contract DepositManager is
     function setOperatorName(
         address operator_,
         string calldata name_
-    ) external givenEnabled onlyAdminRole {
+    ) external onlyOperational onlyAdminRole {
         // Validate that the name is not already set for the operator
         if (_operatorToName[operator_] != bytes3(0)) {
             revert DepositManager_OperatorNameSet(operator_);
@@ -633,7 +651,7 @@ contract DepositManager is
         IERC4626 vault_,
         uint256 depositCap_,
         uint256 minimumDeposit_
-    ) external givenEnabled onlyAdminRole {
+    ) external onlyOperational onlyAdminRole {
         _addAsset(asset_, vault_, depositCap_, minimumDeposit_);
     }
 
@@ -646,7 +664,7 @@ contract DepositManager is
         uint256 depositCap_,
         uint256 minimumDeposit_,
         bool requiresShareWithdrawal_
-    ) external givenEnabled onlyAdminRole {
+    ) external onlyOperational onlyAdminRole {
         _addAsset(asset_, vault_, depositCap_, minimumDeposit_);
         _setAssetShareWithdrawalRequired(asset_, requiresShareWithdrawal_);
     }
@@ -661,7 +679,7 @@ contract DepositManager is
     function setAssetShareWithdrawalRequired(
         IERC20 asset_,
         bool required_
-    ) external givenEnabled onlyConfigAuthority(false) {
+    ) external onlyOperational onlyConfigAuthority(false) {
         _setAssetShareWithdrawalRequired(asset_, required_);
     }
 
@@ -674,7 +692,7 @@ contract DepositManager is
     function setAssetDepositCap(
         IERC20 asset_,
         uint256 depositCap_
-    ) external givenEnabled onlyConfigAuthority(false) {
+    ) external onlyOperational onlyConfigAuthority(false) {
         _setAssetDepositCap(asset_, depositCap_);
     }
 
@@ -687,7 +705,7 @@ contract DepositManager is
     function setAssetMinimumDeposit(
         IERC20 asset_,
         uint256 minimumDeposit_
-    ) external givenEnabled onlyConfigAuthority(false) {
+    ) external onlyOperational onlyConfigAuthority(false) {
         _setAssetMinimumDeposit(asset_, minimumDeposit_);
     }
 
@@ -710,7 +728,7 @@ contract DepositManager is
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) external givenEnabled onlyConfigAuthority(false) returns (uint256 receiptTokenId) {
+    ) external onlyOperational onlyConfigAuthority(false) returns (uint256 receiptTokenId) {
         _validateAddAssetPeriod(asset_, depositPeriod_, operator_);
 
         // Configure the ERC6909 receipt token and asset period atomically
@@ -723,6 +741,14 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManagerV1_1
+    /// @dev Reverts if:
+    ///      - The asset is unconfigured.
+    ///      - The deposit period or operator is zero.
+    ///      - The route already exists.
+    ///      - The operator is unregistered.
+    ///      - The operator lacks deposit_operator.
+    ///
+    /// @dev Validation is permissionless and does not require local enablement.
     function validateAddAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -762,7 +788,7 @@ contract DepositManager is
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) external givenEnabled onlyConfigAuthority(false) {
+    ) external onlyOperational onlyConfigAuthority(false) {
         uint256 tokenId = _getAssetPeriodTokenId(asset_, depositPeriod_, operator_);
         if (_assetPeriods[tokenId].isEnabled) {
             revert DepositManager_AssetPeriodEnabled(address(asset_), depositPeriod_, operator_);
@@ -785,7 +811,7 @@ contract DepositManager is
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) external givenEnabled onlyConfigAuthority(true) {
+    ) external onlyOperational onlyConfigAuthority(true) {
         uint256 tokenId = _getAssetPeriodTokenId(asset_, depositPeriod_, operator_);
         if (!_assetPeriods[tokenId].isEnabled) {
             revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
@@ -844,7 +870,7 @@ contract DepositManager is
     )
         external
         nonReentrant
-        givenEnabled
+        onlyOperational
         onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (uint256 actualAmount)
     {
@@ -870,7 +896,7 @@ contract DepositManager is
     )
         external
         nonReentrant
-        givenEnabled
+        onlyOperational
         onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (IERC20 tokenOut, uint256 amountOut)
     {
@@ -963,7 +989,7 @@ contract DepositManager is
     )
         external
         nonReentrant
-        givenEnabled
+        onlyOperational
         onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (uint256 actualAmount)
     {
@@ -1023,7 +1049,7 @@ contract DepositManager is
     ///             - The operator becomes insolvent after the default (assets + borrowed < liabilities)
     function borrowingDefault(
         BorrowingDefaultParams calldata params_
-    ) external nonReentrant givenEnabled onlyRole(DEPOSIT_OPERATOR_ROLE) {
+    ) external nonReentrant onlyOperational onlyRole(DEPOSIT_OPERATOR_ROLE) {
         // Validate that the asset is configured
         if (!_isConfiguredAsset(params_.asset)) revert AssetManager_NotConfigured();
 
@@ -1203,6 +1229,7 @@ contract DepositManager is
     ///
     /// @param  token_ The address of the ERC20 token to rescue
     function rescue(address token_) external nonReentrant {
+        _requireOwnPolicyActive();
         _requireDepositManagerAdminAuthority();
 
         if (_isManagedToken(token_)) revert DepositManager_CannotRescueAsset(token_);
@@ -1238,7 +1265,7 @@ contract DepositManager is
 
     /// @inheritdoc ConfigOperatorSingleStep
     function _authorizeSetConfigOperator() internal view override returns (bool authorized) {
-        _requireEnabled();
+        _requireOperational();
         _requireRole(msg.sender, ADMIN_ROLE);
         return true;
     }
@@ -1256,6 +1283,59 @@ contract DepositManager is
     }
 
     /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive.
+    ///      - This policy is locally disabled.
+    ///      - The caller lacks ADMIN.
+    ///      - The requested period is zero.
+    function setGracePeriod(uint32 period_) public override {
+        _requireOwnPolicyActive();
+        super.setGracePeriod(period_);
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
+    /// @notice Requires local Kernel membership for ordinary actions and enablement.
+    /// @dev Disable intentionally omits this check. Reverts if:
+    ///      - This policy is Kernel-inactive (DepositManager_PolicyInactive).
+    function _requireOwnPolicyActive() private view {
+        if (!kernel.isPolicyActive(this)) revert DepositManager_PolicyInactive();
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty (DepositManager_InvalidData).
+    ///      - This policy is Kernel-inactive (DepositManager_PolicyInactive).
+    function _beforeEnable(bytes calldata data_) internal view override {
+        if (data_.length != 0) revert DepositManager_InvalidData();
+        _requireOwnPolicyActive();
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev Kernel inactivity does not prevent disable. Reverts if:
+    ///      - Lifecycle data is nonempty (DepositManager_InvalidData).
+    function _beforeDisable(bytes calldata data_) internal pure override {
+        if (data_.length != 0) revert DepositManager_InvalidData();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The grace deadline exceeds uint48 (SafeCastOverflowedUintDowncast).
+    ///      - The current timestamp exceeds the inclusive grace deadline (GracePeriod_Expired).
+    ///      - This policy is Kernel-inactive (DepositManager_PolicyInactive).
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _requireOwnPolicyActive();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The widened deadline exceeds uint48 (SafeCastOverflowedUintDowncast).
+    ///      - The current timestamp exceeds the inclusive deadline (GracePeriod_Expired).
+    function _requireGrace() internal view override {
+        uint48 deadline = SafeCast.toUint48(uint256(lastTransitionAt) + gracePeriod);
+        if (_getBlockTimestamp() > deadline) revert GracePeriod_Expired(deadline);
+    }
 }
 /// forge-lint: disable-end(asm-keccak256, mixed-case-function)

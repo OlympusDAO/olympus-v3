@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Vault variants exercise the same onboarding action and are intentionally co-located.
 // Scenario-specific literals and ignored revert-path return values remain explicit.
@@ -51,11 +53,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
             isConfigured_,
             "AssetConfiguration: isConfigured mismatch"
         );
-        assertEq(
-            address(configuration.vault),
-            address(vault_),
-            "AssetConfiguration: vault mismatch"
-        );
+        assertEq(configuration.vault, address(vault_), "AssetConfiguration: vault mismatch");
         assertEq(configuration.depositCap, depositCap_, "AssetConfiguration: depositCap mismatch");
         assertEq(
             configuration.minimumDeposit,
@@ -995,6 +993,37 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
             IERC4626(address(secondVault)),
             type(uint256).max,
             0
+        );
+    }
+
+    // Scenarios: DM-ADD-ASSET-L02.
+    function test_givenInactiveAndDisabled_reverts_ActivityFirst() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositManagerV1_1.DepositManager_PolicyInactive.selector)
+        );
+
+        vm.prank(ADMIN);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max, 0);
+    }
+
+    // Scenarios: DM-ADD-ASSET-L01.
+    function test_givenInactiveAndDisabled_whenShareWithdrawalRequirementIsSpecified_reverts_ActivityFirst(
+        bool requiresShareWithdrawal_
+    ) public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositManagerV1_1.DepositManager_PolicyInactive.selector)
+        );
+        vm.prank(ADMIN);
+        IDepositManagerV1_1(address(depositManager)).addAsset(
+            iAsset,
+            iVault,
+            type(uint256).max,
+            0,
+            requiresShareWithdrawal_
         );
     }
 }

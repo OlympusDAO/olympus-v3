@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {Actions} from "src/Kernel.sol";
 
 // Scenario-specific literals remain inline for auditability. Revert-path calls and tuple
 // destructuring intentionally ignore return values that the corresponding assertions do not use.
@@ -616,6 +617,22 @@ contract DepositManagerBorrowingWithdrawV1_1Test is DepositManagerTest {
                 amount: 10e18,
                 shouldWrap: false
             })
+        );
+    }
+
+    // Scenarios: DM-BORROWING-WITHDRAW-L02.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst_V1_1() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+        vm.prank(DEPOSIT_OPERATOR);
+        IDepositManagerV1_1(address(depositManager)).borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: 1
+            }),
+            true
         );
     }
 }

@@ -11,6 +11,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 interface IDepositManagerConfigTimelock is ITimelockBatchQueue {
     // ========== ERRORS ========== //
 
+    /// @notice Lifecycle payloads must be empty.
+    error DepositManagerConfigTimelock_InvalidData();
+
     /// @notice Thrown when the Deposit Manager address is zero.
     error DepositManagerConfigTimelock_ZeroAddress();
 
@@ -21,10 +24,6 @@ interface IDepositManagerConfigTimelock is ITimelockBatchQueue {
     /// @notice Thrown when a policy required for queueing or execution is not active in the Kernel.
     /// @param policy Inactive policy address.
     error DepositManagerConfigTimelock_PolicyInactive(address policy);
-
-    /// @notice Thrown when the target belongs to another Kernel.
-    /// @param targetKernel Kernel configured on the target.
-    error DepositManagerConfigTimelock_KernelMismatch(address targetKernel);
 
     /// @notice Thrown when a required module version is unsupported.
     error DepositManagerConfigTimelock_InvalidModuleVersion();

@@ -14,7 +14,10 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -24,7 +27,6 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ConfigTimelockBatchQueue} from "src/policies/utils/ConfigTimelockBatchQueue.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
-import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Deposit Manager Config Timelock
 /// @notice Timelocked configuration operator for mutable Deposit Manager settings, including
@@ -89,10 +91,7 @@ contract DepositManagerConfigTimelock is
             revert DepositManagerConfigTimelock_InvalidDepositManager(target);
         }
 
-        address targetKernel = address(Policy(target).kernel());
-        if (targetKernel != address(kernel_)) {
-            revert DepositManagerConfigTimelock_KernelMismatch(targetKernel);
-        }
+        PolicyDependency.requireSameKernel(target, address(kernel_));
 
         _DEPOSIT_MANAGER = depositManager_;
     }
@@ -123,17 +122,45 @@ contract DepositManagerConfigTimelock is
         return _DEPOSIT_MANAGER;
     }
 
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    modifier onlyActive() {
+        _requireOwnPolicyActive();
+        _;
+    }
+
+    /// @dev Reverts if:
+    ///      - The caller holds neither accepted queue-proposer role.
+    modifier onlyProposerRole() {
+        _requireProposerRole(msg.sender);
+        _;
+    }
+
+    /// @dev Reverts if:
+    ///      - The caller holds neither accepted queue-proposer role (NotAuthorised).
+    /// @param caller_ Actual caller whose governance role is checked.
+    function _requireProposerRole(address caller_) private view {
+        _requireAuthorized(
+            !_hasRole(caller_, ADMIN_ROLE) && !_hasRole(caller_, DEPOSIT_MANAGER_ADMIN_ROLE)
+        );
+    }
+
     // ========== QUEUE FUNCTIONS ========== //
 
     /// @inheritdoc IDepositManagerConfigTimelock
-    /// @dev Reverts if either policy is Kernel-inactive or disabled, this contract is not the
-    ///      target's current config operator, the caller has neither `admin` nor
-    ///      `deposit_manager_admin`, the asset is not configured, the cap is below the current
-    ///      minimum, or the asset's limits key is pending.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither admin nor deposit_manager_admin.
+    ///      - DepositManager is Kernel-inactive or disabled.
+    ///      - This contract is not DepositManager's current config operator.
+    ///      - The asset is unconfigured.
+    ///      - The cap is below the current minimum.
+    ///      - The asset's limits key is pending.
     function queueSetAssetDepositCap(
         IERC20 asset_,
         uint256 depositCap_
-    ) external returns (uint64 actionId) {
+    ) external onlyActive givenEnabled onlyProposerRole returns (uint64 actionId) {
         return
             _queueAction(
                 address(_DEPOSIT_MANAGER),
@@ -143,14 +170,19 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc IDepositManagerConfigTimelock
-    /// @dev Reverts if either policy is Kernel-inactive or disabled, this contract is not the
-    ///      target's current config operator, the caller has neither `admin` nor
-    ///      `deposit_manager_admin`, the asset is not configured, the minimum exceeds the current
-    ///      cap, or the asset's limits key is pending.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither admin nor deposit_manager_admin.
+    ///      - DepositManager is Kernel-inactive or disabled.
+    ///      - This contract is not DepositManager's current config operator.
+    ///      - The asset is unconfigured.
+    ///      - The minimum exceeds the current cap.
+    ///      - The asset's limits key is pending.
     function queueSetAssetMinimumDeposit(
         IERC20 asset_,
         uint256 minimumDeposit_
-    ) external returns (uint64 actionId) {
+    ) external onlyActive givenEnabled onlyProposerRole returns (uint64 actionId) {
         return
             _queueAction(
                 address(_DEPOSIT_MANAGER),
@@ -160,14 +192,18 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc IDepositManagerConfigTimelock
-    /// @dev Reverts if either policy is Kernel-inactive or disabled, this contract is not the
-    ///      target's current config operator, the caller has neither `admin` nor
-    ///      `deposit_manager_admin`, the requested requirement is invalid for the configured
-    ///      custody route, or the asset's withdrawal-requirement key is pending.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither admin nor deposit_manager_admin.
+    ///      - DepositManager is Kernel-inactive or disabled.
+    ///      - This contract is not DepositManager's current config operator.
+    ///      - The requested requirement is invalid for the configured custody route.
+    ///      - The asset's withdrawal-requirement key is pending.
     function queueSetAssetShareWithdrawalRequired(
         IERC20 asset_,
         bool required_
-    ) external returns (uint64 actionId) {
+    ) external onlyActive givenEnabled onlyProposerRole returns (uint64 actionId) {
         return
             _queueAction(
                 address(_DEPOSIT_MANAGER),
@@ -177,15 +213,19 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc IDepositManagerConfigTimelock
-    /// @dev Reverts if either policy is Kernel-inactive or disabled, this contract is not the
-    ///      target's current config operator, the caller has neither `admin` nor
-    ///      `deposit_manager_admin`, the asset period is absent or already enabled, or the
-    ///      asset-period key is pending.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither admin nor deposit_manager_admin.
+    ///      - DepositManager is Kernel-inactive or disabled.
+    ///      - This contract is not DepositManager's current config operator.
+    ///      - The asset period is absent or already enabled.
+    ///      - The asset-period key is pending.
     function queueEnableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) external returns (uint64 actionId) {
+    ) external onlyActive givenEnabled onlyProposerRole returns (uint64 actionId) {
         return
             _queueAction(
                 address(_DEPOSIT_MANAGER),
@@ -195,15 +235,19 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc IDepositManagerConfigTimelock
-    /// @dev Reverts if either policy is Kernel-inactive or disabled, this contract is not the
-    ///      target's current config operator, the caller has neither `admin` nor
-    ///      `deposit_manager_admin`, the asset period is absent or already disabled, or the
-    ///      asset-period key is pending.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither admin nor deposit_manager_admin.
+    ///      - DepositManager is Kernel-inactive or disabled.
+    ///      - This contract is not DepositManager's current config operator.
+    ///      - The asset period is absent or already disabled.
+    ///      - The asset-period key is pending.
     function queueDisableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) external returns (uint64 actionId) {
+    ) external onlyActive givenEnabled onlyProposerRole returns (uint64 actionId) {
         return
             _queueAction(
                 address(_DEPOSIT_MANAGER),
@@ -213,16 +257,23 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc IDepositManagerConfigTimelock
-    /// @dev Reverts if either policy is Kernel-inactive or disabled, this contract is not the
-    ///      target's current config operator, the caller has neither `admin` nor
-    ///      `deposit_manager_admin`, the asset is not configured, the deposit period is zero, the
-    ///      operator is zero or not registered, the operator does not hold `deposit_operator`, the
-    ///      route already exists, or the asset-period key is pending.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither admin nor deposit_manager_admin.
+    ///      - DepositManager is Kernel-inactive or disabled.
+    ///      - This contract is not DepositManager's current config operator.
+    ///      - The asset is unconfigured.
+    ///      - The deposit period is zero.
+    ///      - The operator is zero or unregistered.
+    ///      - The operator lacks deposit_operator.
+    ///      - The route already exists.
+    ///      - The asset-period key is pending.
     function queueAddAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) external returns (uint64 actionId) {
+    ) external onlyActive givenEnabled onlyProposerRole returns (uint64 actionId) {
         return
             _queueAction(
                 address(_DEPOSIT_MANAGER),
@@ -232,25 +283,30 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc IDepositManagerConfigTimelock
-    /// @dev Reverts if queue-wide authorization or lifecycle validation fails, the batch is empty
-    ///      or too large, or any sub-action has an unsupported target, selector, payload, current
-    ///      state, or already-pending configuration key. The complete queue operation is atomic.
+    /// @dev Reverts if:
+    ///      - Queue-wide lifecycle or authorization validation fails.
+    ///      - The batch is empty or too large.
+    ///      - A sub-action has an unsupported target or selector.
+    ///      - A payload or current target state is invalid.
+    ///      - A configuration key is already pending.
+    ///
+    /// @dev The complete queue operation is atomic.
     function queueBatch(
         ITimelockBatchQueue.BatchAction[] memory actions_
-    ) external returns (uint64 actionId) {
+    ) external onlyActive givenEnabled onlyProposerRole returns (uint64 actionId) {
         return _queueAction(actions_);
     }
 
     // ========== CONFIG TIMELOCK HOOKS ========== //
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    /// @dev Reverts with NotAuthorised when the caller holds neither accepted queue-proposer role.
+    /// @dev Reverts if:
+    ///      - The caller holds neither accepted queue-proposer role (NotAuthorised).
     function _validateConfigQueue(address caller_) internal view override {
+        _requireOwnPolicyActive();
         _requireEnabled();
-        _requirePoliciesActive();
-        _requireAuthorized(
-            !_hasRole(caller_, ADMIN_ROLE) && !_hasRole(caller_, DEPOSIT_MANAGER_ADMIN_ROLE)
-        );
+        _requireProposerRole(caller_);
+        PolicyDependency.requireActive(address(_DEPOSIT_MANAGER), address(kernel));
         _requireAuthorizedConfigOperator();
         _requireDepositManagerEnabled();
     }
@@ -491,9 +547,10 @@ contract DepositManagerConfigTimelock is
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
+        _requireOwnPolicyActive();
         _requireEnabled();
-        _requireDepositManagerEnabled();
         _requirePoliciesActive();
+        _requireDepositManagerEnabled();
         _requireAuthorizedConfigOperator();
     }
 
@@ -503,6 +560,7 @@ contract DepositManagerConfigTimelock is
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
+        _requireOwnPolicyActive();
         _requireRole(caller_, EMERGENCY_ROLE);
     }
 
@@ -514,18 +572,18 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc ReEnablerGracePeriod
-    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
-
-    /// @inheritdoc EnablerV2
-    function _beforeEnable(bytes calldata) internal view override {
-        _requireDepositManagerActive();
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive.
+    ///      - This policy is locally disabled.
+    ///      - The caller lacks ADMIN.
+    ///      - The requested period is zero.
+    function setGracePeriod(uint32 period_) public override {
+        _requireOwnPolicyActive();
+        super.setGracePeriod(period_);
     }
 
     /// @inheritdoc ReEnablerGracePeriod
-    function _beforeReEnable() internal override {
-        super._beforeReEnable();
-        _requireDepositManagerActive();
-    }
+    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
     /// @inheritdoc TimelockBatchQueue
     function _validateTimelockDelay(uint48 delay_) internal pure override {
@@ -551,26 +609,42 @@ contract DepositManagerConfigTimelock is
         }
     }
 
+    /// @notice Requires the target's local enabled state after its Kernel binding is validated.
+    /// @dev Reverts if:
+    ///      - The enabled-state getter fails or returns malformed data (PolicyDependency_InvalidDependency).
+    ///      - The target is disabled (NotEnabled).
     function _requireDepositManagerEnabled() internal view {
-        if (!IEnabler(address(_DEPOSIT_MANAGER)).isEnabled()) revert IEnabler.NotEnabled();
+        if (!PolicyDependency.readEnabled(address(_DEPOSIT_MANAGER))) revert IEnabler.NotEnabled();
     }
 
-    function _requireDepositManagerActive() internal view {
-        if (!kernel.isPolicyActive(Policy(address(_DEPOSIT_MANAGER)))) {
-            revert DepositManagerConfigTimelock_InvalidDepositManager(address(_DEPOSIT_MANAGER));
-        }
+    /// @notice Requires this timelock to be active in its Kernel.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive (DepositManagerConfigTimelock_PolicyInactive).
+    function _requireOwnPolicyActive() internal view {
+        if (!kernel.isPolicyActive(this))
+            revert DepositManagerConfigTimelock_PolicyInactive(address(this));
     }
 
+    /// @notice Requires own activity and the target's matching Kernel binding and membership.
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive (DepositManagerConfigTimelock_PolicyInactive).
+    ///      - The target's Kernel getter fails or is malformed (PolicyDependency_InvalidDependency).
+    ///      - The target reports another Kernel (PolicyDependency_KernelMismatch).
+    ///      - The target is Kernel-inactive (PolicyDependency_NotActive).
     function _requirePoliciesActive() internal view {
-        address timelock = address(this);
-        if (!kernel.isPolicyActive(Policy(timelock))) {
-            revert DepositManagerConfigTimelock_PolicyInactive(timelock);
-        }
+        _requireOwnPolicyActive();
+        PolicyDependency.requireActive(address(_DEPOSIT_MANAGER), address(kernel));
+    }
 
-        address manager = address(_DEPOSIT_MANAGER);
-        if (!kernel.isPolicyActive(Policy(manager))) {
-            revert DepositManagerConfigTimelock_PolicyInactive(manager);
-        }
+    /// @notice Validates the target's binding and readiness for either activation route.
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive (DepositManagerConfigTimelock_PolicyInactive).
+    ///      - Kernel or enabled-state metadata fails or is malformed (PolicyDependency_InvalidDependency).
+    ///      - The target reports another Kernel (PolicyDependency_KernelMismatch).
+    ///      - The target is Kernel-inactive or disabled (PolicyDependency_NotActive).
+    function _requireActivationReady() private view {
+        _requireOwnPolicyActive();
+        PolicyDependency.requireActiveAndEnabled(address(_DEPOSIT_MANAGER), address(kernel));
     }
 
     function _requirePayloadLength(
@@ -627,5 +701,40 @@ contract DepositManagerConfigTimelock is
             interfaceId_ == type(IDepositManagerConfigTimelock).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty (DepositManagerConfigTimelock_InvalidData).
+    ///      - Own activity or target binding/readiness validation in _requireActivationReady fails.
+    function _beforeEnable(bytes calldata data_) internal view override {
+        if (data_.length != 0) revert DepositManagerConfigTimelock_InvalidData();
+        _requireActivationReady();
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev Kernel inactivity does not prevent disable. Reverts if:
+    ///      - Lifecycle data is nonempty (DepositManagerConfigTimelock_InvalidData).
+    function _beforeDisable(bytes calldata data_) internal pure override {
+        if (data_.length != 0) revert DepositManagerConfigTimelock_InvalidData();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The grace deadline exceeds uint48 (SafeCastOverflowedUintDowncast).
+    ///      - The current timestamp exceeds the inclusive grace deadline (GracePeriod_Expired).
+    ///      - Own activity or target binding/readiness validation in _requireActivationReady fails.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _requireActivationReady();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The widened deadline exceeds uint48 (SafeCastOverflowedUintDowncast).
+    ///      - The current timestamp exceeds the inclusive deadline (GracePeriod_Expired).
+    function _requireGrace() internal view override {
+        uint48 deadline = SafeCast.toUint48(uint256(lastTransitionAt) + gracePeriod);
+        if (_getBlockTimestamp() > deadline) revert GracePeriod_Expired(deadline);
     }
 }

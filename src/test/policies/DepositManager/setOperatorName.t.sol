@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
@@ -200,6 +202,18 @@ contract DepositManagerSetOperatorNameTest is DepositManagerTest {
             nameStr,
             "Operator name not set correctly"
         );
+    }
+
+    // Scenarios: DM-SET-OPERATOR-NAME-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        // Expect revert
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        // Call function
+        vm.prank(ADMIN);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
     }
 }
 

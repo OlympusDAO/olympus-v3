@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-// Shared domain values use constants; scenario-specific literals remain inline for auditability.
-// Revert-path calls deliberately ignore return values.
-// forge-lint: disable-start(literal-instead-of-constant, unused-return)
-
 // Interfaces
+import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/IDepositManagerConfigTimelock.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+// Contracts
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// Revert-path calls deliberately ignore return values.
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
 
 contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimelockTest {
     /// @notice Governance retains direct queue authority alongside its delegated manager role.
@@ -125,6 +128,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         );
     }
 
+    // Scenarios: DMCT-BATCH-I05.
     function test_whenRouteCreationPayloadLengthIsInvalid_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _singleAction(
@@ -143,6 +147,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         _configTimelock.queueBatch(actions);
     }
 
+    // Scenarios: DMCT-BATCH-P01.
     function test_givenConflictingRouteCreations_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _singleAction(
@@ -154,13 +159,12 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
             abi.encode(iAsset, SECOND_PERIOD, DEPOSIT_OPERATOR)
         );
 
-        vm.expectPartialRevert(
-            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector
-        );
+        _expectPendingKey(_periodKey(SECOND_PERIOD, DEPOSIT_OPERATOR), 1);
         vm.prank(DEPOSIT_MANAGER_ADMIN);
         _configTimelock.queueBatch(actions);
     }
 
+    // Scenarios: DMCT-BATCH-I06.
     function test_givenRouteCreationThenEnablementOfSameTuple_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _singleAction(
@@ -184,6 +188,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         _configTimelock.queueBatch(actions);
     }
 
+    // Scenarios: DMCT-BATCH-N01.
     function test_whenBatchIsAtMaximum_queues() public {
         uint256 maximum = 15;
         ITimelockBatchQueue.BatchAction[] memory actions = _buildIndependentPeriodBatch(maximum);
@@ -198,6 +203,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         );
     }
 
+    // Scenarios: DMCT-BATCH-N02.
     function test_whenBatchIsAboveMaximum_reverts() public {
         uint256 maximum = 15;
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](
@@ -217,6 +223,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         assertEq(_configTimelock.nextActionId(), 1, "failed batch should not consume action ID");
     }
 
+    // Scenarios: DMCT-BATCH-I01.
     function test_whenBatchIsEmpty_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](0);
 
@@ -225,6 +232,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         _configTimelock.queueBatch(actions);
     }
 
+    // Scenarios: DMCT-BATCH-I02.
     function test_whenTargetIsInvalid_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = ITimelockBatchQueue.BatchAction({
@@ -244,6 +252,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         _configTimelock.queueBatch(actions);
     }
 
+    // Scenarios: DMCT-BATCH-I03.
     function test_whenSelectorIsInvalid_reverts() public {
         bytes4 invalidSelector = 0xdeadbeef;
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
@@ -260,6 +269,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         _configTimelock.queueBatch(actions);
     }
 
+    // Scenarios: DMCT-BATCH-I04.
     function test_whenPayloadLengthIsInvalid_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _singleAction(IDepositManager.setAssetDepositCap.selector, abi.encode(iAsset));
@@ -275,6 +285,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         _configTimelock.queueBatch(actions);
     }
 
+    // Scenarios: DMCT-BATCH-P02.
     function test_givenSameAssetCapAndMinimum_whenQueuedTogether_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _singleAction(
@@ -286,15 +297,14 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
             abi.encode(iAsset, uint256(1e18))
         );
 
-        vm.expectPartialRevert(
-            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector
-        );
+        _expectPendingKey(_limitsKey(iAsset), 1);
         vm.prank(DEPOSIT_MANAGER_ADMIN);
         _configTimelock.queueBatch(actions);
 
         assertEq(_configTimelock.nextActionId(), 1, "failed batch should not consume action ID");
     }
 
+    // Scenarios: DMCT-BATCH-P03.
     function test_givenIndependentActions_queuesAndExecutesAtomically(address executor_) public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _singleAction(
@@ -324,6 +334,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         );
     }
 
+    // Scenarios: DMCT-BATCH-T01.
     function test_givenLaterActionStateIsStale_executionRollsBackEarlierAction() public {
         uint256 initialCap = depositManager.getAssetConfiguration(iAsset).depositCap;
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
@@ -342,9 +353,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
         depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
         _warpReady();
 
-        vm.expectPartialRevert(
-            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector
-        );
+        _expectStale(actionId, 1, keccak256(abi.encode(true, false)));
         _configTimelock.executeQueuedAction(actionId);
 
         assertEq(
@@ -352,6 +361,7 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
             initialCap,
             "failed batch should roll back earlier cap update"
         );
+        _assertPending(actionId);
     }
 
     function _buildIndependentPeriodBatch(
@@ -373,6 +383,119 @@ contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimel
             );
         }
         vm.stopPrank();
+    }
+
+    // Scenarios: DMCT-BATCH-N03.
+    function test_whenBatchLengthSpansValidRange(uint8 length_) public {
+        uint256 length = bound(length_, 1, 15);
+        ITimelockBatchQueue.BatchAction[] memory actions = _buildIndependentPeriodBatch(length);
+        vm.prank(ADMIN);
+        uint64 id = _configTimelock.queueBatch(actions);
+        assertEq(_configTimelock.getQueuedActionLength(id), length, "full valid batch domain");
+        assertEq(_configTimelock.maxConfigKeysPerBatch(), 15, "batch key bound");
+        assertEq(_configTimelock.nextActionId(), id + 1, "batch consumes one ID");
+    }
+
+    // Scenarios: DMCT-BATCH-I07.
+    function test_whenAssetWordNoncanonical_reverts() public {
+        _malformedBatch(
+            IDepositManager.setAssetDepositCap.selector,
+            abi.encode(type(uint256).max, uint256(1))
+        );
+    }
+
+    // Scenarios: DMCT-BATCH-I08.
+    function test_whenPeriodWordNoncanonical_reverts() public {
+        _malformedBatch(
+            IDepositManager.addAssetPeriod.selector,
+            abi.encode(iAsset, uint256(256), DEPOSIT_OPERATOR)
+        );
+    }
+
+    // Scenarios: DMCT-BATCH-I09.
+    function test_whenBooleanWordNoncanonical_reverts() public {
+        _malformedBatch(
+            IDepositManagerV1_1.setAssetShareWithdrawalRequired.selector,
+            abi.encode(iAsset, uint256(2))
+        );
+    }
+
+    function _malformedBatch(bytes4 selector_, bytes memory payload_) private {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _singleAction(selector_, payload_);
+        // Solidity's ABI decoder supplies no typed error for noncanonical narrow values.
+        _assertQueueRejected(
+            ADMIN,
+            abi.encodeCall(_configTimelock.queueBatch, (actions)),
+            bytes("")
+        );
+    }
+
+    // Scenarios: DMCT-BATCH-L01.
+    function test_givenPolicyInactive_givenBrokenRoles_whenQueueRequested_reverts(
+        address caller_,
+        bool enabled_
+    ) public {
+        if (!enabled_) _pausePolicy(address(_configTimelock));
+        _setPolicyActive(address(_configTimelock), false);
+        vm.etch(address(_configTimelock.ROLES()), hex"fe");
+        uint64 next = _configTimelock.nextActionId();
+        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManagerConfigTimelock.DepositManagerConfigTimelock_PolicyInactive.selector,
+                address(_configTimelock)
+            )
+        );
+        vm.prank(caller_);
+        _configTimelock.queueBatch(new ITimelockBatchQueue.BatchAction[](0));
+        assertEq(_configTimelock.nextActionId(), next, "Rejected local admission consumes no ID");
+        assertEq(
+            _configTimelock.getQueuedConfigStateCount(next, 0),
+            0,
+            "Rejected admission stores no payload"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected local admission commits no logs");
+    }
+
+    // Scenarios: DMCT-BATCH-L02.
+    function test_givenActiveDisabled_givenBrokenRoles_whenQueueRequested_reverts(
+        address caller_
+    ) public {
+        _pausePolicy(address(_configTimelock));
+        vm.etch(address(_configTimelock.ROLES()), hex"fe");
+        uint64 next = _configTimelock.nextActionId();
+        vm.recordLogs();
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(caller_);
+        _configTimelock.queueBatch(new ITimelockBatchQueue.BatchAction[](0));
+        assertEq(_configTimelock.nextActionId(), next, "Disabled admission consumes no ID");
+        assertEq(
+            _configTimelock.getQueuedConfigStateCount(next, 0),
+            0,
+            "Disabled admission stores no payload"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Disabled admission commits no logs");
+    }
+
+    // Scenarios: DMCT-BATCH-A01.
+    function test_givenUnauthorizedCaller_givenBrokenTarget_whenQueueRequested_reverts(
+        address caller_
+    ) public {
+        vm.assume(caller_ != ADMIN && caller_ != DEPOSIT_MANAGER_ADMIN);
+        _setPolicyActive(address(depositManager), false);
+        uint64 next = _configTimelock.nextActionId();
+        vm.recordLogs();
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+        vm.prank(caller_);
+        _configTimelock.queueBatch(new ITimelockBatchQueue.BatchAction[](0));
+        assertEq(_configTimelock.nextActionId(), next, "Unauthorized admission consumes no ID");
+        assertEq(
+            _configTimelock.getQueuedConfigStateCount(next, 0),
+            0,
+            "Unauthorized admission stores no payload"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Unauthorized admission commits no logs");
     }
 }
 

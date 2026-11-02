@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.27;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Interfaces
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
@@ -152,5 +155,14 @@ contract DepositManagerSetAssetShareWithdrawalRequiredTest is DepositManagerTest
             depositManager.isAssetShareWithdrawalRequired(iAsset),
             "synchronous vault should permit underlying withdrawals"
         );
+    }
+
+    // Scenarios: DM-SET-ASSET-SHARE-WITHDRAWAL-REQUIRED-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+        vm.prank(ADMIN);
+        depositManager.setAssetShareWithdrawalRequired(iAsset, true);
     }
 }

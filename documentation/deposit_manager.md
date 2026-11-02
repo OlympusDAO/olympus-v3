@@ -69,9 +69,7 @@ and asynchronous redemption. Share-token identity is not read live.
 DepositManager cannot infer non-standard redemption restrictions from ERC-4626 alone. Governance
 must use the V1.1 `addAsset(..., requiresShareWithdrawal)` overload for initial onboarding and the
 DepositManagerConfigTimelock's `queueSetAssetShareWithdrawalRequired` function for later changes to
-vaults such as sUSDe. This explicit setting is safer and more general than an address whitelist: it
-is part of the asset configuration, works for future vaults, and can be cleared after the timelock
-delay if synchronous redemption becomes available. Standards-compliant ERC-7540 asynchronous
+vaults such as sUSDe. The asset configuration stores this requirement without an address whitelist. If synchronous redemption becomes available, governance can clear the requirement through the timelock. Standards-compliant ERC-7540 asynchronous
 redemption is detected live and requires share output even when the explicit setting is false.
 
 The token transferred by a withdrawal is independent of the requested amount's denomination:
@@ -169,9 +167,7 @@ protocol value and only cost the caller gas.
 underlying-denominated borrowed balance. Capacity is bounded by custody and operator solvency. V1.1
 share mode reverts atomically when a positive request converts to zero output.
 
-`borrowingRepay` returns underlying assets to custody, deposits them into the configured vault when
-applicable, and reduces the calling operator's borrowed balance by the lesser of the actual credited
-amount and a nonzero `maxAmount`, never beyond that operator's outstanding debt. Credited assets
+`borrowingRepay` returns underlying assets to custody and uses the configured vault when present. It reduces the calling operator's debt by the actual credited amount. A nonzero `maxAmount` caps that reduction. The reduction never exceeds the operator's outstanding debt. Credited assets
 above `maxAmount` remain in that operator's custody namespace. A deposit that credits zero
 underlying assets reverts.
 
@@ -244,15 +240,9 @@ V1.1 preserves every V1 function selector and adds:
 - Recipient validation and transaction-scoped reentrancy protection on the affected entrypoints.
 - `PolicyEnablerV2` bounded `reEnable` support and configurable grace period.
 - A single-step config operator and separate DepositManagerConfigTimelock for delayed cap, minimum,
-    route enablement, route disablement, and route-creation changes. Timelocked route creation starts the
-    route enabled after maturity, is conflict- and stale-state-aware, and remains executable
-    permissionlessly by any address; emergency can cancel queued creations or disable routes but
-    cannot create, queue, or enable them.
+    route enablement, route disablement, and route-creation changes. Timelocked route creation starts the route enabled after the notice period. Anyone can execute a valid action after its delay. Conflict and stale-state checks still apply. Emergency can cancel queued creations or disable routes. It cannot create, queue or enable them.
 - `deposit_manager_admin` and `emergency` authority separation: direct asset onboarding, operator
-    registration (`setOperatorName`), and role management remain admin-only. Direct route creation
-    stays available to admin or the current config operator and additionally requires the
-    registered operator to hold `deposit_operator`; `deposit_manager_admin` and a role-bearing
-    operator alone cannot create routes directly.
+    registration (`setOperatorName`), and role management remain admin-only. Admin or the current config operator can create routes directly for a registered operator with `deposit_operator`. Neither `deposit_manager_admin` nor an operator role alone grants direct route-creation authority.
 - Kernel-activity checks on DepositManagerConfigTimelock queue and execution paths.
 
 V1.1 does not add asynchronous redemption requests. It delivers transferable vault shares so the

@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 
 // Libraries
-import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
+import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 
 // Contracts
 import {Kernel, Module} from "src/Kernel.sol";

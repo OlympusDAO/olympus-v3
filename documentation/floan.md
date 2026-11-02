@@ -6,8 +6,7 @@
 positions. It enforces ledger invariants; product policies supply custody, pricing, authorization,
 health checks, repayment ordering, and default rules.
 
-FLOAN is deliberately opinionated about fixed-term debt. Continuously accruing, open-ended loans
-need interest indexes and lifecycle rules that do not belong in this module.
+FLOAN stores fixed-term debt. It does not maintain interest indexes for continuously accruing, open-ended loans.
 
 ## Architecture
 
@@ -25,12 +24,9 @@ A facility is the policy assigned to service one or more markets; it is not a se
 object. A market manager controls configuration. Separating these roles lets an administration
 policy configure markets without either policy depending on the other.
 
-Burner Loans uses this separation as a bound pair. Burner Loans Config is stored as each market's
-manager, while Burner Loans is stored as its facility. Config resolves its markets through the
-bound facility, collateral token, and OHM debt-token tuple. Rebinding only Config would therefore
-change its lookup namespace without changing the authorities stored in existing markets. The
-Burner Loans facility address also keys that policy's external DepositManager accounting, so a
-facility change cannot migrate custody by itself.
+Burner Loans stores its Config as market manager and Core as facility. Config is constructor-bound to Core. Core records one canonical market ID per registered collateral asset, and actions use that record. Unregistered matching markets do not change the selected market or join a Config handoff.
+
+Core also owns the external DepositManager operator namespace. Changing a FLOAN facility does not migrate that custody, receipts or authority. A Core replacement needs a separate migration or wind-down design.
 
 | Layer           | Owns                                                        | Does not own                                     |
 | --------------- | ----------------------------------------------------------- | ------------------------------------------------ |
@@ -87,8 +83,8 @@ matches, leaving products free to select one or enforce stricter cardinality.
 
 | Action                                  | Enabled | Disabled |
 | --------------------------------------- | ------- | -------- |
-| Create position                         | Allowed | Reverts  |
-| Add collateral                          | Allowed | Reverts  |
+| Create position                         | Allowed | Allowed  |
+| Add collateral                          | Allowed | Allowed  |
 | Increase principal or deferred interest | Allowed | Reverts  |
 | Extend maturity                         | Allowed | Reverts  |
 | Remove collateral                       | Allowed | Allowed  |
@@ -96,7 +92,8 @@ matches, leaving products free to select one or enforce stricter cardinality.
 | Default position                        | Allowed | Allowed  |
 | Configure                               | Allowed | Allowed  |
 
-This design freezes new commitments while preserving repayment, withdrawal, and default paths. The
+This design freezes debt increases and maturity extensions while preserving collateral deposits,
+repayment, withdrawal, and default paths. Creating an empty position does not originate debt. The
 facility remains responsible for deciding whether a permitted action is safe.
 
 ### Accounting
@@ -170,6 +167,11 @@ multiplication. Timestamps use `uint48`, and `lastBorrowBlock` uses `uint32`.
 | Rotate manager              | Current manager or facility | Transfers configuration authority; new manager is nonzero |
 | Rotate facility             | Current manager             | Transfers servicing authority and live facility principal |
 | Create/mutate position      | Current facility            | Position must belong to its market                        |
+
+Setting the market manager to its current address succeeds without storage writes or events.
+This lets callers apply the desired manager directly, including across multiple markets, without
+first reading and comparing each market's current manager. Kernel permission and manager-or-facility
+authorization still apply to an unchanged value.
 
 Generic `setMarketFacility` remains a module capability. It updates FLOAN's facility indexes and
 principal aggregate, but does not transfer collateral, approvals, receipt tokens, or other external

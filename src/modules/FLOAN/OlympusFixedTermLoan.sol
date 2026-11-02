@@ -2,18 +2,18 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 
 // Libraries
-import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 
 // Contracts
-import {FLOANv1} from "src/modules/FLOAN/FLOAN.v1.sol";
 import {Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
+import {FLOANv1} from "src/modules/FLOAN/FLOAN.v1.sol";
 
 /// @title Olympus Fixed-Term Loan Ledger
 /// @notice Stores markets and positions while leaving custody and economics to servicing policies.
@@ -221,6 +221,8 @@ contract OlympusFixedTermLoan is FLOANv1 {
             revert FLOAN_NotManager(marketId_, msg.sender);
         }
         address oldManager = market.manager;
+        // Callers can apply the desired manager without reading and comparing every market first.
+        if (manager_ == oldManager) return;
         market.manager = manager_;
         emit MarketManagerSet(marketId_, oldManager, manager_);
     }
@@ -261,7 +263,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
         address borrower_
     ) external override permissioned returns (uint64 positionId) {
         _requireFacility(marketId_);
-        _requireOriginationsEnabled(marketId_);
+        // Empty positions carry no debt, so creating one does not require enabled originations.
         return _createPosition(marketId_, borrower_);
     }
 
@@ -270,7 +272,8 @@ contract OlympusFixedTermLoan is FLOANv1 {
         uint64 positionId_,
         uint128 amount_
     ) external override permissioned returns (uint128 collateral) {
-        Position storage position = _requireOriginatingPosition(positionId_);
+        // Collateral top-ups remain available while debt originations are disabled.
+        Position storage position = _requireServicedPosition(positionId_);
         if (amount_ == 0) revert FLOAN_InvalidAmount();
         position.collateral += amount_;
         getMarketCollateral[position.marketId] += amount_;
@@ -302,7 +305,8 @@ contract OlympusFixedTermLoan is FLOANv1 {
         bool startsDebtEpisode = stored.principalDue == 0 && stored.interestDue == 0;
         // Loan maturity uses chain time and tolerates normal validator drift.
         // forge-lint: disable-next-line(block-timestamp)
-        if (maturity_ <= block.timestamp) revert FLOAN_InvalidAmount();
+        if (maturity_ <= block.timestamp)
+            revert FLOAN_InvalidMaturity(SafeCast.toUint48(block.timestamp), maturity_);
         if (principal_ == 0) {
             if (interest_ == 0 || startsDebtEpisode) revert FLOAN_InvalidAmount();
         }

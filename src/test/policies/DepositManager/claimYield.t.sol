@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
 
 // Scenario-specific literals remain inline for auditability, and calls whose effects are asserted
 // directly intentionally ignore return values.
@@ -501,6 +503,16 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         _assertReceiptToken(0, 0, true, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, balanceBefore);
         _assertDepositAssetBalance(recipient, maxYield, 5);
+    }
+
+    // Scenarios: DM-CLAIM-YIELD-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.claimYield(iAsset, ADMIN, 1);
     }
 }
 

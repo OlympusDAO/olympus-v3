@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-// The handler is co-located with its invariant test to keep the stateful harness self-contained.
-// forge-lint: disable-start(multi-contract-file)
-
 // Interfaces
+import {Vm} from "@forge-std-1.16.2/Vm.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Contracts
-import {StdInvariant} from "forge-std/StdInvariant.sol";
-import {Vm} from "forge-std/Vm.sol";
+import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
+import {StdInvariant} from "@forge-std-1.16.2/StdInvariant.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {DepositManagerConfigTimelock} from "src/policies/deposits/DepositManagerConfigTimelock.sol";
 
-import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
+// The handler is co-located with its invariant test to keep the stateful harness self-contained.
+// forge-lint: disable-start(multi-contract-file)
 
 contract DepositManagerConfigTimelockHandler {
     uint256 internal constant _ACTION_SLOTS = 16;

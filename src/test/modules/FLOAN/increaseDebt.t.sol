@@ -126,7 +126,13 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         uint64 positionId = _createPosition(marketId, facility, borrower);
 
         vm.prank(facility);
-        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IFLOANv1.FLOAN_InvalidMaturity.selector,
+                uint48(block.timestamp),
+                maturity_
+            )
+        );
         floan.increaseDebt(positionId, 1, 0, maturity_);
     }
 
