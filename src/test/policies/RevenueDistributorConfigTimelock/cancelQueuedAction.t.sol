@@ -6,11 +6,12 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+
+// Libraries
+import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Actions} from "src/Kernel.sol";
-import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {RevenueDistributorConfigTimelockTest} from "src/test/policies/RevenueDistributorConfigTimelock/RevenueDistributorConfigTimelockTest.sol";
 
@@ -19,11 +20,8 @@ import {RevenueDistributorConfigTimelockTest} from "src/test/policies/RevenueDis
 contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
     RevenueDistributorConfigTimelockTest
 {
-    // Scenarios: CAN-A01
-    function testFuzz_whenNonEmergencyCancels_reverts(
-        address caller_,
-        bool rotateOperator_
-    ) public {
+    // Scenarios: CAN-A01.
+    function test_whenNonEmergencyCancels_reverts(address caller_, bool rotateOperator_) public {
         vm.assume(caller_ != emergency);
         _permittedProposer(true);
         uint64 actionId = _queueRoute(address(token));
@@ -41,7 +39,7 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
         assertEq(configTimelock.pendingActionId(key), actionId, "key remains owned");
     }
 
-    // Scenarios: CAN-A01
+    // Scenarios: CAN-A01.
     function test_whenKnownNonEmergencyRolesCancel_reverts() public {
         address proposer = _permittedProposer(true);
         address[] memory callers = new address[](4);
@@ -67,13 +65,12 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
         }
     }
 
-    // Scenarios: CAN-I01
-    function testFuzz_whenActionDoesNotExist_revertsBeforeLifecycle(
+    // Scenarios: CAN-I01.
+    function test_whenActionDoesNotExist_revertsBeforeLifecycle(
         address caller_,
         uint64 actionId_
     ) public {
-        vm.prank(emergency);
-        configTimelock.disable("");
+        _disablePolicy(address(configTimelock), emergency);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -85,8 +82,8 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
         configTimelock.cancelQueuedAction(actionId_);
     }
 
-    // Scenarios: CAN-I02
-    function testFuzz_whenActionAlreadyExecuted_revertsBeforeAuthority(address caller_) public {
+    // Scenarios: CAN-I02.
+    function test_whenActionAlreadyExecuted_revertsBeforeAuthority(address caller_) public {
         uint64 actionId = _queueRoute(address(token));
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
         configTimelock.executeQueuedAction(actionId);
@@ -101,8 +98,8 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
         configTimelock.cancelQueuedAction(actionId);
     }
 
-    // Scenarios: CAN-I03
-    function testFuzz_whenActionAlreadyCancelled_revertsBeforeAuthority(address caller_) public {
+    // Scenarios: CAN-I03.
+    function test_whenActionAlreadyCancelled_revertsBeforeAuthority(address caller_) public {
         uint64 actionId = _queueRoute(address(token));
         vm.prank(emergency);
         configTimelock.cancelQueuedAction(actionId);
@@ -117,7 +114,7 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
         configTimelock.cancelQueuedAction(actionId);
     }
 
-    // Scenarios: CAN-P01
+    // Scenarios: CAN-P01.
     function test_whenCancelled_releasesKeyForReplacement() public {
         uint64 actionId = _queueRoute(address(token));
         bytes32 key = _queuedKey(actionId, 0);
@@ -130,8 +127,8 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
         assertEq(configTimelock.pendingActionId(key), replacementId, "replacement acquires key");
     }
 
-    // Scenarios: CAN-V01
-    function testFuzz_whenCancelledOrUnknownActionRead_returnsTerminalStateAndDefaults(
+    // Scenarios: CAN-V01.
+    function test_whenCancelledOrUnknownActionRead_returnsTerminalStateAndDefaults(
         address caller_,
         bool maximumUnknownId_
     ) public {
@@ -176,62 +173,85 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
     }
 
     /// @notice Both rescue selectors retain their payload, key and funds when RDT cannot cancel.
-    // Scenarios: CAN-L01, CAN-L02.
+    // Scenarios: CAN-L01, CAN-L02, CAN-L03.
     function test_givenTimelockUnavailable_whenEmergencyCancelsRescue_reverts() public {
-        for (uint256 pending; pending < 2; ++pending) {
-            for (uint256 disabled; disabled < 2; ++disabled) {
-                for (uint256 inactive; inactive < 2; ++inactive) {
-                    if (disabled == 0 && inactive == 0) continue;
-                    uint256 snapshot = vm.snapshotState();
-                    uint64 id = _queueRescue(pending != 0);
-                    bytes32 actionBefore = keccak256(
-                        abi.encode(configTimelock.getQueuedAction(id))
-                    );
-                    (bytes32 key, bytes32 guardHash) = configTimelock.getQueuedConfigState(
-                        id,
-                        0,
-                        0
-                    );
-                    vm.startPrank(admin);
-                    if (disabled != 0) configTimelock.disable("");
-                    if (inactive != 0) {
-                        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
-                    }
-                    vm.stopPrank();
-                    bytes memory failure = disabled != 0
-                        ? abi.encodeWithSelector(IEnabler.NotEnabled.selector)
-                        : abi.encodeWithSelector(
-                            IRevenueDistributorConfigTimelock
-                                .RevenueDistributorConfigTimelock_PolicyInactive
-                                .selector,
-                            address(configTimelock)
-                        );
-                    vm.expectRevert(failure);
-                    vm.prank(emergency);
-                    configTimelock.cancelQueuedAction(id);
-                    assertEq(
-                        keccak256(abi.encode(configTimelock.getQueuedAction(id))),
-                        actionBefore,
-                        "blocked cancellation preserves action"
-                    );
-                    assertEq(
-                        configTimelock.pendingActionId(key),
-                        id,
-                        "blocked cancellation retains key"
-                    );
-                    (, bytes32 hashAfter) = configTimelock.getQueuedConfigState(id, 0, 0);
-                    assertEq(hashAfter, guardHash, "blocked cancellation retains guard");
-                    assertEq(
-                        token.balanceOf(address(distributor)),
-                        10,
-                        "blocked cancellation moves no custody"
-                    );
-                    assertEq(token.balanceOf(bob), 0, "blocked cancellation pays no destination");
-                    if (pending != 0) _assertPendingPayouts(address(token), alice, 10, 0, 0);
-                    assertTrue(vm.revertToState(snapshot), "restore cancellation lifecycle");
-                }
-            }
-        }
+        uint256 checkpoint = vm.snapshotState();
+        test_givenInactiveTimelock_whenEmergencyCancelsRescue_reverts(false, false);
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive surplus cancellation seed");
+        test_givenInactiveTimelock_whenEmergencyCancelsRescue_reverts(false, true);
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive disabled surplus seed");
+        test_givenActiveDisabledTimelock_whenEmergencyCancelsRescue_reverts(false);
+        assertTrue(vm.revertToState(checkpoint), "Restore active disabled surplus seed");
+        test_givenInactiveTimelock_whenEmergencyCancelsRescue_reverts(true, false);
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive pending cancellation seed");
+        test_givenInactiveTimelock_whenEmergencyCancelsRescue_reverts(true, true);
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive disabled pending seed");
+        test_givenActiveDisabledTimelock_whenEmergencyCancelsRescue_reverts(true);
+        assertTrue(vm.revertToState(checkpoint), "Restore active disabled pending seed");
+    }
+
+    // Scenarios: CAN-L02, CAN-L03.
+    function test_givenInactiveTimelock_whenEmergencyCancelsRescue_reverts(
+        bool pending_,
+        bool disabled_
+    ) public {
+        uint64 id = _queueRescue(pending_);
+        bytes32 actionBefore = keccak256(abi.encode(configTimelock.getQueuedAction(id)));
+        (bytes32 key, bytes32 guardHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+        _setRevenuePolicyLifecycle(address(configTimelock), false, !disabled_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
+                    .selector,
+                address(configTimelock)
+            )
+        );
+        vm.prank(emergency);
+        configTimelock.cancelQueuedAction(id);
+        assertEq(
+            keccak256(abi.encode(configTimelock.getQueuedAction(id))),
+            actionBefore,
+            "blocked cancellation preserves action"
+        );
+        assertEq(configTimelock.pendingActionId(key), id, "blocked cancellation retains key");
+        (, bytes32 hashAfter) = configTimelock.getQueuedConfigState(id, 0, 0);
+        assertEq(hashAfter, guardHash, "blocked cancellation retains guard");
+        assertEq(
+            token.balanceOf(address(distributor)),
+            10,
+            "blocked cancellation moves no custody"
+        );
+        assertEq(token.balanceOf(bob), 0, "blocked cancellation pays no destination");
+        if (pending_) _assertPendingPayouts(address(token), alice, 10, 0, 0);
+    }
+
+    // Scenarios: CAN-L01.
+    function test_givenActiveDisabledTimelock_whenEmergencyCancelsRescue_reverts(
+        bool pending_
+    ) public {
+        uint64 id = _queueRescue(pending_);
+        bytes32 actionBefore = keccak256(abi.encode(configTimelock.getQueuedAction(id)));
+        (bytes32 key, bytes32 guardHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+        _setRevenuePolicyLifecycle(address(configTimelock), true, false);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(emergency);
+        configTimelock.cancelQueuedAction(id);
+        assertEq(
+            keccak256(abi.encode(configTimelock.getQueuedAction(id))),
+            actionBefore,
+            "blocked cancellation preserves action"
+        );
+        assertEq(configTimelock.pendingActionId(key), id, "blocked cancellation retains key");
+        (, bytes32 hashAfter) = configTimelock.getQueuedConfigState(id, 0, 0);
+        assertEq(hashAfter, guardHash, "blocked cancellation retains guard");
+        assertEq(
+            token.balanceOf(address(distributor)),
+            10,
+            "blocked cancellation moves no custody"
+        );
+        assertEq(token.balanceOf(bob), 0, "blocked cancellation pays no destination");
+        if (pending_) _assertPendingPayouts(address(token), alice, 10, 0, 0);
     }
 
     /// @notice Enabled, active RDT still lets Emergency cancel either rescue before/at readiness or after expiry.
@@ -276,7 +296,7 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
     }
 
     // Scenarios: CAN-P01.
-    function testFuzz_whenEmergencyCancelsBatch_releasesEveryKey(
+    function test_whenEmergencyCancelsBatch_releasesEveryKey(
         bool useRevenueAdmin_,
         bool rotateOperator_,
         uint8 timing_
@@ -359,6 +379,121 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
             selector: IRevenueDistributor.setAssetRoutes.selector,
             payload: abi.encode(asset_, 0, routes)
         });
+    }
+
+    // Scenarios: CAN-L01.
+    function test_givenActiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(
+        bool pending_,
+        uint48 timestamp_
+    ) public {
+        uint64 id = _queueRescue(pending_);
+        timestamp_ = uint48(
+            bound(timestamp_, block.timestamp, configTimelock.getQueuedAction(id).expiresAt)
+        );
+        _disablePolicy(address(configTimelock), admin);
+        _setPolicyActive(address(configTimelock), true);
+
+        vm.warp(timestamp_);
+        bytes32 actionBefore = _queuedLifecycleDigest(id);
+        bytes32 fundsBefore = _revenueAccountingDigest();
+        vm.recordLogs();
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(emergency);
+        configTimelock.cancelQueuedAction(id);
+        assertEq(
+            _queuedLifecycleDigest(id),
+            actionBefore,
+            "Cancellation retains exact action, guards and key owner"
+        );
+        assertEq(
+            _revenueAccountingDigest(),
+            fundsBefore,
+            "Cancellation retains debt, indexes and custody"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected cancellation commits no logs");
+    }
+
+    // Scenarios: CAN-L03.
+    function test_givenInactiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(
+        bool pending_,
+        uint48 timestamp_
+    ) public {
+        uint64 id = _queueRescue(pending_);
+        timestamp_ = uint48(
+            bound(timestamp_, block.timestamp, configTimelock.getQueuedAction(id).expiresAt)
+        );
+        _disablePolicy(address(configTimelock), admin);
+        _setPolicyActive(address(configTimelock), false);
+
+        vm.warp(timestamp_);
+        bytes32 actionBefore = _queuedLifecycleDigest(id);
+        bytes32 fundsBefore = _revenueAccountingDigest();
+        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
+                    .selector,
+                address(configTimelock)
+            )
+        );
+        vm.prank(emergency);
+        configTimelock.cancelQueuedAction(id);
+        assertEq(
+            _queuedLifecycleDigest(id),
+            actionBefore,
+            "Cancellation retains exact action, guards and key owner"
+        );
+        assertEq(
+            _revenueAccountingDigest(),
+            fundsBefore,
+            "Cancellation retains debt, indexes and custody"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected cancellation commits no logs");
+    }
+
+    function test_givenSurplusInactiveDisabledTimelock_whenCancelledAtQueued_reverts() public {
+        test_givenInactiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(false, 1);
+    }
+
+    function test_givenSurplusInactiveDisabledTimelock_whenCancelledAtExpiry_reverts() public {
+        test_givenInactiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(
+            false,
+            type(uint48).max
+        );
+    }
+
+    function test_givenSurplusActiveDisabledTimelock_whenCancelledAtQueued_reverts() public {
+        test_givenActiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(false, 1);
+    }
+
+    function test_givenSurplusActiveDisabledTimelock_whenCancelledAtExpiry_reverts() public {
+        test_givenActiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(
+            false,
+            type(uint48).max
+        );
+    }
+
+    function test_givenPendingInactiveDisabledTimelock_whenCancelledAtQueued_reverts() public {
+        test_givenInactiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(true, 1);
+    }
+
+    function test_givenPendingInactiveDisabledTimelock_whenCancelledAtExpiry_reverts() public {
+        test_givenInactiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(
+            true,
+            type(uint48).max
+        );
+    }
+
+    function test_givenPendingActiveDisabledTimelock_whenCancelledAtQueued_reverts() public {
+        test_givenActiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(true, 1);
+    }
+
+    function test_givenPendingActiveDisabledTimelock_whenCancelledAtExpiry_reverts() public {
+        test_givenActiveDisabledTimelock_whenEmergencyCancelsDuringLiveWindow_reverts(
+            true,
+            type(uint48).max
+        );
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast,unused-return)

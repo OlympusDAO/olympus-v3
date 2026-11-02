@@ -1,10 +1,12 @@
 # RevenueDistributorTask.changeKernel scenario plan
 
+Source: [RevenueDistributorTask](../../../policies/RevenueDistributorTask.sol).
+
 Scope: inherited Kernel pointer replacement and its `kernel`/`isActive` getters.
 
 ## Scenarios
 
-| ID | Caller | State and inputs | Expected result | Effects and events | Test |
+| ID | Caller | Kernel pointer input / caller condition | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- |
 | RDTASK-KERNEL-A01 | Any caller except current Kernel, fuzz | Any policy state; any new pointer | KernelAdapter_OnlyKernel(caller) | Kernel pointer and dependencies unchanged | Covered: [test][test_whenCallerIsNotCurrentKernel_reverts] |
 | RDTASK-KERNEL-P01 | Current Kernel | New pointer is distinct and nonzero | Success | `kernel` changes; dependencies do not refresh implicitly; `isActive` follows the new Kernel; immutable distributor is unchanged | Covered: [test][test_whenCurrentKernelChangesToDistinctKernel_updatesPointerOnly] |

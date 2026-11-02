@@ -10,17 +10,16 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 /// @dev Admin and revenue_distributor_admin may queue configuration and rescue. Execution
 ///      is permissionless after delay.
 interface IRevenueDistributorConfigTimelock is ITimelockBatchQueue {
+    /// @notice Lifecycle payloads must be empty.
+    error RevenueDistributorConfigTimelock_InvalidData();
+
     /// @notice The bound distributor is zero or does not expose the required interfaces.
     /// @param distributor Invalid distributor address.
     error RevenueDistributorConfigTimelock_InvalidDistributor(address distributor);
 
-    /// @notice The bound distributor belongs to a different Kernel.
-    /// @param targetKernel Kernel reported by the distributor.
-    error RevenueDistributorConfigTimelock_KernelMismatch(address targetKernel);
-
-    /// @notice A required policy is inactive in the Kernel.
+    /// @notice The timelock policy is inactive in its Kernel.
     /// @param policy Inactive policy address.
-    error RevenueDistributorConfigTimelock_PolicyInactive(address policy);
+    error RevenueDistributorConfigTimelock_PolicyNotActive(address policy);
 
     /// @notice A queued target, selector, or payload is unsupported.
     /// @param target Action target address.

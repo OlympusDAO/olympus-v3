@@ -1,5 +1,7 @@
 pragma solidity >=0.8.24;
 
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
@@ -19,9 +21,9 @@ import {RevenueDistributorSurplusRescueTestBase} from "src/test/policies/Revenue
 // Quantities are base units; finite boundary/identity drivers avoid hidden state generators.
 // forge-lint: disable-start(calls-loop,literal-instead-of-constant,unused-return,unsafe-typecast)
 contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase {
-    uint256 internal constant _SURPLUS_CUSTODY = 19;
+    uint256 internal constant _SURPLUS_PAYOUT = 19;
     uint256 internal constant _DESTINATION_BALANCE = 7;
-    uint256 internal constant _ADDITIONAL_CUSTODY = 5;
+    uint256 internal constant _ADDITIONAL_PAYOUT = 5;
 
     enum NestedAction {
         Surplus,
@@ -32,24 +34,36 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
     }
     ReentrantPayoutToken internal _callbackAsset;
 
-    // Scenarios: L-01.
-    function test_givenDistributorEnabled_whenAdminRescues() public {
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorEnabled_whenAdminRescues(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         token.mint(bob, _DESTINATION_BALANCE);
 
         assertEq(
             distributor.previewRescue(address(token), bob),
-            _SURPLUS_CUSTODY,
+            _SURPLUS_PAYOUT,
             "surplus preview ignores local enablement"
         );
-        _assertRDSurplusPayment(token, bob, _SURPLUS_CUSTODY, admin);
+        _assertRDSurplusPayment(token, bob, _SURPLUS_PAYOUT, admin);
     }
 
-    // Scenarios: L-06.
-    function test_givenDistributorDisabled_whenAdminRescues() public {
+    // Scenarios: RD-RESCUE-L07.
+    function test_givenDistributorDisabled_whenAdminRescues(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         token.mint(bob, _DESTINATION_BALANCE);
 
         vm.startPrank(admin);
@@ -58,16 +72,22 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         vm.stopPrank();
         assertEq(
             distributor.previewRescue(address(token), bob),
-            _SURPLUS_CUSTODY,
+            _SURPLUS_PAYOUT,
             "surplus preview ignores local enablement"
         );
-        _assertRDSurplusPayment(token, bob, _SURPLUS_CUSTODY, admin);
+        _assertRDSurplusPayment(token, bob, _SURPLUS_PAYOUT, admin);
     }
 
-    // Scenarios: L-03.
-    function test_givenDistributorInactive_whenAdminRescues_reverts() public {
+    // Scenarios: RD-RESCUE-L09, RD-RESCUE-L10.
+    function test_givenDistributorInactive_whenAdminRescues_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         token.mint(bob, _DESTINATION_BALANCE);
 
         for (uint256 disabled; disabled < 2; ++disabled) {
@@ -77,7 +97,8 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
             kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
             vm.stopPrank();
             bytes memory failure = abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+                IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                address(distributor)
             );
             vm.expectRevert(failure);
             distributor.previewRescue(address(token), bob);
@@ -90,24 +111,36 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         }
     }
 
-    // Scenarios: L-02.
-    function test_givenDistributorEnabled_whenOperatorRescues() public {
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorEnabled_whenOperatorRescues(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         token.mint(bob, _DESTINATION_BALANCE);
 
         assertEq(
             distributor.previewRescue(address(token), bob),
-            _SURPLUS_CUSTODY,
+            _SURPLUS_PAYOUT,
             "surplus preview ignores local enablement"
         );
-        _assertRDSurplusPayment(token, bob, _SURPLUS_CUSTODY, address(configTimelock));
+        _assertRDSurplusPayment(token, bob, _SURPLUS_PAYOUT, address(configTimelock));
     }
 
-    // Scenarios: L-07.
-    function test_givenDistributorDisabled_whenOperatorRescues() public {
+    // Scenarios: RD-RESCUE-L07.
+    function test_givenDistributorDisabled_whenOperatorRescues(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         token.mint(bob, _DESTINATION_BALANCE);
 
         vm.startPrank(admin);
@@ -116,16 +149,22 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         vm.stopPrank();
         assertEq(
             distributor.previewRescue(address(token), bob),
-            _SURPLUS_CUSTODY,
+            _SURPLUS_PAYOUT,
             "surplus preview ignores local enablement"
         );
-        _assertRDSurplusPayment(token, bob, _SURPLUS_CUSTODY, address(configTimelock));
+        _assertRDSurplusPayment(token, bob, _SURPLUS_PAYOUT, address(configTimelock));
     }
 
-    // Scenarios: L-04.
-    function test_givenDistributorInactive_whenOperatorRescues_reverts() public {
+    // Scenarios: RD-RESCUE-L09, RD-RESCUE-L10.
+    function test_givenDistributorInactive_whenOperatorRescues_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         token.mint(bob, _DESTINATION_BALANCE);
 
         for (uint256 disabled; disabled < 2; ++disabled) {
@@ -135,7 +174,8 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
             kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
             vm.stopPrank();
             bytes memory failure = abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+                IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                address(distributor)
             );
             vm.expectRevert(failure);
             distributor.previewRescue(address(token), bob);
@@ -154,50 +194,72 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         }
     }
 
-    // Scenarios: L-05.
-    function test_givenDistributorLifecycle_whenCallerUnauthorized_reverts(address caller_) public {
+    // Scenarios: RD-RESCUE-L03, RD-RESCUE-L05.
+    function test_givenActiveDistributor_whenCallerUnauthorized_reverts(address caller_) public {
         address operator = distributor.configOperator();
-        vm.assume(caller_ != admin && (operator == address(0) || caller_ != operator));
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
-        for (uint256 disabled; disabled < 2; ++disabled)
-            for (uint256 inactive; inactive < 2; ++inactive) {
-                uint256 snapshot = vm.snapshotState();
-                vm.startPrank(admin);
-                if (disabled != 0) distributor.disable("");
-                if (inactive != 0)
-                    kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
-                vm.stopPrank();
-                bytes memory failure = abi.encodeWithSelector(
-                    IRevenueDistributor.RevenueDistributor_UnauthorizedConfigOperator.selector,
-                    caller_
-                );
-                _assertRDSurplusFailure(token, address(token), bob, caller_, failure);
-                _assertRDSurplusFailure(token, address(0), address(0), caller_, failure);
-                assertTrue(vm.revertToState(snapshot), "restore unauthorized RD lifecycle");
-            }
+        vm.assume(
+            !roles.hasRole(caller_, ADMIN_ROLE) && (operator == address(0) || caller_ != operator)
+        );
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
+        for (uint256 disabled; disabled < 2; ++disabled) {
+            uint256 snapshot = vm.snapshotState();
+            vm.startPrank(admin);
+            if (disabled != 0) distributor.disable("");
+
+            vm.stopPrank();
+            bytes memory failure = abi.encodeWithSelector(
+                IRevenueDistributor.RevenueDistributor_UnauthorizedConfigOperator.selector,
+                caller_
+            );
+            _assertRDSurplusFailure(token, address(token), bob, caller_, failure);
+            _assertRDSurplusFailure(token, address(0), address(0), caller_, failure);
+            assertTrue(vm.revertToState(snapshot), "restore unauthorized RD lifecycle");
+        }
     }
 
-    // Scenarios: L-01, L-02, L-05, L-06, L-07.
+    // Scenarios: RD-RESCUE-L04, RD-RESCUE-L06.
+    function test_givenInactiveDistributor_whenCallerUnauthorized_reverts(address caller_) public {
+        address operator = distributor.configOperator();
+        vm.assume(
+            !roles.hasRole(caller_, ADMIN_ROLE) && (operator == address(0) || caller_ != operator)
+        );
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
+        for (uint256 disabled; disabled < 2; ++disabled) {
+            uint256 snapshot = vm.snapshotState();
+            vm.startPrank(admin);
+            if (disabled != 0) distributor.disable("");
+            kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+            vm.stopPrank();
+            bytes memory failure = abi.encodeWithSelector(
+                IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                address(distributor)
+            );
+            _assertRDSurplusFailure(token, address(token), bob, caller_, failure);
+            _assertRDSurplusFailure(token, address(0), address(0), caller_, failure);
+            assertTrue(vm.revertToState(snapshot), "restore unauthorized RD lifecycle");
+        }
+    }
+
     // Preview ignores caller authorization and local enablement while RD is Kernel-active.
+    // Scenarios: RD-RESCUE-L01, RD-RESCUE-L03, RD-RESCUE-L04, RD-RESCUE-L05, RD-RESCUE-L06, RD-RESCUE-L07.
     function test_givenActiveDistributor_whenAnyCallerPreviews(
         address caller_,
         bool disabled_
     ) public {
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         if (disabled_) {
-            vm.prank(admin);
-            distributor.disable("");
+            _disableDistributor();
         }
         vm.prank(caller_);
         assertEq(
             distributor.previewRescue(address(token), bob),
-            _SURPLUS_CUSTODY,
+            _SURPLUS_PAYOUT,
             "preview is permissionless"
         );
     }
 
-    // Scenarios: L-03, L-04, L-05.
     // Activity is checked before invalid inputs, independently of caller identity.
+    // Scenarios: RD-RESCUE-L03, RD-RESCUE-L04, RD-RESCUE-L05, RD-RESCUE-L06, RD-RESCUE-L09, RD-RESCUE-L10.
     function test_givenInactiveDistributor_whenAnyCallerPreviews_reverts(
         address caller_,
         bool disabled_
@@ -207,7 +269,8 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
         vm.stopPrank();
         bytes memory failure = abi.encodeWithSelector(
-            IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+            IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+            address(distributor)
         );
         vm.expectRevert(failure);
         vm.prank(caller_);
@@ -217,33 +280,39 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         distributor.previewRescue(address(0), address(0));
     }
 
-    // Scenarios: L-05.
+    // Scenarios: RD-RESCUE-L03, RD-RESCUE-L05.
     function test_givenUnauthorizedIdentities_whenSeeded_reverts() public {
         address[3] memory callers = [address(0), emergency, alice];
         for (uint256 c; c < callers.length; ++c) {
             uint256 snapshot = vm.snapshotState();
-            test_givenDistributorLifecycle_whenCallerUnauthorized_reverts(callers[c]);
+            test_givenActiveDistributor_whenCallerUnauthorized_reverts(callers[c]);
             assertTrue(vm.revertToState(snapshot), "restore seeded unauthorized identity");
         }
         vm.prank(admin);
         distributor.setConfigOperator(alice);
-        test_givenDistributorLifecycle_whenCallerUnauthorized_reverts(address(configTimelock));
+        test_givenActiveDistributor_whenCallerUnauthorized_reverts(address(configTimelock));
     }
 
-    // Scenarios: A-01.
+    // Scenarios: RD-RESCUE-A01, RD-RESCUE-A02.
     function test_givenTimelockUnavailable_whenAdminRescuesDirectly() public {
         for (uint256 inactiveTimelock; inactiveTimelock < 2; ++inactiveTimelock)
             for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
                 uint256 snapshot = vm.snapshotState();
                 _createManagedRescueDebt();
-                token.mint(address(distributor), _SURPLUS_CUSTODY);
+                token.mint(address(distributor), _SURPLUS_PAYOUT);
                 vm.startPrank(admin);
                 if (inactiveTimelock == 0) configTimelock.disable("");
                 else kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
                 if (disabledRD != 0) distributor.disable("");
                 vm.stopPrank();
                 uint64 counter = configTimelock.nextActionId();
-                _assertRDSurplusPayment(token, bob, _SURPLUS_CUSTODY, admin);
+                bytes32 timelockBefore = _timelockControlDigest();
+                _assertRDSurplusPayment(token, bob, _SURPLUS_PAYOUT, admin);
+                assertEq(
+                    _timelockControlDigest(),
+                    timelockBefore,
+                    "Direct recovery preserves timelock lifecycle and queue control"
+                );
                 assertEq(
                     configTimelock.nextActionId(),
                     counter,
@@ -253,11 +322,16 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
             }
     }
 
-    // Scenarios: P-01, ISO-01.
+    // Scenarios: RD-RESCUE-P01, RD-RESCUE-P05.
     function test_givenNeverListedAsset_whenFullCustodyRescued(
         uint256 balance_,
-        address destination_
+        address destination_,
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
     ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         vm.assume(
             destination_ != address(0) &&
                 destination_ != address(kernel) &&
@@ -268,8 +342,14 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         _caseFullCustody(bound(balance_, 1, type(uint256).max), destination_);
     }
 
-    // Scenarios: P-01, ISO-01.
-    function test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded() public {
+    // Scenarios: RD-RESCUE-P01, RD-RESCUE-P05.
+    function test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
         uint256[3] memory balances = [uint256(1), type(uint256).max - 1, type(uint256).max];
         address[3] memory destinations = [address(treasury), address(configTimelock), bob];
@@ -279,7 +359,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 _caseFullCustody(balances[b], destinations[d]);
                 assertTrue(
                     vm.revertToState(snapshot),
-                    "restore full-custody boundary and destination"
+                    "restore full-payout boundary and destination"
                 );
             }
     }
@@ -299,17 +379,23 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         }
     }
 
-    // Scenarios: P-02.
-    function test_givenZeroCustody_whenEachPermittedCallerRescues() public {
+    // Scenarios: RD-RESCUE-P03.
+    function test_givenZeroCustody_whenEachPermittedCallerRescues(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
         _assertRDSurplusPayment(token, bob, 0, admin);
         _assertRDSurplusPayment(token, bob, 0, address(configTimelock));
     }
 
-    // Scenarios: AUTH-01.
+    // Scenarios: RD-RESCUE-P08.
     function test_givenOperatorRotated_whenFormerOperatorRescues_reverts() public {
         address newOperator = alice;
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         vm.prank(admin);
         distributor.setConfigOperator(newOperator);
         _assertRDSurplusFailure(
@@ -324,24 +410,24 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         );
     }
 
-    // Scenarios: AUTH-01.
+    // Scenarios: RD-RESCUE-A03, RD-RESCUE-P07.
     function test_givenOperatorRotated_whenCurrentAuthorityRescues() public {
         address newOperator = alice;
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         vm.prank(admin);
         distributor.setConfigOperator(newOperator);
         address[2] memory callers = [admin, newOperator];
         for (uint256 c; c < callers.length; ++c) {
             uint256 snapshot = vm.snapshotState();
-            _assertRDSurplusPayment(token, bob, _SURPLUS_CUSTODY, callers[c]);
+            _assertRDSurplusPayment(token, bob, _SURPLUS_PAYOUT, callers[c]);
             assertTrue(vm.revertToState(snapshot), "restore independent authorized payment");
         }
     }
 
-    // Scenarios: AUTH-01.
+    // Scenarios: RD-RESCUE-P08.
     function test_givenOperatorRevoked_whenFormerOperatorOrZeroCallerRescues_reverts() public {
         address newOperator = alice;
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         vm.prank(admin);
         distributor.setConfigOperator(newOperator);
         vm.prank(admin);
@@ -360,19 +446,25 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
             );
     }
 
-    // Scenarios: AUTH-01.
+    // Scenarios: RD-RESCUE-A03.
     function test_givenOperatorRevoked_whenAdminRescues() public {
         address newOperator = alice;
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         vm.prank(admin);
         distributor.setConfigOperator(newOperator);
         vm.prank(admin);
         distributor.setConfigOperator(address(0));
-        _assertRDSurplusPayment(token, bob, _SURPLUS_CUSTODY, admin);
+        _assertRDSurplusPayment(token, bob, _SURPLUS_PAYOUT, admin);
     }
 
-    // Scenarios: I-01.
-    function test_givenNeverListedAsset_whenAssetHasNoCode_reverts() public {
+    // Scenarios: RD-RESCUE-I01, RD-RESCUE-I02.
+    function test_givenNeverListedAsset_whenAssetHasNoCode_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
         address[2] memory callers = [admin, address(configTimelock)];
         uint256[3] memory balances = [uint256(0), 1, type(uint256).max];
@@ -381,8 +473,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 for (uint256 b; b < balances.length; ++b) {
                     uint256 snapshot = vm.snapshotState();
                     if (disabled != 0) {
-                        vm.prank(admin);
-                        distributor.disable("");
+                        _disableDistributor();
                     }
                     token.mint(address(distributor), balances[b]);
                     address[2] memory invalidAssets = [
@@ -409,8 +500,14 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 }
     }
 
-    // Scenarios: I-02.
-    function test_givenNeverListedAsset_whenDestinationIsForbidden_reverts() public {
+    // Scenarios: RD-RESCUE-I05, RD-RESCUE-I06, RD-RESCUE-I07, RD-RESCUE-I08.
+    function test_givenNeverListedAsset_whenDestinationIsForbidden_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
         address[2] memory callers = [admin, address(configTimelock)];
         uint256[3] memory balances = [uint256(0), 1, type(uint256).max];
@@ -419,8 +516,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 for (uint256 b; b < balances.length; ++b) {
                     uint256 snapshot = vm.snapshotState();
                     if (disabled != 0) {
-                        vm.prank(admin);
-                        distributor.disable("");
+                        _disableDistributor();
                     }
                     token.mint(address(distributor), balances[b]);
 
@@ -448,8 +544,14 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 }
     }
 
-    // Scenarios: I-05.
-    function test_givenNeverListedAsset_whenBalanceQueryReverts_reverts() public {
+    // Scenarios: RD-RESCUE-I17.
+    function test_givenNeverListedAsset_whenBalanceQueryReverts_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         _createManagedRescueDebt();
         address[2] memory callers = [admin, address(configTimelock)];
         uint256[3] memory balances = [uint256(0), 1, type(uint256).max];
@@ -458,8 +560,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 for (uint256 b; b < balances.length; ++b) {
                     uint256 snapshot = vm.snapshotState();
                     if (disabled != 0) {
-                        vm.prank(admin);
-                        distributor.disable("");
+                        _disableDistributor();
                     }
                     token.mint(address(distributor), balances[b]);
 
@@ -469,8 +570,14 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
     }
 
     /// @notice Managed assets are forbidden regardless of solvency, debt or local enablement.
-    // Scenarios: I-03.
-    function test_givenActiveAsset_whenSurplusRescueRequested_reverts() public {
+    // Scenarios: RD-RESCUE-I13.
+    function test_givenActiveAsset_whenSurplusRescueRequested_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         address[2] memory callers = [admin, address(configTimelock)];
         for (uint256 custodyState; custodyState < 4; ++custodyState)
             for (uint256 disabled; disabled < 2; ++disabled)
@@ -486,13 +593,11 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                     } else {
                         asset = _createManagedRescueDebt();
                         if (custodyState == 1) asset.burn(address(distributor), 1);
-                        if (custodyState == 3)
-                            asset.mint(address(distributor), _ADDITIONAL_CUSTODY);
+                        if (custodyState == 3) asset.mint(address(distributor), _ADDITIONAL_PAYOUT);
                     }
 
                     if (disabled != 0) {
-                        vm.prank(admin);
-                        distributor.disable("");
+                        _disableDistributor();
                     }
                     _assertRDMatchingError(
                         asset,
@@ -518,13 +623,19 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                     );
                     assertTrue(
                         vm.revertToState(snapshot),
-                        "restore managed-asset custody and listing state"
+                        "restore managed-asset payout and listing state"
                     );
                 }
     }
 
-    // Scenarios: I-04.
-    function test_givenRetiredAsset_whenSurplusRescueRequested_reverts() public {
+    // Scenarios: RD-RESCUE-I15.
+    function test_givenRetiredAsset_whenSurplusRescueRequested_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         address[2] memory callers = [admin, address(configTimelock)];
         for (uint256 custodyState; custodyState < 4; ++custodyState)
             for (uint256 disabled; disabled < 2; ++disabled)
@@ -540,16 +651,14 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                     } else {
                         asset = _createManagedRescueDebt();
                         if (custodyState == 1) asset.burn(address(distributor), 1);
-                        if (custodyState == 3)
-                            asset.mint(address(distributor), _ADDITIONAL_CUSTODY);
+                        if (custodyState == 3) asset.mint(address(distributor), _ADDITIONAL_PAYOUT);
                     }
 
                     vm.prank(admin);
                     distributor.disableAssetRoutes(address(asset));
 
                     if (disabled != 0) {
-                        vm.prank(admin);
-                        distributor.disable("");
+                        _disableDistributor();
                     }
                     _assertRDMatchingError(
                         asset,
@@ -575,7 +684,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                     );
                     assertTrue(
                         vm.revertToState(snapshot),
-                        "restore managed-asset custody and listing state"
+                        "restore managed-asset payout and listing state"
                     );
                 }
     }
@@ -592,134 +701,106 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         _assertRDSurplusFailure(tracker_, asset_, destination_, caller_, failure_);
     }
 
-    // Scenarios: TX-01.
-    function test_givenNeverListedAsset_whenTransferReverts_reverts() public {
-        _assertTransferFailure(false);
-    }
-
-    // Scenarios: TX-02.
-    function test_givenNeverListedAsset_whenTransferReturnsFalse_reverts() public {
-        _assertTransferFailure(true);
-    }
-
-    function _assertTransferFailure(bool returnsFalse_) internal {
-        _createManagedRescueDebt();
-        ReentrantPayoutToken asset = new ReentrantPayoutToken();
-        asset.mint(address(distributor), _SURPLUS_CUSTODY);
-        asset.mint(bob, _DESTINATION_BALANCE);
-        assertEq(
-            distributor.previewRescue(address(asset), bob),
-            _SURPLUS_CUSTODY,
-            "preview omits transfer dependency"
+    // Scenarios: RD-RESCUE-T01.
+    function test_givenNeverListedAsset_whenTransferReverts_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        ReentrantPayoutToken asset = _prepareRescueTransfer();
+        asset.setTransferBlocked(bob, true);
+        bytes memory failure = abi.encodeWithSelector(
+            ReentrantPayoutToken.TransferBlocked.selector,
+            bob
         );
-        bytes memory failure;
-        if (returnsFalse_) {
-            vm.mockCall(
-                address(asset),
-                abi.encodeWithSelector(IERC20.transfer.selector, bob),
-                abi.encode(false)
-            );
-            failure = abi.encodeWithSelector(
-                SafeERC20.SafeERC20FailedOperation.selector,
-                address(asset)
-            );
-        } else {
-            asset.setTransferBlocked(bob, true);
-            failure = abi.encodeWithSelector(ReentrantPayoutToken.TransferBlocked.selector, bob);
-        }
+        _assertRDSurplusFailure(asset, address(asset), bob, admin, failure);
+        _assertRDSurplusFailure(asset, address(asset), bob, address(configTimelock), failure);
+    }
+
+    // Scenarios: RD-RESCUE-T03.
+    function test_givenNeverListedAsset_whenTransferReturnsFalse_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        ReentrantPayoutToken asset = _prepareRescueTransfer();
+        vm.mockCall(
+            address(asset),
+            abi.encodeWithSelector(IERC20.transfer.selector, bob),
+            abi.encode(false)
+        );
+        bytes memory failure = abi.encodeWithSelector(
+            SafeERC20.SafeERC20FailedOperation.selector,
+            address(asset)
+        );
         _assertRDSurplusFailure(asset, address(asset), bob, admin, failure);
         _assertRDSurplusFailure(asset, address(asset), bob, address(configTimelock), failure);
         vm.clearMockedCalls();
     }
 
-    // Scenarios: CB-01.
-    function test_givenSurplusRescueCallback_whenFailureIsCaught() public {
-        for (
-            uint256 differentToken;
-            differentToken < (0 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
+    function _prepareRescueTransfer() internal returns (ReentrantPayoutToken asset) {
+        _createManagedRescueDebt();
+        asset = new ReentrantPayoutToken();
+        asset.mint(address(distributor), _SURPLUS_PAYOUT);
+        asset.mint(bob, _DESTINATION_BALANCE);
+        assertEq(
+            distributor.previewRescue(address(asset), bob),
+            _SURPLUS_PAYOUT,
+            "preview omits transfer dependency"
+        );
+    }
+
+    // Scenarios: RD-RESCUE-C01.
+    function test_givenSurplusRescueCallback_whenFailureIsCaught(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 differentToken; differentToken < 2; ++differentToken)
             for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
                 uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (0 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(0))
-                    )
-                );
+                (
+                    MockERC20 nestedAsset,
+                    bytes32 nestedBefore,
+                    uint256 nestedCustody
+                ) = _prepareSurplusCallback(NestedAction.Surplus, differentToken != 0);
                 _callbackAsset.setBubbleCallbackFailure(false);
                 address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_CUSTODY, caller);
+                _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
                 assertEq(
                     _callbackAsset.callbackRevertData(),
                     abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
                     "nested action reaches guard after callback reads"
                 );
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
+                _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
                 assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
             }
     }
 
-    // Scenarios: CB-01.
-    function test_givenSurplusRescueCallback_whenFailureIsPropagated() public {
-        for (
-            uint256 differentToken;
-            differentToken < (0 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
+    // Scenarios: RD-RESCUE-C05.
+    function test_givenSurplusRescueCallback_whenFailureIsPropagated(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 differentToken; differentToken < 2; ++differentToken)
             for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
                 uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (0 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(0))
-                    )
-                );
+                (
+                    MockERC20 nestedAsset,
+                    bytes32 nestedBefore,
+                    uint256 nestedCustody
+                ) = _prepareSurplusCallback(NestedAction.Surplus, differentToken != 0);
                 _callbackAsset.setBubbleCallbackFailure(true);
                 address caller = operatorCaller == 0 ? admin : address(this);
-
                 _assertRDSurplusFailure(
                     _callbackAsset,
                     address(_callbackAsset),
@@ -728,468 +809,241 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                     abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
                 );
                 assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
+                _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
                 assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
             }
     }
 
-    // Scenarios: CB-02.
-    function test_givenPendingRescueCallback_whenFailureIsCaught() public {
-        for (
-            uint256 differentToken;
-            differentToken < (1 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
-            for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
-                uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (1 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(1))
-                    )
-                );
-                _callbackAsset.setBubbleCallbackFailure(false);
-                address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_CUSTODY, caller);
-                assertEq(
-                    _callbackAsset.callbackRevertData(),
-                    abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
-                    "nested action reaches guard after callback reads"
-                );
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
-                assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
-            }
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenPendingRescueCallback_whenFailureIsCaught(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
+            uint256 snapshot = vm.snapshotState();
+            (
+                MockERC20 nestedAsset,
+                bytes32 nestedBefore,
+                uint256 nestedCustody
+            ) = _prepareSurplusCallback(NestedAction.PendingPayout, false);
+            _callbackAsset.setBubbleCallbackFailure(false);
+            address caller = operatorCaller == 0 ? admin : address(this);
+            _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
+            assertEq(
+                _callbackAsset.callbackRevertData(),
+                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
+                "nested action reaches guard after callback reads"
+            );
+            _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
+            assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
+        }
     }
 
-    // Scenarios: CB-02.
-    function test_givenPendingRescueCallback_whenFailureIsPropagated() public {
-        for (
-            uint256 differentToken;
-            differentToken < (1 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
-            for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
-                uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (1 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(1))
-                    )
-                );
-                _callbackAsset.setBubbleCallbackFailure(true);
-                address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusFailure(
-                    _callbackAsset,
-                    address(_callbackAsset),
-                    bob,
-                    caller,
-                    abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
-                );
-                assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
-                assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
-            }
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenPendingRescueCallback_whenFailureIsPropagated(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
+            uint256 snapshot = vm.snapshotState();
+            (
+                MockERC20 nestedAsset,
+                bytes32 nestedBefore,
+                uint256 nestedCustody
+            ) = _prepareSurplusCallback(NestedAction.PendingPayout, false);
+            _callbackAsset.setBubbleCallbackFailure(true);
+            address caller = operatorCaller == 0 ? admin : address(this);
+            _assertRDSurplusFailure(
+                _callbackAsset,
+                address(_callbackAsset),
+                bob,
+                caller,
+                abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
+            );
+            assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
+            _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
+            assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
+        }
     }
 
-    // Scenarios: CB-02.
-    function test_givenPendingRetryCallback_whenFailureIsCaught() public {
-        for (
-            uint256 differentToken;
-            differentToken < (2 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
-            for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
-                uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (2 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(2))
-                    )
-                );
-                _callbackAsset.setBubbleCallbackFailure(false);
-                address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_CUSTODY, caller);
-                assertEq(
-                    _callbackAsset.callbackRevertData(),
-                    abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
-                    "nested action reaches guard after callback reads"
-                );
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
-                assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
-            }
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenPendingRetryCallback_whenFailureIsCaught(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
+            uint256 snapshot = vm.snapshotState();
+            (
+                MockERC20 nestedAsset,
+                bytes32 nestedBefore,
+                uint256 nestedCustody
+            ) = _prepareSurplusCallback(NestedAction.Retry, false);
+            _callbackAsset.setBubbleCallbackFailure(false);
+            address caller = operatorCaller == 0 ? admin : address(this);
+            _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
+            assertEq(
+                _callbackAsset.callbackRevertData(),
+                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
+                "nested action reaches guard after callback reads"
+            );
+            _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
+            assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
+        }
     }
 
-    // Scenarios: CB-02.
-    function test_givenPendingRetryCallback_whenFailureIsPropagated() public {
-        for (
-            uint256 differentToken;
-            differentToken < (2 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
-            for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
-                uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (2 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(2))
-                    )
-                );
-                _callbackAsset.setBubbleCallbackFailure(true);
-                address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusFailure(
-                    _callbackAsset,
-                    address(_callbackAsset),
-                    bob,
-                    caller,
-                    abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
-                );
-                assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
-                assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
-            }
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenPendingRetryCallback_whenFailureIsPropagated(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
+            uint256 snapshot = vm.snapshotState();
+            (
+                MockERC20 nestedAsset,
+                bytes32 nestedBefore,
+                uint256 nestedCustody
+            ) = _prepareSurplusCallback(NestedAction.Retry, false);
+            _callbackAsset.setBubbleCallbackFailure(true);
+            address caller = operatorCaller == 0 ? admin : address(this);
+            _assertRDSurplusFailure(
+                _callbackAsset,
+                address(_callbackAsset),
+                bob,
+                caller,
+                abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
+            );
+            assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
+            _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
+            assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
+        }
     }
 
-    // Scenarios: CB-02.
-    function test_givenDistributeCallback_whenFailureIsCaught() public {
-        for (
-            uint256 differentToken;
-            differentToken < (3 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
-            for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
-                uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (3 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(3))
-                    )
-                );
-                _callbackAsset.setBubbleCallbackFailure(false);
-                address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_CUSTODY, caller);
-                assertEq(
-                    _callbackAsset.callbackRevertData(),
-                    abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
-                    "nested action reaches guard after callback reads"
-                );
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
-                assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
-            }
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenDistributeCallback_whenFailureIsCaught(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
+            uint256 snapshot = vm.snapshotState();
+            (
+                MockERC20 nestedAsset,
+                bytes32 nestedBefore,
+                uint256 nestedCustody
+            ) = _prepareSurplusCallback(NestedAction.Distribute, false);
+            _callbackAsset.setBubbleCallbackFailure(false);
+            address caller = operatorCaller == 0 ? admin : address(this);
+            _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
+            assertEq(
+                _callbackAsset.callbackRevertData(),
+                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
+                "nested action reaches guard after callback reads"
+            );
+            _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
+            assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
+        }
     }
 
-    // Scenarios: CB-02.
-    function test_givenDistributeCallback_whenFailureIsPropagated() public {
-        for (
-            uint256 differentToken;
-            differentToken < (3 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
-            for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
-                uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (3 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(3))
-                    )
-                );
-                _callbackAsset.setBubbleCallbackFailure(true);
-                address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusFailure(
-                    _callbackAsset,
-                    address(_callbackAsset),
-                    bob,
-                    caller,
-                    abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
-                );
-                assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
-                assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
-            }
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenDistributeCallback_whenFailureIsPropagated(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
+            uint256 snapshot = vm.snapshotState();
+            (
+                MockERC20 nestedAsset,
+                bytes32 nestedBefore,
+                uint256 nestedCustody
+            ) = _prepareSurplusCallback(NestedAction.Distribute, false);
+            _callbackAsset.setBubbleCallbackFailure(true);
+            address caller = operatorCaller == 0 ? admin : address(this);
+            _assertRDSurplusFailure(
+                _callbackAsset,
+                address(_callbackAsset),
+                bob,
+                caller,
+                abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
+            );
+            assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
+            _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
+            assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
+        }
     }
 
-    // Scenarios: CB-02.
-    function test_givenConfigurationCallback_whenFailureIsCaught() public {
-        for (
-            uint256 differentToken;
-            differentToken < (4 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
-            for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
-                uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (4 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(4))
-                    )
-                );
-                _callbackAsset.setBubbleCallbackFailure(false);
-                address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_CUSTODY, caller);
-                assertEq(
-                    _callbackAsset.callbackRevertData(),
-                    abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
-                    "nested action reaches guard after callback reads"
-                );
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
-                assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
-            }
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenConfigurationCallback_whenFailureIsCaught(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
+            uint256 snapshot = vm.snapshotState();
+            (
+                MockERC20 nestedAsset,
+                bytes32 nestedBefore,
+                uint256 nestedCustody
+            ) = _prepareSurplusCallback(NestedAction.Configuration, false);
+            _callbackAsset.setBubbleCallbackFailure(false);
+            address caller = operatorCaller == 0 ? admin : address(this);
+            _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
+            assertEq(
+                _callbackAsset.callbackRevertData(),
+                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
+                "nested action reaches guard after callback reads"
+            );
+            _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
+            assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
+        }
     }
 
-    // Scenarios: CB-02.
-    function test_givenConfigurationCallback_whenFailureIsPropagated() public {
-        for (
-            uint256 differentToken;
-            differentToken < (4 == uint256(NestedAction.Surplus) ? 2 : 1);
-            ++differentToken
-        )
-            for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
-                uint256 snapshot = vm.snapshotState();
-                _createManagedRescueDebt();
-                _callbackAsset = new ReentrantPayoutToken();
-                _callbackAsset.mint(address(distributor), _SURPLUS_CUSTODY);
-                MockERC20 nestedAsset = _callbackAsset;
-                if (differentToken != 0) {
-                    nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
-                    nestedAsset.mint(address(distributor), _ADDITIONAL_CUSTODY);
-                }
-                if (4 != uint256(NestedAction.Surplus)) nestedAsset = _managedAsset;
-                vm.prank(admin);
-                distributor.setConfigOperator(address(this));
-                bytes32 nestedBefore = _rdRawRescueHash(address(nestedAsset));
-                uint256 nestedCustody = nestedAsset.balanceOf(address(distributor));
-                _callbackAsset.setCallbackFrom(
-                    address(distributor),
-                    address(this),
-                    abi.encodeCall(
-                        this.observeAndAttemptNestedAction,
-                        (address(nestedAsset), NestedAction(4))
-                    )
-                );
-                _callbackAsset.setBubbleCallbackFailure(true);
-                address caller = operatorCaller == 0 ? admin : address(this);
-
-                _assertRDSurplusFailure(
-                    _callbackAsset,
-                    address(_callbackAsset),
-                    bob,
-                    caller,
-                    abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
-                );
-                assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
-
-                assertEq(
-                    _rdRawRescueHash(address(nestedAsset)),
-                    nestedBefore,
-                    "nested accounting and indexes preserved"
-                );
-                if (address(nestedAsset) != address(_callbackAsset))
-                    assertEq(
-                        nestedAsset.balanceOf(address(distributor)),
-                        nestedCustody,
-                        "other token custody unchanged"
-                    );
-                assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
-            }
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenConfigurationCallback_whenFailureIsPropagated(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        for (uint256 operatorCaller; operatorCaller < 2; ++operatorCaller) {
+            uint256 snapshot = vm.snapshotState();
+            (
+                MockERC20 nestedAsset,
+                bytes32 nestedBefore,
+                uint256 nestedCustody
+            ) = _prepareSurplusCallback(NestedAction.Configuration, false);
+            _callbackAsset.setBubbleCallbackFailure(true);
+            address caller = operatorCaller == 0 ? admin : address(this);
+            _assertRDSurplusFailure(
+                _callbackAsset,
+                address(_callbackAsset),
+                bob,
+                caller,
+                abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector)
+            );
+            assertTrue(_callbackAsset.callbackEnabled(), "propagation restores callback state");
+            _assertNestedCallbackState(nestedAsset, nestedBefore, nestedCustody);
+            assertTrue(vm.revertToState(snapshot), "restore callback action/caller/outcome");
+        }
     }
 
     function observeAndAttemptNestedAction(address nestedAsset_, NestedAction action_) external {
@@ -1213,16 +1067,497 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         else distributor.setYieldRecipient(distributor.yieldRecipient());
     }
 
-    // Scenarios: L-01.
-    function test_givenDistributorRestored_whenSurplusRescued() public {
-        token.mint(address(distributor), _SURPLUS_CUSTODY);
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorRestored_whenSurplusRescued(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        token.mint(address(distributor), _SURPLUS_PAYOUT);
         vm.startPrank(admin);
         distributor.disable("");
         distributor.reEnable();
         kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
         vm.stopPrank();
-        _assertRDSurplusPayment(token, bob, _SURPLUS_CUSTODY, admin);
+        _assertRDSurplusPayment(token, bob, _SURPLUS_PAYOUT, admin);
+    }
+
+    function _prepareSurplusCallback(
+        NestedAction action_,
+        bool differentToken_
+    ) internal returns (MockERC20 nestedAsset, bytes32 nestedBefore, uint256 nestedCustody) {
+        _createManagedRescueDebt();
+        _callbackAsset = new ReentrantPayoutToken();
+        _callbackAsset.mint(address(distributor), _SURPLUS_PAYOUT);
+        nestedAsset = _managedAsset;
+        if (action_ == NestedAction.Surplus) {
+            nestedAsset = _callbackAsset;
+            if (differentToken_) {
+                nestedAsset = new MockERC20("Other surplus", "OSUR", 18);
+                nestedAsset.mint(address(distributor), _ADDITIONAL_PAYOUT);
+            }
+        }
+        vm.prank(admin);
+        if (_configurationSeed == address(0)) distributor.setConfigOperator(address(this));
+        else rolesAdmin.grantRole(ADMIN_ROLE, address(this));
+        nestedBefore = _rdRawRescueHash(address(nestedAsset));
+        nestedCustody = nestedAsset.balanceOf(address(distributor));
+        _callbackAsset.setCallbackFrom(
+            address(distributor),
+            address(this),
+            abi.encodeCall(this.observeAndAttemptNestedAction, (address(nestedAsset), action_))
+        );
+    }
+
+    function _assertNestedCallbackState(
+        MockERC20 nestedAsset_,
+        bytes32 nestedBefore_,
+        uint256 nestedCustody_
+    ) internal view {
+        assertEq(
+            _rdRawRescueHash(address(nestedAsset_)),
+            nestedBefore_,
+            "nested accounting and indexes preserved"
+        );
+        if (address(nestedAsset_) != address(_callbackAsset))
+            assertEq(
+                nestedAsset_.balanceOf(address(distributor)),
+                nestedCustody_,
+                "other token payout unchanged"
+            );
+    }
+
+    // Scenarios: RD-RESCUE-I13.
+    function test_givenActiveAsset_whenSurplusRescueRequested_reverts_AdminOnlySeed() public {
+        test_givenActiveAsset_whenSurplusRescueRequested_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-I13.
+    function test_givenActiveAsset_whenSurplusRescueRequested_reverts_OperatorOnlySeed() public {
+        test_givenActiveAsset_whenSurplusRescueRequested_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-I13.
+    function test_givenActiveAsset_whenSurplusRescueRequested_reverts_RolesOverlapSeed() public {
+        test_givenActiveAsset_whenSurplusRescueRequested_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenConfigurationCallback_whenFailureIsCaught_AdminOnlySeed() public {
+        test_givenConfigurationCallback_whenFailureIsCaught(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenConfigurationCallback_whenFailureIsCaught_OperatorOnlySeed() public {
+        test_givenConfigurationCallback_whenFailureIsCaught(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenConfigurationCallback_whenFailureIsCaught_RolesOverlapSeed() public {
+        test_givenConfigurationCallback_whenFailureIsCaught(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenConfigurationCallback_whenFailureIsPropagated_AdminOnlySeed() public {
+        test_givenConfigurationCallback_whenFailureIsPropagated(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenConfigurationCallback_whenFailureIsPropagated_OperatorOnlySeed() public {
+        test_givenConfigurationCallback_whenFailureIsPropagated(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenConfigurationCallback_whenFailureIsPropagated_RolesOverlapSeed() public {
+        test_givenConfigurationCallback_whenFailureIsPropagated(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenDistributeCallback_whenFailureIsCaught_AdminOnlySeed() public {
+        test_givenDistributeCallback_whenFailureIsCaught(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenDistributeCallback_whenFailureIsCaught_OperatorOnlySeed() public {
+        test_givenDistributeCallback_whenFailureIsCaught(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenDistributeCallback_whenFailureIsCaught_RolesOverlapSeed() public {
+        test_givenDistributeCallback_whenFailureIsCaught(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenDistributeCallback_whenFailureIsPropagated_AdminOnlySeed() public {
+        test_givenDistributeCallback_whenFailureIsPropagated(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenDistributeCallback_whenFailureIsPropagated_OperatorOnlySeed() public {
+        test_givenDistributeCallback_whenFailureIsPropagated(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenDistributeCallback_whenFailureIsPropagated_RolesOverlapSeed() public {
+        test_givenDistributeCallback_whenFailureIsPropagated(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-L07.
+    function test_givenDistributorDisabled_whenAdminRescues_AdminOnlySeed() public {
+        test_givenDistributorDisabled_whenAdminRescues(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-L07.
+    function test_givenDistributorDisabled_whenAdminRescues_OperatorOnlySeed() public {
+        test_givenDistributorDisabled_whenAdminRescues(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-L07.
+    function test_givenDistributorDisabled_whenAdminRescues_RolesOverlapSeed() public {
+        test_givenDistributorDisabled_whenAdminRescues(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-L07.
+    function test_givenDistributorDisabled_whenOperatorRescues_AdminOnlySeed() public {
+        test_givenDistributorDisabled_whenOperatorRescues(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-L07.
+    function test_givenDistributorDisabled_whenOperatorRescues_OperatorOnlySeed() public {
+        test_givenDistributorDisabled_whenOperatorRescues(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-L07.
+    function test_givenDistributorDisabled_whenOperatorRescues_RolesOverlapSeed() public {
+        test_givenDistributorDisabled_whenOperatorRescues(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorEnabled_whenAdminRescues_AdminOnlySeed() public {
+        test_givenDistributorEnabled_whenAdminRescues(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorEnabled_whenAdminRescues_OperatorOnlySeed() public {
+        test_givenDistributorEnabled_whenAdminRescues(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorEnabled_whenAdminRescues_RolesOverlapSeed() public {
+        test_givenDistributorEnabled_whenAdminRescues(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorEnabled_whenOperatorRescues_AdminOnlySeed() public {
+        test_givenDistributorEnabled_whenOperatorRescues(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorEnabled_whenOperatorRescues_OperatorOnlySeed() public {
+        test_givenDistributorEnabled_whenOperatorRescues(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorEnabled_whenOperatorRescues_RolesOverlapSeed() public {
+        test_givenDistributorEnabled_whenOperatorRescues(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-L09, RD-RESCUE-L10.
+    function test_givenDistributorInactive_whenAdminRescues_reverts_AdminOnlySeed() public {
+        test_givenDistributorInactive_whenAdminRescues_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-L09, RD-RESCUE-L10.
+    function test_givenDistributorInactive_whenAdminRescues_reverts_OperatorOnlySeed() public {
+        test_givenDistributorInactive_whenAdminRescues_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-L09, RD-RESCUE-L10.
+    function test_givenDistributorInactive_whenAdminRescues_reverts_RolesOverlapSeed() public {
+        test_givenDistributorInactive_whenAdminRescues_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-L09, RD-RESCUE-L10.
+    function test_givenDistributorInactive_whenOperatorRescues_reverts_AdminOnlySeed() public {
+        test_givenDistributorInactive_whenOperatorRescues_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-L09, RD-RESCUE-L10.
+    function test_givenDistributorInactive_whenOperatorRescues_reverts_OperatorOnlySeed() public {
+        test_givenDistributorInactive_whenOperatorRescues_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-L09, RD-RESCUE-L10.
+    function test_givenDistributorInactive_whenOperatorRescues_reverts_RolesOverlapSeed() public {
+        test_givenDistributorInactive_whenOperatorRescues_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorRestored_whenSurplusRescued_AdminOnlySeed() public {
+        test_givenDistributorRestored_whenSurplusRescued(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorRestored_whenSurplusRescued_OperatorOnlySeed() public {
+        test_givenDistributorRestored_whenSurplusRescued(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-L01.
+    function test_givenDistributorRestored_whenSurplusRescued_RolesOverlapSeed() public {
+        test_givenDistributorRestored_whenSurplusRescued(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-I01, RD-RESCUE-I02.
+    function test_givenNeverListedAsset_whenAssetHasNoCode_reverts_AdminOnlySeed() public {
+        test_givenNeverListedAsset_whenAssetHasNoCode_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-I01, RD-RESCUE-I02.
+    function test_givenNeverListedAsset_whenAssetHasNoCode_reverts_OperatorOnlySeed() public {
+        test_givenNeverListedAsset_whenAssetHasNoCode_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-I01, RD-RESCUE-I02.
+    function test_givenNeverListedAsset_whenAssetHasNoCode_reverts_RolesOverlapSeed() public {
+        test_givenNeverListedAsset_whenAssetHasNoCode_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-I17.
+    function test_givenNeverListedAsset_whenBalanceQueryReverts_reverts_AdminOnlySeed() public {
+        test_givenNeverListedAsset_whenBalanceQueryReverts_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-I17.
+    function test_givenNeverListedAsset_whenBalanceQueryReverts_reverts_OperatorOnlySeed() public {
+        test_givenNeverListedAsset_whenBalanceQueryReverts_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-I17.
+    function test_givenNeverListedAsset_whenBalanceQueryReverts_reverts_RolesOverlapSeed() public {
+        test_givenNeverListedAsset_whenBalanceQueryReverts_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-P01, RD-RESCUE-P05.
+    function test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded_AdminOnlySeed() public {
+        test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-P01, RD-RESCUE-P05.
+    function test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded_OperatorOnlySeed()
+        public
+    {
+        test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-P01, RD-RESCUE-P05.
+    function test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded_RolesOverlapSeed()
+        public
+    {
+        test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-I05, RD-RESCUE-I06, RD-RESCUE-I07, RD-RESCUE-I08.
+    function test_givenNeverListedAsset_whenDestinationIsForbidden_reverts_AdminOnlySeed() public {
+        test_givenNeverListedAsset_whenDestinationIsForbidden_reverts(
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: RD-RESCUE-I05, RD-RESCUE-I06, RD-RESCUE-I07, RD-RESCUE-I08.
+    function test_givenNeverListedAsset_whenDestinationIsForbidden_reverts_OperatorOnlySeed()
+        public
+    {
+        test_givenNeverListedAsset_whenDestinationIsForbidden_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-I05, RD-RESCUE-I06, RD-RESCUE-I07, RD-RESCUE-I08.
+    function test_givenNeverListedAsset_whenDestinationIsForbidden_reverts_RolesOverlapSeed()
+        public
+    {
+        test_givenNeverListedAsset_whenDestinationIsForbidden_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-P01, RD-RESCUE-P05.
+    function test_givenNeverListedAsset_whenFullCustodyRescued_AdminOnlySeed() public {
+        test_givenNeverListedAsset_whenFullCustodyRescued(1, bob, address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-P01, RD-RESCUE-P05.
+    function test_givenNeverListedAsset_whenFullCustodyRescued_OperatorOnlySeed() public {
+        test_givenNeverListedAsset_whenFullCustodyRescued(1, bob, address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-P01, RD-RESCUE-P05.
+    function test_givenNeverListedAsset_whenFullCustodyRescued_RolesOverlapSeed() public {
+        test_givenNeverListedAsset_whenFullCustodyRescued(1, bob, address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-T03.
+    function test_givenNeverListedAsset_whenTransferReturnsFalse_reverts_AdminOnlySeed() public {
+        test_givenNeverListedAsset_whenTransferReturnsFalse_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-T03.
+    function test_givenNeverListedAsset_whenTransferReturnsFalse_reverts_OperatorOnlySeed() public {
+        test_givenNeverListedAsset_whenTransferReturnsFalse_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-T03.
+    function test_givenNeverListedAsset_whenTransferReturnsFalse_reverts_RolesOverlapSeed() public {
+        test_givenNeverListedAsset_whenTransferReturnsFalse_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-T01.
+    function test_givenNeverListedAsset_whenTransferReverts_reverts_AdminOnlySeed() public {
+        test_givenNeverListedAsset_whenTransferReverts_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-T01.
+    function test_givenNeverListedAsset_whenTransferReverts_reverts_OperatorOnlySeed() public {
+        test_givenNeverListedAsset_whenTransferReverts_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-T01.
+    function test_givenNeverListedAsset_whenTransferReverts_reverts_RolesOverlapSeed() public {
+        test_givenNeverListedAsset_whenTransferReverts_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenPendingRescueCallback_whenFailureIsCaught_AdminOnlySeed() public {
+        test_givenPendingRescueCallback_whenFailureIsCaught(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenPendingRescueCallback_whenFailureIsCaught_OperatorOnlySeed() public {
+        test_givenPendingRescueCallback_whenFailureIsCaught(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenPendingRescueCallback_whenFailureIsCaught_RolesOverlapSeed() public {
+        test_givenPendingRescueCallback_whenFailureIsCaught(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenPendingRescueCallback_whenFailureIsPropagated_AdminOnlySeed() public {
+        test_givenPendingRescueCallback_whenFailureIsPropagated(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenPendingRescueCallback_whenFailureIsPropagated_OperatorOnlySeed() public {
+        test_givenPendingRescueCallback_whenFailureIsPropagated(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenPendingRescueCallback_whenFailureIsPropagated_RolesOverlapSeed() public {
+        test_givenPendingRescueCallback_whenFailureIsPropagated(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenPendingRetryCallback_whenFailureIsCaught_AdminOnlySeed() public {
+        test_givenPendingRetryCallback_whenFailureIsCaught(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenPendingRetryCallback_whenFailureIsCaught_OperatorOnlySeed() public {
+        test_givenPendingRetryCallback_whenFailureIsCaught(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C03.
+    function test_givenPendingRetryCallback_whenFailureIsCaught_RolesOverlapSeed() public {
+        test_givenPendingRetryCallback_whenFailureIsCaught(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenPendingRetryCallback_whenFailureIsPropagated_AdminOnlySeed() public {
+        test_givenPendingRetryCallback_whenFailureIsPropagated(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenPendingRetryCallback_whenFailureIsPropagated_OperatorOnlySeed() public {
+        test_givenPendingRetryCallback_whenFailureIsPropagated(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C06.
+    function test_givenPendingRetryCallback_whenFailureIsPropagated_RolesOverlapSeed() public {
+        test_givenPendingRetryCallback_whenFailureIsPropagated(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-I15.
+    function test_givenRetiredAsset_whenSurplusRescueRequested_reverts_AdminOnlySeed() public {
+        test_givenRetiredAsset_whenSurplusRescueRequested_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-I15.
+    function test_givenRetiredAsset_whenSurplusRescueRequested_reverts_OperatorOnlySeed() public {
+        test_givenRetiredAsset_whenSurplusRescueRequested_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-I15.
+    function test_givenRetiredAsset_whenSurplusRescueRequested_reverts_RolesOverlapSeed() public {
+        test_givenRetiredAsset_whenSurplusRescueRequested_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C01.
+    function test_givenSurplusRescueCallback_whenFailureIsCaught_AdminOnlySeed() public {
+        test_givenSurplusRescueCallback_whenFailureIsCaught(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C01.
+    function test_givenSurplusRescueCallback_whenFailureIsCaught_OperatorOnlySeed() public {
+        test_givenSurplusRescueCallback_whenFailureIsCaught(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C01.
+    function test_givenSurplusRescueCallback_whenFailureIsCaught_RolesOverlapSeed() public {
+        test_givenSurplusRescueCallback_whenFailureIsCaught(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-C05.
+    function test_givenSurplusRescueCallback_whenFailureIsPropagated_AdminOnlySeed() public {
+        test_givenSurplusRescueCallback_whenFailureIsPropagated(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-C05.
+    function test_givenSurplusRescueCallback_whenFailureIsPropagated_OperatorOnlySeed() public {
+        test_givenSurplusRescueCallback_whenFailureIsPropagated(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-C05.
+    function test_givenSurplusRescueCallback_whenFailureIsPropagated_RolesOverlapSeed() public {
+        test_givenSurplusRescueCallback_whenFailureIsPropagated(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-P03.
+    function test_givenZeroCustody_whenEachPermittedCallerRescues_AdminOnlySeed() public {
+        test_givenZeroCustody_whenEachPermittedCallerRescues(address(0x1234), false, false);
+    }
+
+    // Scenarios: RD-RESCUE-P03.
+    function test_givenZeroCustody_whenEachPermittedCallerRescues_OperatorOnlySeed() public {
+        test_givenZeroCustody_whenEachPermittedCallerRescues(address(0x1234), true, false);
+    }
+
+    // Scenarios: RD-RESCUE-P03.
+    function test_givenZeroCustody_whenEachPermittedCallerRescues_RolesOverlapSeed() public {
+        test_givenZeroCustody_whenEachPermittedCallerRescues(address(0x1234), true, true);
+    }
+
+    // Scenarios: RD-RESCUE-L04, RD-RESCUE-L06.
+    function test_givenInactiveUnauthorizedIdentities_whenSeeded_reverts() public {
+        address[3] memory callers = [address(0), emergency, alice];
+        for (uint256 c; c < callers.length; ++c) {
+            uint256 snapshot = vm.snapshotState();
+            test_givenInactiveDistributor_whenCallerUnauthorized_reverts(callers[c]);
+            assertTrue(vm.revertToState(snapshot), "restore seeded unauthorized identity");
+        }
+        vm.prank(admin);
+        distributor.setConfigOperator(alice);
+        test_givenInactiveDistributor_whenCallerUnauthorized_reverts(address(configTimelock));
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unused-return,unsafe-typecast)

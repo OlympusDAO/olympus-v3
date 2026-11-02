@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 import {Actions} from "src/Kernel.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
@@ -74,11 +76,6 @@ abstract contract RevenueDistributorTaskTest is RevenueDistributorTest {
         kernel.executeAction(Actions.DeactivatePolicy, address(task));
     }
 
-    function _disableDistributor() internal {
-        vm.prank(emergency);
-        distributor.disable("");
-    }
-
     function _deactivateDistributor() internal {
         vm.prank(admin);
         kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
@@ -130,5 +127,59 @@ abstract contract RevenueDistributorTaskTest is RevenueDistributorTest {
             _configureAsset(assets_[i], receipt_);
         }
     }
+
     // forge-lint: disable-end(calls-loop)
+
+    function _expectDistributorNotActive() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(distributor)
+            )
+        );
+    }
+
+    function _seedTaskLifecycleQueue() internal returns (uint64 id) {
+        id = _seedLifecycleQueue();
+        _configureAssets(1, 0);
+        vm.startPrank(admin);
+        task.setNextAssetIndex(1);
+        task.setExecutionGasLimit(5_000_001);
+        task.setMinimumGasToAttempt(250_001);
+        task.setGasReserve(100_001);
+        vm.stopPrank();
+    }
+
+    function _taskStateDigest(uint64 queueId_) internal view returns (bytes32) {
+        return
+            keccak256(
+                abi.encode(
+                    _timelockStateDigest(queueId_),
+                    task.executionGasLimit(),
+                    task.minimumGasToAttempt(),
+                    task.gasReserve(),
+                    task.nextAssetIndex(),
+                    task.distributor(),
+                    task.gracePeriod(),
+                    address(task.ROLES()),
+                    configTimelock.isEnabled(),
+                    configTimelock.lastTransitionAt()
+                )
+            );
+    }
+
+    function _taskContextDigest(uint64 id_) internal view returns (bytes32) {
+        return
+            keccak256(
+                abi.encode(
+                    _timelockStateDigest(id_),
+                    task.distributor(),
+                    task.gracePeriod(),
+                    task.isActive(),
+                    task.isEnabled(),
+                    task.lastTransitionAt(),
+                    address(task.ROLES())
+                )
+            );
+    }
 }

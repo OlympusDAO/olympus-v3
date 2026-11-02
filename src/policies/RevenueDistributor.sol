@@ -10,15 +10,18 @@ import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchas
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {Math} from "@openzeppelin-5.7.0/utils/math/Math.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
+
+// Contracts
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
-import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
-import {Math} from "@openzeppelin-5.7.0/utils/math/Math.sol";
-import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
-
-// Contracts
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
@@ -44,6 +47,7 @@ contract RevenueDistributor is
 {
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for ERC20;
+    using SafeCall for address;
 
     /// @dev Basis-point denominator for each distribution route.
     uint256 internal constant _BPS = 10_000;
@@ -95,10 +99,10 @@ contract RevenueDistributor is
         _TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
 
         // The two module dependencies are compatible across minor versions.
-        // forge-lint: disable-start(unused-return)
+        // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = Module(address(ROLES)).VERSION();
+        // forge-lint: disable-next-line(unused-return)
         (uint8 treasuryMajor, ) = Module(address(_TRSRY)).VERSION();
-        // forge-lint: disable-end(unused-return)
         if (rolesMajor != 1 || treasuryMajor != 1) {
             revert Policy_WrongModuleVersion(abi.encode([1]));
         }
@@ -129,8 +133,8 @@ contract RevenueDistributor is
         uint16 repurchaseBps_,
         AssetRoute[] calldata routes_
     ) external override nonReentrant {
-        _requireConfigOperatorOrAdmin();
         _requireActiveAndEnabled();
+        _requireConfigOperatorOrAdmin();
         _validateAssetRoutes(asset_, repurchaseBps_, routes_);
 
         if (_assetStates[asset_] != AssetState.Active) {
@@ -201,8 +205,8 @@ contract RevenueDistributor is
     ///      - The asset has no active distribution.
     ///      Its managed identity persists after disablement.
     function disableAssetRoutes(address asset_) external override nonReentrant {
-        _requireConfigOperatorOrAdmin();
         _requireActiveAndEnabled();
+        _requireConfigOperatorOrAdmin();
         _validateDisableAssetRoutes(asset_);
         _activeAssets.remove(asset_);
         _assetStates[asset_] = AssetState.Retired;
@@ -228,14 +232,14 @@ contract RevenueDistributor is
     /// @inheritdoc IRevenueDistributor
     /// @dev Reverts if:
     ///      - The caller is neither admin nor the selected operator, or the policy is inactive or disabled.
-    ///      - The recipient is invalid, duplicates a configured recipient, or cannot accept an
+    ///      - The pointer is unchanged, or the recipient is invalid, duplicates a configured recipient, or cannot accept an
     ///        asset with an active route or a pending repurchase share.
+    // Zero deliberately clears the optional role destination; _validateYieldRecipient checks every active route.
+    // forge-lint: disable-next-line(missing-zero-check)
     function setYieldRecipient(address recipient_) external override nonReentrant {
-        _requireConfigOperatorOrAdmin();
         _requireActiveAndEnabled();
+        _requireConfigOperatorOrAdmin();
         _validateYieldRecipient(recipient_);
-        // A same-pointer call still performs every validation above, but does not write or emit.
-        if (recipient_ == _yieldRecipient) return;
         _yieldRecipient = recipient_;
         emit YieldRecipientSet(recipient_);
     }
@@ -243,7 +247,7 @@ contract RevenueDistributor is
     /// @inheritdoc IRevenueDistributor
     /// @dev Reverts if:
     ///      - The policy is Kernel-inactive or locally disabled.
-    ///      - The recipient is invalid, duplicates a configured recipient, or cannot accept an
+    ///      - The pointer is unchanged, or the recipient is invalid, duplicates a configured recipient, or cannot accept an
     ///        asset with an active route or pending yield share.
     function validateSetYieldRecipient(address recipient_) external view override {
         _requireActiveAndEnabled();
@@ -251,6 +255,7 @@ contract RevenueDistributor is
     }
 
     function _validateYieldRecipient(address recipient_) internal view {
+        if (recipient_ == _yieldRecipient) revert RevenueDistributor_SameAddress(recipient_);
         // A role destination must not also be configured as an ordinary recipient. Treasury
         // receives every route's residual, so selecting it as the yield recipient would merge
         // two independently accounted shares.
@@ -298,8 +303,8 @@ contract RevenueDistributor is
     ///      - Custody is below reserved payouts.
     ///      - A Treasury upgrade made a configured recipient equal to the current Treasury.
     ///      A failed individual transfer leaves only that recipient's share pending.
-    function distribute(address asset_) external override nonReentrant givenEnabled {
-        _requirePolicyActive();
+    function distribute(address asset_) external override nonReentrant {
+        _requireActiveAndEnabled();
         if (_assetStates[asset_] != AssetState.Active) {
             revert RevenueDistributor_AssetNotActive(asset_);
         }
@@ -426,8 +431,8 @@ contract RevenueDistributor is
     ///      - The token transfer to the specified destination fails.
     ///      Callable while locally disabled.
     function rescue(address asset_, address destination_) external override nonReentrant {
-        _requireConfigOperatorOrAdmin();
         _requirePolicyActive();
+        _requireConfigOperatorOrAdmin();
         uint256 amount = _previewRescue(asset_, destination_);
         if (amount == 0) return;
         ERC20(asset_).safeTransfer(destination_, amount);
@@ -468,8 +473,8 @@ contract RevenueDistributor is
         address destination_,
         uint256 amount_
     ) external override nonReentrant {
-        _requireConfigOperatorOrAdmin();
         _requirePolicyActive();
+        _requireConfigOperatorOrAdmin();
         // Validates that amount_ is positive and fits the recipient's combined pending payout.
         _previewRescuePendingPayout(asset_, recipient_, destination_, amount_);
         uint256 assetRoute = Math.min(amount_, _pendingConfiguredDistributions[asset_][recipient_]);
@@ -567,8 +572,8 @@ contract RevenueDistributor is
 
     /// @dev Restricts config-operator rotation to admin while this policy is Kernel-active.
     function _authorizeSetConfigOperator() internal view override returns (bool) {
-        if (!_isAdmin(msg.sender)) return false;
         _requirePolicyActive();
+        if (!_isAdmin(msg.sender)) return false;
         return true;
     }
 
@@ -578,6 +583,17 @@ contract RevenueDistributor is
         _requireAuthorized(
             !_isAdmin(msg.sender) && !_hasRole(msg.sender, REVENUE_DISTRIBUTOR_ADMIN_ROLE)
         );
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive.
+    ///      - This policy is locally disabled.
+    ///      - The caller lacks ADMIN.
+    ///      - The requested period is zero.
+    function setGracePeriod(uint32 period_) public override {
+        _requirePolicyActive();
+        super.setGracePeriod(period_);
     }
 
     /// @dev Reverts if:
@@ -595,8 +611,8 @@ contract RevenueDistributor is
     /// @dev Reverts if:
     ///      - This policy is disabled or Kernel-inactive.
     function _requireActiveAndEnabled() internal view {
-        _requireEnabled();
         _requirePolicyActive();
+        _requireEnabled();
     }
 
     /// @dev Reverts if:
@@ -604,24 +620,22 @@ contract RevenueDistributor is
     ///      Activation refreshes cached modules.
     function _requirePolicyActive() internal view {
         if (!kernel.isPolicyActive(Policy(address(this)))) {
-            revert RevenueDistributor_PolicyInactive();
+            revert RevenueDistributor_PolicyNotActive(address(this));
         }
     }
 
     // Active-asset route validation must query each candidate policy and reject incompatible ones.
     // forge-lint: disable-start(calls-loop,require-revert-in-loop)
     /// @dev Reverts if:
-    ///      - The candidate lacks a required interface or is not an active, enabled policy.
+    ///      - The candidate lacks a required interface, reports incompatible metadata, or is not active/enabled.
     function _requireYieldRecipientPolicy(address recipient_) internal view {
         if (
             !ERC165Checker.supportsInterface(
                 recipient_,
                 type(IYieldRepurchaseRecipient).interfaceId
-            ) ||
-            !ERC165Checker.supportsInterface(recipient_, type(IEnabler).interfaceId) ||
-            !kernel.isPolicyActive(Policy(recipient_)) ||
-            !IEnabler(recipient_).isEnabled()
+            ) || !ERC165Checker.supportsInterface(recipient_, type(IEnabler).interfaceId)
         ) revert RevenueDistributor_InvalidYieldRecipient(recipient_);
+        PolicyDependency.requireActiveAndEnabled(recipient_, address(kernel));
     }
 
     /// @dev Reverts if:
@@ -632,27 +646,55 @@ contract RevenueDistributor is
             revert RevenueDistributor_YieldRecipientUnavailable(recipient_, asset_);
         }
         _requireYieldRecipientPolicy(recipient_);
-        IYieldRepurchaseRecipient recipient = IYieldRepurchaseRecipient(recipient_);
         // Some recipients hold vault shares directly; others accept the vault's underlying
         // asset. Try the direct share match first, then inspect registered vaults for an
         // enabled underlying match. A failed or malformed lookup cannot establish compatibility.
-        try recipient.getVaultConfig(asset_) returns (
-            IYieldRepurchaseRecipient.VaultConfig memory config
-        ) {
-            if (config.vault == asset_ && config.enabled) return;
-        } catch {}
-        try recipient.getVaults() returns (address[] memory vaults) {
-            for (uint256 i; i < vaults.length; ++i) {
-                try recipient.getVaultConfig(vaults[i]) returns (
-                    IYieldRepurchaseRecipient.VaultConfig memory config
-                ) {
-                    if (config.vault == vaults[i] && config.asset == asset_ && config.enabled) {
-                        return;
+        if (_yieldVaultMatches(recipient_, asset_, asset_)) return;
+        // TODO: Merge the YRF changes into this recipient vault lookup.
+        // Decode words first: typed try/catch does not catch malformed return-data decoding.
+        (bool success, bytes memory data) = recipient_.staticcall(
+            abi.encodeCall(IYieldRepurchaseRecipient.getVaults, ())
+        );
+        if (success && data.length >= 64) {
+            (uint256 offset, uint256 length) = abi.decode(data, (uint256, uint256));
+            if (offset == 32 && length == (data.length - 64) / 32 && data.length % 32 == 0) {
+                uint256[] memory vaults = abi.decode(data, (uint256[]));
+                for (uint256 i; i < vaults.length; ++i) {
+                    if (vaults[i] > type(uint160).max) {
+                        revert RevenueDistributor_YieldRecipientUnavailable(recipient_, asset_);
                     }
-                } catch {}
+                }
+                for (uint256 i; i < vaults.length; ++i) {
+                    // Every word was checked above; narrowing cannot truncate an address.
+                    // forge-lint: disable-next-line(unsafe-typecast)
+                    if (_yieldVaultMatches(recipient_, address(uint160(vaults[i])), asset_)) return;
+                }
             }
-        } catch {}
+        }
         revert RevenueDistributor_YieldRecipientUnavailable(recipient_, asset_);
+    }
+
+    /// @dev Safely checks one canonical three-word VaultConfig, without bubbling getter failures.
+    function _yieldVaultMatches(
+        address recipient_,
+        address vault_,
+        address asset_
+    ) internal view returns (bool) {
+        (bool success, bytes memory data) = recipient_.safeStaticCall(
+            gasleft(),
+            97,
+            abi.encodeCall(IYieldRepurchaseRecipient.getVaultConfig, (vault_))
+        );
+        if (!success || data.length != 96) return false;
+        (uint256 returnedVault, uint256 underlying, uint256 enabled) = abi.decode(
+            data,
+            (uint256, uint256, uint256)
+        );
+        return
+            returnedVault == uint256(uint160(vault_)) &&
+            underlying <= type(uint160).max &&
+            enabled == 1 &&
+            (vault_ == asset_ || underlying == uint256(uint160(asset_)));
     }
 
     // forge-lint: disable-end(calls-loop,require-revert-in-loop)
@@ -805,5 +847,41 @@ contract RevenueDistributor is
             interfaceId_ == type(IConfigOperator).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty.
+    ///      - This policy is inactive or a required operational dependency is unavailable.
+    function _beforeEnable(bytes calldata data_) internal view override {
+        if (data_.length != 0) revert RevenueDistributor_InvalidData();
+        _requirePolicyActive();
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty.
+    ///
+    /// @dev Kernel inactivity does not prevent disable.
+    function _beforeDisable(bytes calldata data_) internal pure override {
+        if (data_.length != 0) revert RevenueDistributor_InvalidData();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The shared re-enable grace checks fail.
+    ///      - The enable prerequisites fail.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _requirePolicyActive();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The grace deadline does not fit uint48 (SafeCastOverflowedUintDowncast).
+    ///      - The inclusive grace window has expired (GracePeriod_Expired).
+    function _requireGrace() internal view override {
+        uint48 deadline = SafeCast.toUint48(uint256(lastTransitionAt) + gracePeriod);
+        if (_getBlockTimestamp() > deadline) revert GracePeriod_Expired(deadline);
     }
 }

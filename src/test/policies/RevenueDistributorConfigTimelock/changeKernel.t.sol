@@ -5,11 +5,8 @@ import {Kernel, KernelAdapter} from "src/Kernel.sol";
 import {RevenueDistributorTest} from "src/test/policies/RevenueDistributor/RevenueDistributorTest.sol";
 
 contract RevenueDistributorConfigTimelockChangeKernelTest is RevenueDistributorTest {
-    // Scenarios: RDCT-KERNEL-A01
-    function testFuzz_whenNonKernelChangesKernel_reverts(
-        address caller_,
-        address newKernel_
-    ) public {
+    // Scenarios: RDCT-KERNEL-A01.
+    function test_whenNonKernelChangesKernel_reverts(address caller_, address newKernel_) public {
         vm.assume(caller_ != address(kernel));
 
         vm.expectRevert(
@@ -22,7 +19,7 @@ contract RevenueDistributorConfigTimelockChangeKernelTest is RevenueDistributorT
         assertEq(address(configTimelock.ROLES()), address(roles), "ROLES remains unchanged");
     }
 
-    // Scenarios: RDCT-KERNEL-P01
+    // Scenarios: RDCT-KERNEL-P01.
     function test_whenKernelChangesToDistinctKernel_updatesOnlyPointer() public {
         Kernel newKernel = new Kernel();
 
@@ -34,7 +31,7 @@ contract RevenueDistributorConfigTimelockChangeKernelTest is RevenueDistributorT
         assertFalse(configTimelock.isActive(), "new Kernel has not activated timelock");
     }
 
-    // Scenarios: RDCT-KERNEL-P02
+    // Scenarios: RDCT-KERNEL-P02.
     function test_whenKernelChangesToSameKernel_preservesDependencies() public {
         vm.prank(address(kernel));
         configTimelock.changeKernel(kernel);
@@ -47,7 +44,7 @@ contract RevenueDistributorConfigTimelockChangeKernelTest is RevenueDistributorT
         assertEq(address(configTimelock.ROLES()), address(roles), "ROLES cache remains unchanged");
     }
 
-    // Scenarios: RDCT-KERNEL-P03
+    // Scenarios: RDCT-KERNEL-P03.
     function test_whenKernelChangesToZero_setsZeroPointer() public {
         vm.prank(address(kernel));
         configTimelock.changeKernel(Kernel(address(0)));

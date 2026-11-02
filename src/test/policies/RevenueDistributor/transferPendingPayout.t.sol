@@ -5,7 +5,6 @@ pragma solidity >=0.8.24;
 // Scenario amounts are intentionally explicit; bounded casts are proven by their adjacent bounds.
 // forge-lint: disable-start(literal-instead-of-constant,unsafe-typecast)
 
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {Vm} from "@forge-std-1.16.2/Vm.sol";
@@ -19,7 +18,7 @@ import {PendingPayoutCallbackObserver} from "./fixtures/PendingPayoutCallbackObs
 import {RevenueDistributorTest} from "./RevenueDistributorTest.sol";
 
 contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
-    // Scenarios: RTRY-P01, RTRY-P08
+    // Scenarios: RTRY-P01, RTRY-P08.
     function test_givenNoPendingPayout_whenInputsAreArbitrary_noOps(
         address asset_,
         address recipient_,
@@ -39,7 +38,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(vm.getRecordedLogs().length, 0, "empty retry emits no event");
     }
 
-    // Scenarios: RTRY-P01
+    // Scenarios: RTRY-P01.
     function test_givenNeverListedContractWithNoPendingPayout_whenRetried_noOps(
         address recipient_,
         address caller_
@@ -64,7 +63,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(vm.getRecordedLogs().length, 0, "empty retry emits no event");
     }
 
-    // Scenarios: RTRY-P08
+    // Scenarios: RTRY-P08.
     function test_givenNoPendingPayout_noOps() public givenAliceConfiguredAsRecipient {
         vm.prank(bob);
         distributor.transferPendingPayout(address(token), alice);
@@ -76,7 +75,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(token.balanceOf(alice), 0, "empty retry transfers no tokens");
     }
 
-    // Scenarios: RTRY-L01
+    // Scenarios: RTRY-L01, RTRY-L03.
     function test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
         address caller_,
         bool retired_,
@@ -88,14 +87,13 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         distributor.seedPendingForTest(address(token), alice, amount, 0, 0);
         token.mint(address(distributor), amount);
         if (disable_) {
-            vm.prank(admin);
-            distributor.disable("");
+            _disableDistributor();
         }
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), false);
 
+        bytes32 beforeState = _revenueAccountingDigest();
         vm.recordLogs();
-        vm.expectRevert(IRevenueDistributor.RevenueDistributor_PolicyInactive.selector);
+        _expectPolicyInactive();
         vm.prank(caller_);
         distributor.transferPendingPayout(address(token), alice);
 
@@ -106,10 +104,15 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
             hasEntitlement_,
             "pending index is preserved"
         );
+        assertEq(
+            _revenueAccountingDigest(),
+            beforeState,
+            "Inactive retry preserves all authoritative state"
+        );
         assertEq(vm.getRecordedLogs().length, 0, "inactive retry emits no event");
     }
 
-    // Scenarios: RTRY-L02
+    // Scenarios: RTRY-L02.
     function test_givenDistributorDisabled_whenAnyManagedAssetRetried_reverts(
         address caller_,
         bool retired_,
@@ -119,11 +122,10 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         _setAssetState(retired_);
         distributor.seedPendingForTest(address(token), alice, amount_, 0, 0);
         token.mint(address(distributor), amount_);
-        vm.prank(admin);
-        distributor.disable("");
+        _disableDistributor();
 
         vm.recordLogs();
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        _expectNotEnabled();
         vm.prank(caller_);
         distributor.transferPendingPayout(address(token), alice);
 
@@ -150,7 +152,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
     //       [X] the recipient appears once and receives both reserved shares
     //       [X] the new receipts remain unallocated
     //       [X] updating the route then allows those new receipts to be distributed
-    // Scenarios: RTRY-P05
+    // Scenarios: RTRY-P05.
     function test_givenPendingConfiguredRecipientBecomesTreasury_whenNewReceiptsArrive_paysBoth()
         public
     {
@@ -215,7 +217,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
     // given a retired asset with a pending payout and a disabled distributor
     //   when the payout is retried before and after re-enablement
     //     [X] only the enabled retry pays the recipient
-    // Scenarios: RTRY-L02, RTRY-P02
+    // Scenarios: RTRY-L02, RTRY-P02.
     function test_givenRetiredAssetAndDisabledDistributor_retryWaitsForReEnable() public {
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: bob, bps: 10_000});
@@ -235,7 +237,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         distributor.disable("");
 
         assertEq(distributor.pendingPayout(address(token), bob), 10, "pending debt remains");
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        _expectNotEnabled();
         distributor.transferPendingPayout(address(token), bob);
         assertEq(distributor.pendingPayout(address(token), bob), 10, "disabled retry retains debt");
         vm.prank(admin);
@@ -247,7 +249,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
     // given two pending recipients and one still blocked by the token
     //   when the other recipient is retried directly
     //     [X] only that recipient receives its payout
-    // Scenarios: RTRY-P02
+    // Scenarios: RTRY-P02.
     function test_givenTwoPendingRecipients_whenFirstStillBlocked_thenSecondCanRetryDirectly()
         public
     {
@@ -292,7 +294,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(distributor.pendingPayout(address(token), bob), 0, "second recipient debt clears");
     }
 
-    // Scenarios: RTRY-P02
+    // Scenarios: RTRY-P02.
     function test_givenConfiguredPayout_whenRetried_paysExactAmountAndIsolatesOtherDebt(
         uint256 amount_,
         bool retired_,
@@ -325,7 +327,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(otherAsset.balanceOf(address(distributor)), 7, "other asset custody is isolated");
     }
 
-    // Scenarios: RTRY-P02
+    // Scenarios: RTRY-P02.
     function test_givenConfiguredPayoutAtMaximum_whenRetried_paysExactAmount() public {
         distributor.seedPendingForTest(address(token), alice, type(uint256).max, 0, 0);
         token.mint(address(distributor), type(uint256).max);
@@ -342,7 +344,6 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         _assertPendingPayouts(address(token), alice, 0, 0, 0);
     }
 
-    // Scenarios: RTRY-L01
     function test_givenPendingTreasury_whenPolicyInactiveAndTreasuryUpgrades_thenRetryWaitsForReactivation()
         public
     {
@@ -363,15 +364,14 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         kernel.executeAction(Actions.UpgradeModule, address(newTreasury));
         vm.stopPrank();
 
-        vm.expectRevert(IRevenueDistributor.RevenueDistributor_PolicyInactive.selector);
+        _expectPolicyInactive();
         distributor.transferPendingPayout(address(token), address(treasury));
         assertEq(
             token.balanceOf(address(newTreasury)),
             0,
             "inactive distributor transfers nothing"
         );
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), true);
         address[] memory pendingRecipients = distributor.getPendingPayoutRecipients(address(token));
         assertEq(pendingRecipients[0], address(newTreasury), "reactivation refreshes Treasury");
         distributor.transferPendingPayout(address(token), address(newTreasury));
@@ -379,7 +379,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(token.balanceOf(address(newTreasury)), 10, "new Treasury receives payout");
     }
 
-    // Scenarios: RTRY-L02
+    // Scenarios: RTRY-L02.
     function test_givenPendingRecipient_whenDistributorDisabled_thenRetryWaitsForReEnable()
         public
         givenAliceConfiguredAsRecipient
@@ -396,7 +396,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         vm.prank(emergency);
         distributor.disable("");
         vm.prank(bob);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        _expectNotEnabled();
         distributor.transferPendingPayout(address(token), alice);
         assertEq(distributor.pendingPayout(address(token), alice), 33, "unpaid share remains owed");
         assertEq(token.balanceOf(alice), 0, "disabled distributor transfers nothing");
@@ -409,7 +409,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(distributor.pendingPayout(address(token), alice), 0, "retry clears the debt");
     }
 
-    // Scenarios: RTRY-P04
+    // Scenarios: RTRY-P04.
     function test_givenTreasuryPayoutPending_whenTreasuryUpgrades_thenRetryPaysNewTreasury()
         public
         givenAliceConfiguredAsRecipient
@@ -442,7 +442,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(distributor.pendingPayout(address(token), address(newTreasury)), 0, "debt clears");
     }
 
-    // Scenarios: RTRY-P04
+    // Scenarios: RTRY-P04.
     function test_givenTreasuryPayout_whenTreasuryUpgrades_retryUsesCurrentRole(
         uint256 amount_,
         bool retired_,
@@ -480,7 +480,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: RTRY-P04
+    // Scenarios: RTRY-P04.
     function test_givenMaximumTreasuryPayout_whenTreasuryUpgrades_retryPaysMaximum() public {
         distributor.seedPendingForTest(address(token), alice, 0, 0, type(uint256).max);
         token.mint(address(distributor), type(uint256).max);
@@ -498,7 +498,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         _assertPendingPayouts(address(token), alice, 0, 0, 0);
     }
 
-    // Scenarios: RTRY-P03
+    // Scenarios: RTRY-P03.
     function test_givenYieldPayout_whenRecipientRotates_retryUsesCurrentRole(
         uint256 amount_,
         bool retired_,
@@ -542,7 +542,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: RTRY-P03
+    // Scenarios: RTRY-P03.
     function test_givenMaximumYieldPayout_whenRecipientRotates_retryPaysMaximum() public {
         MockYieldRepurchaseRecipient oldRecipient = _newYieldRecipientForAsset(address(token));
         vm.prank(address(configTimelock));
@@ -563,7 +563,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         _assertPendingPayouts(address(token), alice, 0, 0, 0);
     }
 
-    // Scenarios: RTRY-P12
+    // Scenarios: RTRY-P12.
     function test_givenYieldPayout_whenRecipientClears_retryUsesTreasuryFallback(
         uint256 amount_,
         bool retired_,
@@ -602,7 +602,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         _assertPendingPayouts(address(token), bob, 7, 0, 0);
     }
 
-    // Scenarios: RTRY-P12
+    // Scenarios: RTRY-P12.
     function test_givenMaximumYieldPayout_whenRecipientClears_retryPaysTreasuryMaximum() public {
         MockYieldRepurchaseRecipient oldRecipient = _newYieldRecipientForAsset(address(token));
         vm.prank(address(configTimelock));
@@ -622,7 +622,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         _assertPendingPayouts(address(token), alice, 0, 0, 0);
     }
 
-    // Scenarios: RTRY-C01
+    // Scenarios: RTRY-C01.
     function test_givenPendingPayout_whenTokenReentersRetry_thenPayoutOccursOnce() public {
         ReentrantFeeToken callbackToken = new ReentrantFeeToken();
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
@@ -650,7 +650,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(distributor.pendingPayout(address(callbackToken), alice), 0, "debt clears once");
     }
 
-    // Scenarios: RTRY-C01
+    // Scenarios: RTRY-C01.
     function test_givenPendingPayout_whenTokenCatchesAnyGuardedNestedCall_paysOnce(
         uint8 bucketMask_,
         uint8 nestedCallKind_,
@@ -721,7 +721,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(_countDistributedLogs(logs), 1, "outer retry emits exactly one payout event");
     }
 
-    // Scenarios: RTRY-C01
+    // Scenarios: RTRY-C01.
     function test_givenPendingPayout_whenTokenReadsGetter_callbackSeesPreDeliveryDebt() public {
         ReentrantFeeToken callbackToken = new ReentrantFeeToken();
         PendingPayoutCallbackObserver observer = new PendingPayoutCallbackObserver();
@@ -746,7 +746,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(callbackToken.balanceOf(recipient), 60, "outer retry pays once");
     }
 
-    // Scenarios: RTRY-C02
+    // Scenarios: RTRY-C02.
     function test_givenPendingPayout_whenTokenPropagatesReentrantFailure_defersPayout() public {
         ReentrantFeeToken callbackToken = new ReentrantFeeToken();
         distributor.seedPendingForTest(address(callbackToken), alice, 10, 0, 0);
@@ -775,7 +775,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(callbackToken.balanceOf(alice), 0, "failed retry transfers nothing");
     }
 
-    // Scenarios: RTRY-P05, RTRY-P11
+    // Scenarios: RTRY-P05, RTRY-P11.
     function test_givenCombinedPendingBuckets_whenRetried_paysOneCombinedTransfer(
         uint8 mask_,
         uint96 route_,
@@ -826,7 +826,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(vm.getRecordedLogs().length, 0, "repeat retry is silent");
     }
 
-    // Scenarios: RTRY-T01
+    // Scenarios: RTRY-T01.
     function test_givenCombinedPendingBuckets_whenTransferReturnsFalse_defersThenRetries(
         uint8 mask_,
         address caller_
@@ -865,7 +865,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         _assertPendingPayouts(address(token), recipient, 0, 0, 0);
     }
 
-    // Scenarios: RTRY-T03
+    // Scenarios: RTRY-T03.
     function test_givenPendingPayout_whenTransferReverts_defersThenRetries(address caller_) public {
         MockRevertingTransferToken revertingToken = new MockRevertingTransferToken(18);
         address recipient = address(treasury);
@@ -889,7 +889,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
         assertEq(revertingToken.balanceOf(recipient), 60, "later retry pays retained entitlement");
     }
 
-    // Scenarios: RTRY-T02
+    // Scenarios: RTRY-T02.
     function test_givenPendingPayoutExceedsCustody_whenRetried_defersUntilFunded() public {
         address recipient = address(treasury);
         distributor.seedPendingForTest(address(token), recipient, 10, 20, 30);
@@ -920,8 +920,7 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
     ) internal returns (MockYieldRepurchaseRecipient recipient) {
         recipient = new MockYieldRepurchaseRecipient(kernel);
         recipient.setVaultConfig(asset_, asset_, true);
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+        _setPolicyActive(address(recipient), true);
     }
 
     function _countDistributedLogs(Vm.Log[] memory logs_) internal view returns (uint256 count) {
@@ -930,6 +929,67 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
             if (logs_[i].emitter == address(distributor) && logs_[i].topics[0] == signature)
                 ++count;
         }
+    }
+
+    // Scenarios: RTRY-L01, RTRY-L03.
+    function test_givenInactiveRetryLifecycleAndEntitlementSeeds_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
+            address(0),
+            false,
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive retry seed");
+        test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
+            address(0),
+            false,
+            false,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive retry seed");
+        test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
+            address(0),
+            false,
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive retry seed");
+        test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
+            address(0),
+            false,
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive retry seed");
+        test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
+            address(0),
+            true,
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive retry seed");
+        test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
+            address(0),
+            true,
+            false,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive retry seed");
+        test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
+            address(0),
+            true,
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive retry seed");
+        test_givenPolicyInactive_whenAnyRetryAttempted_revertsBeforeLocalState(
+            address(0),
+            true,
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore inactive retry seed");
     }
 }
 // forge-lint: disable-end(literal-instead-of-constant,unsafe-typecast)

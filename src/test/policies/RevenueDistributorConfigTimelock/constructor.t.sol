@@ -1,23 +1,21 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-// The target mock is test-local and is clearer beside the constructor cases that configure it.
-// forge-lint: disable-start(multi-contract-file)
-
-import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
-
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+// Interfaces
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
-import {IRevenueDistributorRescue} from "src/policies/interfaces/IRevenueDistributorRescue.sol";
-import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
-import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
+// Contracts
+import {MockRevenueDistributorTarget} from "./fixtures/MockRevenueDistributorTarget.sol";
+import {Kernel} from "src/Kernel.sol";
 import {RevenueDistributorConfigTimelock} from "src/policies/RevenueDistributorConfigTimelock.sol";
 import {RevenueDistributorTest} from "src/test/policies/RevenueDistributor/RevenueDistributorTest.sol";
 
 contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTest {
-    // Scenarios: RDCT-CTOR-P01
+    // Scenarios: RDCT-CTOR-P01.
     function test_whenConstructedWithValidTarget_setsTargetAndDefaults() public {
         RevenueDistributorConfigTimelock timelock = new RevenueDistributorConfigTimelock(
             kernel,
@@ -34,13 +32,13 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
         assertEq(timelock.maxConfigKeysPerBatch(), 15, "maximum batch keys");
     }
 
-    // Scenarios: RDCT-CTOR-I01
+    // Scenarios: RDCT-CTOR-I01.
     function test_whenConstructedWithZeroTarget_reverts() public {
         _expectInvalidTarget(address(0));
         new RevenueDistributorConfigTimelock(kernel, IRevenueDistributor(address(0)));
     }
 
-    // Scenarios: RDCT-CTOR-I02
+    // Scenarios: RDCT-CTOR-I02.
     function test_whenConstructedWithEoaTarget_reverts() public {
         address target = makeAddr("non-contract distributor");
 
@@ -48,7 +46,7 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
         new RevenueDistributorConfigTimelock(kernel, IRevenueDistributor(target));
     }
 
-    // Scenarios: RDCT-CTOR-I03
+    // Scenarios: RDCT-CTOR-I03.
     function test_whenTargetLacksRevenueDistributorInterface_reverts() public {
         MockRevenueDistributorTarget target = new MockRevenueDistributorTarget(
             kernel,
@@ -62,7 +60,7 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
         new RevenueDistributorConfigTimelock(kernel, IRevenueDistributor(address(target)));
     }
 
-    // Scenarios: RDCT-CTOR-I04
+    // Scenarios: RDCT-CTOR-I04.
     function test_whenTargetLacksRescueInterface_reverts() public {
         MockRevenueDistributorTarget target = new MockRevenueDistributorTarget(
             kernel,
@@ -76,7 +74,7 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
         new RevenueDistributorConfigTimelock(kernel, IRevenueDistributor(address(target)));
     }
 
-    // Scenarios: RDCT-CTOR-I05
+    // Scenarios: RDCT-CTOR-I05.
     function test_whenTargetLacksConfigOperatorInterface_reverts() public {
         MockRevenueDistributorTarget target = new MockRevenueDistributorTarget(
             kernel,
@@ -90,7 +88,7 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
         new RevenueDistributorConfigTimelock(kernel, IRevenueDistributor(address(target)));
     }
 
-    // Scenarios: RDCT-CTOR-I06
+    // Scenarios: RDCT-CTOR-I06.
     function test_whenTargetLacksEnablerInterface_reverts() public {
         MockRevenueDistributorTarget target = new MockRevenueDistributorTarget(
             kernel,
@@ -104,7 +102,7 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
         new RevenueDistributorConfigTimelock(kernel, IRevenueDistributor(address(target)));
     }
 
-    // Scenarios: RDCT-CTOR-I07
+    // Scenarios: RDCT-CTOR-I07.
     function test_whenTargetUsesDifferentKernel_reverts() public {
         Kernel targetKernel = new Kernel();
         MockRevenueDistributorTarget target = new MockRevenueDistributorTarget(
@@ -117,9 +115,9 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_KernelMismatch
-                    .selector,
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(target),
+                address(kernel),
                 address(targetKernel)
             )
         );
@@ -136,53 +134,59 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
             )
         );
     }
+
+    // Scenarios: RDCT-CTOR-D01.
+    function test_whenDistributorKernelReadIsMalformed_reverts(bytes memory output_) public {
+        if (output_.length == 32) vm.assume(abi.decode(output_, (uint256)) > type(uint160).max);
+        vm.mockCall(address(distributor), abi.encodeWithSignature("kernel()"), output_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(distributor)
+            )
+        );
+        new RevenueDistributorConfigTimelock(kernel, distributor);
+    }
+
+    // Scenarios: RDCT-CTOR-D02.
+    function test_whenDistributorEnabledReadIsMalformed_reverts(bytes memory output_) public {
+        if (output_.length == 32) vm.assume(abi.decode(output_, (uint256)) > 1);
+        vm.mockCall(address(distributor), abi.encodeWithSignature("isEnabled()"), output_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(distributor)
+            )
+        );
+        new RevenueDistributorConfigTimelock(kernel, distributor);
+    }
+
+    // Scenarios: RDCT-CTOR-D01, RDCT-CTOR-D02.
+    function test_whenDistributorMetadataBoundaries_reverts() public {
+        test_whenDistributorKernelReadIsMalformed_reverts(hex"");
+        test_whenDistributorKernelReadIsMalformed_reverts(hex"00");
+        test_whenDistributorKernelReadIsMalformed_reverts(abi.encode(type(uint256).max));
+        test_whenDistributorKernelReadIsMalformed_reverts(new bytes(64));
+        vm.clearMockedCalls();
+        test_whenDistributorEnabledReadIsMalformed_reverts(hex"");
+        test_whenDistributorEnabledReadIsMalformed_reverts(hex"00");
+        test_whenDistributorEnabledReadIsMalformed_reverts(abi.encode(uint256(2)));
+        test_whenDistributorEnabledReadIsMalformed_reverts(new bytes(64));
+    }
+
+    // Scenarios: RDCT-CTOR-D03.
+    function test_whenDistributorMetadataReverts_reverts(bool kernelRead_) public {
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature(kernelRead_ ? "kernel()" : "isEnabled()"),
+            abi.encodeWithSignature("MetadataFailed()")
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(distributor)
+            )
+        );
+        new RevenueDistributorConfigTimelock(kernel, distributor);
+    }
 }
-
-contract MockRevenueDistributorTarget is Policy, IERC165 {
-    bool internal immutable _SUPPORTS_DISTRIBUTOR;
-    bool internal immutable _SUPPORTS_RESCUE;
-    bool internal immutable _SUPPORTS_CONFIG_OPERATOR;
-    bool internal immutable _SUPPORTS_ENABLER;
-
-    constructor(
-        Kernel kernel_,
-        bool supportsDistributor_,
-        bool supportsRescue_,
-        bool supportsConfigOperator_,
-        bool supportsEnabler_
-    ) Policy(kernel_) {
-        _SUPPORTS_DISTRIBUTOR = supportsDistributor_;
-        _SUPPORTS_RESCUE = supportsRescue_;
-        _SUPPORTS_CONFIG_OPERATOR = supportsConfigOperator_;
-        _SUPPORTS_ENABLER = supportsEnabler_;
-    }
-
-    function configureDependencies()
-        external
-        pure
-        override
-        returns (Keycode[] memory dependencies)
-    {
-        dependencies = new Keycode[](0);
-    }
-
-    function requestPermissions()
-        external
-        pure
-        override
-        returns (Permissions[] memory permissions)
-    {
-        permissions = new Permissions[](0);
-    }
-
-    function supportsInterface(bytes4 interfaceId_) external view returns (bool) {
-        return
-            interfaceId_ == type(IERC165).interfaceId ||
-            (_SUPPORTS_DISTRIBUTOR && interfaceId_ == type(IRevenueDistributor).interfaceId) ||
-            (_SUPPORTS_RESCUE && interfaceId_ == type(IRevenueDistributorRescue).interfaceId) ||
-            (_SUPPORTS_CONFIG_OPERATOR && interfaceId_ == type(IConfigOperator).interfaceId) ||
-            (_SUPPORTS_ENABLER && interfaceId_ == type(IEnabler).interfaceId);
-    }
-}
-
-// forge-lint: disable-end(multi-contract-file)

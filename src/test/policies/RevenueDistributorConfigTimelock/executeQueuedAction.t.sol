@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {Actions} from "src/Kernel.sol";
-import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+// Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Contracts
 import {RevenueDistributorConfigTimelockTest} from "./RevenueDistributorConfigTimelockTest.sol";
 
 contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
@@ -20,8 +22,8 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         uint256 index
     );
 
-    // Scenarios: RDT-E13
-    function testFuzz_whenExecutionIsWithinWindow_anyCallerExecutes(
+    // Scenarios: RDCT-EXECUTE-E13.
+    function test_whenExecutionIsWithinWindow_anyCallerExecutes(
         address executor_,
         uint48 timestamp_
     ) public {
@@ -57,8 +59,8 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         );
     }
 
-    // Scenarios: EXEC-I02
-    function testFuzz_whenExecutionIsBeforeReady_revertsAndRetainsAction(
+    // Scenarios: EXEC-I02.
+    function test_whenExecutionIsBeforeReady_revertsAndRetainsAction(
         address executor_,
         uint48 timestamp_
     ) public {
@@ -88,8 +90,8 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         assertEq(configTimelock.pendingActionId(key), actionId, "configuration key retained");
     }
 
-    // Scenarios: EXEC-I06
-    function testFuzz_whenExecutionIsExpired_revertsAndRetainsAction(
+    // Scenarios: EXEC-I06.
+    function test_whenExecutionIsExpired_revertsAndRetainsAction(
         address executor_,
         uint48 timestamp_
     ) public {
@@ -119,13 +121,12 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         assertEq(configTimelock.pendingActionId(key), actionId, "expired key retained");
     }
 
-    // Scenarios: EXEC-I01
-    function testFuzz_whenActionDoesNotExist_revertsBeforeLifecycleChecks(
+    // Scenarios: EXEC-I01.
+    function test_whenActionDoesNotExist_revertsBeforeLifecycleChecks(
         address executor_,
         uint64 actionId_
     ) public {
-        vm.prank(emergency);
-        configTimelock.disable("");
+        _disablePolicy(address(configTimelock), emergency);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -137,15 +138,12 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         configTimelock.executeQueuedAction(actionId_);
     }
 
-    // Scenarios: EXEC-I07
-    function testFuzz_whenActionWasCancelled_revertsBeforeLifecycleChecks(
-        address executor_
-    ) public {
+    // Scenarios: EXEC-I07.
+    function test_whenActionWasCancelled_revertsBeforeLifecycleChecks(address executor_) public {
         uint64 actionId = _queueRoute(address(token));
         vm.prank(emergency);
         configTimelock.cancelQueuedAction(actionId);
-        vm.prank(emergency);
-        configTimelock.disable("");
+        _disablePolicy(address(configTimelock), emergency);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -157,15 +155,12 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         configTimelock.executeQueuedAction(actionId);
     }
 
-    // Scenarios: EXEC-I08
-    function testFuzz_whenActionAlreadyExecuted_revertsBeforeLifecycleChecks(
-        address executor_
-    ) public {
+    // Scenarios: EXEC-I08.
+    function test_whenActionAlreadyExecuted_revertsBeforeLifecycleChecks(address executor_) public {
         uint64 actionId = _queueRoute(address(token));
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
         configTimelock.executeQueuedAction(actionId);
-        vm.prank(emergency);
-        configTimelock.disable("");
+        _disablePolicy(address(configTimelock), emergency);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -177,8 +172,8 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         configTimelock.executeQueuedAction(actionId);
     }
 
-    // Scenarios: EXEC-V01
-    function testFuzz_whenExecutedOrUnknownActionRead_returnsTerminalStateAndDefaults(
+    // Scenarios: EXEC-V01.
+    function test_whenExecutedOrUnknownActionRead_returnsTerminalStateAndDefaults(
         address caller_,
         bool maximumUnknownId_
     ) public {
@@ -230,8 +225,7 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
     function test_givenTargetDisabledAfterQueue_whenRouteExecuted_reverts() public {
         uint64 actionId = _queueRoute(address(token));
         bytes32 key = _queuedKey(actionId, 0);
-        vm.prank(admin);
-        distributor.disable("");
+        _disablePolicy(address(distributor), admin);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -249,8 +243,8 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         assertEq(configTimelock.pendingActionId(key), 0, "successful retry releases key");
     }
 
-    // Scenarios: EXEC-L02
-    function testFuzz_givenTargetDisabledAfterQueue_whenConfigurationExecuted_revertsThenRetries(
+    // Scenarios: EXEC-L02.
+    function test_givenTargetDisabledAfterQueue_whenConfigurationExecuted_revertsThenRetries(
         uint8 actionKind_,
         address executor_
     ) public {
@@ -260,8 +254,7 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         uint64 actionId = _queueConfiguration(actionKind_);
         bytes32 key = _queuedKey(actionId, 0);
         bytes32 actionBefore = keccak256(abi.encode(configTimelock.getQueuedAction(actionId)));
-        vm.prank(admin);
-        distributor.disable("");
+        _disablePolicy(address(distributor), admin);
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -282,34 +275,32 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         assertEq(configTimelock.pendingActionId(key), 0, "successful retry releases key");
     }
 
-    // Scenarios: EXEC-L05
-    function testFuzz_givenTargetInactiveAfterQueue_whenExecuted_revertsThenRetries(
+    // Scenarios: EXEC-L05, EXEC-L06.
+    function test_givenTargetInactiveAfterQueue_whenExecuted_revertsThenRetries(
         address executor_,
         bool locallyEnabled_
     ) public {
         uint64 actionId = _queueRoute(address(token));
         bytes32 key = _queuedKey(actionId, 0);
         if (!locallyEnabled_) {
-            vm.prank(admin);
-            distributor.disable("");
+            _disablePolicy(address(distributor), admin);
         }
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), false);
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
-        if (locallyEnabled_) {
-            vm.expectRevert(IRevenueDistributor.RevenueDistributor_PolicyInactive.selector);
-        } else {
-            vm.expectRevert(IEnabler.NotEnabled.selector);
-        }
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                address(distributor)
+            )
+        );
         vm.prank(executor_);
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(configTimelock.pendingActionId(key), actionId, "failed action retains key");
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "action remains live");
 
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), true);
         if (!locallyEnabled_) {
             vm.prank(admin);
             distributor.reEnable();
@@ -319,12 +310,11 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         assertEq(configTimelock.pendingActionId(key), 0, "successful retry releases key");
     }
 
-    // Scenarios: RDT-E11
-    function testFuzz_givenTimelockDisabled_whenExecuted_reverts(address executor_) public {
+    // Scenarios: RDCT-EXECUTE-E11.
+    function test_givenTimelockDisabled_whenExecuted_reverts(address executor_) public {
         uint64 actionId = _queueRoute(address(token));
         bytes32 key = _queuedKey(actionId, 0);
-        vm.prank(emergency);
-        configTimelock.disable("");
+        _disablePolicy(address(configTimelock), emergency);
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -335,18 +325,17 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "action remains live");
     }
 
-    // Scenarios: RDT-E12
-    function testFuzz_givenTimelockInactive_whenExecuted_reverts(address executor_) public {
+    // Scenarios: RDCT-EXECUTE-E12.
+    function test_givenTimelockInactive_whenExecuted_reverts(address executor_) public {
         uint64 actionId = _queueRoute(address(token));
         bytes32 key = _queuedKey(actionId, 0);
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+        _setPolicyActive(address(configTimelock), false);
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
                     .selector,
                 address(configTimelock)
             )
@@ -381,8 +370,8 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
         );
     }
 
-    // Scenarios: EXEC-L04
-    function testFuzz_givenOperatorRotatedAfterQueue_whenConfigurationExecuted_reverts(
+    // Scenarios: EXEC-L04.
+    function test_givenOperatorRotatedAfterQueue_whenConfigurationExecuted_reverts(
         uint8 actionKind_,
         address executor_
     ) public {

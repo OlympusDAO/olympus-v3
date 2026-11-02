@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 // Scenario amounts stay inline; bounded loops/casts intentionally exercise allocation matrices.
 // forge-lint: disable-start(calls-loop,literal-instead-of-constant,unsafe-typecast)
 
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {Actions} from "src/Kernel.sol";
@@ -26,7 +25,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     //     when new receipts are distributed before the route is updated
     //       [X] no funds are reserved or transferred
     //       [X] updating the route permits distribution of those receipts
-    // Scenarios: DIST-P05
+    // Scenarios: DIST-P05.
     function test_givenConfiguredRecipientBecomesTreasury_givenNewReceipts_reverts() public {
         vm.prank(admin);
         OlympusTreasury newTreasury = new OlympusTreasury(kernel);
@@ -68,7 +67,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     //   given that Treasury becomes the current module
     //     when new receipts are distributed
     //       [X] all reservations and transfers roll back
-    // Scenarios: DIST-P05
+    // Scenarios: DIST-P05.
     function test_givenSecondConfiguredRecipientBecomesTreasury_reverts() public {
         vm.prank(admin);
         OlympusTreasury newTreasury = new OlympusTreasury(kernel);
@@ -110,7 +109,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     //     when distribution is called without new receipts while transfers fail
     //       [X] both historical liabilities remain pending
     //       [X] a later successful distribution pays them in one transfer
-    // Scenarios: DIST-P06
+    // Scenarios: DIST-P06.
     function test_givenConfiguredRecipientBecomesTreasury_givenNoNewReceipts_paysPendingOnce(
         address caller_
     ) public {
@@ -172,8 +171,8 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given a route change queued by admin or revenue distributor admin and a token with a callback
     //   when the callback executes the queued change during distribution
     //     [X] the in-flight distribution keeps its original recipient allocation
-    // Scenarios: DIST-C01
-    function testFuzz_givenMaturedRouteChange_whenTokenCallsTimelockDuringDistribution_thenRouteStaysFixed(
+    // Scenarios: DIST-C01.
+    function test_givenMaturedRouteChange_whenTokenCallsTimelockDuringDistribution_thenRouteStaysFixed(
         bool useRevenueDistributorAdmin_
     ) public {
         ReentrantFeeToken callbackToken = new ReentrantFeeToken();
@@ -224,7 +223,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given a token whose transfer callback calls distribute again
     //   when distribution runs
     //     [X] the nested call fails and each share is paid once
-    // Scenarios: DIST-C01
+    // Scenarios: DIST-C01.
     function test_givenCallbackToken_nestedDistributionFailsAndPaysOnce() public {
         ReentrantFeeToken callbackToken = new ReentrantFeeToken();
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
@@ -255,7 +254,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given the token propagates a reentrant callback failure
     //   when receipts are distributed
     //     [X] each failed transfer remains pending
-    // Scenarios: DIST-C02, DIST-T09
+    // Scenarios: DIST-C02, DIST-T09.
     function test_givenCallbackFailureBubbles_defersEachShare() public {
         ReentrantFeeToken callbackToken = new ReentrantFeeToken();
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
@@ -291,7 +290,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given a managed receipt arrived before Treasury was upgraded
     //   when distribution executes after the upgrade
     //     [X] the residual share reaches the current Treasury
-    // Scenarios: DIST-P07
+    // Scenarios: DIST-P07.
     function test_givenBalanceReceivedBeforeTreasuryUpgrade_paysNewTreasury()
         public
         givenAliceConfiguredAsRecipient
@@ -315,7 +314,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     //   given the distributor holds ten token units
     //     when receipts are distributed
     //       [X] Alice and Treasury each have a payout event with the transferred amount
-    // Scenarios: DIST-P02
+    // Scenarios: DIST-P02.
     function test_givenAliceConfiguredAsRecipient_emitsEachRecipientPayout()
         public
         givenAliceConfiguredAsRecipient
@@ -333,11 +332,10 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     //   given the route assigns 20% to repurchase and names no configured recipients
     //     when receipts are distributed
     //       [X] yield recipient and Treasury have separate payout events
-    // Scenarios: DIST-P08
+    // Scenarios: DIST-P08.
     function test_givenYieldRecipientVaultEnabled_emitsRepurchaseAndTreasury() public {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+        _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(address(token), address(token), true);
         vm.startPrank(address(configTimelock));
         distributor.setYieldRecipient(address(recipient));
@@ -360,7 +358,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     //   when a ten-unit balance is distributed
     //     [X] it transfers three units to the recipient
     //     [X] it transfers all seven remaining units to Treasury
-    // Scenarios: DIST-P02
+    // Scenarios: DIST-P02.
     function test_givenAliceConfiguredAsRecipient_whenBalanceHasRoundingDust()
         public
         givenAliceConfiguredAsRecipient
@@ -407,16 +405,15 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given the distributor is disabled with a managed route
     //   when a balance arrives and settlement is attempted
     //     [X] it rejects settlement and leaves the full balance in custody
-    // Scenarios: DIST-L01
+    // Scenarios: DIST-L01.
     function test_givenDisabled_whenManagedBalanceArrives_reverts()
         public
         givenAliceConfiguredAsRecipient
     {
-        vm.prank(admin);
-        distributor.disable("");
+        _disableDistributor();
         token.mint(address(distributor), 11);
 
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        _expectNotEnabled();
         distributor.distribute(address(token));
 
         assertEq(token.balanceOf(address(distributor)), 11, "disabled distributor retains balance");
@@ -426,16 +423,15 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given the distributor is Kernel-inactive with a managed route
     //   when a balance arrives and settlement is attempted
     //     [X] it rejects settlement and leaves the full balance in custody
-    // Scenarios: DIST-L02
+    // Scenarios: DIST-L02.
     function test_givenKernelInactive_whenManagedBalanceArrives_reverts()
         public
         givenAliceConfiguredAsRecipient
     {
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), false);
         token.mint(address(distributor), 11);
 
-        vm.expectRevert(IRevenueDistributor.RevenueDistributor_PolicyInactive.selector);
+        _expectPolicyInactive();
         distributor.distribute(address(token));
 
         assertEq(token.balanceOf(address(distributor)), 11, "inactive distributor retains balance");
@@ -445,7 +441,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given a configured recipient transfer fails
     //  when anyone distributes a managed token
     //   then Treasury receives its share and the configured recipient remains owed
-    // Scenarios: DIST-T01
+    // Scenarios: DIST-T01.
     function test_givenRecipientTransferFails_keepsOnlyRecipientPending()
         public
         givenAliceConfiguredAsRecipient
@@ -480,7 +476,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     //   given the token transfer to Treasury reverts
     //     when receipts are distributed
     //       [X] the configured recipient is paid and only Treasury's residual remains pending
-    // Scenarios: DIST-T02
+    // Scenarios: DIST-T02.
     function test_givenTreasuryBlacklisted_retainsTreasuryShare()
         public
         givenAliceConfiguredAsRecipient
@@ -512,7 +508,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given a managed token has no balance
     //  when anyone distributes it
     //   then no recipient transfer occurs
-    // Scenarios: DIST-P01
+    // Scenarios: DIST-P01.
     function test_givenZeroBalance_succeedsWithoutTransfer()
         public
         givenAliceConfiguredAsRecipient
@@ -526,7 +522,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given a managed route with one recipient
     //  when a fuzzed nonzero balance is distributed
     //   then the recipient receives the floor and Treasury receives all remaining units
-    // Scenarios: DIST-P02, DIST-P08
+    // Scenarios: DIST-P02, DIST-P08.
     function test_givenAliceConfiguredAsRecipient_whenBalanceIsFuzzed(
         uint256 balance_
     ) public givenAliceConfiguredAsRecipient {
@@ -549,7 +545,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given Alice is configured for 3,333 basis points
     //   when the maximum token balance is distributed
     //     [X] both allocations sum to the original balance without overflow
-    // Scenarios: DIST-P02
+    // Scenarios: DIST-P02.
     function test_givenAliceConfiguredAsRecipient_whenBalanceIsMaximum_preservesExactTotal()
         public
         givenAliceConfiguredAsRecipient
@@ -570,7 +566,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         assertEq(token.balanceOf(address(distributor)), 0, "maximum receipt leaves no custody");
     }
 
-    // Scenarios: DIST-I01
+    // Scenarios: DIST-I01.
     function test_givenAssetNotActive_whenDistributed_reverts(
         address caller_,
         uint8 assetKind_
@@ -601,7 +597,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         distributor.distribute(asset);
     }
 
-    // Scenarios: DIST-I02
+    // Scenarios: DIST-I02.
     function test_givenReservedDebtExceedsCustody_whenDistributed_reverts() public {
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
         vm.prank(admin);
@@ -621,7 +617,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         assertEq(token.balanceOf(address(distributor)), 59, "failed distribution keeps custody");
     }
 
-    // Scenarios: DIST-P08
+    // Scenarios: DIST-P08.
     function test_givenTreasuryOnlyRoute_whenBalanceDistributed_paysExactAmount(
         uint128 amount_,
         address caller_
@@ -642,7 +638,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         assertEq(distributor.getPendingPayoutAssets().length, 0, "no debt remains indexed");
     }
 
-    // Scenarios: DIST-I03
+    // Scenarios: DIST-I03.
     function test_givenActiveAsset_whenBalanceQueryReverts_bubblesExactError() public {
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
         vm.prank(admin);
@@ -664,7 +660,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DIST-T03
+    // Scenarios: DIST-T03.
     function test_givenTokenReportsTransferSuccessWithoutMovement_recordsApparentDelivery() public {
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
         vm.prank(admin);
@@ -687,7 +683,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DIST-T06
+    // Scenarios: DIST-T06.
     function test_givenMultipleTransfersReturnFalse_defersEveryShare()
         public
         givenAliceConfiguredAsRecipient
@@ -715,7 +711,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DIST-I07
+    // Scenarios: DIST-I07.
     function test_givenActiveAsset_whenBalanceQueryReturnsMalformedData_reverts() public {
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
         vm.prank(admin);
@@ -737,47 +733,39 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DIST-L01, DIST-L02
-    function test_givenUnavailableDistributor_whenAnyCallerDistributes_revertsAndRollsBack(
-        address caller_,
-        bool disabled_
+    // Scenarios: DIST-L01, DIST-L02.
+    function test_givenDisabledDistributor_whenAnyCallerDistributes_revertsAndRollsBack(
+        address caller_
     ) public givenAliceConfiguredAsRecipient {
         distributor.seedPendingForTest(address(token), bob, 2, 3, 5);
         token.mint(address(distributor), 21);
-        if (disabled_) {
-            vm.prank(admin);
-            distributor.disable("");
-        } else {
-            vm.prank(admin);
-            kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
-        }
+        _disableDistributor();
 
         vm.recordLogs();
-        vm.expectRevert(
-            disabled_
-                ? IEnabler.NotEnabled.selector
-                : IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
-        );
+        _expectNotEnabled();
         vm.prank(caller_);
         distributor.distribute(address(token));
 
-        _assertPendingPayouts(address(token), bob, 2, 3, 5);
-        assertEq(
-            token.balanceOf(address(distributor)),
-            21,
-            "lifecycle rejection preserves custody"
-        );
-        assertEq(token.balanceOf(alice), 0, "lifecycle rejection pays no route recipient");
-        assertEq(token.balanceOf(address(treasury)), 0, "lifecycle rejection pays no Treasury");
-        assertEq(
-            distributor.getPendingPayoutAssets().length,
-            1,
-            "lifecycle rejection preserves pending index"
-        );
-        assertEq(vm.getRecordedLogs().length, 0, "lifecycle rejection emits no event");
+        _assertUnavailableDistributionUnchanged();
     }
 
-    // Scenarios: DIST-P01
+    // Scenarios: DIST-L01, DIST-L02.
+    function test_givenInactiveDistributor_whenAnyCallerDistributes_revertsAndRollsBack(
+        address caller_
+    ) public givenAliceConfiguredAsRecipient {
+        distributor.seedPendingForTest(address(token), bob, 2, 3, 5);
+        token.mint(address(distributor), 21);
+        _setPolicyActive(address(distributor), false);
+
+        vm.recordLogs();
+        _expectPolicyInactive();
+        vm.prank(caller_);
+        distributor.distribute(address(token));
+
+        _assertUnavailableDistributionUnchanged();
+    }
+
+    // Scenarios: DIST-P01.
     function test_givenZeroBalance_whenAnyCallerDistributes_makesNoTokenCallOrEvent(
         address caller_
     ) public {
@@ -808,7 +796,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         assertEq(vm.getRecordedLogs().length, 0, "zero balance emits no event");
     }
 
-    // Scenarios: DIST-P02, DIST-P08
+    // Scenarios: DIST-P08.
     function test_givenAnyValidRouteTopology_whenReceiptsDistributed_conservesExactAmount(
         uint8 topology_,
         uint16 firstBps_,
@@ -847,8 +835,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         if (repurchaseBps != 0) {
             yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
             yieldRecipient.setVaultConfig(address(token), address(token), true);
-            vm.prank(admin);
-            kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
+            _setPolicyActive(address(yieldRecipient), true);
             vm.prank(address(configTimelock));
             distributor.setYieldRecipient(address(yieldRecipient));
         }
@@ -903,7 +890,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DIST-T01
+    // Scenarios: DIST-T01.
     function test_givenOneTransferReturnsFalse_whenAnyCallerDistributes_defersOnlySelectedClass(
         uint8 failedClass_,
         address caller_
@@ -911,7 +898,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         _assertSingleTransferFailure(failedClass_, caller_, false);
     }
 
-    // Scenarios: DIST-P02
+    // Scenarios: DIST-P02.
     function test_givenOneConfiguredRecipient_whenBoundaryBalancesDistributed_conservesExactAmount(
         address caller_
     ) public {
@@ -952,7 +939,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         }
     }
 
-    // Scenarios: DIST-T02
+    // Scenarios: DIST-T02.
     function test_givenOneTransferReverts_whenAnyCallerDistributes_defersOnlySelectedClass(
         uint8 failedClass_,
         address caller_
@@ -960,7 +947,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         _assertSingleTransferFailure(failedClass_, caller_, true);
     }
 
-    // Scenarios: DIST-P04
+    // Scenarios: DIST-P04.
     function test_givenAnyExistingDebtSubset_whenZeroOrOneNewReceiptDistributed_allocatesOnlySurplus(
         uint8 debtMask_,
         bool addReceipt_,
@@ -970,8 +957,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         MockERC20 other = new MockERC20("Other Revenue", "OREV", 18);
         MockYieldRepurchaseRecipient yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
         yieldRecipient.setVaultConfig(address(token), address(token), true);
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
+        _setPolicyActive(address(yieldRecipient), true);
         vm.prank(address(configTimelock));
         distributor.setYieldRecipient(address(yieldRecipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
@@ -1020,7 +1006,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         assertEq(other.balanceOf(address(distributor)), 31, "other asset custody is isolated");
     }
 
-    // Scenarios: DIST-P05
+    // Scenarios: DIST-P05.
     function test_givenConfiguredRecipientBecomesTreasury_whenAnyCallerDistributes_revertsAtomically(
         address caller_,
         bool invalidRecipientSecond_
@@ -1071,7 +1057,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         assertEq(vm.getRecordedLogs().length, 0, "reverted distribution commits no event");
     }
 
-    // Scenarios: DIST-P07
+    // Scenarios: DIST-P07.
     function test_givenReceiptsBeforeTreasuryUpgrade_whenAnyCallerDistributes_usesCurrentTreasury(
         address caller_
     ) public givenAliceConfiguredAsRecipient {
@@ -1116,7 +1102,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DIST-C01
+    // Scenarios: DIST-C01.
     function test_givenCallbackFromAnyPayoutClass_whenAnyGuardedWriteAttempted_outerDistributionPaysOnce(
         uint8 payoutClass_,
         uint8 operation_,
@@ -1127,8 +1113,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         ReentrantFeeToken callbackToken = new ReentrantFeeToken();
         MockYieldRepurchaseRecipient yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
         yieldRecipient.setVaultConfig(address(callbackToken), address(callbackToken), true);
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
+        _setPolicyActive(address(yieldRecipient), true);
         vm.prank(address(configTimelock));
         distributor.setYieldRecipient(address(yieldRecipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
@@ -1188,7 +1173,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DIST-C01
+    // Scenarios: DIST-C01.
     function test_givenPayoutCallbackReadsPendingGetter_observesDebtBeforeDeliveryClearsIt(
         address caller_
     ) public {
@@ -1231,7 +1216,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         assertEq(callbackToken.balanceOf(address(treasury)), 10, "Treasury receives payout once");
     }
 
-    // Scenarios: DIST-C02
+    // Scenarios: DIST-C02.
     function test_givenPropagatedGuardFailure_whenAnyCallerDistributes_defersThenRetriesExactly(
         address caller_
     ) public {
@@ -1295,8 +1280,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         failedClass_ = uint8(bound(failedClass_, 0, 2));
         MockYieldRepurchaseRecipient yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
         yieldRecipient.setVaultConfig(address(token), address(token), true);
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
+        _setPolicyActive(address(yieldRecipient), true);
         vm.prank(address(configTimelock));
         distributor.setYieldRecipient(address(yieldRecipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
@@ -1419,8 +1403,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         );
         if (address(recipient) == address(0)) {
             recipient = new MockYieldRepurchaseRecipient(kernel);
-            vm.prank(admin);
-            kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+            _setPolicyActive(address(recipient), true);
             vm.prank(address(configTimelock));
             distributor.setYieldRecipient(address(recipient));
         }
@@ -1535,6 +1518,34 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         _assertAllocationBoundary(1, 9_998, 1, type(uint256).max, caller_);
         _assertAllocationBoundary(1, 1, 9_998, 1, caller_);
         _assertAllocationBoundary(1, 1, 9_998, type(uint256).max, caller_);
+    }
+
+    function _assertUnavailableDistributionUnchanged() internal {
+        _assertPendingPayouts(address(token), bob, 2, 3, 5);
+        assertEq(
+            token.balanceOf(address(distributor)),
+            21,
+            "lifecycle rejection preserves custody"
+        );
+        assertEq(token.balanceOf(alice), 0, "lifecycle rejection pays no route recipient");
+        assertEq(token.balanceOf(address(treasury)), 0, "lifecycle rejection pays no Treasury");
+        assertEq(
+            distributor.getPendingPayoutAssets().length,
+            1,
+            "lifecycle rejection preserves pending index"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "lifecycle rejection emits no event");
+    }
+
+    // Scenarios: DIST-L03.
+    function test_givenInactiveAndDisabled_whenAnyCallerDistributes_revertsActivityFirst(
+        address caller_
+    ) public {
+        _disableDistributor();
+        _setPolicyActive(address(distributor), false);
+        _expectPolicyInactive();
+        vm.prank(caller_);
+        distributor.distribute(address(0));
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast)

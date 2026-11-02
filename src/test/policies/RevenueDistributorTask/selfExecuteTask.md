@@ -1,5 +1,7 @@
 # selfExecuteTask scenario plan
 
+Source: [RevenueDistributorTask](../../../policies/RevenueDistributorTask.sol).
+
 Scope: public boundary of RDTask selfExecuteTask; all traversal and distribution outcomes are owned by [execute](./execute.md).
 
 ## Domains and assertions
@@ -19,9 +21,14 @@ through [execute](./execute.md), the only production caller.
 
 ## Authorization
 
-| ID | Caller | Task Kernel | Task local | RD Kernel | RD local | Expected result | Effects and events | Test |
+Independently fuzz each local/distributor lifecycle flag and guarantee all sixteen boolean combinations with deterministic seeds. The caller remains external in every case; only the caller identity affects this boundary. Seed Admin, Heart, Revenue Distributor Admin, Emergency, RD and zero without authorizing self impersonation.
+
+| ID | Caller | Local active | Local enabled | Distributor active | Distributor enabled | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| SELF-A01 | Any external caller, fuzz; seed Admin, Heart, Revenue Distributor Admin, Emergency and RD | Fuzz active/inactive | Fuzz enabled/disabled | Fuzz active/inactive | Fuzz enabled/disabled | RevenueDistributorTask_OnlySelf() | Unchanged | Covered: [fuzz][test_whenExternalCallerExecutesTaskDirectly_reverts], [roles][test_whenRoleBearingExternalCallerExecutesTaskDirectly_reverts] |
+| SELF-A01 | Fuzz caller excluding only this Task; seed every role-bearing identity listed above | Independently fuzz false/true | Independently fuzz false/true | Independently fuzz false/true | Independently fuzz false/true | RevenueDistributorTask_OnlySelf() before dependency or lifecycle reads | No distributor getter, token transfer, cursor change or committed logs | Covered: [test][test_whenExternalCallerExecutesTaskDirectly_reverts], [test][test_givenExternalCallerAndLifecycleSeeds_reverts] |
+
+Retired SELF-A02 through SELF-A16 are subsumed by SELF-A01 without dropping any lifecycle combination. Their existing test comments remain historical mappings until test implementation updates the reciprocal annotations.
 
 [test_whenExternalCallerExecutesTaskDirectly_reverts]: ./selfExecuteTask.t.sol#L9
-[test_whenRoleBearingExternalCallerExecutesTaskDirectly_reverts]: ./selfExecuteTask.t.sol#L28
+
+[test_givenExternalCallerAndLifecycleSeeds_reverts]: ./selfExecuteTask.t.sol#L49

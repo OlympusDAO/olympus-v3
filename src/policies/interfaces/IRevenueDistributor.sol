@@ -4,67 +4,7 @@ pragma solidity >=0.8.24;
 /// @title Revenue Distributor Interface
 /// @notice Asset-specific allocation of protocol fee and yield receipts.
 interface IRevenueDistributor {
-    /// @notice Listing state of an asset's distribution route.
-    enum AssetState {
-        /// @notice The asset has never had a configured route.
-        NeverListed,
-        /// @notice The asset has an active route.
-        Active,
-        /// @notice The asset was listed, then its route was disabled.
-        Retired
-    }
-
-    /// @notice One configured route to a non-Treasury recipient for an asset.
-    struct AssetRoute {
-        /// @notice Recipient of this route's allocation.
-        address recipient;
-        /// @notice Allocation in basis points of the asset's unreserved receipts.
-        uint16 bps;
-    }
-
-    /// @notice The asset address is zero or has no code.
-    /// @param asset Invalid asset address.
-    error RevenueDistributor_InvalidAsset(address asset);
-
-    /// @notice A recipient or basis-point entry cannot be used in a route.
-    /// @param recipient Invalid recipient address.
-    error RevenueDistributor_InvalidRecipient(address recipient);
-
-    /// @notice A configured recipient's allocation has zero basis points.
-    /// @param recipient Recipient with the zero share.
-    error RevenueDistributor_ZeroRecipientBasisPoints(address recipient);
-
-    /// @notice A recipient appears more than once in one distribution.
-    /// @param recipient Repeated recipient address.
-    error RevenueDistributor_DuplicateRecipient(address recipient);
-
-    /// @notice Non-Treasury shares exceed the 10,000 basis-point total.
-    /// @param totalBps Proposed total allocation in basis points.
-    error RevenueDistributor_InvalidBasisPoints(uint256 totalBps);
-
-    /// @notice The asset has no active distribution.
-    /// @param asset Inactive asset address.
-    error RevenueDistributor_AssetNotActive(address asset);
-
-    /// @notice The distributor policy is inactive in its Kernel.
-    error RevenueDistributor_PolicyInactive();
-
-    /// @notice A caller other than admin or the selected config operator attempted a restricted action.
-    /// @param caller Unauthorized caller address.
-    error RevenueDistributor_UnauthorizedConfigOperator(address caller);
-
-    /// @notice A proposed yield recipient lacks the required policy or interface state.
-    /// @param recipient Invalid yield recipient address.
-    error RevenueDistributor_InvalidYieldRecipient(address recipient);
-
-    /// @notice The yield recipient cannot receive a share of this asset.
-    /// @param recipient Yield recipient address.
-    /// @param asset Unsupported asset address.
-    error RevenueDistributor_YieldRecipientUnavailable(address recipient, address asset);
-
-    /// @notice The token balance is below already reserved recipient payouts.
-    /// @param asset Asset whose balance is below its reserved payouts.
-    error RevenueDistributor_InsufficientPayoutBalance(address asset);
+    // ========== EVENTS ========== //
 
     /// @notice An asset's distribution route was set or changed.
     /// @param asset Distributed asset.
@@ -91,6 +31,84 @@ interface IRevenueDistributor {
     /// @param recipient Recipient still owed.
     /// @param amount Amount still owed in asset units.
     event DistributionDeferred(address indexed asset, address indexed recipient, uint256 amount);
+
+    // ========== ERRORS ========== //
+
+    /// @notice Lifecycle payloads must be empty.
+    error RevenueDistributor_InvalidData();
+
+    /// @notice The asset address is zero or has no code.
+    /// @param asset Invalid asset address.
+    error RevenueDistributor_InvalidAsset(address asset);
+
+    /// @notice A recipient or basis-point entry cannot be used in a route.
+    /// @param recipient Invalid recipient address.
+    error RevenueDistributor_InvalidRecipient(address recipient);
+
+    /// @notice A configured recipient's allocation has zero basis points.
+    /// @param recipient Recipient with the zero share.
+    error RevenueDistributor_ZeroRecipientBasisPoints(address recipient);
+
+    /// @notice A recipient appears more than once in one distribution.
+    /// @param recipient Repeated recipient address.
+    error RevenueDistributor_DuplicateRecipient(address recipient);
+
+    /// @notice Non-Treasury shares exceed the 10,000 basis-point total.
+    /// @param totalBps Proposed total allocation in basis points.
+    error RevenueDistributor_InvalidBasisPoints(uint256 totalBps);
+
+    /// @notice The asset has no active distribution.
+    /// @param asset Inactive asset address.
+    error RevenueDistributor_AssetNotActive(address asset);
+
+    /// @notice The distributor policy is inactive in its Kernel.
+    /// @param policy Inactive policy address.
+    error RevenueDistributor_PolicyNotActive(address policy);
+
+    /// @notice A caller other than admin or the selected config operator attempted a restricted action.
+    /// @param caller Unauthorized caller address.
+    error RevenueDistributor_UnauthorizedConfigOperator(address caller);
+
+    /// @notice A proposed yield recipient lacks the required policy or interface state.
+    /// @param recipient Invalid yield recipient address.
+    error RevenueDistributor_InvalidYieldRecipient(address recipient);
+
+    /// @notice The requested contract pointer is already selected.
+    /// @param dependency Unchanged contract address, including zero.
+    error RevenueDistributor_SameAddress(address dependency);
+
+    /// @notice The yield recipient cannot receive a share of this asset.
+    /// @param recipient Yield recipient address.
+    /// @param asset Unsupported asset address.
+    error RevenueDistributor_YieldRecipientUnavailable(address recipient, address asset);
+
+    /// @notice The token balance is below already reserved recipient payouts.
+    /// @param asset Asset whose balance is below its reserved payouts.
+    error RevenueDistributor_InsufficientPayoutBalance(address asset);
+
+    // ========== ENUMS ========== //
+
+    /// @notice Listing state of an asset's distribution route.
+    enum AssetState {
+        /// @notice The asset has never had a configured route.
+        NeverListed,
+        /// @notice The asset has an active route.
+        Active,
+        /// @notice The asset was listed, then its route was disabled.
+        Retired
+    }
+
+    // ========== STRUCTS ========== //
+
+    /// @notice One configured route to a non-Treasury recipient for an asset.
+    struct AssetRoute {
+        /// @notice Recipient of this route's allocation.
+        address recipient;
+        /// @notice Allocation in basis points of the asset's unreserved receipts.
+        uint16 bps;
+    }
+
+    // ========== FUNCTIONS ========== //
 
     /// @notice Sets or reconfigures a managed asset distribution. Admin or the selected config operator may call.
     /// @dev Treasury receives rounding dust.

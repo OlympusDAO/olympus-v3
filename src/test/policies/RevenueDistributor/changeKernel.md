@@ -1,10 +1,12 @@
 # RevenueDistributor.changeKernel scenario plan
 
+Source: [RevenueDistributor](../../../policies/RevenueDistributor.sol).
+
 Scope: inherited Kernel pointer replacement and its `kernel`/`isActive` getters.
 
 ## Scenarios
 
-| ID | Caller | State and inputs | Expected result | Effects and events | Test |
+| ID | Caller | Kernel pointer input / caller condition | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- |
 | RD-KERNEL-A01 | Any caller except current Kernel, fuzz | Any policy state; any new pointer | KernelAdapter_OnlyKernel(caller) | Kernel pointer and dependencies unchanged | Covered: [evidence][test_whenNonKernelChangesKernel_reverts] |
 | RD-KERNEL-P01 | Current Kernel | New pointer is distinct and nonzero | Success | `kernel` changes; dependency addresses do not refresh implicitly; `isActive` follows the new Kernel | Covered: [evidence][test_whenKernelChangesToDistinctKernel_updatesOnlyPointer] |

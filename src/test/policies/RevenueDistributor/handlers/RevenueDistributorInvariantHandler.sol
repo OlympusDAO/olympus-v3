@@ -140,15 +140,30 @@ contract RevenueDistributorInvariantHandler is Test {
         _distributor.disableAssetRoutes(address(_asset));
     }
 
+    // The mock recipient has no callback; the ghost pointer changes only after a successful write.
+    // forge-lint: disable-start(reentrancy-no-eth)
     function setYieldDestination(uint8 selection_) external {
         address recipient;
         if (selection_ % 3 == 1) recipient = _tracked[4];
         if (selection_ % 3 == 2) recipient = _tracked[5];
         if (recipient == address(0) && _expectedRepurchaseBps != 0) return;
+        if (recipient == _expectedYieldRecipient) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IRevenueDistributor.RevenueDistributor_SameAddress.selector,
+                    recipient
+                )
+            );
+            vm.prank(address(_configTimelock));
+            _distributor.setYieldRecipient(recipient);
+            return;
+        }
         vm.prank(address(_configTimelock));
         _distributor.setYieldRecipient(recipient);
         _expectedYieldRecipient = recipient;
     }
+
+    // forge-lint: disable-end(reentrancy-no-eth)
 
     function upgradeTreasury() external {
         if (_expectedTreasury == address(_replacementTreasury)) return;

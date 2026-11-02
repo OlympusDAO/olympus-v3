@@ -13,8 +13,10 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
-import {Actions} from "src/Kernel.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
@@ -56,8 +58,13 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
     // given Treasury is the requested yield recipient
     //  when either permitted proposer queues the change
     //   then queue-time validation rejects it without consuming state
-    // Scenarios: QSYR-I01
-    function test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue(bool useRevenueAdmin_) public {
+    // Scenarios: QSYR-I01.
+    function test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
 
         vm.expectRevert(
@@ -77,8 +84,8 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         );
     }
 
-    // Scenarios: QSYR-A01
-    function testFuzz_whenUnauthorizedCallerQueues_reverts(
+    // Scenarios: QSYR-A01.
+    function test_whenUnauthorizedCallerQueues_reverts(
         address caller_,
         uint8 recipientKind_
     ) public {
@@ -105,8 +112,8 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(configTimelock.nextActionId(), 1, "unauthorized call consumes no ID");
     }
 
-    // Scenarios: QSYR-L01
-    function testFuzz_givenTimelockDisabled_whenQueued_reverts(
+    // Scenarios: QSYR-L01.
+    function test_givenTimelockDisabled_whenQueued_reverts(
         bool useRevenueAdmin_,
         bool currentNonzero_,
         uint8 recipientKind_
@@ -114,8 +121,7 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         address current = _setCurrentPointer(currentNonzero_);
         address candidate = _candidateForLifecycle(recipientKind_);
         address proposer = _permittedProposer(useRevenueAdmin_);
-        vm.prank(emergency);
-        configTimelock.disable("");
+        _disablePolicy(address(configTimelock), emergency);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(proposer);
@@ -125,8 +131,8 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(distributor.yieldRecipient(), current, "disabled call preserves pointer");
     }
 
-    // Scenarios: QSYR-L02
-    function testFuzz_givenTimelockInactive_whenQueued_reverts(
+    // Scenarios: QSYR-L02.
+    function test_givenTimelockInactive_whenQueued_reverts(
         bool useRevenueAdmin_,
         bool currentNonzero_,
         uint8 recipientKind_
@@ -134,13 +140,12 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         address current = _setCurrentPointer(currentNonzero_);
         address candidate = _candidateForLifecycle(recipientKind_);
         address proposer = _permittedProposer(useRevenueAdmin_);
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+        _setPolicyActive(address(configTimelock), false);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
                     .selector,
                 address(configTimelock)
             )
@@ -152,8 +157,8 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(distributor.yieldRecipient(), current, "inactive call preserves pointer");
     }
 
-    // Scenarios: QSYR-L03
-    function testFuzz_givenOperatorRotated_whenQueued_reverts(
+    // Scenarios: QSYR-L03.
+    function test_givenOperatorRotated_whenQueued_reverts(
         bool useRevenueAdmin_,
         bool currentNonzero_,
         uint8 recipientKind_
@@ -177,8 +182,8 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(distributor.yieldRecipient(), current, "unselected operator preserves pointer");
     }
 
-    // Scenarios: QSYR-L04
-    function testFuzz_givenDistributorDisabled_whenQueued_reverts(
+    // Scenarios: QSYR-L04.
+    function test_givenDistributorDisabled_whenQueued_reverts(
         bool useRevenueAdmin_,
         bool currentNonzero_,
         uint8 recipientKind_
@@ -186,10 +191,14 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         address current = _setCurrentPointer(currentNonzero_);
         address candidate = _candidateForLifecycle(recipientKind_);
         address proposer = _permittedProposer(useRevenueAdmin_);
-        vm.prank(admin);
-        distributor.disable("");
+        _disablePolicy(address(distributor), admin);
 
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(distributor)
+            )
+        );
         vm.prank(proposer);
         configTimelock.queueSetYieldRecipient(candidate);
 
@@ -197,28 +206,27 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(distributor.yieldRecipient(), current, "disabled target preserves pointer");
     }
 
-    // Scenarios: QSYR-L05
-    function testFuzz_givenDistributorInactive_whenQueued_revertsBeforeLocalState(
+    // Scenarios: QSYR-L05, QSYR-L06.
+    function test_givenDistributorInactive_whenQueued_revertsBeforeLocalState(
         bool useRevenueAdmin_,
         bool locallyEnabled_,
         bool currentNonzero_,
-        uint8 recipientKind_
-    ) public {
+        uint8 recipientKind_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address current = _setCurrentPointer(currentNonzero_);
         address candidate = _candidateForLifecycle(recipientKind_);
         address proposer = _permittedProposer(useRevenueAdmin_);
         if (!locallyEnabled_) {
-            vm.prank(admin);
-            distributor.disable("");
+            _disablePolicy(address(distributor), admin);
         }
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), false);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
-                    .selector,
+                PolicyDependency.PolicyDependency_NotActive.selector,
                 address(distributor)
             )
         );
@@ -229,12 +237,15 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(distributor.yieldRecipient(), current, "inactive target preserves pointer");
     }
 
-    // Scenarios: QSYR-P01
-    function testFuzz_whenValidNonzeroRecipientQueues_executesAfterDelay(
+    // Scenarios: QSYR-P01.
+    function test_whenValidNonzeroRecipientQueues_executesAfterDelay(
         bool useRevenueAdmin_,
         address executor_,
-        uint8 assetCount_
-    ) public {
+        uint8 assetCount_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         assetCount_ = uint8(bound(assetCount_, 0, 3));
         MockYieldRepurchaseRecipient former = _activeYieldRecipient();
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
@@ -274,29 +285,32 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         }
     }
 
-    // Scenarios: QSYR-P04
-    function testFuzz_whenZeroRecipientQueues_executes(
+    // Scenarios: QSYR-P04.
+    function test_whenZeroRecipientQueues_reverts(
         bool useRevenueAdmin_,
-        address executor_,
-        uint8 assetCount_
-    ) public {
+        uint8 assetCount_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         assetCount_ = uint8(bound(assetCount_, 0, 3));
         address[3] memory assets = _yieldAssets();
         for (uint256 i; i < assetCount_; ++i) {
             distributor.seedPendingForTest(assets[i], alice, 1, i + 2, i + 3);
         }
         address proposer = _permittedProposer(useRevenueAdmin_);
-        vm.prank(proposer);
-        uint64 actionId = configTimelock.queueSetYieldRecipient(address(0));
-        vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
-
         vm.recordLogs();
-        vm.prank(executor_);
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(distributor.yieldRecipient(), address(0), "zero pointer retained");
-        assertTrue(configTimelock.getQueuedAction(actionId).executed, "no-op action executed");
-        assertEq(vm.getRecordedLogs().length, 2, "no-op emits only timelock execution events");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributor.RevenueDistributor_SameAddress.selector,
+                address(0)
+            )
+        );
+        vm.prank(proposer);
+        configTimelock.queueSetYieldRecipient(address(0));
+        assertEq(configTimelock.nextActionId(), 1, "Rejected pointer consumes no action ID");
+        assertEq(distributor.yieldRecipient(), address(0), "Rejected pointer preserves selection");
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected pointer emits no logs");
         for (uint256 i; i < assetCount_; ++i) {
             assertEq(
                 distributor.pendingPayout(assets[i], address(treasury)),
@@ -307,12 +321,15 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         }
     }
 
-    // Scenarios: QSYR-P02
-    function testFuzz_whenNonzeroPointerCleared_executes(
+    // Scenarios: QSYR-P02.
+    function test_whenNonzeroPointerCleared_executes(
         bool useRevenueAdmin_,
         address executor_,
-        uint8 assetCount_
-    ) public {
+        uint8 assetCount_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         assetCount_ = uint8(bound(assetCount_, 0, 3));
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
         address[3] memory assets = _yieldAssets();
@@ -347,12 +364,14 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         }
     }
 
-    // Scenarios: QSYR-P03
-    function testFuzz_whenSameNonzeroRecipientQueues_executesAsValidatedNoOp(
+    // Scenarios: QSYR-P03.
+    function test_whenSameNonzeroRecipientQueues_reverts(
         bool useRevenueAdmin_,
-        address executor_,
-        uint8 assetCount_
-    ) public {
+        uint8 assetCount_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         assetCount_ = uint8(bound(assetCount_, 0, 3));
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
         address[3] memory assets = _yieldAssets();
@@ -365,17 +384,22 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
             distributor.seedPendingForTest(assets[i], alice, 1, i + 2, i + 3);
         }
         address proposer = _permittedProposer(useRevenueAdmin_);
-        vm.prank(proposer);
-        uint64 actionId = configTimelock.queueSetYieldRecipient(address(recipient));
-        vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
-
         vm.recordLogs();
-        vm.prank(executor_);
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(distributor.yieldRecipient(), address(recipient), "same pointer retained");
-        assertTrue(configTimelock.getQueuedAction(actionId).executed, "no-op action executed");
-        assertEq(vm.getRecordedLogs().length, 2, "no-op emits only timelock execution events");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributor.RevenueDistributor_SameAddress.selector,
+                address(recipient)
+            )
+        );
+        vm.prank(proposer);
+        configTimelock.queueSetYieldRecipient(address(recipient));
+        assertEq(configTimelock.nextActionId(), 1, "Rejected pointer consumes no action ID");
+        assertEq(
+            distributor.yieldRecipient(),
+            address(recipient),
+            "Rejected pointer preserves selection"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected pointer emits no logs");
         for (uint256 i; i < assetCount_; ++i) {
             assertEq(
                 distributor.pendingPayout(assets[i], address(recipient)),
@@ -391,13 +415,16 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         }
     }
 
-    // Scenarios: QSYR-S01
-    function testFuzz_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey(
-        address executor_
-    ) public {
+    // Scenarios: QSYR-S01, RDCT-EXECUTE-E05.
+    function test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         MockYieldRepurchaseRecipient queuedRecipient = _activeYieldRecipient();
         MockYieldRepurchaseRecipient liveRecipient = _activeYieldRecipient();
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetYieldRecipient(address(queuedRecipient));
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
         vm.prank(admin);
@@ -422,11 +449,14 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(configTimelock.pendingActionId(key), actionId, "stale action retains key");
     }
 
-    // Scenarios: QSYR-Q01
-    function testFuzz_whenGlobalKeyAlreadyOwned_secondQueueReverts(
+    // Scenarios: QSYR-Q01.
+    function test_whenGlobalKeyAlreadyOwned_secondQueueReverts(
         bool sameRecipient_,
-        bool useRevenueAdmin_
-    ) public {
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         MockYieldRepurchaseRecipient firstRecipient = _activeYieldRecipient();
         MockYieldRepurchaseRecipient secondRecipient = sameRecipient_
@@ -450,18 +480,20 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(configTimelock.pendingActionId(key), actionId, "first action retains key");
     }
 
-    // Scenarios: QSYR-S02, QSYR-S04
-    function testFuzz_whenCandidateBecomesUnavailable_executionRevertsThenRetries(
+    // Scenarios: QSYR-S02, QSYR-S04.
+    function test_whenCandidateBecomesUnavailable_executionRevertsThenRetries(
         bool deactivate_,
-        address executor_
-    ) public {
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetYieldRecipient(address(recipient));
         bytes32 key = _queuedKey(actionId, 0);
         if (deactivate_) {
-            vm.prank(admin);
-            kernel.executeAction(Actions.DeactivatePolicy, address(recipient));
+            _setPolicyActive(address(recipient), false);
         } else {
             recipient.setEnabled(false);
         }
@@ -469,7 +501,7 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_InvalidYieldRecipient.selector,
+                PolicyDependency.PolicyDependency_NotActive.selector,
                 address(recipient)
             )
         );
@@ -478,8 +510,7 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
 
         assertEq(configTimelock.pendingActionId(key), actionId, "failed action retains key");
         if (deactivate_) {
-            vm.prank(admin);
-            kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+            _setPolicyActive(address(recipient), true);
         } else {
             recipient.setEnabled(true);
         }
@@ -488,12 +519,15 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(distributor.yieldRecipient(), address(recipient), "retry updates pointer");
     }
 
-    // Scenarios: QSYR-S05
-    function testFuzz_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries(
-        address executor_
-    ) public {
+    // Scenarios: QSYR-S05.
+    function test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: address(recipient), bps: 1});
@@ -517,16 +551,19 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertEq(distributor.yieldRecipient(), address(recipient), "retry updates pointer");
     }
 
-    // Scenarios: QSYR-S03
-    function testFuzz_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts(
-        address executor_
-    ) public {
+    // Scenarios: QSYR-S03.
+    function test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         MockYieldRepurchaseRecipient currentRecipient = _activeYieldRecipient();
         currentRecipient.setVaultConfig(address(token), address(token), true);
         vm.prank(admin);
         distributor.setYieldRecipient(address(currentRecipient));
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetYieldRecipient(address(recipient));
         vm.prank(admin);
         distributor.setAssetRoutes(address(token), 1, _emptyRoutes());
@@ -550,17 +587,20 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "action remains live");
     }
 
-    // Scenarios: QSYR-S06
-    function testFuzz_whenUnsupportedRetiredPendingYieldAdded_executionReverts(
-        address executor_
-    ) public {
+    // Scenarios: QSYR-S06.
+    function test_whenUnsupportedRetiredPendingYieldAdded_executionReverts(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         MockRevertingTransferToken pendingToken = new MockRevertingTransferToken(18);
         MockYieldRepurchaseRecipient currentRecipient = _activeYieldRecipient();
         currentRecipient.setVaultConfig(address(pendingToken), address(pendingToken), true);
         vm.prank(admin);
         distributor.setYieldRecipient(address(currentRecipient));
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetYieldRecipient(address(recipient));
         vm.prank(admin);
         distributor.setAssetRoutes(address(pendingToken), 10_000, _emptyRoutes());
@@ -587,6 +627,387 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
             "failed action preserves pointer"
         );
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "action remains live");
+    }
+
+    // Scenarios: QSYR-L05, QSYR-L06.
+    function test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_AdminOnlySeed()
+        public
+    {
+        test_givenDistributorInactive_whenQueued_revertsBeforeLocalState(
+            false,
+            false,
+            false,
+            1,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-L05, QSYR-L06.
+    function test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenDistributorInactive_whenQueued_revertsBeforeLocalState(
+            false,
+            false,
+            false,
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-L05, QSYR-L06.
+    function test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_RolesOverlapSeed()
+        public
+    {
+        test_givenDistributorInactive_whenQueued_revertsBeforeLocalState(
+            false,
+            false,
+            false,
+            1,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-S05.
+    function test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_AdminOnlySeed()
+        public
+    {
+        test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S05.
+    function test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S05.
+    function test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_RolesOverlapSeed()
+        public
+    {
+        test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-S02, QSYR-S04.
+    function test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_AdminOnlySeed()
+        public
+    {
+        test_whenCandidateBecomesUnavailable_executionRevertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S02, QSYR-S04.
+    function test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenCandidateBecomesUnavailable_executionRevertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S02, QSYR-S04.
+    function test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_RolesOverlapSeed()
+        public
+    {
+        test_whenCandidateBecomesUnavailable_executionRevertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-Q01.
+    function test_whenGlobalKeyAlreadyOwned_secondQueueReverts_AdminOnlySeed() public {
+        test_whenGlobalKeyAlreadyOwned_secondQueueReverts(
+            false,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-Q01.
+    function test_whenGlobalKeyAlreadyOwned_secondQueueReverts_RevenueRoleOnlySeed() public {
+        test_whenGlobalKeyAlreadyOwned_secondQueueReverts(
+            false,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-Q01.
+    function test_whenGlobalKeyAlreadyOwned_secondQueueReverts_RolesOverlapSeed() public {
+        test_whenGlobalKeyAlreadyOwned_secondQueueReverts(
+            false,
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-P02.
+    function test_whenNonzeroPointerCleared_executes_AdminOnlySeed() public {
+        test_whenNonzeroPointerCleared_executes(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-P02.
+    function test_whenNonzeroPointerCleared_executes_RevenueRoleOnlySeed() public {
+        test_whenNonzeroPointerCleared_executes(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-P02.
+    function test_whenNonzeroPointerCleared_executes_RolesOverlapSeed() public {
+        test_whenNonzeroPointerCleared_executes(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-S01.
+    function test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_AdminOnlySeed()
+        public
+    {
+        test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S01.
+    function test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S01.
+    function test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_RolesOverlapSeed()
+        public
+    {
+        test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-P03.
+    function test_whenSameNonzeroRecipientQueues_reverts_AdminOnlySeed() public {
+        test_whenSameNonzeroRecipientQueues_reverts(false, 1, address(0x1234), false, false);
+    }
+
+    // Scenarios: QSYR-P03.
+    function test_whenSameNonzeroRecipientQueues_reverts_RevenueRoleOnlySeed() public {
+        test_whenSameNonzeroRecipientQueues_reverts(false, 1, address(0x1234), true, false);
+    }
+
+    // Scenarios: QSYR-P03.
+    function test_whenSameNonzeroRecipientQueues_reverts_RolesOverlapSeed() public {
+        test_whenSameNonzeroRecipientQueues_reverts(false, 1, address(0x1234), true, true);
+    }
+
+    // Scenarios: QSYR-I01.
+    function test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_AdminOnlySeed() public {
+        test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue(
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-I01.
+    function test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_RevenueRoleOnlySeed() public {
+        test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: QSYR-I01.
+    function test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_RolesOverlapSeed() public {
+        test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: QSYR-S03.
+    function test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_AdminOnlySeed()
+        public
+    {
+        test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S03.
+    function test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S03.
+    function test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_RolesOverlapSeed()
+        public
+    {
+        test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-S06.
+    function test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_AdminOnlySeed() public {
+        test_whenUnsupportedRetiredPendingYieldAdded_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S06.
+    function test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenUnsupportedRetiredPendingYieldAdded_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-S06.
+    function test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_RolesOverlapSeed()
+        public
+    {
+        test_whenUnsupportedRetiredPendingYieldAdded_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-P01.
+    function test_whenValidNonzeroRecipientQueues_executesAfterDelay_AdminOnlySeed() public {
+        test_whenValidNonzeroRecipientQueues_executesAfterDelay(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-P01.
+    function test_whenValidNonzeroRecipientQueues_executesAfterDelay_RevenueRoleOnlySeed() public {
+        test_whenValidNonzeroRecipientQueues_executesAfterDelay(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSYR-P01.
+    function test_whenValidNonzeroRecipientQueues_executesAfterDelay_RolesOverlapSeed() public {
+        test_whenValidNonzeroRecipientQueues_executesAfterDelay(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSYR-P04.
+    function test_whenZeroRecipientQueues_reverts_AdminOnlySeed() public {
+        test_whenZeroRecipientQueues_reverts(false, 1, address(0x1234), false, false);
+    }
+
+    // Scenarios: QSYR-P04.
+    function test_whenZeroRecipientQueues_reverts_RevenueRoleOnlySeed() public {
+        test_whenZeroRecipientQueues_reverts(false, 1, address(0x1234), true, false);
+    }
+
+    // Scenarios: QSYR-P04.
+    function test_whenZeroRecipientQueues_reverts_RolesOverlapSeed() public {
+        test_whenZeroRecipientQueues_reverts(false, 1, address(0x1234), true, true);
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast,unused-return)

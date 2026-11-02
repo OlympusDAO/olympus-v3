@@ -54,29 +54,90 @@ contract RevenueDistributorTaskExecuteTest is RevenueDistributorTaskTest {
     uint256 internal constant LATER_RECEIPT = 19;
     uint8 internal constant TOKEN_DECIMALS = 18;
 
-    // Scenarios: TASK-A01.
-    function test_whenCallerLacksHeartRole_revertsBeforeLifecycleChecks(
+    // Scenarios: TASK-A01, TASK-A02, TASK-A03, TASK-A04, TASK-A05, TASK-A06, TASK-A07, TASK-A08.
+    function test_givenActiveTask_whenCallerLacksHeartRole_reverts(
         address caller_,
-        bool taskActive_,
         bool taskEnabled_,
         bool distributorActive_,
         bool distributorEnabled_
     ) public {
+        uint64 id = _seedTaskLifecycleQueue();
         vm.prank(admin);
         rolesAdmin.grantRole(HEART_ROLE, bob);
         vm.assume(caller_ != alice);
         vm.assume(caller_ != bob);
-        _setTaskLifecycle(taskActive_, taskEnabled_);
+        _setTaskLifecycle(true, taskEnabled_);
         _setDistributorLifecycle(distributorActive_, distributorEnabled_);
 
+        bytes32 beforeState = _taskStateDigest(id);
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature("isActive()"),
+            abi.encodeWithSignature("UnexpectedRead()")
+        );
+        vm.mockCallRevert(
+            address(task),
+            abi.encodeWithSignature("selfExecuteTask()"),
+            abi.encodeWithSignature("UnexpectedRead()")
+        );
+        vm.recordLogs();
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, HEART_ROLE));
         vm.prank(caller_);
         task.execute();
 
-        assertEq(task.nextAssetIndex(), 0, "unauthorized call preserves cursor");
+        assertEq(
+            _taskStateDigest(id),
+            beforeState,
+            "Unauthorized scheduler preserves funded state and configuration"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Unauthorized scheduler emits no logs");
     }
 
-    // Scenarios: TASK-P01.
+    // Scenarios: TASK-A09, TASK-A10, TASK-A11, TASK-A12, TASK-A13, TASK-A14, TASK-A15, TASK-A16.
+    function test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+        address caller_,
+        bool taskEnabled_,
+        bool distributorActive_,
+        bool distributorEnabled_
+    ) public {
+        uint64 id = _seedTaskLifecycleQueue();
+        vm.prank(admin);
+        rolesAdmin.grantRole(HEART_ROLE, bob);
+        vm.assume(caller_ != alice);
+        vm.assume(caller_ != bob);
+        _setTaskLifecycle(false, taskEnabled_);
+        _setDistributorLifecycle(distributorActive_, distributorEnabled_);
+
+        bytes32 beforeState = _taskStateDigest(id);
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature("isActive()"),
+            abi.encodeWithSignature("UnexpectedRead()")
+        );
+        vm.mockCallRevert(
+            address(task),
+            abi.encodeWithSignature("selfExecuteTask()"),
+            abi.encodeWithSignature("UnexpectedRead()")
+        );
+        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorTask.RevenueDistributorTask_PolicyNotActive.selector,
+                address(task)
+            )
+        );
+        vm.prank(caller_);
+        task.execute();
+
+        assertEq(
+            _taskStateDigest(id),
+            beforeState,
+            "Unauthorized scheduler preserves funded state and configuration"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Unauthorized scheduler emits no logs");
+    }
+
+    // Scenarios: TASK-P01, TASK-P14, TASK-P15, TASK-P16.
     function test_givenTaskDisabled_executeDoesNotQueryDistributor(
         bool distributorActive_,
         bool distributorEnabled_,
@@ -95,6 +156,16 @@ contract RevenueDistributorTaskExecuteTest is RevenueDistributorTaskTest {
             address(distributor),
             abi.encodeCall(IRevenueDistributor.getActiveAssetCount, ()),
             abi.encodeWithSelector(MockGetterFailure.selector)
+        );
+        vm.mockCallRevert(
+            address(task),
+            abi.encodeWithSignature("selfExecuteTask()"),
+            abi.encodeWithSignature("UnexpectedRead()")
+        );
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature("isActive()"),
+            abi.encodeWithSignature("UnexpectedRead()")
         );
         vm.recordLogs();
 
@@ -169,8 +240,8 @@ contract RevenueDistributorTaskExecuteTest is RevenueDistributorTaskTest {
         assertEq(task.nextAssetIndex(), 1, "empty execute preserves cursor");
     }
 
-    // Scenarios: TASK-P03.
-    function test_givenTaskInactive_executeDoesNotQueryDistributor(bool disabled_) public {
+    // Scenarios: TASK-P03, TASK-P17.
+    function test_givenTaskInactive_whenExecuted_reverts(bool disabled_) public {
         _configureAsset(token, DEFAULT_RECEIPT);
         _setTaskDisabled(disabled_);
         _deactivateTask();
@@ -179,8 +250,24 @@ contract RevenueDistributorTaskExecuteTest is RevenueDistributorTaskTest {
             abi.encodeCall(IRevenueDistributor.getActiveAssetCount, ()),
             "distributor must not be queried"
         );
+        vm.mockCallRevert(
+            address(task),
+            abi.encodeWithSignature("selfExecuteTask()"),
+            abi.encodeWithSignature("UnexpectedRead()")
+        );
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature("isActive()"),
+            abi.encodeWithSignature("UnexpectedRead()")
+        );
         vm.recordLogs();
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorTask.RevenueDistributorTask_PolicyNotActive.selector,
+                address(task)
+            )
+        );
         vm.prank(alice);
         task.execute();
 
@@ -618,6 +705,153 @@ contract RevenueDistributorTaskExecuteTest is RevenueDistributorTaskTest {
     function _expectTreasuryDistribution(MockERC20 asset_, uint256 amount_) internal {
         vm.expectEmit(true, true, false, true, address(distributor));
         emit IRevenueDistributor.Distributed(address(asset_), address(treasury), amount_);
+    }
+
+    // Scenarios: TASK-A01, TASK-A02, TASK-A03, TASK-A04, TASK-A05, TASK-A06, TASK-A07, TASK-A08, TASK-A09, TASK-A10, TASK-A11, TASK-A12, TASK-A13, TASK-A14, TASK-A15, TASK-A16, TASK-P01, TASK-P03, TASK-P14, TASK-P15, TASK-P16, TASK-P17.
+    function test_givenSchedulerLifecycleAndReceiptSeeds() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+            address(0),
+            false,
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+            address(0),
+            false,
+            false,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+            address(0),
+            false,
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+            address(0),
+            false,
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+            address(0),
+            true,
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+            address(0),
+            true,
+            false,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+            address(0),
+            true,
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenInactiveTask_whenAnyUnauthorizedCaller_revertsActivityFirst(
+            address(0),
+            true,
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenActiveTask_whenCallerLacksHeartRole_reverts(address(0), false, false, false);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenActiveTask_whenCallerLacksHeartRole_reverts(address(0), false, false, true);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenActiveTask_whenCallerLacksHeartRole_reverts(address(0), false, true, false);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenActiveTask_whenCallerLacksHeartRole_reverts(address(0), false, true, true);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenActiveTask_whenCallerLacksHeartRole_reverts(address(0), true, false, false);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenActiveTask_whenCallerLacksHeartRole_reverts(address(0), true, false, true);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenActiveTask_whenCallerLacksHeartRole_reverts(address(0), true, true, false);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenActiveTask_whenCallerLacksHeartRole_reverts(address(0), true, true, true);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(false, false, 0, 0);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(false, false, 0, 1);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(false, false, 2, 0);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(false, false, 2, 1);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(false, true, 0, 0);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(false, true, 0, 1);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(false, true, 2, 0);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(false, true, 2, 1);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(true, false, 0, 0);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(true, false, 0, 1);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(true, false, 2, 0);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(true, false, 2, 1);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(true, true, 0, 0);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(true, true, 0, 1);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(true, true, 2, 0);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskDisabled_executeDoesNotQueryDistributor(true, true, 2, 1);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskInactive_whenExecuted_reverts(false);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
+        test_givenTaskInactive_whenExecuted_reverts(true);
+        assertTrue(vm.revertToState(checkpoint), "Restore scheduler seed");
+        vm.clearMockedCalls();
     }
 }
 

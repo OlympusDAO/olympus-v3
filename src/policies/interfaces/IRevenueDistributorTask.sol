@@ -4,34 +4,7 @@ pragma solidity >=0.8.24;
 /// @title Revenue Distributor Task Interface
 /// @notice Gas-bounded Heart task that rotates through active distributor assets.
 interface IRevenueDistributorTask {
-    /// @notice The distributor lacks the required interface or is inactive when the task is enabled.
-    /// @param distributor Invalid distributor address.
-    error RevenueDistributorTask_InvalidDistributor(address distributor);
-
-    /// @notice The distributor belongs to a different Kernel.
-    /// @param expectedKernel Kernel passed to the task constructor.
-    /// @param actualKernel Kernel reported by the distributor.
-    error RevenueDistributorTask_KernelMismatch(address expectedKernel, address actualKernel);
-
-    /// @notice The task is not active in its current Kernel.
-    error RevenueDistributorTask_PolicyInactive();
-
-    /// @notice The complete task gas limit is zero.
-    error RevenueDistributorTask_InvalidExecutionGasLimit();
-
-    /// @notice The attempt threshold does not exceed the gas retained for task cleanup.
-    error RevenueDistributorTask_InvalidMinimumGasToAttempt();
-
-    /// @notice The cleanup gas reserve is zero or reaches the current attempt threshold.
-    error RevenueDistributorTask_InvalidGasReserve();
-
-    /// @notice The selected cursor is outside the current active asset set.
-    /// @param index Requested cursor.
-    /// @param assetCount Current number of active assets.
-    error RevenueDistributorTask_InvalidAssetIndex(uint256 index, uint256 assetCount);
-
-    /// @notice A caller other than the task attempted the isolated execution entry point.
-    error RevenueDistributorTask_OnlySelf();
+    // ========== EVENTS ========== //
 
     /// @notice The complete task gas limit changed.
     /// @param gasLimit Gas forwarded to the task's self-call.
@@ -57,6 +30,38 @@ interface IRevenueDistributorTask {
     /// @param asset Asset whose distribution failed.
     /// @param selector First four bytes of the returned error data, if any.
     event AssetDistributionFailed(address indexed asset, bytes4 selector);
+
+    // ========== ERRORS ========== //
+
+    /// @notice Lifecycle payloads must be empty.
+    error RevenueDistributorTask_InvalidData();
+
+    /// @notice The distributor lacks required interfaces or has incompatible metadata.
+    /// @param distributor Invalid distributor address.
+    error RevenueDistributorTask_InvalidDistributor(address distributor);
+
+    /// @notice The task is not active in its current Kernel.
+    /// @param policy Inactive policy address.
+    error RevenueDistributorTask_PolicyNotActive(address policy);
+
+    /// @notice The complete task gas limit is zero.
+    error RevenueDistributorTask_InvalidExecutionGasLimit();
+
+    /// @notice The attempt threshold does not exceed the gas retained for task cleanup.
+    error RevenueDistributorTask_InvalidMinimumGasToAttempt();
+
+    /// @notice The cleanup gas reserve is zero or reaches the current attempt threshold.
+    error RevenueDistributorTask_InvalidGasReserve();
+
+    /// @notice The selected cursor is outside the current active asset set.
+    /// @param index Requested cursor.
+    /// @param assetCount Current number of active assets.
+    error RevenueDistributorTask_InvalidAssetIndex(uint256 index, uint256 assetCount);
+
+    /// @notice A caller other than the task attempted the isolated execution entry point.
+    error RevenueDistributorTask_OnlySelf();
+
+    // ========== FUNCTIONS ========== //
 
     /// @notice Sets the gas forwarded to the complete periodic task.
     /// @dev Admin or revenue_distributor_admin only. An unchanged valid value emits no event.

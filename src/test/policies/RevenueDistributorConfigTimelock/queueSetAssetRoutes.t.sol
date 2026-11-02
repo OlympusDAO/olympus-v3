@@ -5,18 +5,23 @@ pragma solidity >=0.8.24;
 // unauthorized-identity loop intentionally makes external assertions for each seed.
 // forge-lint: disable-start(calls-loop,literal-instead-of-constant,unsafe-typecast,unused-return)
 
+// Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {Actions} from "src/Kernel.sol";
-import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
-import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
+
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
+// Contracts
 import {RevenueDistributorConfigTimelockTest} from "./RevenueDistributorConfigTimelockTest.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
     RevenueDistributorConfigTimelockTest
@@ -85,8 +90,13 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
     // given route basis points exceed the maximum
     //  when either permitted proposer queues the route
     //   then queue-time validation rejects it without consuming state
-    // Scenarios: QSAR-I01
-    function test_whenRouteBasisPointsExceedMaximum_revertsAtQueue(bool useRevenueAdmin_) public {
+    // Scenarios: QSAR-I01.
+    function test_whenRouteBasisPointsExceedMaximum_revertsAtQueue(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: bob, bps: INVALID_ROUTE_BPS});
@@ -131,7 +141,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
     }
 
     // Scenarios: QSAR-A01.
-    function testFuzz_whenCallerHasNoConfigRole_queueReverts(
+    function test_whenCallerHasNoConfigRole_queueReverts(
         address caller_,
         address asset_,
         uint16 repurchaseBps_,
@@ -151,7 +161,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         configTimelock.queueSetAssetRoutes(asset_, repurchaseBps_, routes);
     }
 
-    // Scenarios: QSAR-A01
+    // Scenarios: QSAR-A01.
     function test_whenKnownUnauthorizedIdentitiesQueue_reverts() public {
         address[4] memory callers = [emergency, bob, address(configTimelock), address(distributor)];
         for (uint256 i; i < callers.length; ++i) {
@@ -161,8 +171,8 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         }
     }
 
-    // Scenarios: QSAR-L01
-    function testFuzz_givenTimelockDisabled_whenRouteQueued_reverts(
+    // Scenarios: QSAR-L01.
+    function test_givenTimelockDisabled_whenRouteQueued_reverts(
         bool useRevenueAdmin_,
         address asset_,
         uint16 repurchaseBps_,
@@ -171,8 +181,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         uint16 routeBps_
     ) public {
         address proposer = _permittedProposer(useRevenueAdmin_);
-        vm.prank(emergency);
-        configTimelock.disable("");
+        _disablePolicy(address(configTimelock), emergency);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(proposer);
@@ -185,8 +194,8 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(configTimelock.nextActionId(), 1, "disabled call consumes no ID");
     }
 
-    // Scenarios: QSAR-L02
-    function testFuzz_givenTimelockInactive_whenRouteQueued_reverts(
+    // Scenarios: QSAR-L02.
+    function test_givenTimelockInactive_whenRouteQueued_reverts(
         bool useRevenueAdmin_,
         address asset_,
         uint16 repurchaseBps_,
@@ -195,13 +204,12 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         uint16 routeBps_
     ) public {
         address proposer = _permittedProposer(useRevenueAdmin_);
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+        _setPolicyActive(address(configTimelock), false);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
                     .selector,
                 address(configTimelock)
             )
@@ -216,8 +224,8 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(configTimelock.nextActionId(), 1, "inactive call consumes no ID");
     }
 
-    // Scenarios: QSAR-L03
-    function testFuzz_givenOperatorRotated_whenRouteQueued_reverts(
+    // Scenarios: QSAR-L03.
+    function test_givenOperatorRotated_whenRouteQueued_reverts(
         bool useRevenueAdmin_,
         address asset_,
         uint16 repurchaseBps_,
@@ -245,8 +253,8 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(configTimelock.nextActionId(), 1, "unselected operator consumes no ID");
     }
 
-    // Scenarios: QSAR-L04
-    function testFuzz_givenTargetDisabled_whenRouteQueued_revertsForEitherRole(
+    // Scenarios: QSAR-L04.
+    function test_givenTargetDisabled_whenRouteQueued_revertsForEitherRole(
         bool useRevenueAdmin_,
         address asset_,
         uint16 repurchaseBps_,
@@ -255,10 +263,14 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         uint16 routeBps_
     ) public {
         address proposer = _permittedProposer(useRevenueAdmin_);
-        vm.prank(admin);
-        distributor.disable("");
+        _disablePolicy(address(distributor), admin);
 
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(distributor)
+            )
+        );
         vm.prank(proposer);
         configTimelock.queueSetAssetRoutes(
             asset_,
@@ -269,29 +281,28 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(configTimelock.nextActionId(), 1, "disabled target consumes no ID");
     }
 
-    // Scenarios: QSAR-L05
-    function testFuzz_givenTargetInactive_whenRouteQueued_revertsBeforeLocalState(
+    // Scenarios: QSAR-L05, QSAR-L06.
+    function test_givenTargetInactive_whenRouteQueued_revertsBeforeLocalState(
         bool useRevenueAdmin_,
         bool locallyEnabled_,
         address asset_,
         uint16 repurchaseBps_,
         bool includeRoute_,
         address recipient_,
-        uint16 routeBps_
-    ) public {
+        uint16 routeBps_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         if (!locallyEnabled_) {
-            vm.prank(admin);
-            distributor.disable("");
+            _disablePolicy(address(distributor), admin);
         }
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), false);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
-                    .selector,
+                PolicyDependency.PolicyDependency_NotActive.selector,
                 address(distributor)
             )
         );
@@ -305,12 +316,15 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(configTimelock.nextActionId(), 1, "inactive target consumes no ID");
     }
 
-    // Scenarios: QSAR-P01
-    function testFuzz_whenValidNonemptyRouteQueued_storesExactActionAndExecutes(
+    // Scenarios: QSAR-P01.
+    function test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes(
         bool useRevenueAdmin_,
         address executor_,
-        uint48 executeAt_
-    ) public {
+        uint48 executeAt_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         uint64 actionId;
         uint48 executableAt;
         uint48 expiresAt;
@@ -413,10 +427,15 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(configTimelock.pendingActionId(key), 0, "executed action releases key");
     }
 
-    // Scenarios: QSAR-S01
-    function testFuzz_whenRouteChanges_executionRevertsAndRetainsKey(address executor_) public {
+    // Scenarios: QSAR-S01, RDCT-EXECUTE-E05.
+    function test_whenRouteChanges_executionRevertsAndRetainsKey(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         _activateAsset(address(token));
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes());
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
         IRevenueDistributor.AssetRoute[] memory changed = new IRevenueDistributor.AssetRoute[](1);
@@ -443,10 +462,15 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "stale action remains live");
     }
 
-    // Scenarios: QSAR-S04
-    function testFuzz_whenListingChanges_executionRevertsAndRetainsKey(address executor_) public {
+    // Scenarios: QSAR-S04.
+    function test_whenListingChanges_executionRevertsAndRetainsKey(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         _activateAsset(address(token));
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes());
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
         vm.prank(admin);
@@ -471,11 +495,14 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "stale action remains live");
     }
 
-    // Scenarios: QSAR-S05
-    function testFuzz_whenYieldPointerChanges_executionRevertsAndRetainsKey(
-        address executor_
-    ) public {
-        vm.prank(admin);
+    // Scenarios: QSAR-S05.
+    function test_whenYieldPointerChanges_executionRevertsAndRetainsKey(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes());
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
         address recipient = address(_activeYieldRecipient());
@@ -501,13 +528,16 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "stale action remains live");
     }
 
-    // Scenarios: QSAR-S02
-    function testFuzz_whenCustodyChangesAfterQueue_executionStillSucceeds(
+    // Scenarios: QSAR-S02.
+    function test_whenCustodyChangesAfterQueue_executionStillSucceeds(
         address executor_,
-        uint256 donation_
-    ) public {
+        uint256 donation_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         donation_ = bound(donation_, 1, type(uint128).max);
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes());
         token.mint(address(distributor), donation_);
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
@@ -523,10 +553,13 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(token.balanceOf(address(distributor)), donation_, "donation remains in custody");
     }
 
-    // Scenarios: QSAR-S06
-    function testFuzz_whenPendingDebtPaidAfterQueue_executionStillSucceeds(
-        address executor_
-    ) public {
+    // Scenarios: QSAR-S06.
+    function test_whenPendingDebtPaidAfterQueue_executionStillSucceeds(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         MockRevertingTransferToken payoutToken = new MockRevertingTransferToken(18);
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: bob, bps: 10_000});
@@ -535,7 +568,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         payoutToken.mint(address(distributor), 10);
         payoutToken.setTransferReverts(bob, true);
         distributor.distribute(address(payoutToken));
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetAssetRoutes(
             address(payoutToken),
             0,
@@ -555,15 +588,17 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(configured.length, 0, "queued route update applied");
     }
 
-    // Scenarios: QSAR-S07
-    function testFuzz_whenTreasuryUpgradesToNoncollidingAddress_executionSucceeds(
-        address executor_
-    ) public {
-        vm.prank(admin);
+    // Scenarios: QSAR-S07.
+    function test_whenTreasuryUpgradesToNoncollidingAddress_executionSucceeds(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes());
         OlympusTreasury replacement = new OlympusTreasury(kernel);
-        vm.prank(admin);
-        kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _upgradeModule(replacement);
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.prank(executor_);
@@ -577,18 +612,20 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         );
     }
 
-    // Scenarios: QSAR-S03
-    function testFuzz_whenQueuedRecipientBecomesTreasury_executionReverts(
-        address executor_
-    ) public {
+    // Scenarios: QSAR-S03.
+    function test_whenQueuedRecipientBecomesTreasury_executionReverts(
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         OlympusTreasury replacement = new OlympusTreasury(kernel);
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: address(replacement), bps: 1});
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueSetAssetRoutes(address(token), 0, routes);
         bytes32 key = _queuedKey(actionId, 0);
-        vm.prank(admin);
-        kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _upgradeModule(replacement);
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
@@ -604,11 +641,14 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "action remains live");
     }
 
-    // Scenarios: QSAR-Q01
-    function testFuzz_whenAssetKeyAlreadyOwned_secondRouteQueueReverts(
+    // Scenarios: QSAR-Q01.
+    function test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts(
         bool sameValue_,
-        bool useRevenueAdmin_
-    ) public {
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         vm.prank(proposer);
         uint64 actionId = configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes());
@@ -711,8 +751,11 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
     // Scenarios: QSAR-S08.
     function test_givenQueuedRepurchase_whenYieldRecipientDisabled_revertsThenRetries(
         bool useRevenueAdmin_,
-        address executor_
-    ) public {
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         (
             MockYieldRepurchaseRecipient recipient,
             uint64 actionId,
@@ -722,7 +765,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         vm.recordLogs();
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_InvalidYieldRecipient.selector,
+                PolicyDependency.PolicyDependency_NotActive.selector,
                 address(recipient)
             )
         );
@@ -737,19 +780,21 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
     // Scenarios: QSAR-S09.
     function test_givenQueuedRepurchase_whenYieldRecipientInactive_revertsThenRetries(
         bool useRevenueAdmin_,
-        address executor_
-    ) public {
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         (
             MockYieldRepurchaseRecipient recipient,
             uint64 actionId,
             bytes32 key
         ) = _queueRepurchaseRoute(useRevenueAdmin_);
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(recipient));
+        _setPolicyActive(address(recipient), false);
         vm.recordLogs();
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_InvalidYieldRecipient.selector,
+                PolicyDependency.PolicyDependency_NotActive.selector,
                 address(recipient)
             )
         );
@@ -757,16 +802,18 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         configTimelock.executeQueuedAction(actionId);
         assertEq(vm.getRecordedLogs().length, 0, "rejected execution emits no events");
         _assertRepurchaseRouteRetained(actionId, key);
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+        _setPolicyActive(address(recipient), true);
         _executeRestoredRepurchaseRoute(actionId, key, executor_);
     }
 
     // Scenarios: QSAR-S10.
     function test_givenQueuedRepurchase_whenYieldRecipientAssetUnsupported_revertsThenRetries(
         bool useRevenueAdmin_,
-        address executor_
-    ) public {
+        address executor_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         (
             MockYieldRepurchaseRecipient recipient,
             uint64 actionId,
@@ -787,6 +834,488 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         _assertRepurchaseRouteRetained(actionId, key);
         recipient.setVaultConfig(address(token), address(token), true);
         _executeRestoredRepurchaseRoute(actionId, key, executor_);
+    }
+
+    // Scenarios: QSAR-S10.
+    function test_givenQueuedRepurchase_whenYieldRecipientAssetUnsupported_revertsThenRetries_AdminOnlySeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientAssetUnsupported_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S10.
+    function test_givenQueuedRepurchase_whenYieldRecipientAssetUnsupported_revertsThenRetries_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientAssetUnsupported_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S10.
+    function test_givenQueuedRepurchase_whenYieldRecipientAssetUnsupported_revertsThenRetries_RolesOverlapSeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientAssetUnsupported_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-S08.
+    function test_givenQueuedRepurchase_whenYieldRecipientDisabled_revertsThenRetries_AdminOnlySeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientDisabled_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S08.
+    function test_givenQueuedRepurchase_whenYieldRecipientDisabled_revertsThenRetries_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientDisabled_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S08.
+    function test_givenQueuedRepurchase_whenYieldRecipientDisabled_revertsThenRetries_RolesOverlapSeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientDisabled_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-S09.
+    function test_givenQueuedRepurchase_whenYieldRecipientInactive_revertsThenRetries_AdminOnlySeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientInactive_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S09.
+    function test_givenQueuedRepurchase_whenYieldRecipientInactive_revertsThenRetries_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientInactive_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S09.
+    function test_givenQueuedRepurchase_whenYieldRecipientInactive_revertsThenRetries_RolesOverlapSeed()
+        public
+    {
+        test_givenQueuedRepurchase_whenYieldRecipientInactive_revertsThenRetries(
+            false,
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-L05, QSAR-L06.
+    function test_givenTargetInactive_whenRouteQueued_revertsBeforeLocalState_AdminOnlySeed()
+        public
+    {
+        test_givenTargetInactive_whenRouteQueued_revertsBeforeLocalState(
+            false,
+            false,
+            address(0x2345),
+            1,
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-L05, QSAR-L06.
+    function test_givenTargetInactive_whenRouteQueued_revertsBeforeLocalState_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenTargetInactive_whenRouteQueued_revertsBeforeLocalState(
+            false,
+            false,
+            address(0x2345),
+            1,
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-L05, QSAR-L06.
+    function test_givenTargetInactive_whenRouteQueued_revertsBeforeLocalState_RolesOverlapSeed()
+        public
+    {
+        test_givenTargetInactive_whenRouteQueued_revertsBeforeLocalState(
+            false,
+            false,
+            address(0x2345),
+            1,
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-Q01.
+    function test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts_AdminOnlySeed() public {
+        test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts(
+            false,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-Q01.
+    function test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts_RevenueRoleOnlySeed() public {
+        test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts(
+            false,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-Q01.
+    function test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts_RolesOverlapSeed() public {
+        test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts(
+            false,
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-S02.
+    function test_whenCustodyChangesAfterQueue_executionStillSucceeds_AdminOnlySeed() public {
+        test_whenCustodyChangesAfterQueue_executionStillSucceeds(
+            address(0x2345),
+            1,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S02.
+    function test_whenCustodyChangesAfterQueue_executionStillSucceeds_RevenueRoleOnlySeed() public {
+        test_whenCustodyChangesAfterQueue_executionStillSucceeds(
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S02.
+    function test_whenCustodyChangesAfterQueue_executionStillSucceeds_RolesOverlapSeed() public {
+        test_whenCustodyChangesAfterQueue_executionStillSucceeds(
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-S04.
+    function test_whenListingChanges_executionRevertsAndRetainsKey_AdminOnlySeed() public {
+        test_whenListingChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S04.
+    function test_whenListingChanges_executionRevertsAndRetainsKey_RevenueRoleOnlySeed() public {
+        test_whenListingChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S04.
+    function test_whenListingChanges_executionRevertsAndRetainsKey_RolesOverlapSeed() public {
+        test_whenListingChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-S06.
+    function test_whenPendingDebtPaidAfterQueue_executionStillSucceeds_AdminOnlySeed() public {
+        test_whenPendingDebtPaidAfterQueue_executionStillSucceeds(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S06.
+    function test_whenPendingDebtPaidAfterQueue_executionStillSucceeds_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenPendingDebtPaidAfterQueue_executionStillSucceeds(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S06.
+    function test_whenPendingDebtPaidAfterQueue_executionStillSucceeds_RolesOverlapSeed() public {
+        test_whenPendingDebtPaidAfterQueue_executionStillSucceeds(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-S03.
+    function test_whenQueuedRecipientBecomesTreasury_executionReverts_AdminOnlySeed() public {
+        test_whenQueuedRecipientBecomesTreasury_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S03.
+    function test_whenQueuedRecipientBecomesTreasury_executionReverts_RevenueRoleOnlySeed() public {
+        test_whenQueuedRecipientBecomesTreasury_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S03.
+    function test_whenQueuedRecipientBecomesTreasury_executionReverts_RolesOverlapSeed() public {
+        test_whenQueuedRecipientBecomesTreasury_executionReverts(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-I01.
+    function test_whenRouteBasisPointsExceedMaximum_revertsAtQueue_AdminOnlySeed() public {
+        test_whenRouteBasisPointsExceedMaximum_revertsAtQueue(false, address(0x1234), false, false);
+    }
+
+    // Scenarios: QSAR-I01.
+    function test_whenRouteBasisPointsExceedMaximum_revertsAtQueue_RevenueRoleOnlySeed() public {
+        test_whenRouteBasisPointsExceedMaximum_revertsAtQueue(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: QSAR-I01.
+    function test_whenRouteBasisPointsExceedMaximum_revertsAtQueue_RolesOverlapSeed() public {
+        test_whenRouteBasisPointsExceedMaximum_revertsAtQueue(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: QSAR-S01.
+    function test_whenRouteChanges_executionRevertsAndRetainsKey_AdminOnlySeed() public {
+        test_whenRouteChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S01.
+    function test_whenRouteChanges_executionRevertsAndRetainsKey_RevenueRoleOnlySeed() public {
+        test_whenRouteChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S01.
+    function test_whenRouteChanges_executionRevertsAndRetainsKey_RolesOverlapSeed() public {
+        test_whenRouteChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-S07.
+    function test_whenTreasuryUpgradesToNoncollidingAddress_executionSucceeds_AdminOnlySeed()
+        public
+    {
+        test_whenTreasuryUpgradesToNoncollidingAddress_executionSucceeds(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S07.
+    function test_whenTreasuryUpgradesToNoncollidingAddress_executionSucceeds_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenTreasuryUpgradesToNoncollidingAddress_executionSucceeds(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S07.
+    function test_whenTreasuryUpgradesToNoncollidingAddress_executionSucceeds_RolesOverlapSeed()
+        public
+    {
+        test_whenTreasuryUpgradesToNoncollidingAddress_executionSucceeds(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-P01.
+    function test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_AdminOnlySeed() public {
+        test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-P01.
+    function test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-P01.
+    function test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_RolesOverlapSeed()
+        public
+    {
+        test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes(
+            false,
+            address(0x2345),
+            1,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: QSAR-S05.
+    function test_whenYieldPointerChanges_executionRevertsAndRetainsKey_AdminOnlySeed() public {
+        test_whenYieldPointerChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S05.
+    function test_whenYieldPointerChanges_executionRevertsAndRetainsKey_RevenueRoleOnlySeed()
+        public
+    {
+        test_whenYieldPointerChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: QSAR-S05.
+    function test_whenYieldPointerChanges_executionRevertsAndRetainsKey_RolesOverlapSeed() public {
+        test_whenYieldPointerChanges_executionRevertsAndRetainsKey(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast,unused-return)

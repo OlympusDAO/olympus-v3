@@ -15,7 +15,6 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Actions} from "src/Kernel.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 import {RevenueDistributorSurplusRescueTestBase} from "src/test/policies/RevenueDistributor/fixtures/RevenueDistributorSurplusRescueTest.sol";
@@ -25,17 +24,17 @@ import {RevenueDistributorSurplusRescueTestBase} from "src/test/policies/Revenue
 contract RevenueDistributorConfigTimelockQueueRescueTest is
     RevenueDistributorSurplusRescueTestBase
 {
-    uint256 internal constant _QUEUED_CUSTODY = 7;
+    uint256 internal constant _QUEUED_PAYOUT = 7;
     uint256 internal constant _DESTINATION_BALANCE = 3;
-    uint256 internal constant _ADDITIONAL_CUSTODY = 5;
-    uint256 internal constant _INCREASED_CUSTODY = _QUEUED_CUSTODY + _ADDITIONAL_CUSTODY;
+    uint256 internal constant _ADDITIONAL_PAYOUT = 5;
+    uint256 internal constant _INCREASED_PAYOUT = _QUEUED_PAYOUT + _ADDITIONAL_PAYOUT;
 
     error TransferRejected(address destination);
 
     function setUp() public override {
         super.setUp();
         _createManagedRescueDebt();
-        token.mint(address(distributor), _QUEUED_CUSTODY);
+        token.mint(address(distributor), _QUEUED_PAYOUT);
         token.mint(bob, _DESTINATION_BALANCE);
         vm.prank(admin);
         rolesAdmin.grantRole(REVENUE_DISTRIBUTOR_ADMIN_ROLE, alice);
@@ -46,7 +45,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         );
     }
 
-    // Scenarios: I-06.
+    // Scenarios: RDCT-QUEUE-RESCUE-I09.
     function test_givenSurplusThenInvalidPendingRescue_previewFailurePrecedesKeyConflict() public {
         address[2] memory callers = [admin, alice];
         for (uint256 i; i < callers.length; ++i) {
@@ -89,7 +88,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: I-07.
+    // Scenarios: RDCT-QUEUE-RESCUE-I10.
     function test_givenPendingThenInvalidSurplusRescue_previewFailurePrecedesKeyConflict() public {
         address[2] memory callers = [admin, alice];
         for (uint256 i; i < callers.length; ++i) {
@@ -121,7 +120,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: L-01, L-02, L-07, P-01.
+    // Scenarios: RDCT-QUEUE-RESCUE-L01, RDCT-QUEUE-RESCUE-L06, RDCT-QUEUE-RESCUE-P01.
     function test_givenDistributorLocalStates_whenEachRoleQueuesAndAnyExecutorExecutes(
         address executor_
     ) public {
@@ -132,12 +131,11 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
                 for (uint256 d; d < destinations.length; ++d) {
                     uint256 snapshot = vm.snapshotState();
                     if (disabledRD != 0) {
-                        vm.prank(admin);
-                        distributor.disable("");
+                        _disablePolicy(address(distributor), admin);
                     }
                     if (destinations[d] != bob) token.mint(destinations[d], 3);
                     uint64 id = _assertSurplusQueued(token, destinations[d], callers[c]);
-                    _executeVerifiedSurplus(id, token, destinations[d], _QUEUED_CUSTODY, executor_);
+                    _executeVerifiedSurplus(id, token, destinations[d], _QUEUED_PAYOUT, executor_);
                     assertTrue(
                         vm.revertToState(snapshot),
                         "restore proposer/local state/destination"
@@ -147,7 +145,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: L-01, L-02, L-07, P-01.
+    // Scenarios: RDCT-QUEUE-RESCUE-L01, RDCT-QUEUE-RESCUE-L06, RDCT-QUEUE-RESCUE-P01.
     function test_givenPermissionlessExecutorIdentities_whenSeeded() public {
         address[3] memory executors = [address(0), emergency, bob];
         for (uint256 e; e < executors.length; ++e) {
@@ -155,9 +153,9 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: P-02.
+    // Scenarios: RDCT-QUEUE-RESCUE-P02.
     function test_givenZeroCustodyAtQueue_whenExecuted() public {
-        token.burn(address(distributor), _QUEUED_CUSTODY);
+        token.burn(address(distributor), _QUEUED_PAYOUT);
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
             uint256 snapshot = vm.snapshotState();
@@ -167,7 +165,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: L-03.
+    // Scenarios: RDCT-QUEUE-RESCUE-L02.
     function test_givenEnabledActiveSelectedTimelock_whenCallerUnauthorized_reverts(
         address caller_
     ) public {
@@ -188,7 +186,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         );
     }
 
-    // Scenarios: L-03.
+    // Scenarios: RDCT-QUEUE-RESCUE-L02.
     function test_givenUnauthorizedIdentities_whenQueueing_reverts() public {
         address[3] memory callers = [address(0), emergency, address(configTimelock)];
         for (uint256 c; c < callers.length; ++c) {
@@ -196,14 +194,12 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: L-04.
+    // Scenarios: RDCT-QUEUE-RESCUE-L04.
     function test_givenTimelockDisabled_whenRescueQueued_reverts() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
             uint256 snapshot = vm.snapshotState();
-            vm.startPrank(admin);
-            configTimelock.disable("");
-            vm.stopPrank();
+            _disablePolicy(address(configTimelock), admin);
             bytes memory failure = abi.encodeWithSelector(IEnabler.NotEnabled.selector);
             _assertSurplusQueueFailure(token, address(token), bob, callers[c], failure);
             _assertSurplusQueueFailure(token, address(0), address(0), callers[c], failure);
@@ -211,17 +207,15 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: L-05.
+    // Scenarios: RDCT-QUEUE-RESCUE-L05.
     function test_givenTimelockInactive_whenRescueQueued_reverts() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
             uint256 snapshot = vm.snapshotState();
-            vm.startPrank(admin);
-            kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
-            vm.stopPrank();
+            _setPolicyActive(address(configTimelock), false);
             bytes memory failure = abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
                     .selector,
                 address(configTimelock)
             );
@@ -231,14 +225,13 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: L-06.
+    // Scenarios: RDCT-QUEUE-RESCUE-L03.
     function test_givenOperatorRemoved_whenRescueQueued_reverts() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
             uint256 snapshot = vm.snapshotState();
-            vm.startPrank(admin);
+            vm.prank(admin);
             distributor.setConfigOperator(address(0));
-            vm.stopPrank();
             bytes memory failure = abi.encodeWithSelector(
                 IConfigOperator.ConfigOperator_Unauthorized.selector,
                 address(configTimelock)
@@ -249,28 +242,24 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: L-04.
+    // Scenarios: RDCT-QUEUE-RESCUE-L04.
     function test_givenQueuedRescue_whenTimelockDisabled_reverts() public {
         uint256 snapshot = vm.snapshotState();
         uint64 id = _assertSurplusQueued(token, bob, admin);
-        vm.startPrank(admin);
-        configTimelock.disable("");
-        vm.stopPrank();
+        _disablePolicy(address(configTimelock), admin);
         bytes memory failure = abi.encodeWithSelector(IEnabler.NotEnabled.selector);
         _assertSurplusExecutionFailure(id, token, bob, failure);
         assertTrue(vm.revertToState(snapshot), "restore unavailable execution gate");
     }
 
-    // Scenarios: L-05.
+    // Scenarios: RDCT-QUEUE-RESCUE-L05.
     function test_givenQueuedRescue_whenTimelockInactive_reverts() public {
         uint256 snapshot = vm.snapshotState();
         uint64 id = _assertSurplusQueued(token, bob, admin);
-        vm.startPrank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
-        vm.stopPrank();
+        _setPolicyActive(address(configTimelock), false);
         bytes memory failure = abi.encodeWithSelector(
             IRevenueDistributorConfigTimelock
-                .RevenueDistributorConfigTimelock_PolicyInactive
+                .RevenueDistributorConfigTimelock_PolicyNotActive
                 .selector,
             address(configTimelock)
         );
@@ -278,18 +267,16 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         assertTrue(vm.revertToState(snapshot), "restore unavailable execution gate");
     }
 
-    // Scenarios: L-08, L-09.
+    // Scenarios: RDCT-QUEUE-RESCUE-L07, RDCT-QUEUE-RESCUE-L08.
     function test_givenDistributorInactive_whenSurplusRescueQueued_reverts() public {
         address[2] memory callers = [admin, alice];
         for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
             for (uint256 c; c < callers.length; ++c) {
                 uint256 snapshot = vm.snapshotState();
-                vm.startPrank(admin);
-                if (disabledRD != 0) distributor.disable("");
-                kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
-                vm.stopPrank();
+                _setRevenuePolicyLifecycle(address(distributor), false, disabledRD == 0);
                 bytes memory failure = abi.encodeWithSelector(
-                    IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+                    IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                    address(distributor)
                 );
                 _assertSurplusQueueFailure(token, address(token), bob, callers[c], failure);
                 _assertSurplusQueueFailure(token, address(0), address(0), callers[c], failure);
@@ -298,8 +285,8 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: LIVE-05.
     // Deactivation after a valid queue preserves the request for retry after reactivation.
+    // Scenarios: RDCT-QUEUE-RESCUE-T05.
     function test_givenQueuedSurplusRescue_whenDistributorBecomesInactive_revertsThenRetries()
         public
     {
@@ -308,29 +295,27 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
             for (uint256 c; c < callers.length; ++c) {
                 uint256 snapshot = vm.snapshotState();
                 if (disabledRD != 0) {
-                    vm.prank(admin);
-                    distributor.disable("");
+                    _disablePolicy(address(distributor), admin);
                 }
                 uint64 id = _assertSurplusQueued(token, bob, callers[c]);
-                vm.prank(admin);
-                kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+                _setPolicyActive(address(distributor), false);
                 _assertSurplusExecutionFailure(
                     id,
                     token,
                     bob,
                     abi.encodeWithSelector(
-                        IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+                        IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                        address(distributor)
                     )
                 );
-                vm.prank(admin);
-                kernel.executeAction(Actions.ActivatePolicy, address(distributor));
-                _executeVerifiedSurplus(id, token, bob, _QUEUED_CUSTODY, address(this));
+                _setPolicyActive(address(distributor), true);
+                _executeVerifiedSurplus(id, token, bob, _QUEUED_PAYOUT, address(this));
                 assertTrue(vm.revertToState(snapshot), "restore deactivation during delay");
             }
         }
     }
 
-    // Scenarios: I-01.
+    // Scenarios: RDCT-QUEUE-RESCUE-I01.
     function test_whenAssetHasNoCode_reverts() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
@@ -350,7 +335,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: I-02.
+    // Scenarios: RDCT-QUEUE-RESCUE-I02, RDCT-QUEUE-RESCUE-I03, RDCT-QUEUE-RESCUE-I04, RDCT-QUEUE-RESCUE-I05.
     function test_whenDestinationIsForbidden_reverts() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
@@ -377,7 +362,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: I-04.
+    // Scenarios: RDCT-QUEUE-RESCUE-I08.
     function test_whenBalanceQueryReverts_reverts() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
@@ -404,7 +389,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: I-03, I-05.
+    // Scenarios: RDCT-QUEUE-RESCUE-I06, RDCT-QUEUE-RESCUE-I07.
     function test_givenManagedAsset_whenRescueQueued_reverts() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
@@ -433,7 +418,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: Q-01.
+    // Scenarios: RDCT-QUEUE-RESCUE-P03.
     function test_givenAssetKeyOwned_whenRescueAndRouteQueuesConflict() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
@@ -465,14 +450,14 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
                         beforeState,
                         "route conflict retains existing surplus request"
                     );
-                    _executeVerifiedSurplus(id, token, bob, _QUEUED_CUSTODY, address(this));
+                    _executeVerifiedSurplus(id, token, bob, _QUEUED_PAYOUT, address(this));
                 } else {
                     vm.warp(configTimelock.getQueuedAction(id).executableAt);
                     configTimelock.executeQueuedAction(id);
                     _assertSurplusCompleted(id, _surplusKey(address(token)));
                     assertEq(
                         token.balanceOf(address(distributor)),
-                        _QUEUED_CUSTODY,
+                        _QUEUED_PAYOUT,
                         "original route action remains executable without rescue payment"
                     );
                 }
@@ -481,7 +466,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: Q-02.
+    // Scenarios: RDCT-QUEUE-RESCUE-P04.
     function test_givenIndependentAsset_whenSurplusRescueQueuedAndExecutedInEitherOrder() public {
         address[2] memory callers = [admin, alice];
         for (uint256 c; c < callers.length; ++c) {
@@ -489,7 +474,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
                 for (uint256 reverseExecution; reverseExecution < 2; ++reverseExecution) {
                     uint256 snapshot = vm.snapshotState();
                     MockERC20 other = new MockERC20("Other surplus", "OSUR", 18);
-                    other.mint(address(distributor), _QUEUED_CUSTODY);
+                    other.mint(address(distributor), _QUEUED_PAYOUT);
                     uint64 surplus;
                     if (reverseQueue == 0) surplus = _assertSurplusQueued(token, bob, callers[c]);
                     uint64 independent = _assertSurplusQueued(other, emergency, callers[c]);
@@ -509,29 +494,17 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
                         "independent key owner retained"
                     );
                     if (reverseExecution == 0) {
-                        _executeVerifiedSurplus(
-                            surplus,
-                            token,
-                            bob,
-                            _QUEUED_CUSTODY,
-                            address(this)
-                        );
+                        _executeVerifiedSurplus(surplus, token, bob, _QUEUED_PAYOUT, address(this));
                     }
                     _executeVerifiedSurplus(
                         independent,
                         other,
                         emergency,
-                        _QUEUED_CUSTODY,
+                        _QUEUED_PAYOUT,
                         address(this)
                     );
                     if (reverseExecution != 0) {
-                        _executeVerifiedSurplus(
-                            surplus,
-                            token,
-                            bob,
-                            _QUEUED_CUSTODY,
-                            address(this)
-                        );
+                        _executeVerifiedSurplus(surplus, token, bob, _QUEUED_PAYOUT, address(this));
                     }
                     assertTrue(
                         vm.revertToState(snapshot),
@@ -542,7 +515,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: Q-02.
+    // Scenarios: RDCT-QUEUE-RESCUE-P04.
     function test_givenYieldConfigurationAction_whenSurplusRescueQueuedAndExecutedInEitherOrder()
         public
     {
@@ -554,7 +527,16 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
 
                     uint64 surplus;
                     if (reverseQueue == 0) surplus = _assertSurplusQueued(token, bob, callers[c]);
-                    address currentYieldRecipient = distributor.yieldRecipient();
+                    MockYieldRepurchaseRecipient candidate = new MockYieldRepurchaseRecipient(
+                        kernel
+                    );
+                    _setPolicyActive(address(candidate), true);
+                    candidate.setVaultConfig(address(token), address(token), true);
+                    // The managed debt fixture also has a retired yield-bearing token.
+                    address[] memory pendingAssets = distributor.getPendingPayoutAssets();
+                    for (uint256 i; i < pendingAssets.length; ++i)
+                        candidate.setVaultConfig(pendingAssets[i], pendingAssets[i], true);
+                    address currentYieldRecipient = address(candidate);
                     vm.prank(callers[c]);
                     uint64 independent = configTimelock.queueSetYieldRecipient(
                         currentYieldRecipient
@@ -575,25 +557,13 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
                         "independent key owner retained"
                     );
                     if (reverseExecution == 0) {
-                        _executeVerifiedSurplus(
-                            surplus,
-                            token,
-                            bob,
-                            _QUEUED_CUSTODY,
-                            address(this)
-                        );
+                        _executeVerifiedSurplus(surplus, token, bob, _QUEUED_PAYOUT, address(this));
                     }
                     vm.warp(configTimelock.getQueuedAction(independent).executableAt);
                     configTimelock.executeQueuedAction(independent);
                     _assertSurplusCompleted(independent, independentKey);
                     if (reverseExecution != 0) {
-                        _executeVerifiedSurplus(
-                            surplus,
-                            token,
-                            bob,
-                            _QUEUED_CUSTODY,
-                            address(this)
-                        );
+                        _executeVerifiedSurplus(surplus, token, bob, _QUEUED_PAYOUT, address(this));
                     }
                     assertTrue(
                         vm.revertToState(snapshot),
@@ -604,14 +574,14 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: LIVE-01.
+    // Scenarios: RDCT-QUEUE-RESCUE-T01.
     function test_givenQueuedRescue_whenCustodyIncreases() public {
         uint64 id = _assertSurplusQueued(token, bob, admin);
-        token.mint(address(distributor), _ADDITIONAL_CUSTODY);
-        _executeVerifiedSurplus(id, token, bob, _INCREASED_CUSTODY, address(this));
+        token.mint(address(distributor), _ADDITIONAL_PAYOUT);
+        _executeVerifiedSurplus(id, token, bob, _INCREASED_PAYOUT, address(this));
     }
 
-    // Scenarios: LIVE-02.
+    // Scenarios: RDCT-QUEUE-RESCUE-T02.
     function test_givenQueuedRescue_whenAdminAlreadyRescued() public {
         uint64 id = _assertSurplusQueued(token, bob, admin);
 
@@ -621,7 +591,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         _executeVerifiedSurplus(id, token, bob, 0, address(this));
     }
 
-    // Scenarios: LIVE-03.
+    // Scenarios: RDCT-QUEUE-RESCUE-T03.
     function test_givenQueuedNeverListedAsset_whenActivated_reverts() public {
         uint64 id = _assertSurplusQueued(token, bob, admin);
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(id, 0, 0);
@@ -645,7 +615,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         );
     }
 
-    // Scenarios: LIVE-04.
+    // Scenarios: RDCT-QUEUE-RESCUE-T04.
     function test_givenQueuedNeverListedAsset_whenActivatedThenRetired_reverts() public {
         uint64 id = _assertSurplusQueued(token, bob, admin);
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(id, 0, 0);
@@ -672,7 +642,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         );
     }
 
-    // Scenarios: TX-01.
+    // Scenarios: RDCT-QUEUE-RESCUE-T06.
     function test_givenQueuedSurplus_whenTransferFailsThenRecovers() public {
         uint64 id = _assertSurplusQueued(token, bob, admin);
         bytes memory failure = abi.encodeWithSelector(TransferRejected.selector, bob);
@@ -683,7 +653,7 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         );
         _assertSurplusExecutionFailure(id, token, bob, failure);
         vm.clearMockedCalls();
-        _executeVerifiedSurplus(id, token, bob, _QUEUED_CUSTODY, address(this));
+        _executeVerifiedSurplus(id, token, bob, _QUEUED_PAYOUT, address(this));
     }
 
     uint64 internal _surplusActionId;
@@ -753,9 +723,11 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
             next,
             proposer_,
             keccak256(abi.encode(batch)),
-            uint48(block.timestamp + configTimelock.timelockDelay()),
+            uint48(vm.getBlockTimestamp() + configTimelock.timelockDelay()),
             uint48(
-                block.timestamp + configTimelock.timelockDelay() + configTimelock.EXECUTION_WINDOW()
+                vm.getBlockTimestamp() +
+                    configTimelock.timelockDelay() +
+                    configTimelock.EXECUTION_WINDOW()
             )
         );
         vm.recordLogs();
@@ -766,10 +738,10 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         assertEq(configTimelock.nextActionId(), next + 1, "queue increments counter once");
         ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(id);
         assertEq(action.proposer, proposer_, "proposer stored");
-        assertEq(action.queuedAt, block.timestamp, "queue time stored");
+        assertEq(action.queuedAt, vm.getBlockTimestamp(), "queue time stored");
         assertEq(
             action.executableAt,
-            block.timestamp + configTimelock.timelockDelay(),
+            vm.getBlockTimestamp() + configTimelock.timelockDelay(),
             "ready time stored"
         );
         assertEq(

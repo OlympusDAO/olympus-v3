@@ -6,7 +6,6 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(calls-loop,literal-instead-of-constant,unsafe-typecast)
 
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {Actions} from "src/Kernel.sol";
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
@@ -16,7 +15,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
     // given an active asset
     //   when governance admin disables its routes
     //     [X] the asset is retired
-    // Scenarios: DAR-A01
+    // Scenarios: DAR-A01.
     function test_givenActiveAsset_whenAdminDisables_succeeds()
         public
         givenAliceConfiguredAsRecipient
@@ -49,7 +48,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
     // given an active asset with a configured route
     //   when the selected config operator disables it
     //     [X] the route is cleared for future receipts
-    // Scenarios: DAR-A02
+    // Scenarios: DAR-A02.
     function test_givenActiveAsset_whenDisabled_clearsRoute()
         public
         givenAliceConfiguredAsRecipient
@@ -68,7 +67,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         );
         vm.expectEmit(true, false, false, true, address(distributor));
         emit IRevenueDistributor.AssetDistributionDisabled(address(token));
-        vm.prank(address(configTimelock));
+        vm.prank(_configurationCaller());
         distributor.disableAssetRoutes(address(token));
         (uint16 repurchaseBps, IRevenueDistributor.AssetRoute[] memory routes) = distributor
             .getAssetDistribution(address(token));
@@ -92,26 +91,16 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DAR-A03
-    function test_givenAnyLifecycleAndAssetState_whenUnauthorizedCallerDisables_reverts(
+    // Scenarios: DAR-A03.
+    function test_givenPolicyActiveEnabledAndAssetState_whenUnauthorizedCallerDisables_reverts(
         address caller_,
-        uint8 assetKind_,
-        bool disable_,
-        bool deactivate_
+        uint8 assetKind_
     ) public {
         vm.assume(caller_ != admin && caller_ != address(configTimelock));
         address asset = _prepareAssetKind(assetKind_);
         IRevenueDistributor.AssetState stateBefore = distributor.assetState(asset);
         bytes32 hashBefore = distributor.assetDistributionHash(asset);
         uint256 activeCountBefore = distributor.getActiveAssetCount();
-        if (disable_) {
-            vm.prank(admin);
-            distributor.disable("");
-        }
-        if (deactivate_) {
-            vm.prank(admin);
-            kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
-        }
 
         vm.recordLogs();
         vm.expectRevert(
@@ -141,7 +130,83 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         assertEq(vm.getRecordedLogs().length, 0, "unauthorized call emits no event");
     }
 
-    // Scenarios: DAR-A03
+    // Scenarios: DAR-L01.
+    function test_givenPolicyActiveDisabledAndAssetState_whenUnauthorizedCallerDisables_reverts(
+        address caller_,
+        uint8 assetKind_
+    ) public {
+        vm.assume(caller_ != admin && caller_ != address(configTimelock));
+        address asset = _prepareAssetKind(assetKind_);
+        IRevenueDistributor.AssetState stateBefore = distributor.assetState(asset);
+        bytes32 hashBefore = distributor.assetDistributionHash(asset);
+        uint256 activeCountBefore = distributor.getActiveAssetCount();
+
+        _disableDistributor();
+
+        vm.recordLogs();
+        _expectNotEnabled();
+        vm.prank(caller_);
+        distributor.disableAssetRoutes(asset);
+
+        assertEq(
+            uint8(distributor.assetState(asset)),
+            uint8(stateBefore),
+            "unauthorized call preserves asset state"
+        );
+        assertEq(
+            distributor.assetDistributionHash(asset),
+            hashBefore,
+            "unauthorized call preserves route hash"
+        );
+        assertEq(
+            distributor.getActiveAssetCount(),
+            activeCountBefore,
+            "unauthorized call preserves membership"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "unauthorized call emits no event");
+    }
+
+    // Scenarios: DAR-L02, DAR-L03.
+    function test_givenPolicyInactiveAndAssetState_whenUnauthorizedCallerDisables_reverts(
+        address caller_,
+        uint8 assetKind_,
+        bool disable_
+    ) public {
+        vm.assume(caller_ != admin && caller_ != address(configTimelock));
+        address asset = _prepareAssetKind(assetKind_);
+        IRevenueDistributor.AssetState stateBefore = distributor.assetState(asset);
+        bytes32 hashBefore = distributor.assetDistributionHash(asset);
+        uint256 activeCountBefore = distributor.getActiveAssetCount();
+        if (disable_) {
+            _disableDistributor();
+        }
+
+        _setPolicyActive(address(distributor), false);
+
+        vm.recordLogs();
+        _expectPolicyInactive();
+        vm.prank(caller_);
+        distributor.disableAssetRoutes(asset);
+
+        assertEq(
+            uint8(distributor.assetState(asset)),
+            uint8(stateBefore),
+            "unauthorized call preserves asset state"
+        );
+        assertEq(
+            distributor.assetDistributionHash(asset),
+            hashBefore,
+            "unauthorized call preserves route hash"
+        );
+        assertEq(
+            distributor.getActiveAssetCount(),
+            activeCountBefore,
+            "unauthorized call preserves membership"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "unauthorized call emits no event");
+    }
+
+    // Scenarios: DAR-A03.
     function test_givenSeededUnauthorizedIdentities_whenAssetDisabled_reverts()
         public
         givenAliceConfiguredAsRecipient
@@ -167,7 +232,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
     // given an active asset
     //   when an unauthorized caller disables its routes
     //     [X] the call reverts and the asset remains active
-    // Scenarios: DAR-A03
+    // Scenarios: DAR-A03.
     function test_givenActiveAsset_whenUnauthorizedCallerDisables_reverts(
         address caller_
     ) public givenAliceConfiguredAsRecipient {
@@ -187,19 +252,18 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
     // given the distributor is locally disabled
     //   when the selected config operator disables an active asset's routes
     //     [X] the call reverts
-    // Scenarios: DAR-L01
+    // Scenarios: DAR-L01.
     function test_givenDisabled_whenOperatorDisablesAsset_reverts()
         public
         givenAliceConfiguredAsRecipient
     {
-        vm.prank(admin);
-        distributor.disable("");
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(address(configTimelock));
+        _disableDistributor();
+        _expectNotEnabled();
+        vm.prank(_configurationCaller());
         distributor.disableAssetRoutes(address(token));
     }
 
-    // Scenarios: DAR-L01
+    // Scenarios: DAR-L01.
     function test_givenDisabled_whenPermittedCallerDisablesAnyAsset_reverts(
         uint8 assetKind_,
         bool adminCalls_
@@ -208,11 +272,10 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         IRevenueDistributor.AssetState stateBefore = distributor.assetState(asset);
         bytes32 hashBefore = distributor.assetDistributionHash(asset);
         uint256 activeCountBefore = distributor.getActiveAssetCount();
-        vm.prank(admin);
-        distributor.disable("");
+        _disableDistributor();
 
         vm.recordLogs();
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        _expectNotEnabled();
         vm.prank(adminCalls_ ? admin : address(configTimelock));
         distributor.disableAssetRoutes(asset);
 
@@ -246,7 +309,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         distributor.reEnable();
         vm.stopPrank();
 
-        vm.prank(address(configTimelock));
+        vm.prank(_configurationCaller());
         distributor.disableAssetRoutes(address(token));
 
         assertEq(
@@ -259,19 +322,18 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
     // given the distributor policy is Kernel-inactive
     //   when the selected config operator disables an active asset's routes
     //     [X] the call reverts
-    // Scenarios: DAR-L02
+    // Scenarios: DAR-L02.
     function test_givenPolicyInactive_whenOperatorDisablesAsset_reverts()
         public
         givenAliceConfiguredAsRecipient
     {
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
-        vm.expectRevert(IRevenueDistributor.RevenueDistributor_PolicyInactive.selector);
-        vm.prank(address(configTimelock));
+        _setPolicyActive(address(distributor), false);
+        _expectPolicyInactive();
+        vm.prank(_configurationCaller());
         distributor.disableAssetRoutes(address(token));
     }
 
-    // Scenarios: DAR-L02
+    // Scenarios: DAR-L02.
     function test_givenPolicyInactive_whenPermittedCallerDisablesAnyAsset_reverts(
         uint8 assetKind_,
         bool adminCalls_
@@ -280,11 +342,10 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         IRevenueDistributor.AssetState stateBefore = distributor.assetState(asset);
         bytes32 hashBefore = distributor.assetDistributionHash(asset);
         uint256 activeCountBefore = distributor.getActiveAssetCount();
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), false);
 
         vm.recordLogs();
-        vm.expectRevert(IRevenueDistributor.RevenueDistributor_PolicyInactive.selector);
+        _expectPolicyInactive();
         vm.prank(adminCalls_ ? admin : address(configTimelock));
         distributor.disableAssetRoutes(asset);
 
@@ -306,8 +367,8 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         assertEq(vm.getRecordedLogs().length, 0, "inactive call emits no event");
     }
 
-    // Scenarios: DAR-L03
-    function test_givenPolicyInactiveAndDisabled_whenAssetDisabled_revertsNotEnabledFirst()
+    // Scenarios: DAR-L03.
+    function test_givenPolicyInactiveAndDisabled_whenAssetDisabled_revertsActivityFirst()
         public
         givenAliceConfiguredAsRecipient
     {
@@ -316,8 +377,8 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
         vm.stopPrank();
 
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(address(configTimelock));
+        _expectPolicyInactive();
+        vm.prank(_configurationCaller());
         distributor.disableAssetRoutes(address(token));
     }
 
@@ -333,7 +394,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
         vm.stopPrank();
 
-        vm.prank(address(configTimelock));
+        vm.prank(_configurationCaller());
         distributor.disableAssetRoutes(address(token));
 
         assertEq(
@@ -346,9 +407,15 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
     // given an asset that has never been listed
     //   when the selected config operator tries to disable it
     //     [X] the call reverts and the asset remains unlisted
-    // Scenarios: DAR-I01
-    function test_givenNeverListedAsset_whenDisabled_reverts() public {
-        vm.prank(address(configTimelock));
+    // Scenarios: DAR-I01.
+    function test_givenNeverListedAsset_whenDisabled_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        vm.prank(authority_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRevenueDistributor.RevenueDistributor_AssetNotActive.selector,
@@ -363,11 +430,15 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DAR-I01
+    // Scenarios: DAR-I01.
     function test_givenNeverListedAddress_whenPermittedCallerDisables_reverts(
         address asset_,
-        bool adminCalls_
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
     ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         vm.assume(asset_.code.length == 0);
 
         vm.recordLogs();
@@ -377,7 +448,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
                 asset_
             )
         );
-        vm.prank(adminCalls_ ? admin : address(configTimelock));
+        vm.prank(authority_);
         distributor.disableAssetRoutes(asset_);
 
         assertEq(
@@ -391,15 +462,17 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
     // given an asset that has already been retired
     //   when the selected config operator disables it again
     //     [X] the call reverts and retirement remains in force
-    // Scenarios: DAR-I02
-    function test_givenRetiredAsset_whenDisabledAgain_reverts()
-        public
-        givenAliceConfiguredAsRecipient
-    {
-        vm.prank(address(configTimelock));
+    function test_givenRetiredAsset_whenDisabledAgain_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public givenAliceConfiguredAsRecipient {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        vm.prank(authority_);
         distributor.disableAssetRoutes(address(token));
 
-        vm.prank(address(configTimelock));
+        vm.prank(authority_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRevenueDistributor.RevenueDistributor_AssetNotActive.selector,
@@ -414,11 +487,14 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DAR-I02
     function test_givenRetiredAssetWithPendingBuckets_whenPermittedCallerDisablesAgain_reverts(
-        bool adminCalls_
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
     ) public givenAliceConfiguredAsRecipient {
-        vm.prank(address(configTimelock));
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        vm.prank(authority_);
         distributor.disableAssetRoutes(address(token));
         distributor.seedPendingForTest(address(token), alice, 10, 20, 30);
         token.mint(address(distributor), 60);
@@ -430,7 +506,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
                 address(token)
             )
         );
-        vm.prank(adminCalls_ ? admin : address(configTimelock));
+        vm.prank(authority_);
         distributor.disableAssetRoutes(address(token));
 
         _assertPendingPayouts(address(token), alice, 10, 20, 30);
@@ -446,11 +522,17 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         assertEq(vm.getRecordedLogs().length, 0, "failed repeated disable emits no event");
     }
 
-    // Scenarios: DAR-P04
-    function test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership() public {
+    // Scenarios: DAR-P04.
+    function test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         MockERC20 otherToken = new MockERC20("Other Revenue", "OREV", 18);
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
-        vm.startPrank(address(configTimelock));
+        vm.startPrank(_configurationCaller());
         distributor.setAssetRoutes(address(token), 0, routes);
         distributor.setAssetRoutes(address(otherToken), 0, routes);
         distributor.disableAssetRoutes(address(token));
@@ -470,19 +552,23 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: DAR-P04
+    // Scenarios: DAR-P04.
     function test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
         uint8 targetIndex_,
         uint8 pendingMask_,
-        bool adminCalls_
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
     ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         targetIndex_ = uint8(bound(targetIndex_, 0, 2));
         pendingMask_ = uint8(bound(pendingMask_, 0, 7));
         MockERC20 secondToken = new MockERC20("Second Revenue", "REV2", 18);
         MockERC20 thirdToken = new MockERC20("Third Revenue", "REV3", 18);
         address[3] memory assets = [address(token), address(secondToken), address(thirdToken)];
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
-        vm.startPrank(address(configTimelock));
+        vm.startPrank(_configurationCaller());
         for (uint256 i; i < assets.length; ++i) {
             distributor.setAssetRoutes(assets[i], 0, routes);
         }
@@ -495,7 +581,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
 
         vm.expectEmit(true, false, false, true, address(distributor));
         emit IRevenueDistributor.AssetDistributionDisabled(target);
-        vm.prank(adminCalls_ ? admin : address(configTimelock));
+        vm.prank(authority_);
         distributor.disableAssetRoutes(target);
 
         address[] memory remaining = distributor.getActiveAssets();
@@ -515,11 +601,14 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
     // given an active asset with a failed configured-recipient payout
     //   when the selected config operator disables the asset
     //     [X] the old route is cleared but the recipient remains owed and discoverable
-    // Scenarios: DAR-P01
-    function test_givenPendingConfiguredPayout_whenDisabled_preservesLiability()
-        public
-        givenAliceConfiguredAsRecipient
-    {
+    // Scenarios: DAR-P01.
+    function test_givenPendingConfiguredPayout_whenDisabled_preservesLiability(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
+    ) public givenAliceConfiguredAsRecipient {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         token.mint(address(distributor), 100);
         vm.mockCallRevert(
             address(token),
@@ -529,7 +618,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         distributor.distribute(address(token));
         vm.clearMockedCalls();
 
-        vm.prank(address(configTimelock));
+        vm.prank(authority_);
         distributor.disableAssetRoutes(address(token));
 
         assertEq(distributor.pendingPayout(address(token), alice), 33, "recipient remains owed");
@@ -543,14 +632,18 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         assertEq(routes.length, 0, "retirement clears configured route");
     }
 
-    // Scenarios: DAR-P01
+    // Scenarios: DAR-P01.
     function test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
         uint8 pendingMask_,
         uint96 route_,
         uint96 yield_,
         uint96 treasury_,
-        bool adminCalls_
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_
     ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
         pendingMask_ = uint8(bound(pendingMask_, 1, 7));
         route_ = uint96(bound(route_, 1, type(uint96).max));
         yield_ = uint96(bound(yield_, 1, type(uint96).max));
@@ -561,7 +654,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         uint256 total = routeAmount + yieldAmount + treasuryAmount;
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: bob, bps: 2_500});
-        vm.prank(address(configTimelock));
+        vm.prank(authority_);
         distributor.setAssetRoutes(address(token), 0, routes);
         distributor.seedPendingForTest(
             address(token),
@@ -574,7 +667,7 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
 
         vm.expectEmit(true, false, false, true, address(distributor));
         emit IRevenueDistributor.AssetDistributionDisabled(address(token));
-        vm.prank(adminCalls_ ? admin : address(configTimelock));
+        vm.prank(authority_);
         distributor.disableAssetRoutes(address(token));
 
         _assertPendingPayouts(address(token), alice, routeAmount, yieldAmount, treasuryAmount);
@@ -606,10 +699,10 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
         if (assetKind_ == 2) return address(new MockERC20("Never Listed", "NONE", 18));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: bob, bps: 2_500});
-        vm.prank(address(configTimelock));
+        vm.prank(_configurationCaller());
         distributor.setAssetRoutes(address(token), 0, routes);
         if (assetKind_ == 4) {
-            vm.prank(address(configTimelock));
+            vm.prank(_configurationCaller());
             distributor.disableAssetRoutes(address(token));
         }
         return address(token);
@@ -620,6 +713,782 @@ contract RevenueDistributorDisableAssetRoutesTest is RevenueDistributorTest {
             if (values_[i] == value_) return true;
         }
         return false;
+    }
+
+    // Scenarios: DAR-P01.
+    function test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability_AdminOnlySeed()
+        public
+    {
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            1,
+            1,
+            1,
+            1,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: DAR-P01.
+    function test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability_OperatorOnlySeed()
+        public
+    {
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            1,
+            1,
+            1,
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: DAR-P01.
+    function test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability_RolesOverlapSeed()
+        public
+    {
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            1,
+            1,
+            1,
+            1,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: DAR-P04.
+    function test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership_AdminOnlySeed()
+        public
+    {
+        test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership(
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: DAR-P04.
+    function test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership_OperatorOnlySeed()
+        public
+    {
+        test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership(
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: DAR-P04.
+    function test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership_RolesOverlapSeed()
+        public
+    {
+        test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership(
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: DAR-I01.
+    function test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_AdminOnlySeed()
+        public
+    {
+        test_givenNeverListedAddress_whenPermittedCallerDisables_reverts(
+            address(0x2345),
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: DAR-I01.
+    function test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_OperatorOnlySeed()
+        public
+    {
+        test_givenNeverListedAddress_whenPermittedCallerDisables_reverts(
+            address(0x2345),
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: DAR-I01.
+    function test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_RolesOverlapSeed()
+        public
+    {
+        test_givenNeverListedAddress_whenPermittedCallerDisables_reverts(
+            address(0x2345),
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: DAR-I01.
+    function test_givenNeverListedAsset_whenDisabled_reverts_AdminOnlySeed() public {
+        test_givenNeverListedAsset_whenDisabled_reverts(address(0x1234), false, false);
+    }
+
+    // Scenarios: DAR-I01.
+    function test_givenNeverListedAsset_whenDisabled_reverts_OperatorOnlySeed() public {
+        test_givenNeverListedAsset_whenDisabled_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: DAR-I01.
+    function test_givenNeverListedAsset_whenDisabled_reverts_RolesOverlapSeed() public {
+        test_givenNeverListedAsset_whenDisabled_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: DAR-P01.
+    function test_givenPendingConfiguredPayout_whenDisabled_preservesLiability_AdminOnlySeed()
+        public
+    {
+        test_givenPendingConfiguredPayout_whenDisabled_preservesLiability(
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: DAR-P01.
+    function test_givenPendingConfiguredPayout_whenDisabled_preservesLiability_OperatorOnlySeed()
+        public
+    {
+        test_givenPendingConfiguredPayout_whenDisabled_preservesLiability(
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: DAR-P01.
+    function test_givenPendingConfiguredPayout_whenDisabled_preservesLiability_RolesOverlapSeed()
+        public
+    {
+        test_givenPendingConfiguredPayout_whenDisabled_preservesLiability(
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    function test_givenRetiredAssetWithPendingBuckets_whenPermittedCallerDisablesAgain_reverts_AdminOnlySeed()
+        public
+    {
+        test_givenRetiredAssetWithPendingBuckets_whenPermittedCallerDisablesAgain_reverts(
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    function test_givenRetiredAssetWithPendingBuckets_whenPermittedCallerDisablesAgain_reverts_OperatorOnlySeed()
+        public
+    {
+        test_givenRetiredAssetWithPendingBuckets_whenPermittedCallerDisablesAgain_reverts(
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    function test_givenRetiredAssetWithPendingBuckets_whenPermittedCallerDisablesAgain_reverts_RolesOverlapSeed()
+        public
+    {
+        test_givenRetiredAssetWithPendingBuckets_whenPermittedCallerDisablesAgain_reverts(
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    function test_givenRetiredAsset_whenDisabledAgain_reverts_AdminOnlySeed() public {
+        test_givenRetiredAsset_whenDisabledAgain_reverts(address(0x1234), false, false);
+    }
+
+    function test_givenRetiredAsset_whenDisabledAgain_reverts_OperatorOnlySeed() public {
+        test_givenRetiredAsset_whenDisabledAgain_reverts(address(0x1234), true, false);
+    }
+
+    function test_givenRetiredAsset_whenDisabledAgain_reverts_RolesOverlapSeed() public {
+        test_givenRetiredAsset_whenDisabledAgain_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: DAR-P04.
+    function test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets_AdminOnlySeed()
+        public
+    {
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            1,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: DAR-P04.
+    function test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets_OperatorOnlySeed()
+        public
+    {
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: DAR-P04.
+    function test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets_RolesOverlapSeed()
+        public
+    {
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            1,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: DAR-I02.
+    function test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+        address authority_,
+        bool operatorOnly_,
+        bool overlap_,
+        uint8 mask_,
+        uint96 route_,
+        uint96 yield_,
+        uint96 treasury_
+    ) public {
+        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _configurationSeed = authority_;
+        mask_ = uint8(bound(mask_, 0, 7));
+        uint256 routeAmount = mask_ & 1 == 0 ? 0 : bound(route_, 1, type(uint96).max);
+        uint256 yieldAmount = mask_ & 2 == 0 ? 0 : bound(yield_, 1, type(uint96).max);
+        uint256 treasuryAmount = mask_ & 4 == 0 ? 0 : bound(treasury_, 1, type(uint96).max);
+        vm.startPrank(admin);
+        distributor.setAssetRoutes(address(token), 0, new IRevenueDistributor.AssetRoute[](0));
+        distributor.disableAssetRoutes(address(token));
+        vm.stopPrank();
+        distributor.seedPendingForTest(
+            address(token),
+            alice,
+            routeAmount,
+            yieldAmount,
+            treasuryAmount
+        );
+        token.mint(address(distributor), routeAmount + yieldAmount + treasuryAmount);
+        bytes32 beforeState = _revenueAccountingDigest();
+        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributor.RevenueDistributor_AssetNotActive.selector,
+                address(token)
+            )
+        );
+        vm.prank(authority_);
+        distributor.disableAssetRoutes(address(token));
+        assertEq(
+            _revenueAccountingDigest(),
+            beforeState,
+            "Repeated retirement preserves every bucket, index, route and balance"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Repeated retirement commits no logs");
+    }
+
+    // Scenarios: DAR-I02.
+    function test_givenRetirementMembershipAndAmountSeeds() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+            address(0x1234),
+            false,
+            false,
+            0,
+            1,
+            1,
+            1
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            0,
+            0,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            0,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            2,
+            0,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+            address(0x1234),
+            false,
+            false,
+            1,
+            1,
+            1,
+            1
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            0,
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            2,
+            1,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+            address(0x1234),
+            false,
+            false,
+            2,
+            1,
+            1,
+            1
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            0,
+            2,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            2,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            2,
+            2,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+            address(0x1234),
+            false,
+            false,
+            3,
+            1,
+            1,
+            1
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            0,
+            3,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            3,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            2,
+            3,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+            address(0x1234),
+            false,
+            false,
+            4,
+            1,
+            1,
+            1
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            0,
+            4,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            4,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            2,
+            4,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+            address(0x1234),
+            false,
+            false,
+            5,
+            1,
+            1,
+            1
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            0,
+            5,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            5,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            2,
+            5,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+            address(0x1234),
+            false,
+            false,
+            6,
+            1,
+            1,
+            1
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            0,
+            6,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            6,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            2,
+            6,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts(
+            address(0x1234),
+            false,
+            false,
+            7,
+            1,
+            1,
+            1
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            0,
+            7,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            1,
+            7,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets(
+            2,
+            7,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            1,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            2,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            3,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            4,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            5,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            6,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            7,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            false,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            1,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            2,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            3,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            4,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            5,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            6,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            7,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            false
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            1,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            2,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            3,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            4,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            5,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            6,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
+        test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability(
+            7,
+            type(uint96).max,
+            type(uint96).max,
+            type(uint96).max,
+            address(0x1234),
+            true,
+            true
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore retirement seed");
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast)

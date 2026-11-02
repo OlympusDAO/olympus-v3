@@ -10,6 +10,8 @@ delay to operator calls; direct admin calls follow the admin holder's governance
 See [contract linkages](revenue_distributor.md#contract-linkages) and
 [Burner Loans access control](burner_loans_access_control.md) for source-policy permissions.
 
+Ordinary mutations apply existing reentrancy guards, own Kernel activity, required local enablement, then caller authority. Disabled-capable recovery and configuration omit the enabled requirement. Lifecycle transitions retain their inherited checks; disable remains available while inactive.
+
 ## RevenueDistributor
 
 | Function | Caller | Requirements and effect |
@@ -53,7 +55,7 @@ without binding balances at queue time. A failed execution retains its action an
 
 | Function | Caller | Requirements and effect |
 | --- | --- | --- |
-| `execute` | Heart | Returns without work if the task or distributor is disabled or Kernel-inactive; otherwise attempts active assets within its gas budget. |
+| `execute` | Heart | An inactive task reverts. An active disabled task, or an unavailable distributor, produces no work; otherwise attempts active assets within its gas budget. |
 | `selfExecuteTask` | Task itself | Internal execution path reached through `execute`. |
 | `setExecutionGasLimit`, `setMinimumGasToAttempt`, `setGasReserve` | Admin or revenue distributor admin | Task Kernel-active; local disablement allowed. Validates gas settings. |
 | `setNextAssetIndex` | Admin or revenue distributor admin | Task Kernel-active; local disablement allowed. Zero or an index in the active asset set. |

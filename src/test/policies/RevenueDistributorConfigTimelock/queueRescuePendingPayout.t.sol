@@ -2,30 +2,31 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
 import {IRevenueDistributorRescue} from "src/policies/interfaces/IRevenueDistributorRescue.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
 import {REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Actions} from "src/Kernel.sol";
+import {RevenueDistributorConfigTimelockTest} from "./RevenueDistributorConfigTimelockTest.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
-import {RevenueDistributorTest} from "src/test/policies/RevenueDistributor/RevenueDistributorTest.sol";
 
 // Small, finite scenario loops use literal base units and inspect expected failures.
 // forge-lint: disable-start(literal-instead-of-constant,unused-return,calls-loop,unsafe-typecast)
 /// @dev Fixed ten-unit entitlement isolates RDT validation and queue integration from RD allocation.
-contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is RevenueDistributorTest {
+contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
+    RevenueDistributorConfigTimelockTest
+{
     uint256 internal constant _AMOUNT = 4;
     uint256 internal constant _ENTITLEMENT = 10;
     uint16 internal constant _FULL_REPURCHASE_BPS = 10_000;
@@ -55,9 +56,13 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice Both roles queue exact four-unit requests for Active/Retired assets and disabled RD.
-    // Scenarios: RDT-L01, RDT-Q01.
-    function test_givenValidRequest_whenEachRoleQueues() public {
-        address[2] memory callers = [admin, _revenueAdmin];
+    // Scenarios: RDT-L01, RDT-L04, RDT-Q01.
+    function test_givenValidRequest_whenEachRoleQueues(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        address[3] memory callers = [admin, _revenueAdmin, proposerSeed_];
         for (uint256 state; state < 4; ++state) {
             for (uint256 c; c < callers.length; ++c) {
                 uint256 snapshot = vm.snapshotState();
@@ -66,8 +71,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
                     distributor.disableAssetRoutes(address(_rescueAsset));
                 }
                 if (state % 2 != 0) {
-                    vm.prank(admin);
-                    distributor.disable("");
+                    _disablePolicy(address(distributor), admin);
                 }
                 uint64 id = _assertQueued(
                     callers[c],
@@ -91,12 +95,9 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
             uint256 snapshot = vm.snapshotState();
             if (disabledRD != 0) {
-                vm.prank(admin);
-                distributor.disable("");
+                _disablePolicy(address(distributor), admin);
             }
-            vm.startPrank(admin);
-            configTimelock.disable("");
-            vm.stopPrank();
+            _disablePolicy(address(configTimelock), admin);
             bytes memory failure = abi.encodeWithSelector(IEnabler.NotEnabled.selector);
 
             for (uint256 c; c < callers.length; ++c) {
@@ -115,15 +116,12 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
             uint256 snapshot = vm.snapshotState();
             if (disabledRD != 0) {
-                vm.prank(admin);
-                distributor.disable("");
+                _disablePolicy(address(distributor), admin);
             }
-            vm.startPrank(admin);
-            kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
-            vm.stopPrank();
+            _setPolicyActive(address(configTimelock), false);
             bytes memory failure = abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
                     .selector,
                 address(configTimelock)
             );
@@ -139,17 +137,15 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
 
     // Scenarios: RDT-L08.
     function test_givenOperatorChanged_whenPendingRescueQueued_reverts() public {
-        address[3] memory callers = [admin, _revenueAdmin, emergency];
+        address[2] memory callers = [admin, _revenueAdmin];
 
         for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
             uint256 snapshot = vm.snapshotState();
             if (disabledRD != 0) {
-                vm.prank(admin);
-                distributor.disable("");
+                _disablePolicy(address(distributor), admin);
             }
-            vm.startPrank(admin);
+            vm.prank(admin);
             distributor.setConfigOperator(emergency);
-            vm.stopPrank();
             bytes memory failure = abi.encodeWithSelector(
                 IConfigOperator.ConfigOperator_Unauthorized.selector,
                 address(configTimelock)
@@ -169,14 +165,12 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
             uint256 snapshot = vm.snapshotState();
             if (disabledRD != 0) {
-                vm.prank(admin);
-                distributor.disable("");
+                _disablePolicy(address(distributor), admin);
             }
-            vm.startPrank(admin);
-            kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
-            vm.stopPrank();
+            _setPolicyActive(address(distributor), false);
             bytes memory failure = abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+                IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                address(distributor)
             );
 
             vm.expectRevert(failure);
@@ -200,14 +194,12 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
             uint256 snapshot = vm.snapshotState();
             if (disabledRD != 0) {
-                vm.prank(admin);
-                distributor.disable("");
+                _disablePolicy(address(distributor), admin);
             }
-            vm.startPrank(admin);
-            kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
-            vm.stopPrank();
+            _setPolicyActive(address(distributor), false);
             bytes memory failure = abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+                IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                address(distributor)
             );
 
             vm.expectRevert(failure);
@@ -233,14 +225,12 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
             uint256 snapshot = vm.snapshotState();
             if (disabledRD != 0) {
-                vm.prank(admin);
-                distributor.disable("");
+                _disablePolicy(address(distributor), admin);
             }
-            vm.startPrank(admin);
-            kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
-            vm.stopPrank();
+            _setPolicyActive(address(distributor), false);
             bytes memory failure = abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+                IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                address(distributor)
             );
 
             vm.expectRevert(failure);
@@ -276,21 +266,56 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice Simultaneous disablement, activity and operator faults establish RDT check order.
-    // Scenarios: RDT-L03, RDT-L07, RDT-L08.
+    // Scenarios: RDT-A01, RDT-L07, RDT-L09.
     function test_whenQueueFaultsCompete_reverts() public {
-        uint256 snapshot = vm.snapshotState();
+        uint256 checkpoint = vm.snapshotState();
+        test_givenInactiveDisabledTimelock_givenInactiveDistributor_whenUnauthorizedQueues_reverts();
+        assertTrue(vm.revertToState(checkpoint), "Restore competing lifecycle seed");
+        test_givenInactiveTimelock_givenOperatorChanged_whenUnauthorizedQueues_reverts();
+        assertTrue(vm.revertToState(checkpoint), "Restore competing authority seed");
+        test_givenOperatorChanged_whenUnauthorizedCallerQueues_reverts();
+    }
+
+    // Scenarios: RDT-L09.
+    function test_givenInactiveDisabledTimelock_givenInactiveDistributor_whenUnauthorizedQueues_reverts()
+        public
+    {
         _failGate(Gate.DistributorInactive);
-        _failGate(Gate.Inactive);
+        bytes memory failure = _failGate(Gate.Inactive);
         _failGate(Gate.Disabled);
-        _assertQueueFailure(emergency, 0, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        assertTrue(vm.revertToState(snapshot), "restore competing lifecycle");
-        snapshot = vm.snapshotState();
+        _assertQueueFailure(emergency, 0, failure);
+    }
+
+    // Scenarios: RDT-L07.
+    function test_givenInactiveTimelock_givenOperatorChanged_whenUnauthorizedQueues_reverts()
+        public
+    {
         _failGate(Gate.OperatorChanged);
         bytes memory failure = _failGate(Gate.Inactive);
         _assertQueueFailure(emergency, 0, failure);
-        assertTrue(vm.revertToState(snapshot), "restore competing authority");
-        failure = _failGate(Gate.OperatorChanged);
-        _assertQueueFailure(emergency, 0, failure);
+    }
+
+    // Scenarios: RDT-A01.
+    function test_givenOperatorChanged_whenUnauthorizedCallerQueues_reverts() public {
+        for (uint256 disabledRD; disabledRD < 2; ++disabledRD) {
+            uint256 checkpoint = vm.snapshotState();
+            if (disabledRD != 0) _disablePolicy(address(distributor), admin);
+            _failGate(Gate.OperatorChanged);
+            _assertQueueFailure(
+                emergency,
+                _AMOUNT,
+                abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+            );
+            _assertQueueFailure(
+                emergency,
+                0,
+                abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+            );
+            assertTrue(
+                vm.revertToState(checkpoint),
+                "Restore unauthorized operator-change partition"
+            );
+        }
     }
 
     /// @notice Zero amount is rejected by RD before either a free or already-owned key.
@@ -303,8 +328,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
                 distributor.disableAssetRoutes(address(_rescueAsset));
             }
             if ((state & 2) != 0) {
-                vm.prank(admin);
-                distributor.disable("");
+                _disablePolicy(address(distributor), admin);
             }
 
             address[2] memory callers = [admin, _revenueAdmin];
@@ -323,8 +347,12 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice All recipients/amounts/destinations and route actions share the same asset key.
-    // Scenarios: RDT-Q02.
-    function test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts() public {
+    // Scenarios: RDCT-BATCH-Q02, RDCT-PENDING-RESCUE-Q02.
+    function test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         _setRoute(address(_rescueAsset), emergency);
         _rescueAsset.mint(address(distributor), 10);
         _rescueAsset.setTransferReverts(emergency, true);
@@ -361,8 +389,12 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice Another asset and a global yield-recipient action are independent of the rescue key.
-    // Scenarios: RDT-Q03.
-    function test_givenIndependentAssetAndGlobalAction_whenQueued() public {
+    // Scenarios: RDCT-BATCH-Q03, RDCT-PENDING-RESCUE-Q03.
+    function test_givenIndependentAssetAndGlobalAction_whenQueued(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         MockRevertingTransferToken other = new MockRevertingTransferToken(18);
         _setRoute(address(other), alice);
         other.mint(address(distributor), 10);
@@ -373,8 +405,10 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
             uint256 snapshot = vm.snapshotState();
             uint64 first = _assertQueued(callers[c], address(_rescueAsset), alice, bob, _AMOUNT);
             uint64 second = _assertQueued(callers[c], address(other), alice, bob, _AMOUNT);
+            MockYieldRepurchaseRecipient candidate = new MockYieldRepurchaseRecipient(kernel);
+            _setPolicyActive(address(candidate), true);
             vm.prank(callers[c]);
-            uint64 globalActionId = configTimelock.queueSetYieldRecipient(address(0));
+            uint64 globalActionId = configTimelock.queueSetYieldRecipient(address(candidate));
             (bytes32 globalKey, bytes32 globalHash) = configTimelock.getQueuedConfigState(
                 globalActionId,
                 0,
@@ -420,7 +454,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice Changing entitlement or custody keeps the hash live and revalidates stored amount=4.
-    // Scenarios: RDT-E03, EXEC-S02.
+    // Scenarios: EXEC-S02, RDT-E03.
     function test_givenQueuedRequest_whenEntitlementIncreases() public {
         vm.expectCall(
             address(distributor),
@@ -442,8 +476,14 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         assertTrue(vm.revertToState(snapshot), "restore changed entitlement");
     }
 
-    // Scenarios: RDT-E03, EXEC-S02.
-    function test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient() public {
+    // Scenarios: EXEC-S02, RDT-E11.
+    function test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         vm.expectCall(
             address(distributor),
             abi.encodeCall(
@@ -464,8 +504,14 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         assertTrue(vm.revertToState(snapshot), "restore changed entitlement");
     }
 
-    // Scenarios: RDT-E03, EXEC-S02.
-    function test_givenQueuedRequest_whenEntitlementEqualsAmount() public {
+    // Scenarios: EXEC-S02, RDT-E12.
+    function test_givenQueuedRequest_whenEntitlementEqualsAmount(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         vm.expectCall(
             address(distributor),
             abi.encodeCall(
@@ -486,8 +532,14 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         assertTrue(vm.revertToState(snapshot), "restore changed entitlement");
     }
 
-    // Scenarios: RDT-E03, EXEC-S02.
-    function test_givenQueuedRequest_whenCustodyIncreases() public {
+    // Scenarios: EXEC-S02, RDT-E13.
+    function test_givenQueuedRequest_whenCustodyIncreases(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         vm.expectCall(
             address(distributor),
             abi.encodeCall(
@@ -537,8 +589,14 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         assertTrue(vm.revertToState(snapshot), "restore changed entitlement");
     }
 
-    // Scenarios: RDT-E04.
-    function test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts() public {
+    // Scenarios: RDT-E14.
+    function test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         vm.expectCall(
             address(distributor),
             abi.encodeCall(
@@ -570,7 +628,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice Retirement stales the hash before amount checks, even if entitlement fell below four.
-    // Scenarios: RDT-E05.
+    // Scenarios: RDCT-EXECUTE-E05.
     function test_givenQueuedActiveAsset_whenRetired_reverts() public {
         for (uint256 reduce; reduce < 2; ++reduce) {
             uint256 snapshot = vm.snapshotState();
@@ -615,8 +673,14 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         _assertExecuted(id, _ENTITLEMENT);
     }
 
-    // Scenarios: RDT-E09.
-    function test_givenQueuedFixedRecipient_whenYieldRecipientChanges() public {
+    // Scenarios: RDT-E18.
+    function test_givenQueuedFixedRecipient_whenYieldRecipientChanges(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         // Historical route debt belongs to Alice, regardless of today's role destinations.
         vm.expectCall(
             address(distributor),
@@ -627,17 +691,21 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
             uint64(1)
         );
         uint64 id = _assertQueued(admin, address(_rescueAsset), alice, bob, _AMOUNT);
-        MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
-        vm.startPrank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+        MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
-        vm.stopPrank();
         vm.warp(configTimelock.getQueuedAction(id).executableAt);
         _assertExecuted(id, _ENTITLEMENT);
     }
 
-    // Scenarios: RDT-E09.
-    function test_givenQueuedFixedRecipient_whenTreasuryUpgraded() public {
+    // Scenarios: RDT-E19.
+    function test_givenQueuedFixedRecipient_whenTreasuryUpgraded(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         // Historical route debt belongs to Alice, regardless of today's role destinations.
         vm.expectCall(
             address(distributor),
@@ -649,15 +717,20 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         );
         uint64 id = _assertQueued(admin, address(_rescueAsset), alice, bob, _AMOUNT);
         OlympusTreasury nextTreasury = new OlympusTreasury(kernel);
-        vm.prank(admin);
-        kernel.executeAction(Actions.UpgradeModule, address(nextTreasury));
+        _upgradeModule(nextTreasury);
         vm.warp(configTimelock.getQueuedAction(id).executableAt);
         _assertExecuted(id, _ENTITLEMENT);
     }
 
     /// @notice Global repurchase and Treasury debt follows new role destinations after queueing.
-    // Scenarios: RDT-E04.
-    function test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts() public {
+    // Scenarios: RDT-E15.
+    function test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         // Role debt follows the current role holder; the queued address loses entitlement.
         _rescueAsset = new MockRevertingTransferToken(18);
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
@@ -688,8 +761,14 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         );
     }
 
-    // Scenarios: RDT-E04.
-    function test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts() public {
+    // Scenarios: RDT-E16.
+    function test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         // Role debt follows the current role holder; the queued address loses entitlement.
         _rescueAsset = new MockRevertingTransferToken(18);
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
@@ -701,8 +780,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         distributor.distribute(address(_rescueAsset));
         uint64 id = _assertQueued(admin, address(_rescueAsset), _originalRecipient, bob, _AMOUNT);
         OlympusTreasury next = new OlympusTreasury(kernel);
-        vm.prank(admin);
-        kernel.executeAction(Actions.UpgradeModule, address(next));
+        _upgradeModule(next);
         vm.warp(configTimelock.getQueuedAction(id).executableAt);
         _assertExecutionFailure(
             id,
@@ -735,8 +813,14 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         assertTrue(vm.revertToState(snapshot), "restore dependency failure");
     }
 
-    // Scenarios: RDT-E06.
-    function test_givenQueuedRequest_whenCustodyIsInsufficient_reverts() public {
+    // Scenarios: RDT-E17.
+    function test_givenQueuedRequest_whenCustodyIsInsufficient_reverts(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_,
+        address executor_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        _selectExecutor(executor_);
         uint256 snapshot = vm.snapshotState();
         uint64 id = _assertQueued(admin, address(_rescueAsset), _originalRecipient, bob, _AMOUNT);
         bytes memory expected;
@@ -760,10 +844,10 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         uint64 id = _assertQueued(admin, address(_rescueAsset), _originalRecipient, bob, _AMOUNT);
         bytes memory expected;
 
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(distributor));
+        _setPolicyActive(address(distributor), false);
         expected = abi.encodeWithSelector(
-            IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+            IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+            address(distributor)
         );
 
         vm.warp(configTimelock.getQueuedAction(id).executableAt);
@@ -772,7 +856,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice Disablement after queueing blocks a mature request and preserves its debt and key.
-    // Scenarios: RDT-E11.
+    // Scenarios: RDCT-EXECUTE-E11.
     function test_givenQueuedRequest_givenTimelockDisabled_whenExecuted_reverts() public {
         uint64 id = _assertQueued(admin, address(_rescueAsset), _originalRecipient, bob, _AMOUNT);
         bytes memory failure = _failGate(Gate.Disabled);
@@ -781,7 +865,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice Kernel deactivation after queueing blocks a mature request before dispatch to RD.
-    // Scenarios: RDT-E12.
+    // Scenarios: RDCT-EXECUTE-E12.
     function test_givenQueuedRequest_givenTimelockInactive_whenExecuted_reverts() public {
         uint64 id = _assertQueued(admin, address(_rescueAsset), _originalRecipient, bob, _AMOUNT);
         bytes memory failure = _failGate(Gate.Inactive);
@@ -790,15 +874,13 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     }
 
     /// @notice A ready pending rescue needs no executor role; only its queued inputs determine payment.
-    // Scenarios: RDT-E13.
     function test_givenQueuedRequest_whenAnyCallerExecutes(address executor_) public {
         uint64 id = _assertQueued(admin, address(_rescueAsset), _originalRecipient, bob, _AMOUNT);
         vm.warp(configTimelock.getQueuedAction(id).executableAt);
         // No exclusions, including zero, proposers and protocol contracts. Keep the prank active
         // across the helper's balance reads so the execution call uses this fuzzed identity.
-        vm.startPrank(executor_);
+        _selectExecutor(executor_);
         _assertExecuted(id, 10);
-        vm.stopPrank();
     }
 
     /// @dev Install a single 100% fixed route. Distribution setup, not allocation, is the queue fixture.
@@ -813,26 +895,23 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     function _newYieldRecipient(
         address asset_
     ) internal returns (MockYieldRepurchaseRecipient recipient) {
-        recipient = new MockYieldRepurchaseRecipient(kernel);
-        vm.prank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+        recipient = _activeYieldRecipient();
         recipient.setVaultConfig(asset_, asset_, true);
     }
 
     /// @dev Fail one gate and return its exact custom error; local RD disablement is independent.
     function _failGate(Gate gate_) internal returns (bytes memory) {
-        vm.startPrank(admin);
         if (gate_ == Gate.Disabled) {
-            configTimelock.disable("");
+            _disablePolicy(address(configTimelock), admin);
         } else if (gate_ == Gate.OperatorChanged) {
+            vm.prank(admin);
             distributor.setConfigOperator(emergency);
         } else {
-            kernel.executeAction(
-                Actions.DeactivatePolicy,
-                gate_ == Gate.Inactive ? address(configTimelock) : address(distributor)
+            _setPolicyActive(
+                gate_ == Gate.Inactive ? address(configTimelock) : address(distributor),
+                false
             );
         }
-        vm.stopPrank();
         if (gate_ == Gate.Disabled) return abi.encodeWithSelector(IEnabler.NotEnabled.selector);
         if (gate_ == Gate.OperatorChanged) {
             return
@@ -844,13 +923,14 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         if (gate_ == Gate.DistributorInactive) {
             return
                 abi.encodeWithSelector(
-                    IRevenueDistributor.RevenueDistributor_PolicyInactive.selector
+                    IRevenueDistributor.RevenueDistributor_PolicyNotActive.selector,
+                    address(distributor)
                 );
         }
         return
             abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
                     .selector,
                 address(configTimelock)
             );
@@ -913,7 +993,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
                 IRevenueDistributorRescue.rescuePendingPayout.selector,
                 payload
             );
-            uint48 ready = uint48(block.timestamp + configTimelock.timelockDelay());
+            uint48 ready = uint48(vm.getBlockTimestamp() + configTimelock.timelockDelay());
             vm.expectEmit(true, true, true, true, address(configTimelock));
             emit IConfigTimelockBatchQueue.ConfigStateQueued(
                 next,
@@ -948,10 +1028,10 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         assertEq(configTimelock.nextActionId(), next + 1, "counter increments once");
         ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(id);
         assertEq(action.proposer, caller_, "proposer stored");
-        assertEq(action.queuedAt, block.timestamp, "queue time stored");
+        assertEq(action.queuedAt, vm.getBlockTimestamp(), "queue time stored");
         assertEq(
             action.executableAt,
-            block.timestamp + configTimelock.timelockDelay(),
+            vm.getBlockTimestamp() + configTimelock.timelockDelay(),
             "ready time stored"
         );
         assertEq(
@@ -988,6 +1068,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     /// @dev Compare execution with explicit current entitlement and verify completion/key release.
     function _assertExecuted(uint64 id_, uint256 available_) internal {
         uint256 custodyBefore = _rescueAsset.balanceOf(address(distributor));
+        vm.prank(_executorSeed);
         configTimelock.executeQueuedAction(id_);
         assertEq(_rescueAsset.balanceOf(bob), _AMOUNT, "only stored four paid");
         assertEq(
@@ -1017,6 +1098,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
     function _assertExecutionFailure(uint64 id_, bytes memory failure_) internal {
         bytes32 beforeState = _queueState();
         vm.expectRevert(failure_);
+        vm.prank(_executorSeed);
         configTimelock.executeQueuedAction(id_);
         assertEq(_queueState(), beforeState, "failed execution fully rolls back");
     }
@@ -1105,6 +1187,342 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is Revenue
         }
         return
             keccak256(abi.encode(configTimelock.nextActionId(), owner, actionHash, _fundsHash()));
+    }
+
+    // Scenarios: RDCT-BATCH-Q02.
+    function test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_AdminOnlySeed() public {
+        test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts(
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: RDCT-BATCH-Q02.
+    function test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts(address(0x1234), true, false);
+    }
+
+    // Scenarios: RDCT-BATCH-Q02.
+    function test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_RolesOverlapSeed()
+        public
+    {
+        test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts(address(0x1234), true, true);
+    }
+
+    // Scenarios: RDCT-BATCH-Q03.
+    function test_givenIndependentAssetAndGlobalAction_whenQueued_AdminOnlySeed() public {
+        test_givenIndependentAssetAndGlobalAction_whenQueued(address(0x1234), false, false);
+    }
+
+    // Scenarios: RDCT-BATCH-Q03.
+    function test_givenIndependentAssetAndGlobalAction_whenQueued_RevenueRoleOnlySeed() public {
+        test_givenIndependentAssetAndGlobalAction_whenQueued(address(0x1234), true, false);
+    }
+
+    // Scenarios: RDCT-BATCH-Q03.
+    function test_givenIndependentAssetAndGlobalAction_whenQueued_RolesOverlapSeed() public {
+        test_givenIndependentAssetAndGlobalAction_whenQueued(address(0x1234), true, true);
+    }
+
+    // Scenarios: RDT-E19.
+    function test_givenQueuedFixedRecipient_whenTreasuryUpgraded_AdminOnlySeed() public {
+        test_givenQueuedFixedRecipient_whenTreasuryUpgraded(
+            address(0x1234),
+            false,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E19.
+    function test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RevenueRoleOnlySeed() public {
+        test_givenQueuedFixedRecipient_whenTreasuryUpgraded(
+            address(0x1234),
+            true,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E19.
+    function test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RolesOverlapSeed() public {
+        test_givenQueuedFixedRecipient_whenTreasuryUpgraded(
+            address(0x1234),
+            true,
+            true,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E18.
+    function test_givenQueuedFixedRecipient_whenYieldRecipientChanges_AdminOnlySeed() public {
+        test_givenQueuedFixedRecipient_whenYieldRecipientChanges(
+            address(0x1234),
+            false,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E18.
+    function test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RevenueRoleOnlySeed() public {
+        test_givenQueuedFixedRecipient_whenYieldRecipientChanges(
+            address(0x1234),
+            true,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E18.
+    function test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RolesOverlapSeed() public {
+        test_givenQueuedFixedRecipient_whenYieldRecipientChanges(
+            address(0x1234),
+            true,
+            true,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E15.
+    function test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_AdminOnlySeed()
+        public
+    {
+        test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts(
+            address(0x1234),
+            false,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E15.
+    function test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts(
+            address(0x1234),
+            true,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E15.
+    function test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RolesOverlapSeed()
+        public
+    {
+        test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts(
+            address(0x1234),
+            true,
+            true,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E13.
+    function test_givenQueuedRequest_whenCustodyIncreases_AdminOnlySeed() public {
+        test_givenQueuedRequest_whenCustodyIncreases(address(0x1234), false, false, address(0));
+    }
+
+    // Scenarios: RDT-E13.
+    function test_givenQueuedRequest_whenCustodyIncreases_RevenueRoleOnlySeed() public {
+        test_givenQueuedRequest_whenCustodyIncreases(address(0x1234), true, false, address(0));
+    }
+
+    // Scenarios: RDT-E13.
+    function test_givenQueuedRequest_whenCustodyIncreases_RolesOverlapSeed() public {
+        test_givenQueuedRequest_whenCustodyIncreases(address(0x1234), true, true, address(0));
+    }
+
+    // Scenarios: RDT-E17.
+    function test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_AdminOnlySeed() public {
+        test_givenQueuedRequest_whenCustodyIsInsufficient_reverts(
+            address(0x1234),
+            false,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E17.
+    function test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenQueuedRequest_whenCustodyIsInsufficient_reverts(
+            address(0x1234),
+            true,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E17.
+    function test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RolesOverlapSeed() public {
+        test_givenQueuedRequest_whenCustodyIsInsufficient_reverts(
+            address(0x1234),
+            true,
+            true,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E14.
+    function test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_AdminOnlySeed() public {
+        test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts(
+            address(0x1234),
+            false,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E14.
+    function test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts(
+            address(0x1234),
+            true,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E14.
+    function test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RolesOverlapSeed() public {
+        test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts(
+            address(0x1234),
+            true,
+            true,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E11.
+    function test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_AdminOnlySeed()
+        public
+    {
+        test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient(
+            address(0x1234),
+            false,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E11.
+    function test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient(
+            address(0x1234),
+            true,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E11.
+    function test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RolesOverlapSeed()
+        public
+    {
+        test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient(
+            address(0x1234),
+            true,
+            true,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E12.
+    function test_givenQueuedRequest_whenEntitlementEqualsAmount_AdminOnlySeed() public {
+        test_givenQueuedRequest_whenEntitlementEqualsAmount(
+            address(0x1234),
+            false,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E12.
+    function test_givenQueuedRequest_whenEntitlementEqualsAmount_RevenueRoleOnlySeed() public {
+        test_givenQueuedRequest_whenEntitlementEqualsAmount(
+            address(0x1234),
+            true,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E12.
+    function test_givenQueuedRequest_whenEntitlementEqualsAmount_RolesOverlapSeed() public {
+        test_givenQueuedRequest_whenEntitlementEqualsAmount(
+            address(0x1234),
+            true,
+            true,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E16.
+    function test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_AdminOnlySeed() public {
+        test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts(
+            address(0x1234),
+            false,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E16.
+    function test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts(
+            address(0x1234),
+            true,
+            false,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-E16.
+    function test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RolesOverlapSeed()
+        public
+    {
+        test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts(
+            address(0x1234),
+            true,
+            true,
+            address(0)
+        );
+    }
+
+    // Scenarios: RDT-L01, RDT-L04, RDT-Q01.
+    function test_givenValidRequest_whenEachRoleQueues_AdminOnlySeed() public {
+        test_givenValidRequest_whenEachRoleQueues(address(0x1234), false, false);
+    }
+
+    // Scenarios: RDT-L01, RDT-L04, RDT-Q01.
+    function test_givenValidRequest_whenEachRoleQueues_RevenueRoleOnlySeed() public {
+        test_givenValidRequest_whenEachRoleQueues(address(0x1234), true, false);
+    }
+
+    // Scenarios: RDT-L01, RDT-L04, RDT-Q01.
+    function test_givenValidRequest_whenEachRoleQueues_RolesOverlapSeed() public {
+        test_givenValidRequest_whenEachRoleQueues(address(0x1234), true, true);
+    }
+
+    address internal _executorSeed = address(this);
+
+    function _selectExecutor(address executor_) internal {
+        // Permissionless execution explicitly includes address(0); this is a prank identity, not a payment destination.
+        // forge-lint: disable-next-line(missing-zero-check)
+        _executorSeed = executor_;
     }
 }
 // forge-lint: disable-end(literal-instead-of-constant,unused-return,calls-loop,unsafe-typecast)

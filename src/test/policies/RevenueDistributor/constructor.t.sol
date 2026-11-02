@@ -9,7 +9,7 @@ import {Test} from "@forge-std-1.16.2/Test.sol";
 contract RevenueDistributorConstructorTest is Test {
     uint32 private constant DEFAULT_GRACE_PERIOD = 7 days;
 
-    // Scenarios: RD-CTOR-P01
+    // Scenarios: RD-CTOR-P01.
     function test_whenConstructedWithKernel_initializesDefaults() public {
         Kernel kernel = new Kernel();
         RevenueDistributorHarness distributor = new RevenueDistributorHarness(kernel);
@@ -27,7 +27,7 @@ contract RevenueDistributorConstructorTest is Test {
         assertEq(distributor.getPendingPayoutAssets().length, 0, "pending asset set starts empty");
     }
 
-    // Scenarios: RD-CTOR-P02
+    // Scenarios: RD-CTOR-P02.
     function test_whenConstructedWithZeroKernel_preservesZeroPointer() public {
         RevenueDistributorHarness distributor = new RevenueDistributorHarness(Kernel(address(0)));
 

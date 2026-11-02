@@ -5,7 +5,7 @@ import {Kernel, KernelAdapter} from "src/Kernel.sol";
 import {RevenueDistributorTest} from "./RevenueDistributorTest.sol";
 
 contract RevenueDistributorChangeKernelTest is RevenueDistributorTest {
-    // Scenarios: RD-KERNEL-A01
+    // Scenarios: RD-KERNEL-A01.
     function test_whenNonKernelChangesKernel_reverts(address caller_, address newKernel_) public {
         vm.assume(caller_ != address(kernel));
 
@@ -24,7 +24,7 @@ contract RevenueDistributorChangeKernelTest is RevenueDistributorTest {
         assertEq(distributor.treasury(), address(treasury), "unauthorized call preserves Treasury");
     }
 
-    // Scenarios: RD-KERNEL-P01
+    // Scenarios: RD-KERNEL-P01.
     function test_whenKernelChangesToDistinctKernel_updatesOnlyPointer() public {
         Kernel newKernel = new Kernel();
 
@@ -37,7 +37,7 @@ contract RevenueDistributorChangeKernelTest is RevenueDistributorTest {
         assertFalse(distributor.isActive(), "new Kernel has not activated distributor");
     }
 
-    // Scenarios: RD-KERNEL-P02
+    // Scenarios: RD-KERNEL-P02.
     function test_whenKernelChangesToSameKernel_succeedsWithoutDependencyRefresh() public {
         vm.prank(address(kernel));
         distributor.changeKernel(kernel);
@@ -47,7 +47,7 @@ contract RevenueDistributorChangeKernelTest is RevenueDistributorTest {
         assertEq(distributor.treasury(), address(treasury), "Treasury cache remains");
     }
 
-    // Scenarios: RD-KERNEL-P03
+    // Scenarios: RD-KERNEL-P03.
     function test_whenKernelChangesToZero_setsZeroPointer() public {
         vm.prank(address(kernel));
         distributor.changeKernel(Kernel(address(0)));

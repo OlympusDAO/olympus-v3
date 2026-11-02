@@ -127,6 +127,7 @@ abstract contract RevenueDistributorSurplusRescueTestBase is RevenueDistributorT
         uint256 amount_,
         address caller_
     ) internal {
+        if (_configurationSeed != address(0)) caller_ = _configurationSeed;
         uint256 custody = asset_.balanceOf(address(distributor));
         uint256 destinationBalance = asset_.balanceOf(destination_);
         bytes32 beforeState = _rdSurplusStateHash(address(asset_));
@@ -193,6 +194,7 @@ abstract contract RevenueDistributorSurplusRescueTestBase is RevenueDistributorT
         address caller_,
         bytes memory failure_
     ) internal {
+        if (_configurationSeed != address(0)) caller_ = _configurationSeed;
         uint256 custody = tracker_.balanceOf(address(distributor));
         uint256 destinationBalance = tracker_.balanceOf(destination_);
         bytes32 beforeState = _rdSurplusStateHash(address(tracker_));
@@ -212,6 +214,7 @@ abstract contract RevenueDistributorSurplusRescueTestBase is RevenueDistributorT
     }
 
     function _assertRDBalanceQueryFailure(MockERC20 asset_, address caller_) internal {
+        if (_configurationSeed != address(0)) caller_ = _configurationSeed;
         uint256 custody = asset_.balanceOf(address(distributor));
         bytes32 beforeState = _rdSurplusStateHash(address(asset_));
         bytes memory failure = abi.encodeWithSelector(BalanceQueryFailed.selector);

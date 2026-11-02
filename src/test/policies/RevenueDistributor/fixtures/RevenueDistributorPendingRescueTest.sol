@@ -12,77 +12,11 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
-import {RevenueDistributorHarness} from "src/test/policies/RevenueDistributor/fixtures/RevenueDistributorHarness.sol";
 import {RevenueDistributorTest} from "src/test/policies/RevenueDistributor/RevenueDistributorTest.sol";
-
-/// @dev A token callback records post-debit reads; comparing with final reads proves visibility.
-// The observer and ledger assert the same action's callback/read state in one fixture.
-// forge-lint: disable-next-line(multi-contract-file)
-contract RevenueDistributorRescueObserver {
-    uint256 public entitlement;
-    uint256 public preview;
-    bytes public failure;
-    bytes32 public state;
-
-    /// @dev Probe one unit, catching the expected insufficient-entitlement error after full drainage.
-    function observe(
-        RevenueDistributorHarness rd_,
-        IERC20 asset_,
-        address recipient_,
-        address destination_
-    ) external {
-        entitlement = rd_.pendingPayout(address(asset_), recipient_);
-        try rd_.previewRescuePendingPayout(address(asset_), recipient_, destination_, 1) returns (
-            uint256 available
-        ) {
-            preview = available;
-        } catch (bytes memory errorData) {
-            failure = errorData;
-        }
-        state = observation(rd_, asset_, recipient_, destination_);
-    }
-
-    /// @dev Include raw accounting, indexes, config and custody; exclude the observer's own storage.
-    function observation(
-        RevenueDistributorHarness rd_,
-        IERC20 asset_,
-        address recipient_,
-        address destination_
-    ) public view returns (bytes32) {
-        bytes32 accounting = keccak256(
-            abi.encode(
-                rd_.pendingAssetRouteForTest(address(asset_), recipient_),
-                rd_.pendingRepurchaseForTest(address(asset_)),
-                rd_.pendingTreasuryForTest(address(asset_)),
-                rd_.totalPendingForTest(address(asset_)),
-                rd_.getPendingPayoutAssets(),
-                rd_.getPendingPayoutRecipients(address(asset_))
-            )
-        );
-        bytes32 config = keccak256(
-            abi.encode(
-                rd_.assetState(address(asset_)),
-                rd_.configOperator(),
-                rd_.yieldRecipient(),
-                rd_.treasury()
-            )
-        );
-        return
-            keccak256(
-                abi.encode(
-                    accounting,
-                    config,
-                    asset_.balanceOf(address(rd_)),
-                    asset_.balanceOf(destination_)
-                )
-            );
-    }
-}
 
 // Scenario fixtures intentionally use fixed base units, calls in finite loops and raw-state seeding.
 // forge-lint: disable-start(literal-instead-of-constant,unused-return,calls-loop)
 /// @dev Each ledger contains only identities and raw obligations, never an operation or outcome.
-// forge-lint: disable-next-line(multi-contract-file)
 abstract contract RevenueDistributorPendingRescueTest is RevenueDistributorTest {
     enum Layout {
         Distinct,
@@ -276,6 +210,7 @@ abstract contract RevenueDistributorPendingRescueTest is RevenueDistributorTest 
         uint256 amount_,
         uint256[3] memory paid_
     ) internal {
+        if (_configurationSeed != address(0)) caller_ = _configurationSeed;
         uint256 entitlement;
         {
             uint256[3] memory eligible = _eligible(l, recipient_);
@@ -369,6 +304,7 @@ abstract contract RevenueDistributorPendingRescueTest is RevenueDistributorTest 
         bytes memory previewError_,
         bytes memory executionError_
     ) internal {
+        if (_configurationSeed != address(0)) caller_ = _configurationSeed;
         uint256[3] memory e = _eligible(l, recipient_);
         _assertPreview(
             l,

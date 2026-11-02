@@ -10,12 +10,14 @@ import {IRevenueDistributorTask} from "src/policies/interfaces/IRevenueDistribut
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 
 // Contracts
+import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
-import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {HEART_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -60,16 +62,13 @@ contract RevenueDistributorTask is
         address distributor_,
         uint32 executionGasLimit_
     ) Policy(kernel_) ReEnablerGracePeriod(_REENABLE_GRACE_PERIOD) {
-        if (
-            !ERC165Checker.supportsInterface(distributor_, type(IRevenueDistributor).interfaceId) ||
-            !ERC165Checker.supportsInterface(distributor_, type(IEnabler).interfaceId)
-        ) {
+        if (distributor_ == address(0))
             revert RevenueDistributorTask_InvalidDistributor(distributor_);
-        }
-        address reportedKernel = address(Policy(distributor_).kernel());
-        if (reportedKernel != address(kernel_)) {
-            revert RevenueDistributorTask_KernelMismatch(address(kernel_), reportedKernel);
-        }
+        // Construction checks compatibility while allowing a paused or not-yet-active target.
+        _requireDistributorInterfaces(distributor_);
+        PolicyDependency.requireSameKernel(distributor_, address(kernel_));
+        // forge-lint: disable-next-line(unused-return)
+        PolicyDependency.readEnabled(distributor_);
         _DISTRIBUTOR = distributor_;
         _setExecutionGasLimit(executionGasLimit_);
         _setMinimumGasToAttempt(_DEFAULT_MINIMUM_GAS_TO_ATTEMPT);
@@ -100,11 +99,13 @@ contract RevenueDistributorTask is
 
     /// @inheritdoc IPeriodicTask
     /// @dev Reverts if:
-    ///      - The caller lacks the Heart role.
-    ///      Internal task failures are caught and emitted as `ExecutionFailed`; a Kernel-inactive
-    ///      or locally disabled task returns without settlement.
-    function execute() external override onlyRole(HEART_ROLE) {
-        if (!kernel.isPolicyActive(Policy(address(this))) || !isEnabled) return;
+    ///      - The caller lacks the Heart role or this task is Kernel-inactive, even while disabled.
+    ///      Internal task failures are caught and emitted as `ExecutionFailed`.
+    ///      An authorized active but disabled task returns without settlement.
+    function execute() external override {
+        _requirePolicyActive();
+        _requireRole(msg.sender, HEART_ROLE);
+        if (!isEnabled) return;
         (bool success, bytes memory reason) = address(this).safeCall(
             executionGasLimit,
             0,
@@ -166,8 +167,8 @@ contract RevenueDistributorTask is
     ///      - The gas limit is zero.
     ///      Callable while locally disabled.
     function setExecutionGasLimit(uint32 gasLimit_) external override {
-        _requireDistributorAdmin();
         _requirePolicyActive();
+        _requireDistributorAdmin();
         _setExecutionGasLimit(gasLimit_);
     }
 
@@ -178,8 +179,8 @@ contract RevenueDistributorTask is
     ///      - The threshold is at or below the cleanup reserve.
     ///      Callable while locally disabled so governance can tune the next execution.
     function setMinimumGasToAttempt(uint32 gasLimit_) external override {
-        _requireDistributorAdmin();
         _requirePolicyActive();
+        _requireDistributorAdmin();
         _setMinimumGasToAttempt(gasLimit_);
     }
 
@@ -190,8 +191,8 @@ contract RevenueDistributorTask is
     ///      - The reserve is zero or at or above the current attempt threshold.
     ///      Callable while locally disabled.
     function setGasReserve(uint32 gasLimit_) external override {
-        _requireDistributorAdmin();
         _requirePolicyActive();
+        _requireDistributorAdmin();
         _setGasReserve(gasLimit_);
     }
 
@@ -203,10 +204,17 @@ contract RevenueDistributorTask is
     ///      Callable while locally disabled so governance can select the next asset before
     ///      re-enabling.
     function setNextAssetIndex(uint256 index_) external override {
-        _requireDistributorAdmin();
         _requirePolicyActive();
+        _requireDistributorAdmin();
+        // Resetting the cursor is a recovery action and needs no registry lookup.
+        if (index_ == 0) {
+            if (_nextAssetIndex == 0) return;
+            _nextAssetIndex = 0;
+            emit NextAssetIndexSet(0);
+            return;
+        }
         uint256 count = IRevenueDistributor(_DISTRIBUTOR).getActiveAssetCount();
-        if (index_ != 0 && index_ >= count) {
+        if (index_ >= count) {
             revert RevenueDistributorTask_InvalidAssetIndex(index_, count);
         }
         if (index_ == _nextAssetIndex) return;
@@ -230,13 +238,26 @@ contract RevenueDistributorTask is
         _requireDistributorAdmin();
     }
 
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive.
+    ///      - This policy is locally disabled.
+    ///      - The caller lacks ADMIN.
+    ///      - The requested period is zero.
+    function setGracePeriod(uint32 period_) public override {
+        _requirePolicyActive();
+        super.setGracePeriod(period_);
+    }
+
     /// @dev Reverts if:
     ///      - The caller lacks the admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
     /// @dev Reverts if:
-    ///      - The bound distributor is Kernel-inactive or locally disabled.
-    function _beforeEnable(bytes calldata) internal view override {
+    ///      - Lifecycle data is nonempty, this task is inactive, or the distributor is unavailable.
+    function _beforeEnable(bytes calldata data_) internal view override {
+        if (data_.length != 0) revert RevenueDistributorTask_InvalidData();
+        _requirePolicyActive();
         _requireDistributorAvailable();
     }
 
@@ -245,21 +266,49 @@ contract RevenueDistributorTask is
     ///      - The bound distributor is Kernel-inactive or locally disabled.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
+        _requirePolicyActive();
         _requireDistributorAvailable();
     }
 
+    /// @inheritdoc EnablerV2
     /// @dev Reverts if:
-    ///      - The constructor-bound distributor is Kernel-inactive or locally disabled.
-    function _requireDistributorAvailable() internal view {
-        if (!kernel.isPolicyActive(Policy(_DISTRIBUTOR)) || !IEnabler(_DISTRIBUTOR).isEnabled()) {
-            revert RevenueDistributorTask_InvalidDistributor(_DISTRIBUTOR);
-        }
+    ///      - Lifecycle data is nonempty.
+    ///
+    /// @dev Pausing does not require operational dependencies.
+    function _beforeDisable(bytes calldata data_) internal pure override {
+        if (data_.length != 0) revert RevenueDistributorTask_InvalidData();
     }
 
-    /// @dev Reverts if this task is not active in its current Kernel.
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Widen the inclusive deadline before checked uint48 narrowing.
+    function _requireGrace() internal view override {
+        uint48 deadline = SafeCast.toUint48(uint256(lastTransitionAt) + gracePeriod);
+        if (_getBlockTimestamp() > deadline) revert GracePeriod_Expired(deadline);
+    }
+
+    /// @dev Reverts if:
+    ///      - Required distributor interfaces or metadata are invalid.
+    ///      - The distributor reports a different Kernel.
+    ///      - The constructor-bound distributor is Kernel-inactive or locally disabled.
+    function _requireDistributorAvailable() internal view {
+        _requireDistributorInterfaces(_DISTRIBUTOR);
+        PolicyDependency.requireActiveAndEnabled(_DISTRIBUTOR, address(kernel));
+    }
+
+    /// @dev Reverts if:
+    ///      - Required distributor interfaces are invalid.
+    function _requireDistributorInterfaces(address target_) internal view {
+        if (
+            !ERC165Checker.supportsInterface(target_, type(IRevenueDistributor).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IEnabler).interfaceId)
+        ) revert RevenueDistributorTask_InvalidDistributor(target_);
+    }
+
+    /// @dev Reverts if:
+    ///      - This task is not active in its current Kernel.
     function _requirePolicyActive() internal view {
         if (!kernel.isPolicyActive(Policy(address(this)))) {
-            revert RevenueDistributorTask_PolicyInactive();
+            revert RevenueDistributorTask_PolicyNotActive(address(this));
         }
     }
 

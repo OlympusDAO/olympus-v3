@@ -9,31 +9,23 @@ need separate routes because they are different tokens.
 
 ```mermaid
 flowchart LR
-    OCG[OCG admin] -->|setRevenueDistributor| BL[Burner Loans]
-    OCG -->|direct configuration and rescue| RD[Revenue Distributor]
-    OCG -->|select config operator| RD
-    Kernel[Kernel] -.->|activate or deactivate| BL
-    Kernel -.->|activate or deactivate| RD
-    Kernel -.->|activate or deactivate| RCT[Revenue Distributor Config Timelock]
-    BCT[Burner Loans Config Timelock] -->|delayed send flags| BC[Burner Loans Config]
-    BC -->|setSendFees / setSendYield| BL
-    RCT -->|delayed routes and rescue| RD
-    RD -.->|timelock selected as operator for delayed actions| RCT
-    OtherOperator[Other selected operator] -->|direct configuration| RD
-    Borrower[Borrower] -->|fee transfer via BL| BL
-    BL -->|fee payout when flag on| RD
-    BL -->|fee payout when flag off| TRSRY[Treasury]
-    BL -->|claim yield to selected recipient| DM[DepositManager]
-    DM -->|yield output when flag on| RD
-    DM -->|yield output when flag off| TRSRY
-    BL -->|keeper reward on seizure| Keeper[Keeper]
-    BL -->|seized remainder| TRSRY
-    Heart[Heart] --> YC[Burner Loans Yield Claimer]
-    Heart --> DT[Revenue Distributor Task]
-    YC -->|claimYield| BL
-    DT -->|distribute active tokens within gas budget| RD
+    OCG[ADMIN governance] -->|select distributor| PAYOUT[BurnerLoansPayout]
+    BPT[BurnerLoansPayoutConfigTimelock] -->|delayed flags and recovery| PAYOUT
+    CORE[BurnerLoansCore] -->|fees and seizure receipts| PAYOUT
+    PAYOUT -->|enabled fee route| RD[RevenueDistributor]
+    PAYOUT -->|keeper reward| KEEPER[Original keeper]
+    PAYOUT -->|seizure remainder or Treasury fee route| TRSRY[Treasury]
+    YC[BurnerLoansYieldClaimerTask] -->|claim through Core| DM[DepositManager]
+    PAYOUT -.->|selects yield recipient| YC
+    DM -->|yield output| RD
+    DM -->|Treasury yield route| TRSRY
+    OCG -->|direct configuration and rescue| RD
+    RCT[RevenueDistributorConfigTimelock] -->|delayed routes and rescue| RD
+    HEART[Heart] --> YC
+    HEART --> DT[RevenueDistributorTask]
+    DT -->|distribute within gas budget| RD
     RD -->|repurchase share| YRF[Yield repurchase recipient]
-    RD -->|configured shares| Others[Other recipients]
+    RD -->|configured shares| RECIPIENTS[Other recipients]
     RD -->|remainder| TRSRY
 ```
 
@@ -52,7 +44,9 @@ Setting a nonzero repurchase share requires an enabled, Kernel-active yield reci
 `setYieldRecipient` validates every active route and any unpaid repurchase shares, including retired
 assets. Clearing it requires every active route to have zero repurchase share; existing repurchase
 debt then follows Treasury. A new recipient cannot be current Treasury or a configured recipient on
-an active route. Even selecting the same yield recipient revalidates these requirements.
+an active route. Selecting the current pointer, including zero-to-zero, reverts before dependency
+probes. The validator applies the same rule. Required Kernel and enabled getters must return
+canonical ABI values. Invalid metadata is distinct from an inactive or paused dependency.
 
 Anyone can call `distribute(asset)` while the distributor is enabled and Kernel-active and the asset
 route is active. It allocates only custody above the total pending reserve, then attempts payment
@@ -81,7 +75,7 @@ is enabled and Kernel-active. Failed retries preserve the debt; successful retri
 
 `distribute` also retries current route and role destinations, so Heart can retry those payouts on
 later beats. Retired assets and former recipients outside those destinations need direct retries.
-Burner Loans' own pending payouts are retried separately in Burner Loans.
+Burner Loans source obligations are retried separately on the Payout instance that received them. Replacing Core's Payout pointer does not move those old obligations.
 
 Treasury upgrades refresh the distributor's cached TRSRY address. If a configured recipient becomes
 Treasury, its fixed share and the Treasury liability combine in one payment. With no new receipts,
@@ -98,7 +92,7 @@ up an asset and preserves `gasReserve` before calling the distributor. A failed 
 on a later pass or directly through `distribute`. A token exhausting call gas can revert that asset's
 distribution. Failure of the whole task body rolls back its work and emits `ExecutionFailed`.
 
-An authorized Heart call does no work while the task or distributor is disabled or Kernel-inactive.
+An authorized Heart call reverts when the task itself is Kernel-inactive. An active but disabled task returns without work. The self-call also returns without work when the distributor is disabled or Kernel-inactive.
 Admin or `revenue_distributor_admin` can tune the gas budget, minimum attempt threshold, and reserve,
 or reset `setNextAssetIndex(index)`, including while the task is disabled; the task must remain
 Kernel-active. Index zero is always accepted, and other indices must identify a current active asset.
@@ -126,6 +120,12 @@ rescue's Kernel-active requirement and allow local disablement; they do not guar
 transfer success or freeze custody, entitlement, or routing.
 
 ## Configuration and timelock
+
+Distributor, timelock and task lifecycle payloads must be empty. Enable and reEnable require
+own Kernel activity; task and timelock also require a compatible, active and enabled distributor.
+Pause remains available without own activity or downstream readiness. Grace deadlines are inclusive
+and use checked uint48 narrowing. Ordinary grace-period changes require own activity; repeating a
+valid grace value still emits GracePeriodSet.
 
 Admin or the selected operator can configure routes and the yield recipient while the distributor
 is enabled and Kernel-active. Admin can rotate or revoke the operator while locally disabled, but
@@ -160,7 +160,7 @@ lets the distributor reject or attribute a late receipt, and an asset remains ma
 route is retired. Use this sequence when retiring one asset:
 
 1. Stop every known source from sending the asset. For Burner Loans, disable the applicable fee or
-   yield flag through Burner Loans Config, cancel or let expire any queued action that could enable
+   yield flag on BurnerLoansPayout directly or through its PayoutConfigTimelock. Cancel or let expire any queued action that could enable
    it again, and confirm that the effective flag is false before proceeding.
 2. While the route remains active and the distributor remains enabled and Kernel-active, call
    `distribute(asset)` to allocate the live unreserved balance.
@@ -177,19 +177,14 @@ available for its existing liabilities while the distributor is enabled and Kern
 For a complete distributor wind-down, first disable every source route, settle all active-asset
 balances, and clear or rescue every listed pending payout. Then retire the routes, clear source
 pointers where applicable, and disable the periodic task. Keep the config timelock available until
-all delayed route and rescue work is complete. Disable and Kernel-deactivate the distributor only
-after its managed balances and liabilities are zero and no further receipts are expected: local
-disablement stops `distribute` and ordinary pending retries, while Kernel deactivation also blocks
-rescue until governance reactivates the policy.
+all delayed route and rescue work is complete. Before disabling or deactivating the distributor, reconcile managed balances and liabilities to zero and stop further receipts. Local disablement stops `distribute` and ordinary pending retries. Kernel deactivation also blocks rescue until governance reactivates the policy.
 
 ## Rollout
 
 Deploy and activate the distributor, its config timelock, and its task. Enable the distributor,
 then configure the yield recipient and exact fee and yield output tokens. Select and enable its
 config timelock if delayed delegation is required, grant
-`revenue_distributor_admin` to queue proposers, and enable the periodic task. Once Burner Loans is
-enabled, set its distributor address and enable the desired fee and yield flags through Config or
-its timelock. Run the yield claimer before the distributor task in Heart and size gas against the
+`revenue_distributor_admin` to queue proposers, and enable the periodic task. On the selected BurnerLoansPayout, ADMIN sets the distributor address. ADMIN or Payout's local config operator enables the desired flags, directly or through PayoutConfigTimelock. Run the yield claimer before the distributor task in Heart and size gas against the
 largest intended route. Verify the admin role holder: operator rotation is immediate at the target,
 so governance delay depends on that role's assignment.
 

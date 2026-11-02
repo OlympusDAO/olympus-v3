@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
 // Interfaces
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 
@@ -89,7 +91,8 @@ abstract contract RevenueDistributorRescueCallbackTest is RevenueDistributorTest
             distributor.distribute(address(asset));
         } else asset.mint(address(distributor), _CALLBACK_TOTAL);
         vm.prank(admin);
-        distributor.setConfigOperator(address(asset));
+        if (_configurationSeed == address(0)) distributor.setConfigOperator(address(asset));
+        else rolesAdmin.grantRole(ADMIN_ROLE, address(asset));
         bytes memory callback = _rescueCallback(asset, operation, nestedAction_);
         asset.setCallbackFrom(address(distributor), address(distributor), callback);
         asset.setBubbleCallbackFailure(bubbleFailure_);

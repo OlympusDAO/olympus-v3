@@ -2,21 +2,23 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
 import {IRevenueDistributorRescue} from "src/policies/interfaces/IRevenueDistributorRescue.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
 // Contracts
+import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
-import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ConfigTimelockBatchQueue} from "src/policies/utils/ConfigTimelockBatchQueue.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
@@ -76,10 +78,10 @@ contract RevenueDistributorConfigTimelock is
             !ERC165Checker.supportsInterface(target, type(IConfigOperator).interfaceId) ||
             !ERC165Checker.supportsInterface(target, type(IEnabler).interfaceId)
         ) revert RevenueDistributorConfigTimelock_InvalidDistributor(target);
-        address targetKernel = address(Policy(target).kernel());
-        if (targetKernel != address(kernel_)) {
-            revert RevenueDistributorConfigTimelock_KernelMismatch(targetKernel);
-        }
+        // Construction permits deployment before the distributor is active or enabled.
+        PolicyDependency.requireSameKernel(target, address(kernel_));
+        // forge-lint: disable-next-line(unused-return)
+        PolicyDependency.readEnabled(target);
         _DISTRIBUTOR = distributor_;
         _DISTRIBUTOR_RESCUE = IRevenueDistributorRescue(target);
     }
@@ -111,6 +113,29 @@ contract RevenueDistributorConfigTimelock is
         return address(_DISTRIBUTOR);
     }
 
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    modifier onlyActive() {
+        _requireOwnPolicyActive();
+        _;
+    }
+
+    /// @dev Reverts if:
+    ///      - The caller holds neither accepted queue-proposer role.
+    modifier onlyProposerRole() {
+        _requireProposerRole(msg.sender);
+        _;
+    }
+
+    /// @dev Reverts if:
+    ///      - The caller holds neither accepted queue-proposer role (NotAuthorised).
+    /// @param caller_ Actual caller whose governance role is checked.
+    function _requireProposerRole(address caller_) private view {
+        _requireAuthorized(
+            !_hasRole(caller_, ADMIN_ROLE) && !_hasRole(caller_, REVENUE_DISTRIBUTOR_ADMIN_ROLE)
+        );
+    }
+
     /// @inheritdoc IRevenueDistributorConfigTimelock
     /// @dev Reverts if:
     ///      - The caller lacks admin or revenue_distributor_admin role.
@@ -121,7 +146,7 @@ contract RevenueDistributorConfigTimelock is
         address asset_,
         uint16 repurchaseBps_,
         IRevenueDistributor.AssetRoute[] calldata routes_
-    ) external override returns (uint64) {
+    ) external override onlyActive givenEnabled onlyProposerRole returns (uint64) {
         return
             _queueAction(
                 address(_DISTRIBUTOR),
@@ -136,7 +161,9 @@ contract RevenueDistributorConfigTimelock is
     ///      - This timelock is disabled, inactive, or not the selected config operator.
     ///      - The distributor is disabled or inactive.
     ///      - The action conflicts with another queued action.
-    function queueDisableAssetRoutes(address asset_) external override returns (uint64) {
+    function queueDisableAssetRoutes(
+        address asset_
+    ) external override onlyActive givenEnabled onlyProposerRole returns (uint64) {
         return
             _queueAction(
                 address(_DISTRIBUTOR),
@@ -151,7 +178,9 @@ contract RevenueDistributorConfigTimelock is
     ///      - This timelock is disabled, inactive, or not the selected config operator.
     ///      - The distributor is disabled or inactive.
     ///      - The action conflicts with another queued action.
-    function queueSetYieldRecipient(address recipient_) external override returns (uint64) {
+    function queueSetYieldRecipient(
+        address recipient_
+    ) external override onlyActive givenEnabled onlyProposerRole returns (uint64) {
         return
             _queueAction(
                 address(_DISTRIBUTOR),
@@ -165,7 +194,10 @@ contract RevenueDistributorConfigTimelock is
     ///      - The caller lacks admin and revenue_distributor_admin roles.
     ///      - This timelock is disabled, inactive, or not the selected config operator.
     ///      - The action conflicts with another queued action.
-    function queueRescue(address asset_, address destination_) external override returns (uint64) {
+    function queueRescue(
+        address asset_,
+        address destination_
+    ) external override onlyActive givenEnabled onlyProposerRole returns (uint64) {
         return
             _queueAction(
                 address(_DISTRIBUTOR),
@@ -192,7 +224,7 @@ contract RevenueDistributorConfigTimelock is
         address recipient_,
         address destination_,
         uint256 amount_
-    ) external override returns (uint64) {
+    ) external override onlyActive givenEnabled onlyProposerRole returns (uint64) {
         return
             _queueAction(
                 address(_DISTRIBUTOR),
@@ -209,7 +241,7 @@ contract RevenueDistributorConfigTimelock is
     ///      Rescue may target a locally disabled distributor.
     function queueBatch(
         ITimelockBatchQueue.BatchAction[] memory actions_
-    ) external override returns (uint64) {
+    ) external override onlyActive givenEnabled onlyProposerRole returns (uint64) {
         return _queueAction(actions_);
     }
 
@@ -217,12 +249,10 @@ contract RevenueDistributorConfigTimelock is
     ///      - This timelock is disabled, Kernel-inactive, or not the selected config operator.
     ///      - The caller lacks admin and revenue_distributor_admin roles.
     function _validateConfigQueue(address caller_) internal view override {
-        _requireEnabled();
         _requireOwnPolicyActive();
+        _requireEnabled();
+        _requireProposerRole(caller_);
         _requireSelectedOperator();
-        _requireAuthorized(
-            !_hasRole(caller_, ADMIN_ROLE) && !_hasRole(caller_, REVENUE_DISTRIBUTOR_ADMIN_ROLE)
-        );
     }
 
     /// @dev Reverts if:
@@ -373,20 +403,24 @@ contract RevenueDistributorConfigTimelock is
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
-        _requireEnabled();
         _requireOwnPolicyActive();
+        _requireEnabled();
         _requireSelectedOperator();
     }
 
-    /// @dev Reverts if this timelock is disabled or Kernel-inactive, or the caller lacks
-    ///      the emergency role. The target policy and operator selection do not gate cancellation.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller lacks the emergency role.
+    ///
+    /// @dev Target lifecycle and operator selection do not gate cancellation.
     function _validateCancellation(
         address caller_,
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
-        _requireEnabled();
         _requireOwnPolicyActive();
+        _requireEnabled();
         _requireRole(caller_, EMERGENCY_ROLE);
     }
 
@@ -398,23 +432,20 @@ contract RevenueDistributorConfigTimelock is
         );
     }
 
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive.
+    ///      - This policy is locally disabled.
+    ///      - The caller lacks ADMIN.
+    ///      - The requested period is zero.
+    function setGracePeriod(uint32 period_) public override {
+        _requireOwnPolicyActive();
+        super.setGracePeriod(period_);
+    }
+
     /// @dev Reverts if:
     ///      - The caller lacks the admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
-
-    /// @dev Reverts if:
-    ///      - The bound distributor reports a different Kernel.
-    function _beforeEnable(bytes calldata) internal view override {
-        _requireTargetIdentity();
-    }
-
-    /// @dev Reverts if:
-    ///      - The re-enable grace period has expired.
-    ///      - The bound distributor reports a different Kernel.
-    function _beforeReEnable() internal override {
-        super._beforeReEnable();
-        _requireTargetIdentity();
-    }
 
     /// @dev Reverts if:
     ///      - The requested delay is outside governance's allowed range.
@@ -445,28 +476,22 @@ contract RevenueDistributorConfigTimelock is
     ///      - This timelock is Kernel-inactive.
     function _requireOwnPolicyActive() internal view {
         if (!kernel.isPolicyActive(Policy(address(this)))) {
-            revert RevenueDistributorConfigTimelock_PolicyInactive(address(this));
+            revert RevenueDistributorConfigTimelock_PolicyNotActive(address(this));
         }
     }
 
     /// @dev Reverts if:
+    ///      - Required distributor metadata is unreadable or malformed.
+    ///      - The distributor reports a different Kernel.
     ///      - The distributor is Kernel-inactive or locally disabled.
     function _requireTargetActiveAndEnabled() internal view {
-        if (!kernel.isPolicyActive(Policy(address(_DISTRIBUTOR)))) {
-            revert RevenueDistributorConfigTimelock_PolicyInactive(address(_DISTRIBUTOR));
-        }
-        if (!IEnabler(address(_DISTRIBUTOR)).isEnabled()) revert IEnabler.NotEnabled();
+        PolicyDependency.requireActiveAndEnabled(address(_DISTRIBUTOR), address(kernel));
     }
 
-    /// @dev Reverts if:
-    ///      - The bound distributor reports a different Kernel.
-    function _requireTargetIdentity() internal view {
-        if (address(Policy(address(_DISTRIBUTOR)).kernel()) != address(kernel)) {
-            revert RevenueDistributorConfigTimelock_InvalidDistributor(address(_DISTRIBUTOR));
-        }
-    }
-
-    /// @dev Always reverts with the unsupported action's target and selector.
+    /// @dev Reverts unconditionally:
+    ///      - This helper is called, regardless of the supplied target or selector.
+    ///
+    /// @dev The error includes the action's target and selector.
     function _revertUnsupportedAction(
         ITimelockBatchQueue.BatchAction memory action_
     ) internal pure {
@@ -486,5 +511,43 @@ contract RevenueDistributorConfigTimelock is
             interfaceId_ == type(IRevenueDistributorConfigTimelock).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty.
+    ///      - This policy is inactive or a required operational dependency is unavailable.
+    function _beforeEnable(bytes calldata data_) internal view override {
+        if (data_.length != 0) revert RevenueDistributorConfigTimelock_InvalidData();
+        _requireOwnPolicyActive();
+        _requireTargetActiveAndEnabled();
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty.
+    ///
+    /// @dev Kernel inactivity does not prevent disable.
+    function _beforeDisable(bytes calldata data_) internal pure override {
+        if (data_.length != 0) revert RevenueDistributorConfigTimelock_InvalidData();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The shared re-enable grace checks fail.
+    ///      - The enable prerequisites fail.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _requireOwnPolicyActive();
+        _requireTargetActiveAndEnabled();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The grace deadline does not fit uint48 (SafeCastOverflowedUintDowncast).
+    ///      - The inclusive grace window has expired (GracePeriod_Expired).
+    function _requireGrace() internal view override {
+        uint48 deadline = SafeCast.toUint48(uint256(lastTransitionAt) + gracePeriod);
+        if (_getBlockTimestamp() > deadline) revert GracePeriod_Expired(deadline);
     }
 }

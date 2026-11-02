@@ -4,10 +4,8 @@ pragma solidity >=0.8.24;
 // Scenario amounts stay inline for accounting clarity.
 // forge-lint: disable-start(calls-loop,literal-instead-of-constant,unsafe-typecast,unused-return)
 
-// Libraries
-import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
-
 // Interfaces
+import {ADMIN_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
@@ -17,13 +15,14 @@ import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTi
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
-import {Actions} from "src/Kernel.sol";
+import {RevenueDistributorConfigTimelockTest} from "./RevenueDistributorConfigTimelockTest.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
-import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
-import {RevenueDistributorConfigTimelockTest} from "./RevenueDistributorConfigTimelockTest.sol";
 
 contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorConfigTimelockTest {
     bytes4 internal constant INVALID_SELECTOR = 0xdeadbeef;
@@ -71,8 +70,8 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     //     [X] earlier surplus custody is restored
     //     [X] failed batch remains queued
     //     [X] ordinary payout remains settled
-    // Scenarios: EXEC-I04
-    function testFuzz_givenQueuedRescueBatch_whenLaterBucketPaidBeforeExecution_reverts(
+    // Scenarios: EXEC-I04.
+    function test_givenQueuedRescueBatch_whenLaterBucketPaidBeforeExecution_reverts(
         address executor_
     ) public {
         MockRevertingTransferToken pendingAsset = new MockRevertingTransferToken(18);
@@ -198,8 +197,13 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         return keccak256(abi.encode(address(distributor), localKey));
     }
 
-    // Scenarios: BATCH-L03
-    function testFuzz_givenOperatorRotated_whenBatchQueued_reverts(bool useRevenueAdmin_) public {
+    // Scenarios: BATCH-L03.
+    function test_givenOperatorRotated_whenBatchQueued_reverts(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _routeAction(address(token), address(0));
@@ -218,20 +222,27 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(configTimelock.nextActionId(), 1, "unselected operator consumes no ID");
     }
 
-    // Scenarios: BATCH-I07
-    function testFuzz_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically(
-        bool useRevenueAdmin_
-    ) public {
+    // Scenarios: BATCH-I07.
+    function test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         token.mint(address(distributor), 1);
         MockERC20 routeToken = new MockERC20("Route", "ROUTE", 18);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _rescueAction(address(token));
         actions[1] = _routeAction(address(routeToken), address(0));
-        vm.prank(admin);
-        distributor.disable("");
+        _disablePolicy(address(distributor), admin);
 
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(distributor)
+            )
+        );
         vm.prank(proposer);
         configTimelock.queueBatch(actions);
 
@@ -239,11 +250,14 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(token.balanceOf(address(distributor)), 1, "queue failure moves no funds");
     }
 
-    // Scenarios: BATCH-I08, BATCH-I09
-    function testFuzz_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
+    // Scenarios: BATCH-I08, BATCH-I09.
+    function test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
         bool useRevenueAdmin_,
-        bool retireRoute_
-    ) public {
+        bool retireRoute_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         token.mint(address(distributor), 1);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
@@ -259,10 +273,14 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         } else {
             actions[1] = _yieldAction(address(_activeYieldRecipient()));
         }
-        vm.prank(emergency);
-        distributor.disable("");
+        _disablePolicy(address(distributor), emergency);
 
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(distributor)
+            )
+        );
         vm.prank(proposer);
         configTimelock.queueBatch(actions);
 
@@ -270,8 +288,8 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(token.balanceOf(address(distributor)), 1, "queue failure moves no funds");
     }
 
-    // Scenarios: QBATCH-V01
-    function testFuzz_whenLiveBatchRead_returnsExactSubActionsAndRejectsInvalidIndex(
+    // Scenarios: QBATCH-V01.
+    function test_whenLiveBatchRead_returnsExactSubActionsAndRejectsInvalidIndex(
         address caller_,
         uint256 validIndex_,
         bool maximumIndex_
@@ -310,8 +328,8 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         configTimelock.getQueuedSubAction(actionId, invalidIndex);
     }
 
-    // Scenarios: QBATCH-V02
-    function testFuzz_whenQueuedConfigRead_returnsExactStateAndDefaults(
+    // Scenarios: QBATCH-V02.
+    function test_whenQueuedConfigRead_returnsExactStateAndDefaults(
         address caller_,
         bool maximumIndex_
     ) public {
@@ -358,11 +376,14 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         vm.stopPrank();
     }
 
-    // Scenarios: BATCH-I02, BATCH-I11
-    function testFuzz_whenFirstActionTargetOrSelectorUnsupported_reverts(
+    // Scenarios: BATCH-I02, BATCH-I11.
+    function test_whenFirstActionTargetOrSelectorUnsupported_reverts(
         bool invalidTarget_,
-        bool useRevenueAdmin_
-    ) public {
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         address target = invalidTarget_ ? address(token) : address(distributor);
         bytes4 selector = invalidTarget_
@@ -386,8 +407,13 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(configTimelock.nextActionId(), 1, "invalid action consumes no ID");
     }
 
-    // Scenarios: BATCH-I12
-    function testFuzz_whenLaterActionUnsupported_rollsBackEarlierKey(bool useRevenueAdmin_) public {
+    // Scenarios: BATCH-I12.
+    function test_whenLaterActionUnsupported_rollsBackEarlierKey(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _routeAction(address(token), address(0));
@@ -414,13 +440,16 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         );
     }
 
-    // Scenarios: BATCH-I03
-    function testFuzz_whenStaticPayloadLengthIsInvalid_reverts(
+    // Scenarios: BATCH-I03.
+    function test_whenStaticPayloadLengthIsInvalid_reverts(
         uint8 selectorIndex_,
         bool trailingWord_,
         bool laterPosition_,
-        bool useRevenueAdmin_
-    ) public {
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         bytes4[4] memory selectors = [
             IRevenueDistributor.disableAssetRoutes.selector,
@@ -468,12 +497,15 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         );
     }
 
-    // Scenarios: BATCH-I04
-    function testFuzz_whenRoutePayloadEncodingIsInvalid_reverts(
+    // Scenarios: BATCH-I04.
+    function test_whenRoutePayloadEncodingIsInvalid_reverts(
         bool useRevenueAdmin_,
         bool rawMalformed_,
-        bool shiftedOffset_
-    ) public {
+        bool shiftedOffset_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
         bytes memory payload;
@@ -519,11 +551,14 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         );
     }
 
-    // Scenarios: BATCH-I05
-    function testFuzz_whenAddressWordHasDirtyUpperBits_revertsAtQueue(
+    // Scenarios: BATCH-I05.
+    function test_whenAddressWordHasDirtyUpperBits_revertsAtQueue(
         uint8 selectorIndex_,
-        bool useRevenueAdmin_
-    ) public {
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         bytes4[5] memory selectors = [
             IRevenueDistributor.setAssetRoutes.selector,
@@ -555,12 +590,18 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(configTimelock.nextActionId(), 1, "dirty address consumes no ID");
     }
 
-    // Scenarios: BATCH-Q04
-    function testFuzz_whenTwoYieldActionsShareGlobalKey_batchReverts(bool useRevenueAdmin_) public {
+    // Scenarios: BATCH-Q04.
+    function test_whenTwoYieldActionsShareGlobalKey_batchReverts(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        actions[0] = _yieldAction(address(0));
-        actions[1] = _yieldAction(address(0));
+        MockYieldRepurchaseRecipient candidate = _activeYieldRecipient();
+        actions[0] = _yieldAction(address(candidate));
+        actions[1] = _yieldAction(address(candidate));
         uint64 actionId = configTimelock.nextActionId();
         bytes32 localKey = keccak256("REVENUE_DISTRIBUTOR_YIELD_RECIPIENT");
         bytes32 key = keccak256(abi.encode(address(distributor), localKey));
@@ -579,11 +620,14 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(configTimelock.pendingActionId(key), 0, "rolled-back global key is free");
     }
 
-    // Scenarios: RDT-Q02
-    function testFuzz_whenReachableAssetActionsShareKey_batchReverts(
+    // Scenarios: RDCT-BATCH-Q02.
+    function test_whenReachableAssetActionsShareKey_batchReverts(
         uint8 pairKind_,
-        bool useRevenueAdmin_
-    ) public {
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         pairKind_ = uint8(bound(pairKind_, 0, 6));
         address proposer = _permittedProposer(useRevenueAdmin_);
         MockERC20 asset = new MockERC20("Managed", "MGT", 18);
@@ -660,7 +704,7 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     //   when batch queued
     //     [X] it reverts with NotAuthorised
     //     [X] unauthorized caller queues no batch
-    // Scenarios: BATCH-A01
+    // Scenarios: BATCH-A01.
     function test_givenUnauthorizedCaller_whenBatchQueued_reverts(address caller_) public {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != alice);
@@ -675,7 +719,7 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(configTimelock.nextActionId(), 1, "unauthorized caller queues no batch");
     }
 
-    // Scenarios: BATCH-A01
+    // Scenarios: BATCH-A01.
     function test_whenKnownUnauthorizedIdentitiesQueueBatch_reverts() public {
         _permittedProposer(true);
         address[] memory callers = new address[](4);
@@ -698,8 +742,13 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     //   when batch queued
     //     [X] it reverts with NotEnabled
     //     [X] disabled timelock queues no batch
-    // Scenarios: BATCH-L01
-    function testFuzz_givenDisabled_whenBatchQueued_reverts(bool useRevenueAdmin_) public {
+    // Scenarios: BATCH-L01.
+    function test_givenDisabled_whenBatchQueued_reverts(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _rescueAction(address(token));
@@ -722,22 +771,27 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     function test_givenReEnabled_whenBatchQueued() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _rescueAction(address(token));
-        vm.startPrank(admin);
-        configTimelock.disable("");
+        _disablePolicy(address(configTimelock), admin);
+        vm.prank(admin);
         configTimelock.reEnable();
 
+        vm.prank(admin);
         uint64 actionId = configTimelock.queueBatch(actions);
-        vm.stopPrank();
 
         assertEq(actionId, 1, "re-enabled timelock queues batch");
     }
 
     // given policy inactive
     //   when batch queued
-    //     [X] it reverts with RevenueDistributorConfigTimelock_PolicyInactive
+    //     [X] it reverts with RevenueDistributorConfigTimelock_PolicyNotActive
     //     [X] inactive timelock queues no batch
-    // Scenarios: BATCH-L02
-    function testFuzz_givenPolicyInactive_whenBatchQueued_reverts(bool useRevenueAdmin_) public {
+    // Scenarios: BATCH-L02.
+    function test_givenPolicyInactive_whenBatchQueued_reverts(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _rescueAction(address(token));
@@ -748,7 +802,7 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
-                    .RevenueDistributorConfigTimelock_PolicyInactive
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
                     .selector,
                 address(configTimelock)
             )
@@ -767,28 +821,26 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     function test_givenPolicyReactivated_whenBatchQueued() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _rescueAction(address(token));
-        vm.startPrank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
-        kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
+        _setPolicyActive(address(configTimelock), false);
+        _setPolicyActive(address(configTimelock), true);
 
+        vm.prank(admin);
         uint64 actionId = configTimelock.queueBatch(actions);
-        vm.stopPrank();
 
         assertEq(actionId, 1, "reactivated timelock queues batch");
     }
 
     // when empty batch queued
     //   [X] it reverts with ITimelockBatchQueue_BatchEmpty
-    // Scenarios: BATCH-I01
-    function testFuzz_whenEmptyBatchQueued_reverts(
+    // Scenarios: BATCH-I01.
+    function test_whenEmptyBatchQueued_reverts(
         bool useRevenueAdmin_,
-        uint8 lifecycleFault_
-    ) public {
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](0);
-        lifecycleFault_ = uint8(bound(lifecycleFault_, 0, 2));
-        if (lifecycleFault_ == 1) _disableTimelock();
-        if (lifecycleFault_ == 2) _deactivateTimelock();
 
         vm.prank(proposer);
         vm.expectRevert(ITimelockBatchQueue.ITimelockBatchQueue_BatchEmpty.selector);
@@ -796,10 +848,55 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(configTimelock.nextActionId(), 1, "empty batch consumes no ID");
     }
 
+    // Scenarios: BATCH-L06.
+    function test_givenDisabled_whenEmptyBatchQueued_reverts(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        address proposer = _permittedProposer(useRevenueAdmin_);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](0);
+
+        _disableTimelock();
+        vm.prank(proposer);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        configTimelock.queueBatch(actions);
+        assertEq(configTimelock.nextActionId(), 1, "empty batch consumes no ID");
+    }
+
+    // Scenarios: BATCH-L07.
+    function test_givenInactive_whenEmptyBatchQueued_reverts(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        address proposer = _permittedProposer(useRevenueAdmin_);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](0);
+
+        _deactivateTimelock();
+        vm.prank(proposer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
+                    .selector,
+                address(configTimelock)
+            )
+        );
+        configTimelock.queueBatch(actions);
+        assertEq(configTimelock.nextActionId(), 1, "empty batch consumes no ID");
+    }
+
     // when maximum batch queued
     //   [X] maximum-size batch queues
-    // Scenarios: BATCH-P01
-    function test_whenMaximumBatchQueued() public {
+    // Scenarios: BATCH-P01.
+    function test_whenMaximumBatchQueued(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         uint256 maximum = 15;
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](
             maximum
@@ -809,17 +906,20 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
             actions[i] = _rescueAction(address(rescueToken));
         }
 
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 actionId = configTimelock.queueBatch(actions);
 
         assertEq(actionId, 1, "maximum-size batch queues");
     }
 
-    // Scenarios: BATCH-P01
-    function testFuzz_whenValidSizedBatchQueued_storesEveryActionAndGuard(
+    // Scenarios: BATCH-P01.
+    function test_whenValidSizedBatchQueued_storesEveryActionAndGuard(
         uint8 length_,
-        bool useRevenueAdmin_
-    ) public {
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         uint256 length = bound(length_, 1, 15);
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](
@@ -875,19 +975,18 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
 
     // when batch exceeds maximum
     //   [X] it reverts with ITimelockBatchQueue_BatchTooLarge
-    // Scenarios: BATCH-I10
-    function testFuzz_whenBatchExceedsMaximum_reverts(
+    // Scenarios: BATCH-I10.
+    function test_whenBatchExceedsMaximum_reverts(
         bool useRevenueAdmin_,
-        uint8 lifecycleFault_
-    ) public {
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         uint256 maximum = 15;
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](
             maximum + 1
         );
-        lifecycleFault_ = uint8(bound(lifecycleFault_, 0, 2));
-        if (lifecycleFault_ == 1) _disableTimelock();
-        if (lifecycleFault_ == 2) _deactivateTimelock();
 
         vm.prank(proposer);
         vm.expectRevert(
@@ -895,6 +994,53 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
                 ITimelockBatchQueue.ITimelockBatchQueue_BatchTooLarge.selector,
                 maximum + 1,
                 maximum
+            )
+        );
+        configTimelock.queueBatch(actions);
+        assertEq(configTimelock.nextActionId(), 1, "oversized batch consumes no ID");
+    }
+
+    // Scenarios: BATCH-L08.
+    function test_givenDisabled_whenBatchExceedsMaximum_reverts(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        uint256 maximum = 15;
+        address proposer = _permittedProposer(useRevenueAdmin_);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](
+            maximum + 1
+        );
+
+        _disableTimelock();
+        vm.prank(proposer);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        configTimelock.queueBatch(actions);
+        assertEq(configTimelock.nextActionId(), 1, "oversized batch consumes no ID");
+    }
+
+    // Scenarios: BATCH-L09.
+    function test_givenInactive_whenBatchExceedsMaximum_reverts(
+        bool useRevenueAdmin_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
+        uint256 maximum = 15;
+        address proposer = _permittedProposer(useRevenueAdmin_);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](
+            maximum + 1
+        );
+
+        _deactivateTimelock();
+        vm.prank(proposer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
+                    .selector,
+                address(configTimelock)
             )
         );
         configTimelock.queueBatch(actions);
@@ -937,8 +1083,8 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     // given a batch names the same address in its route and yield recipient
     //   when the route executes before the yield change
     //     [X] the later action reverts and the whole batch rolls back
-    // Scenarios: EXEC-I03
-    function testFuzz_givenConflictingRouteAndYield_whenRouteFirstBatchExecutes_revertsAtomically(
+    // Scenarios: EXEC-I03.
+    function test_givenConflictingRouteAndYield_whenRouteFirstBatchExecutes_revertsAtomically(
         address executor_
     ) public {
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
@@ -973,8 +1119,8 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     // given a batch names the same address in its route and yield recipient
     //   when the yield change executes before the route
     //     [X] the route state hash changes and the whole batch rolls back
-    // Scenarios: EXEC-I03
-    function testFuzz_givenConflictingRouteAndYield_whenYieldFirstBatchExecutes_revertsAtomically(
+    // Scenarios: EXEC-I03.
+    function test_givenConflictingRouteAndYield_whenYieldFirstBatchExecutes_revertsAtomically(
         address executor_
     ) public {
         MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
@@ -1017,8 +1163,8 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         _assertBatchRetained(actionId, actionBefore, firstKey, firstHash, key, expectedHash);
     }
 
-    // Scenarios: EXEC-I05
-    function testFuzz_givenCompatibleRouteAndYield_whenBatchExecutesInSuppliedOrder(
+    // Scenarios: EXEC-I05.
+    function test_givenCompatibleRouteAndYield_whenBatchExecutesInSuppliedOrder(
         bool routeFirst_,
         address executor_
     ) public {
@@ -1125,14 +1271,18 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     // given an asset route is already queued
     //   when a route for another asset is queued
     //     [X] both assets retain independent keys
-    // Scenarios: BATCH-Q02
-    function test_givenQueuedRoute_whenOtherAssetRouteQueued() public {
+    // Scenarios: BATCH-Q02.
+    function test_givenQueuedRoute_whenOtherAssetRouteQueued(
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         MockERC20 otherToken = new MockERC20("Other Revenue", "OREV", 18);
         vm.label(address(otherToken), "Other revenue token");
         IRevenueDistributor.AssetRoute[] memory shares = new IRevenueDistributor.AssetRoute[](0);
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 first = configTimelock.queueSetAssetRoutes(address(token), 0, shares);
-        vm.prank(admin);
+        vm.prank(proposerSeed_);
         uint64 second = configTimelock.queueSetAssetRoutes(address(otherToken), 0, shares);
         assertEq(second, first + 1, "other asset queues independently");
         bytes32 firstKey = _queuedKey(first, 0);
@@ -1186,8 +1336,8 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     // given two different asset routes in one batch
     //   when the batch executes after the delay
     //     [X] both assets receive their routes
-    // Scenarios: EXEC-P02
-    function testFuzz_givenTwoDifferentAssetRoutes_whenBatchExecutes(address executor_) public {
+    // Scenarios: EXEC-P02.
+    function test_givenTwoDifferentAssetRoutes_whenBatchExecutes(address executor_) public {
         MockERC20 otherToken = new MockERC20("Other Revenue", "OREV", 18);
         vm.label(address(otherToken), "Other revenue token");
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
@@ -1231,101 +1381,6 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(configTimelock.pendingActionId(secondKey), 0, "second key released");
     }
 
-    // Scenarios: EXEC-C01
-    function testFuzz_whenRescueTokenCallbacksIntoExecution_preservesAtomicity(
-        bool sameAction_,
-        bool propagateFailure_,
-        address executor_
-    ) public {
-        ReentrantFeeToken callbackAsset = new ReentrantFeeToken();
-        callbackAsset.mint(address(distributor), 10);
-        vm.prank(admin);
-        uint64 outerId = configTimelock.queueRescue(address(callbackAsset), bob);
-        bytes32 outerKey = _queuedKey(outerId, 0);
-
-        MockERC20 routeAsset = new MockERC20("Callback route", "CBR", 18);
-        uint64 nestedId = outerId;
-        bytes32 nestedKey;
-        if (!sameAction_) {
-            vm.prank(admin);
-            nestedId = configTimelock.queueSetAssetRoutes(address(routeAsset), 0, _emptyRoutes());
-            nestedKey = _queuedKey(nestedId, 0);
-        }
-        callbackAsset.setCallbackFrom(
-            address(distributor),
-            address(configTimelock),
-            abi.encodeCall(configTimelock.executeQueuedAction, (nestedId))
-        );
-        callbackAsset.setBubbleCallbackFailure(propagateFailure_);
-        vm.warp(configTimelock.getQueuedAction(outerId).executableAt);
-
-        if (propagateFailure_) {
-            vm.expectRevert(abi.encodeWithSelector(ReentrantFeeToken.CallbackFailed.selector));
-        }
-        vm.prank(executor_);
-        configTimelock.executeQueuedAction(outerId);
-
-        if (propagateFailure_) {
-            assertFalse(
-                configTimelock.getQueuedAction(outerId).executed,
-                "propagated callback retains outer action"
-            );
-            assertEq(
-                configTimelock.pendingActionId(outerKey),
-                outerId,
-                "propagated callback retains outer key"
-            );
-            assertEq(
-                callbackAsset.balanceOf(address(distributor)),
-                10,
-                "propagated callback restores custody"
-            );
-            assertEq(callbackAsset.balanceOf(bob), 0, "propagated callback pays nothing");
-            assertTrue(callbackAsset.callbackEnabled(), "propagated callback state rolls back");
-        } else {
-            bytes4 expectedSelector = sameAction_
-                ? ITimelockBatchQueue.ITimelockBatchQueue_ActionAlreadyExecuted.selector
-                : ReentrancyGuard.ReentrancyGuardReentrantCall.selector;
-            assertFalse(callbackAsset.callbackSucceeded(), "nested execution is rejected");
-            assertEq(
-                callbackAsset.callbackRevertSelector(),
-                expectedSelector,
-                "nested failure selector matches"
-            );
-            assertTrue(
-                configTimelock.getQueuedAction(outerId).executed,
-                "caught callback completes outer action"
-            );
-            assertEq(
-                configTimelock.pendingActionId(outerKey),
-                0,
-                "caught callback releases outer key"
-            );
-            assertEq(
-                callbackAsset.balanceOf(address(distributor)),
-                0,
-                "outer rescue spends custody once"
-            );
-            assertEq(callbackAsset.balanceOf(bob), 10, "outer rescue pays once");
-        }
-        if (!sameAction_) {
-            assertFalse(
-                configTimelock.getQueuedAction(nestedId).executed,
-                "nested configuration stays live"
-            );
-            assertEq(
-                configTimelock.pendingActionId(nestedKey),
-                nestedId,
-                "nested key remains owned"
-            );
-            assertEq(
-                uint8(distributor.assetState(address(routeAsset))),
-                0,
-                "nested route is not installed"
-            );
-        }
-    }
-
     function _assertBatchRetained(
         uint64 actionId_,
         bytes32 actionBefore_,
@@ -1350,11 +1405,14 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     // given a disabled distributor and revenue distributor admin
     //   when an unmanaged rescue batch matures
     //     [X] the batch executes and sends unreserved funds to Treasury
-    // Scenarios: BATCH-P02
-    function testFuzz_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch(
+    // Scenarios: BATCH-P02.
+    function test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch(
         bool useRevenueAdmin_,
-        bool includePending_
-    ) public {
+        bool includePending_,
+        address proposerSeed_,
+        bool revenueOnly_,
+        bool overlap_
+    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         token.mint(address(distributor), 9);
         MockERC20 pendingAsset = new MockERC20("Pending", "PEND", 18);
         if (includePending_) {
@@ -1367,8 +1425,7 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
             pendingAsset.mint(address(distributor), 7);
             distributor.seedPendingForTest(address(pendingAsset), alice, 7, 0, 0);
         }
-        vm.prank(emergency);
-        distributor.disable("");
+        _disablePolicy(address(distributor), emergency);
         address proposer = _permittedProposer(useRevenueAdmin_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](
             includePending_ ? 2 : 1
@@ -1402,6 +1459,520 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
             );
             _assertPendingPayouts(address(pendingAsset), alice, 3, 0, 0);
         }
+    }
+
+    // Scenarios: BATCH-L01.
+    function test_givenDisabled_whenBatchQueued_reverts_AdminOnlySeed() public {
+        test_givenDisabled_whenBatchQueued_reverts(false, address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-L01.
+    function test_givenDisabled_whenBatchQueued_reverts_RevenueRoleOnlySeed() public {
+        test_givenDisabled_whenBatchQueued_reverts(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-L01.
+    function test_givenDisabled_whenBatchQueued_reverts_RolesOverlapSeed() public {
+        test_givenDisabled_whenBatchQueued_reverts(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-P02.
+    function test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_AdminOnlySeed()
+        public
+    {
+        test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch(
+            false,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-P02.
+    function test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch(
+            false,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-P02.
+    function test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_RolesOverlapSeed()
+        public
+    {
+        test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch(
+            false,
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BATCH-I08, BATCH-I09.
+    function test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_AdminOnlySeed()
+        public
+    {
+        test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
+            false,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I08, BATCH-I09.
+    function test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
+            false,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I08, BATCH-I09.
+    function test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RolesOverlapSeed()
+        public
+    {
+        test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
+            false,
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BATCH-I07.
+    function test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_AdminOnlySeed()
+        public
+    {
+        test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically(
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I07.
+    function test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_RevenueRoleOnlySeed()
+        public
+    {
+        test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically(
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I07.
+    function test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_RolesOverlapSeed()
+        public
+    {
+        test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically(
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BATCH-L03.
+    function test_givenOperatorRotated_whenBatchQueued_reverts_AdminOnlySeed() public {
+        test_givenOperatorRotated_whenBatchQueued_reverts(false, address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-L03.
+    function test_givenOperatorRotated_whenBatchQueued_reverts_RevenueRoleOnlySeed() public {
+        test_givenOperatorRotated_whenBatchQueued_reverts(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-L03.
+    function test_givenOperatorRotated_whenBatchQueued_reverts_RolesOverlapSeed() public {
+        test_givenOperatorRotated_whenBatchQueued_reverts(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-L02.
+    function test_givenPolicyInactive_whenBatchQueued_reverts_AdminOnlySeed() public {
+        test_givenPolicyInactive_whenBatchQueued_reverts(false, address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-L02.
+    function test_givenPolicyInactive_whenBatchQueued_reverts_RevenueRoleOnlySeed() public {
+        test_givenPolicyInactive_whenBatchQueued_reverts(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-L02.
+    function test_givenPolicyInactive_whenBatchQueued_reverts_RolesOverlapSeed() public {
+        test_givenPolicyInactive_whenBatchQueued_reverts(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-Q02.
+    function test_givenQueuedRoute_whenOtherAssetRouteQueued_AdminOnlySeed() public {
+        test_givenQueuedRoute_whenOtherAssetRouteQueued(address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-Q02.
+    function test_givenQueuedRoute_whenOtherAssetRouteQueued_RevenueRoleOnlySeed() public {
+        test_givenQueuedRoute_whenOtherAssetRouteQueued(address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-Q02.
+    function test_givenQueuedRoute_whenOtherAssetRouteQueued_RolesOverlapSeed() public {
+        test_givenQueuedRoute_whenOtherAssetRouteQueued(address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-I05.
+    function test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_AdminOnlySeed() public {
+        test_whenAddressWordHasDirtyUpperBits_revertsAtQueue(
+            1,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I05.
+    function test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RevenueRoleOnlySeed() public {
+        test_whenAddressWordHasDirtyUpperBits_revertsAtQueue(
+            1,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I05.
+    function test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RolesOverlapSeed() public {
+        test_whenAddressWordHasDirtyUpperBits_revertsAtQueue(1, false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-L08.
+    function test_whenBatchExceedsMaximum_reverts_AdminOnlySeed() public {
+        test_givenDisabled_whenBatchExceedsMaximum_reverts(false, address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-L08.
+    function test_whenBatchExceedsMaximum_reverts_RevenueRoleOnlySeed() public {
+        test_givenDisabled_whenBatchExceedsMaximum_reverts(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-L08.
+    function test_whenBatchExceedsMaximum_reverts_RolesOverlapSeed() public {
+        test_givenDisabled_whenBatchExceedsMaximum_reverts(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-L06.
+    function test_whenEmptyBatchQueued_reverts_AdminOnlySeed() public {
+        test_givenDisabled_whenEmptyBatchQueued_reverts(false, address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-L06.
+    function test_whenEmptyBatchQueued_reverts_RevenueRoleOnlySeed() public {
+        test_givenDisabled_whenEmptyBatchQueued_reverts(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-L06.
+    function test_whenEmptyBatchQueued_reverts_RolesOverlapSeed() public {
+        test_givenDisabled_whenEmptyBatchQueued_reverts(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-I02, BATCH-I11.
+    function test_whenFirstActionTargetOrSelectorUnsupported_reverts_AdminOnlySeed() public {
+        test_whenFirstActionTargetOrSelectorUnsupported_reverts(
+            false,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I02, BATCH-I11.
+    function test_whenFirstActionTargetOrSelectorUnsupported_reverts_RevenueRoleOnlySeed() public {
+        test_whenFirstActionTargetOrSelectorUnsupported_reverts(
+            false,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I02, BATCH-I11.
+    function test_whenFirstActionTargetOrSelectorUnsupported_reverts_RolesOverlapSeed() public {
+        test_whenFirstActionTargetOrSelectorUnsupported_reverts(
+            false,
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BATCH-I12.
+    function test_whenLaterActionUnsupported_rollsBackEarlierKey_AdminOnlySeed() public {
+        test_whenLaterActionUnsupported_rollsBackEarlierKey(false, address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-I12.
+    function test_whenLaterActionUnsupported_rollsBackEarlierKey_RevenueRoleOnlySeed() public {
+        test_whenLaterActionUnsupported_rollsBackEarlierKey(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-I12.
+    function test_whenLaterActionUnsupported_rollsBackEarlierKey_RolesOverlapSeed() public {
+        test_whenLaterActionUnsupported_rollsBackEarlierKey(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-P01.
+    function test_whenMaximumBatchQueued_AdminOnlySeed() public {
+        test_whenMaximumBatchQueued(address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-P01.
+    function test_whenMaximumBatchQueued_RevenueRoleOnlySeed() public {
+        test_whenMaximumBatchQueued(address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-P01.
+    function test_whenMaximumBatchQueued_RolesOverlapSeed() public {
+        test_whenMaximumBatchQueued(address(0x1234), true, true);
+    }
+
+    // Scenarios: RDCT-BATCH-Q02.
+    function test_whenReachableAssetActionsShareKey_batchReverts_AdminOnlySeed() public {
+        test_whenReachableAssetActionsShareKey_batchReverts(
+            1,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: RDCT-BATCH-Q02.
+    function test_whenReachableAssetActionsShareKey_batchReverts_RevenueRoleOnlySeed() public {
+        test_whenReachableAssetActionsShareKey_batchReverts(1, false, address(0x1234), true, false);
+    }
+
+    // Scenarios: RDCT-BATCH-Q02.
+    function test_whenReachableAssetActionsShareKey_batchReverts_RolesOverlapSeed() public {
+        test_whenReachableAssetActionsShareKey_batchReverts(1, false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-I04.
+    function test_whenRoutePayloadEncodingIsInvalid_reverts_AdminOnlySeed() public {
+        test_whenRoutePayloadEncodingIsInvalid_reverts(
+            false,
+            false,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I04.
+    function test_whenRoutePayloadEncodingIsInvalid_reverts_RevenueRoleOnlySeed() public {
+        test_whenRoutePayloadEncodingIsInvalid_reverts(
+            false,
+            false,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I04.
+    function test_whenRoutePayloadEncodingIsInvalid_reverts_RolesOverlapSeed() public {
+        test_whenRoutePayloadEncodingIsInvalid_reverts(
+            false,
+            false,
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BATCH-I03.
+    function test_whenStaticPayloadLengthIsInvalid_reverts_AdminOnlySeed() public {
+        test_whenStaticPayloadLengthIsInvalid_reverts(
+            1,
+            false,
+            false,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I03.
+    function test_whenStaticPayloadLengthIsInvalid_reverts_RevenueRoleOnlySeed() public {
+        test_whenStaticPayloadLengthIsInvalid_reverts(
+            1,
+            false,
+            false,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-I03.
+    function test_whenStaticPayloadLengthIsInvalid_reverts_RolesOverlapSeed() public {
+        test_whenStaticPayloadLengthIsInvalid_reverts(
+            1,
+            false,
+            false,
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BATCH-Q04.
+    function test_whenTwoYieldActionsShareGlobalKey_batchReverts_AdminOnlySeed() public {
+        test_whenTwoYieldActionsShareGlobalKey_batchReverts(false, address(0x1234), false, false);
+    }
+
+    // Scenarios: BATCH-Q04.
+    function test_whenTwoYieldActionsShareGlobalKey_batchReverts_RevenueRoleOnlySeed() public {
+        test_whenTwoYieldActionsShareGlobalKey_batchReverts(false, address(0x1234), true, false);
+    }
+
+    // Scenarios: BATCH-Q04.
+    function test_whenTwoYieldActionsShareGlobalKey_batchReverts_RolesOverlapSeed() public {
+        test_whenTwoYieldActionsShareGlobalKey_batchReverts(false, address(0x1234), true, true);
+    }
+
+    // Scenarios: BATCH-P01.
+    function test_whenValidSizedBatchQueued_storesEveryActionAndGuard_AdminOnlySeed() public {
+        test_whenValidSizedBatchQueued_storesEveryActionAndGuard(
+            1,
+            false,
+            address(0x1234),
+            false,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-P01.
+    function test_whenValidSizedBatchQueued_storesEveryActionAndGuard_RevenueRoleOnlySeed() public {
+        test_whenValidSizedBatchQueued_storesEveryActionAndGuard(
+            1,
+            false,
+            address(0x1234),
+            true,
+            false
+        );
+    }
+
+    // Scenarios: BATCH-P01.
+    function test_whenValidSizedBatchQueued_storesEveryActionAndGuard_RolesOverlapSeed() public {
+        test_whenValidSizedBatchQueued_storesEveryActionAndGuard(
+            1,
+            false,
+            address(0x1234),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BATCH-L04.
+    function test_givenPolicyInactive_givenBrokenRoles_whenQueueRequested_reverts(
+        address caller_,
+        bool enabled_
+    ) public {
+        if (!enabled_) _disablePolicy(address(configTimelock), admin);
+        _setPolicyActive(address(configTimelock), false);
+        vm.etch(address(configTimelock.ROLES()), hex"fe");
+        uint64 next = configTimelock.nextActionId();
+        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_PolicyNotActive
+                    .selector,
+                address(configTimelock)
+            )
+        );
+        vm.prank(caller_);
+        configTimelock.queueBatch(new ITimelockBatchQueue.BatchAction[](0));
+        assertEq(configTimelock.nextActionId(), next, "Rejected local admission consumes no ID");
+        assertEq(
+            configTimelock.getQueuedConfigStateCount(next, 0),
+            0,
+            "Rejected admission stores no payload"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected local admission commits no logs");
+    }
+
+    // Scenarios: BATCH-L05.
+    function test_givenActiveDisabled_givenBrokenRoles_whenQueueRequested_reverts(
+        address caller_
+    ) public {
+        _disablePolicy(address(configTimelock), admin);
+        vm.etch(address(configTimelock.ROLES()), hex"fe");
+        uint64 next = configTimelock.nextActionId();
+        vm.recordLogs();
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(caller_);
+        configTimelock.queueBatch(new ITimelockBatchQueue.BatchAction[](0));
+        assertEq(configTimelock.nextActionId(), next, "Disabled admission consumes no ID");
+        assertEq(
+            configTimelock.getQueuedConfigStateCount(next, 0),
+            0,
+            "Disabled admission stores no payload"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Disabled admission commits no logs");
+    }
+
+    // Scenarios: BATCH-A02.
+    function test_givenUnauthorizedCaller_givenBrokenTarget_whenQueueRequested_reverts(
+        address caller_
+    ) public {
+        vm.assume(
+            !roles.hasRole(caller_, ADMIN_ROLE) &&
+                !roles.hasRole(caller_, REVENUE_DISTRIBUTOR_ADMIN_ROLE)
+        );
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature("configOperator()"),
+            abi.encodeWithSignature("Unavailable()")
+        );
+        uint64 next = configTimelock.nextActionId();
+        vm.recordLogs();
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+        vm.prank(caller_);
+        configTimelock.queueBatch(new ITimelockBatchQueue.BatchAction[](0));
+        assertEq(configTimelock.nextActionId(), next, "Unauthorized admission consumes no ID");
+        assertEq(
+            configTimelock.getQueuedConfigStateCount(next, 0),
+            0,
+            "Unauthorized admission stores no payload"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Unauthorized admission commits no logs");
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast,unused-return)
