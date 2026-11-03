@@ -11,13 +11,15 @@ The development tools are listed in `mise.toml`:
 - Python 3.13.18 for the bridge supply helper
 - shfmt 3.14.1 for shell formatting
 - SCC 4.1.0 for [scoped nSLOC reports](documentation/METRICS.md)
-- LCOV 2.6 (`genhtml`) for coverage reports
 
 With [mise](https://mise.jdx.dev/), run `mise trust` and `mise install` from the repository root.
 Use `mise exec --` before a command when your shell does not activate mise.
 
 Run `pnpm install` to install all dependencies.
 Run `pnpm build` or `forge build` to run a build.
+
+Run `pnpm test:coverage` for Forge's coverage summary and `lcov.info` data.
+Forge generates both outputs directly; no separate LCOV installation is needed.
 
 Run `pnpm format` to format files, or `pnpm format:check` to check them.
 Biome formats JSON, YAML, and JavaScript; Taplo formats TOML; shfmt formats shell scripts.
