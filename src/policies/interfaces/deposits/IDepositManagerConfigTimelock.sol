@@ -45,6 +45,12 @@ interface IDepositManagerConfigTimelock is ITimelockBatchQueue {
 
     // ========== QUEUE FUNCTIONS ========== //
 
+    /// @notice Queues recovery of an unmanaged token to the current Treasury.
+    /// @dev The balance is determined at execution. DepositManager may be locally disabled.
+    /// @param token_ The ERC-20 token to recover.
+    /// @return actionId Queued action identifier.
+    function queueRescue(address token_) external returns (uint64 actionId);
+
     /// @notice Queues creation of a new asset-period route on the Deposit Manager.
     /// @dev Route creation starts enabled after timelock execution. Queueing requires a
     ///      configured asset, nonzero period, registered operator holding `deposit_operator`,

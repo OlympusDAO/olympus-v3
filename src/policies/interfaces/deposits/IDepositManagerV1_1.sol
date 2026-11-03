@@ -125,6 +125,19 @@ interface IDepositManagerV1_1 is IDepositManager {
         address operator_
     ) external view;
 
+    // ========== RECOVERY ========== //
+
+    /// @notice Transfers the entire unmanaged token balance to the current Treasury.
+    /// @param token_ The ERC-20 token to recover.
+    function rescue(address token_) external;
+
+    /// @notice Quotes the current unmanaged token balance available for recovery.
+    /// @dev Permissionless and available while locally disabled. The quote does not reserve tokens
+    ///      or establish caller authorization or successful token delivery.
+    /// @param token_ The ERC-20 token to recover.
+    /// @return amount The live balance in raw token units, including zero.
+    function previewRescue(address token_) external view returns (uint256 amount);
+
     // ========== PREVIEW FUNCTIONS ========== //
 
     /// @notice Estimates the custody credit and shares for a deposit at the current vault state.
