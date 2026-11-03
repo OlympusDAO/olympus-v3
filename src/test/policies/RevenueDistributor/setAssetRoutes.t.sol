@@ -2345,5 +2345,134 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
     function test_whenZeroRecipientConfigured_reverts_RolesOverlapSeed() public {
         test_whenZeroRecipientConfigured_reverts(address(0x1234), true, true);
     }
+
+    // Scenarios: SAR-P06.
+    function test_givenERC7575ShareToken_whenRepurchaseRouteSet() public {
+        address vault = makeAddr("ERC7575 vault");
+        MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
+        _setPolicyActive(address(recipient), true);
+        recipient.setVaultConfig(vault, makeAddr("underlying"), true);
+        vm.mockCall(
+            address(recipient),
+            abi.encodeCall(MockYieldRepurchaseRecipient.getVaultConfig, (vault)),
+            abi.encode(vault, address(token), makeAddr("underlying"), true)
+        );
+        vm.prank(_configurationCaller());
+        distributor.setYieldRecipient(address(recipient));
+        IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
+
+        distributor.validateSetAssetRoutes(address(token), 1_000, routes);
+        vm.prank(_configurationCaller());
+        distributor.setAssetRoutes(address(token), 1_000, routes);
+
+        assertEq(
+            uint8(distributor.assetState(address(token))),
+            uint8(IRevenueDistributor.AssetState.Active),
+            "separate share token route is active"
+        );
+        _assertStoredRoute(address(token), 1_000, routes);
+    }
+
+    // Scenarios: SAR-I18.
+    function test_givenVaultIsNotShareToken_whenRepurchaseRouteSet_reverts() public {
+        MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
+        _setPolicyActive(address(recipient), true);
+        recipient.setVaultConfig(address(token), makeAddr("underlying"), true);
+        vm.mockCall(
+            address(recipient),
+            abi.encodeCall(MockYieldRepurchaseRecipient.getVaultConfig, (address(token))),
+            abi.encode(address(token), makeAddr("separate shares"), makeAddr("underlying"), true)
+        );
+        vm.prank(_configurationCaller());
+        distributor.setYieldRecipient(address(recipient));
+        _assertInvalidVaultConfig(recipient);
+    }
+
+    // Scenarios: SAR-I18.
+    function test_givenFourWordVaultConfig_whenAddressWordMalformed_reverts(
+        uint256 malformed_,
+        bool shareTokenWord_
+    ) public {
+        malformed_ = bound(malformed_, uint256(type(uint160).max) + 1, type(uint256).max);
+        MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
+        _setPolicyActive(address(recipient), true);
+        recipient.setVaultConfig(address(token), address(token), true);
+        vm.mockCall(
+            address(recipient),
+            abi.encodeCall(MockYieldRepurchaseRecipient.getVaultConfig, (address(token))),
+            abi.encode(
+                address(token),
+                shareTokenWord_ ? malformed_ : uint256(uint160(address(token))),
+                shareTokenWord_ ? uint256(uint160(address(token))) : malformed_,
+                true
+            )
+        );
+        vm.prank(_configurationCaller());
+        distributor.setYieldRecipient(address(recipient));
+        _assertInvalidVaultConfig(recipient);
+    }
+
+    // Scenarios: SAR-I18.
+    function test_givenFourWordVaultConfig_whenAddressWordsAtMaximum_reverts() public {
+        test_givenFourWordVaultConfig_whenAddressWordMalformed_reverts(
+            uint256(type(uint160).max) + 1,
+            true
+        );
+        test_givenFourWordVaultConfig_whenAddressWordMalformed_reverts(
+            uint256(type(uint160).max) + 1,
+            false
+        );
+        test_givenFourWordVaultConfig_whenAddressWordMalformed_reverts(type(uint256).max, true);
+        test_givenFourWordVaultConfig_whenAddressWordMalformed_reverts(type(uint256).max, false);
+    }
+
+    // Scenarios: SAR-I18.
+    function test_givenVaultConfig_whenReturnLengthIsNotFourWords_reverts(uint8 length_) public {
+        vm.assume(length_ != 128);
+        MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
+        _setPolicyActive(address(recipient), true);
+        recipient.setVaultConfig(address(token), address(token), true);
+        bytes memory data = new bytes(256);
+        bytes memory canonical = abi.encode(address(token), address(token), address(token), true);
+        for (uint256 i; i < canonical.length; ++i) data[i] = canonical[i];
+        assembly ("memory-safe") {
+            mstore(data, length_)
+        }
+        vm.mockCall(
+            address(recipient),
+            abi.encodeCall(MockYieldRepurchaseRecipient.getVaultConfig, (address(token))),
+            data
+        );
+        vm.prank(_configurationCaller());
+        distributor.setYieldRecipient(address(recipient));
+        _assertInvalidVaultConfig(recipient);
+    }
+
+    // Scenarios: SAR-I18.
+    function test_givenVaultConfig_whenReturnLengthBoundaries_reverts() public {
+        test_givenVaultConfig_whenReturnLengthIsNotFourWords_reverts(0);
+        test_givenVaultConfig_whenReturnLengthIsNotFourWords_reverts(1);
+        test_givenVaultConfig_whenReturnLengthIsNotFourWords_reverts(96);
+        test_givenVaultConfig_whenReturnLengthIsNotFourWords_reverts(127);
+        test_givenVaultConfig_whenReturnLengthIsNotFourWords_reverts(129);
+        test_givenVaultConfig_whenReturnLengthIsNotFourWords_reverts(type(uint8).max);
+    }
+
+    function _assertInvalidVaultConfig(MockYieldRepurchaseRecipient recipient_) internal {
+        bytes32 beforeHash = distributor.assetDistributionHash(address(token));
+        bytes memory reason = abi.encodeWithSelector(
+            IRevenueDistributor.RevenueDistributor_YieldRecipientUnavailable.selector,
+            address(recipient_),
+            address(token)
+        );
+        IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
+        vm.expectRevert(reason);
+        distributor.validateSetAssetRoutes(address(token), 1_000, routes);
+        vm.expectRevert(reason);
+        vm.prank(_configurationCaller());
+        distributor.setAssetRoutes(address(token), 1_000, routes);
+        assertEq(distributor.assetDistributionHash(address(token)), beforeHash, "route unchanged");
+        assertEq(distributor.getActiveAssetCount(), 0, "invalid metadata cannot list an asset");
+    }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast,unused-return)

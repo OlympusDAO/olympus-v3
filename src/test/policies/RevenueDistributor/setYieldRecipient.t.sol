@@ -1869,7 +1869,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         vm.mockCall(
             address(candidate),
             abi.encodeWithSignature("getVaultConfig(address)", address(token)),
-            abi.encode(address(token), address(token), uint256(2))
+            abi.encode(address(token), address(token), address(token), uint256(2))
         );
         bytes memory reason = abi.encodeWithSelector(
             IRevenueDistributor.RevenueDistributor_YieldRecipientUnavailable.selector,
