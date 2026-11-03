@@ -51,6 +51,10 @@ contract RevenueDistributor is
 
     /// @dev Basis-point denominator for each distribution route.
     uint256 internal constant _BPS = 10_000;
+    /// @dev VaultConfig returns four ABI words: vault, share token, underlying asset, and enabled.
+    uint16 internal constant _VAULT_CONFIG_RETURN_SIZE = 128;
+    /// @dev Copy one extra byte so oversized responses fail the exact-length check.
+    uint16 internal constant _MAX_VAULT_CONFIG_RETURN_SIZE = _VAULT_CONFIG_RETURN_SIZE + 1;
     /// @dev Time after disablement in which the policy may be re-enabled.
     uint32 internal constant _REENABLE_GRACE_PERIOD = 7 days;
 
@@ -648,9 +652,8 @@ contract RevenueDistributor is
         _requireYieldRecipientPolicy(recipient_);
         // Some recipients hold vault shares directly; others accept the vault's underlying
         // asset. Try the direct share match first, then inspect registered vaults for an
-        // enabled underlying match. A failed or malformed lookup cannot establish compatibility.
+        // enabled share or underlying match. A failed or malformed lookup cannot establish compatibility.
         if (_yieldVaultMatches(recipient_, asset_, asset_)) return;
-        // TODO: Merge the YRF changes into this recipient vault lookup.
         // Decode words first: typed try/catch does not catch malformed return-data decoding.
         (bool success, bytes memory data) = recipient_.staticcall(
             abi.encodeCall(IYieldRepurchaseRecipient.getVaults, ())
@@ -674,7 +677,7 @@ contract RevenueDistributor is
         revert RevenueDistributor_YieldRecipientUnavailable(recipient_, asset_);
     }
 
-    /// @dev Safely checks one canonical three-word VaultConfig, without bubbling getter failures.
+    /// @dev Safely checks one canonical four-word VaultConfig, without bubbling getter failures.
     function _yieldVaultMatches(
         address recipient_,
         address vault_,
@@ -682,19 +685,18 @@ contract RevenueDistributor is
     ) internal view returns (bool) {
         (bool success, bytes memory data) = recipient_.safeStaticCall(
             gasleft(),
-            97,
+            _MAX_VAULT_CONFIG_RETURN_SIZE,
             abi.encodeCall(IYieldRepurchaseRecipient.getVaultConfig, (vault_))
         );
-        if (!success || data.length != 96) return false;
-        (uint256 returnedVault, uint256 underlying, uint256 enabled) = abi.decode(
-            data,
-            (uint256, uint256, uint256)
-        );
+        if (!success || data.length != _VAULT_CONFIG_RETURN_SIZE) return false;
+        (uint256 returnedVault, uint256 shareToken, uint256 underlying, uint256 enabled) = abi
+            .decode(data, (uint256, uint256, uint256, uint256));
         return
             returnedVault == uint256(uint160(vault_)) &&
+            shareToken <= type(uint160).max &&
             underlying <= type(uint160).max &&
             enabled == 1 &&
-            (vault_ == asset_ || underlying == uint256(uint160(asset_)));
+            (shareToken == uint256(uint160(asset_)) || underlying == uint256(uint160(asset_)));
     }
 
     // forge-lint: disable-end(calls-loop,require-revert-in-loop)
