@@ -52,4 +52,30 @@ contract MockYieldRepurchaseRecipientTest is Test {
         assertEq(_recipient.getAssetVault(former), address(0), "former asset has no vault");
         assertEq(_recipient.getAssetVault(current), vault, "current asset resolves to vault");
     }
+
+    function test_givenAssetRegistered_whenDifferentVaultRegisters_replacesFormerVault() public {
+        address formerVault = makeAddr("former vault");
+        address currentVault = makeAddr("current vault");
+        address asset = makeAddr("asset");
+        _recipient.setVaultConfig(formerVault, asset, true);
+
+        _recipient.setVaultConfig(currentVault, asset, true);
+
+        assertEq(_recipient.getAssetVault(asset), currentVault, "asset resolves to replacement");
+        address[] memory vaults = _recipient.getVaults();
+        assertEq(vaults.length, 1, "only one vault remains registered for the asset");
+        assertEq(vaults[0], currentVault, "replacement is the registered vault");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IYieldRepurchaseRecipient.YieldRepurchaseRecipient_VaultNotRegistered.selector,
+                formerVault
+            )
+        );
+        _recipient.getVaultConfig(formerVault);
+
+        _recipient.removeVaultConfig(currentVault);
+
+        assertEq(_recipient.getAssetVault(asset), address(0), "removed replacement clears lookup");
+        assertEq(_recipient.getVaults().length, 0, "no former registration is left behind");
+    }
 }

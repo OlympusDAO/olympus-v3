@@ -56,6 +56,11 @@ contract MockYieldRepurchaseRecipient is Policy, IYieldRepurchaseRecipient, IEna
     function setVaultConfig(address vault_, address asset_, bool enabled_) external {
         address formerAsset = _vaultConfigs[vault_].asset;
         if (_assetVaults[formerAsset] == vault_) delete _assetVaults[formerAsset];
+        address formerVault = _assetVaults[asset_];
+        if (formerVault != address(0) && formerVault != vault_) {
+            _vaults.remove(formerVault);
+            delete _vaultConfigs[formerVault];
+        }
         _vaults.add(vault_);
         // The mock models an ordinary ERC4626 vault, which is its own share token
         _vaultConfigs[vault_] = IYieldRepurchaseRecipient.VaultConfig({
