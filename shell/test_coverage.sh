@@ -105,8 +105,8 @@ GENHTML=(genhtml "$LCOV_FILE" -o "$HTML_DIR" --branch-coverage --legend --prefix
 if ! "${GENHTML[@]}" 2> "$GENHTML_LOG"; then
     # genhtml names the category of each complaint in parentheses and accepts the same names in
     # --ignore-errors, so retry with exactly the categories it raised.
-    categories=$(grep -oE '\((inconsistent|corrupt|range|source|format|unmapped|empty|unused|mismatch)\)' "$GENHTML_LOG" \
-        | tr -d '()' | sort -u | paste -sd, -)
+    categories=$(grep -oE '\((inconsistent|corrupt|range|source|format|unmapped|empty|unused|mismatch)\)' "$GENHTML_LOG" |
+        tr -d '()' | sort -u | paste -sd, -)
     if [ -z "$categories" ]; then
         echo "ERROR: genhtml failed and raised no recognised category:" >&2
         tail -20 "$GENHTML_LOG" >&2

@@ -1,0 +1,49 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+    "assist": {
+        "actions": {
+            "recommended": false,
+            "source": {
+                "useSortedKeys": {"level": "on", "options": {"sortOrder": "lexicographic"}},
+                "useSortedPackageJson": "off"
+            }
+        },
+        "enabled": true
+    },
+    "files": {
+        "includes": [
+            "**/*.{json,yaml,yml,js}",
+            "!broadcast/**/*.{json,yaml,yml,js}",
+            "broadcast/{DeployUsdsMocks.sol,DeployV2.sol,DeployV3.s.sol,L2Deploy.s.sol,LZBridgeTestnetDeploy.s.sol}/**/run-*.json",
+            "!broadcast/**/{31337,dry-run}/**",
+            "!broadcast/**/*-latest.json",
+            "!!**/{node_modules,dependencies,cache,coverage,docs,lib,out,.gen-perms}/**",
+            "!src/scripts/deploy/savedDeployments/**",
+            "!pnpm-lock.yaml"
+        ],
+        "maxSize": 16000000
+    },
+    "formatter": {
+        "bracketSpacing": false,
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100
+    },
+    "javascript": {
+        "assist": {"enabled": false},
+        "formatter": {"quoteStyle": "double", "trailingCommas": "all"}
+    },
+    "json": {"formatter": {"expand": "auto", "trailingCommas": "none"}},
+    "linter": {"enabled": false},
+    "overrides": [
+        {
+            "assist": {
+                "actions": {"source": {"useSortedKeys": "off", "useSortedPackageJson": "on"}}
+            },
+            "includes": ["**/package.json"]
+        }
+    ],
+    "vcs": {"enabled": false},
+    "yaml": {"formatter": {"enabled": true, "indentWidth": 4, "lineWidth": 100}}
+}

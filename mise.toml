@@ -1,0 +1,18 @@
+[tools]
+node = "24.22.1"
+pnpm = "11.28.10"
+foundry = "1.8.1"
+jq = "1.8.2"
+python = "3.13.18"
+shfmt = "3.14.1"
+"aqua:boyter/scc" = "4.1.0"
+
+[tools."github:linux-test-project/lcov"]
+version = "2.6"
+asset_pattern = "lcov-2.6.tar.gz"
+strip_components = 1
+bin_path = "bin"
+
+[env]
+# The LCOV source archive has no compiled XS module.
+LCOV_PURE_PERL = "1"
