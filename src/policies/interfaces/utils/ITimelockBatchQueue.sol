@@ -29,7 +29,7 @@ interface ITimelockBatchQueue {
     /// @param proposer     The account that queued the action.
     /// @param batchHash    Hash of the encoded batch of sub-actions.
     /// @param executableAt Timestamp at which the action can first be executed.
-    /// @param expiresAt    Timestamp after which the action can no longer be executed.
+    /// @param expiresAt    The last timestamp at which the action can be executed, inclusive.
     event TimelockActionQueued(
         uint64 indexed actionId,
         address indexed proposer,
@@ -114,10 +114,11 @@ interface ITimelockBatchQueue {
     /// @param executableAt Timestamp at which the action can first be executed.
     error ITimelockBatchQueue_ActionNotReady(uint64 actionId, uint48 executableAt);
 
-    /// @notice Thrown when a queued action is executed after its execution window.
+    /// @notice Thrown when a queued action is executed after `expiresAt`, the last executable
+    ///         timestamp.
     ///
     /// @param actionId  The queued action ID.
-    /// @param expiresAt Timestamp after which the action can no longer be executed.
+    /// @param expiresAt The last timestamp at which the action can be executed, inclusive.
     error ITimelockBatchQueue_ActionExpired(uint64 actionId, uint48 expiresAt);
 
     /// @notice Thrown when a queued sub-action has an unsupported target or selector.
@@ -176,7 +177,8 @@ interface ITimelockBatchQueue {
     /// @param proposer     The account that queued the action.
     /// @param queuedAt     Timestamp at which the action was queued.
     /// @param executableAt Timestamp at which the action can first be executed.
-    /// @param expiresAt    Timestamp after which the action can no longer be executed.
+    /// @param expiresAt    The last timestamp at which the action can be executed; the
+    ///                     execution window is `[executableAt, expiresAt]`, both ends included.
     /// @param executed     Whether the action has been executed.
     /// @param cancelled    Whether the action has been cancelled.
     /// @param actions      The sub-actions of the batch.
@@ -238,7 +240,9 @@ interface ITimelockBatchQueue {
     /// @notice Execute a queued action after its timelock has elapsed.
     /// @dev    Implementations must revert from implementation-specific hooks if the caller or
     ///         any sub-action should not be executed. Standard action state and timestamp
-    ///         checks revert from the abstract implementation. The batch is atomic: a revert
+    ///         checks revert from the abstract implementation: the action is executable at any
+    ///         block timestamp in the closed window `[executableAt, expiresAt]`, and expired
+    ///         once the block timestamp is past `expiresAt`. The batch is atomic: a revert
     ///         in any sub-action reverts the entire batch. Cross-batch ordering is not
     ///         enforced: once their timelocks elapse, separately queued actions may be
     ///         executed in any order, regardless of the order in which they were queued.

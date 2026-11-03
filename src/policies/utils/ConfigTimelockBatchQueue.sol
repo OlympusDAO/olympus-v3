@@ -141,7 +141,8 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             _queuedConfigStates[actionId_][index_].push(
                 QueuedConfigState({localKey: localKey, expectedStateHash: expectedStateHash})
             );
-            // Aggregate configuration keys are capped at 15, and each key must reserve its owner.
+            // The aggregate key count of a batch is bounded by `_maxConfigKeysPerBatch()`, and
+            // each key must reserve its owner.
             // forge-lint: disable-next-line(costly-loop)
             _pendingActionIds[key] = actionId_;
 
@@ -181,7 +182,8 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i; i < length; ++i) {
             QueuedConfigState storage state = states[i];
-            bytes32 key = ConfigTimelockKeyLib.scope(expectedDestination, state.localKey);
+            bytes32 localKey = state.localKey;
+            bytes32 key = ConfigTimelockKeyLib.scope(expectedDestination, localKey);
             uint64 owner = _pendingActionIds[key];
             if (owner != actionId_) {
                 revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -195,15 +197,16 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             bytes32 currentStateHash = _currentConfigStateHash(
                 actionId_,
                 index_,
-                state.localKey,
+                localKey,
                 action_
             );
-            if (currentStateHash != state.expectedStateHash) {
+            bytes32 expectedStateHash = state.expectedStateHash;
+            if (currentStateHash != expectedStateHash) {
                 revert IConfigTimelockBatchQueue_ConfigStateChanged(
                     actionId_,
                     index_,
                     key,
-                    state.expectedStateHash,
+                    expectedStateHash,
                     currentStateHash
                 );
             }
@@ -240,11 +243,13 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
                         owner
                     );
                 }
-                // At most 15 aggregate configuration keys are released for one terminal action.
+                // One terminal action releases the keys it reserved, bounded at queue time by
+                // `_maxConfigKeysPerBatch()`.
                 // forge-lint: disable-next-line(costly-loop)
                 delete _pendingActionIds[key];
             }
-            // Batches are capped at 15 sub-actions, whose terminal state must be fully removed.
+            // The sub-action count of a batch is bounded at queue time by `_maxBatchSize()`, and
+            // the terminal state of each sub-action must be fully removed.
             // forge-lint: disable-start(costly-loop)
             delete _queuedConfigStates[actionId_][index];
             delete _queuedConfigDestinations[actionId_][index];

@@ -22,6 +22,11 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     /// @inheritdoc IConfigOperator
     /// @dev The zero address revokes delegated configuration access. Authorization is checked before
     ///      rejecting an operator that is already configured.
+    ///
+    ///      Reverts if:
+    ///      - The authorization check of the implementation denies the caller or reverts.
+    ///      - The requested operator is the one already configured, which includes the zero
+    ///        address while no operator is set.
     // Zero intentionally revokes delegated configuration authority.
     // forge-lint: disable-next-line(missing-zero-check)
     function setConfigOperator(address configOperator_) public virtual override {
