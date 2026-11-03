@@ -218,6 +218,10 @@ V1.1 preserves every V1 function selector and adds:
 - `claimYield(IERC20,address,uint256,bool)`, returning `(tokenOut, amountOut)`.
 - `borrowingWithdraw(BorrowingWithdrawParams,bool)`, returning `(tokenOut, amountOut)`.
 - `previewDeposit(IERC20,uint256)` and `previewWithdraw(IERC20,uint256,bool)` conversion previews.
+- `rescue(address)` and permissionless `previewRescue(address)` for unmanaged-token recovery to current
+    Treasury. ADMIN or the selected config operator may rescue while DM is locally disabled.
+    A manager without ADMIN must propose through `DepositManagerConfigTimelock.queueRescue(address)`.
+    Execution sweeps the live balance after the delay. Managed assets, vaults and stored share tokens remain protected.
 - The separate `IAssetManagerV1_1` surface adds `getAssetWithdrawalToken(IERC20,bool)`,
     `getAssetDepositCapStatus(IERC20)`, `isAssetShareWithdrawalRequired(IERC20)`,
     `validateAssetWithdrawAsShares(IERC20,bool)`, and

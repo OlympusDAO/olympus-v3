@@ -683,6 +683,15 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
             : IERC4626(configuration.vault).previewRedeem(shares);
     }
 
+    // This custody mock does not model governance recovery; recovery suites use the real policy.
+    function rescue(address) external pure override {
+        revert MockDepositManager_TransferFailed();
+    }
+
+    function previewRescue(address) external pure override returns (uint256) {
+        revert MockDepositManager_TransferFailed();
+    }
+
     function supportsInterface(bytes4 interfaceId_) external pure override returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||

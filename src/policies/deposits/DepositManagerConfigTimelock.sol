@@ -33,8 +33,9 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         timelocked creation of new asset-period routes.
 /// @dev Asset and operator registration remain admin-only on Deposit Manager. This policy may only
 ///      call the configuration functions accepted by its action validator. Queue and execution
-///      require both policies to remain active in their shared Kernel and internally enabled;
-///      emergency cancellation remains available while either policy is inactive.
+///      require both policies active in their shared Kernel and this timelock enabled. Rescue
+///      permits a locally disabled manager; ordinary configuration requires it enabled.
+///      Emergency cancellation requires this timelock active but ignores manager readiness.
 contract DepositManagerConfigTimelock is
     Policy,
     ReEnablerGracePeriod,
@@ -52,6 +53,7 @@ contract DepositManagerConfigTimelock is
     bytes32 internal constant _ASSET_PERIOD_DOMAIN = keccak256("DEPOSIT_MANAGER_ASSET_PERIOD");
     bytes32 internal constant _ASSET_SHARE_WITHDRAWAL_DOMAIN =
         keccak256("DEPOSIT_MANAGER_ASSET_SHARE_WITHDRAWAL");
+    bytes32 internal constant _RESCUE_DOMAIN = keccak256("DEPOSIT_MANAGER_RESCUE");
 
     uint32 internal constant _REENABLE_GRACE_PERIOD = 7 days;
 
@@ -146,6 +148,20 @@ contract DepositManagerConfigTimelock is
     }
 
     // ========== QUEUE FUNCTIONS ========== //
+
+    /// @inheritdoc IDepositManagerConfigTimelock
+    /// @dev Reverts if queue admission, the manager's permissionless rescue preview or conflict
+    ///      reservation fails. Does not reserve tokens or require the manager locally enabled.
+    function queueRescue(
+        address token_
+    ) external override onlyActive givenEnabled onlyProposerRole returns (uint64 actionId) {
+        return
+            _queueAction(
+                address(_DEPOSIT_MANAGER),
+                IDepositManagerV1_1.rescue.selector,
+                abi.encode(token_)
+            );
+    }
 
     /// @inheritdoc IDepositManagerConfigTimelock
     /// @dev Reverts if:
@@ -308,11 +324,10 @@ contract DepositManagerConfigTimelock is
         _requireProposerRole(caller_);
         PolicyDependency.requireActive(address(_DEPOSIT_MANAGER), address(kernel));
         _requireAuthorizedConfigOperator();
-        _requireDepositManagerEnabled();
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    // Reason: keeping the bounded six-selector validator together makes its accepted action
+    // Reason: keeping the bounded seven-selector validator together makes its accepted action
     // surface auditable and avoids single-use dispatch helpers.
     // forge-lint: disable-next-line(cyclomatic-complexity)
     function _validateConfigSubAction(
@@ -321,9 +336,21 @@ contract DepositManagerConfigTimelock is
         uint256,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override {
+        if (action_.selector != IDepositManagerV1_1.rescue.selector)
+            _requireDepositManagerEnabled();
         if (action_.target != address(_DEPOSIT_MANAGER)) _revertInvalidAction(action_);
 
         bytes4 selector = action_.selector;
+        if (selector == IDepositManagerV1_1.rescue.selector) {
+            _requirePayloadLength(action_, 32);
+            uint256 tokenWord = abi.decode(action_.payload, (uint256));
+            if (tokenWord > type(uint160).max) _revertInvalidAction(action_);
+            address token = abi.decode(action_.payload, (address));
+            // Admission validates the live quote; the balance is not committed to the action.
+            // forge-lint: disable-next-line(unused-return)
+            IDepositManagerV1_1(address(_DEPOSIT_MANAGER)).previewRescue(token);
+            return;
+        }
         if (_isAssetLimitsSelector(selector)) {
             _requirePayloadLength(action_, _LEN_ASSET_VALUE);
             (IERC20 asset, uint256 value) = abi.decode(action_.payload, (IERC20, uint256));
@@ -418,6 +445,10 @@ contract DepositManagerConfigTimelock is
         ITimelockBatchQueue.BatchAction memory action_
     ) internal pure override returns (bytes32[] memory keys) {
         keys = new bytes32[](1);
+        if (action_.selector == IDepositManagerV1_1.rescue.selector) {
+            keys[0] = keccak256(abi.encode(_RESCUE_DOMAIN, abi.decode(action_.payload, (address))));
+            return keys;
+        }
         if (_isAssetLimitsSelector(action_.selector)) {
             (address limitsAsset, ) = abi.decode(action_.payload, (address, uint256));
             keys[0] = keccak256(abi.encode(_ASSET_LIMITS_DOMAIN, limitsAsset));
@@ -442,6 +473,29 @@ contract DepositManagerConfigTimelock is
         bytes32,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32 stateHash) {
+        if (action_.selector == IDepositManagerV1_1.rescue.selector) {
+            address token = abi.decode(action_.payload, (address));
+            try IDepositManagerV1_1(address(_DEPOSIT_MANAGER)).previewRescue(token) returns (
+                uint256
+            ) {
+                return keccak256(abi.encode(true));
+            } catch (bytes memory reason) {
+                // Only eligibility drift changes the commitment. Balance/Treasury failures retain
+                // their exact error, and receipts never stale a queued full-balance rescue.
+                if (
+                    keccak256(reason) ==
+                    keccak256(
+                        abi.encodeWithSelector(
+                            IDepositManager.DepositManager_CannotRescueAsset.selector,
+                            token
+                        )
+                    )
+                ) return keccak256(abi.encode(false));
+                assembly ("memory-safe") {
+                    revert(add(reason, 32), mload(reason))
+                }
+            }
+        }
         if (action_.selector == IDepositManager.addAssetPeriod.selector) {
             (
                 IERC20 routeAsset,
@@ -507,7 +561,11 @@ contract DepositManagerConfigTimelock is
         ITimelockBatchQueue.BatchAction memory action_
     ) internal override {
         bytes4 selector = action_.selector;
-        if (selector == IDepositManager.setAssetDepositCap.selector) {
+        if (selector == IDepositManagerV1_1.rescue.selector) {
+            IDepositManagerV1_1(address(_DEPOSIT_MANAGER)).rescue(
+                abi.decode(action_.payload, (address))
+            );
+        } else if (selector == IDepositManager.setAssetDepositCap.selector) {
             (IERC20 asset, uint256 value) = abi.decode(action_.payload, (IERC20, uint256));
             _DEPOSIT_MANAGER.setAssetDepositCap(asset, value);
         } else if (selector == IDepositManager.setAssetMinimumDeposit.selector) {
@@ -545,12 +603,20 @@ contract DepositManagerConfigTimelock is
     function _validateExecution(
         address,
         uint64,
-        ITimelockBatchQueue.QueuedAction storage
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
         _requireOwnPolicyActive();
         _requireEnabled();
         _requirePoliciesActive();
-        _requireDepositManagerEnabled();
+        uint256 count = action_.actions.length;
+        bool requiresEnabled;
+        for (uint256 i; i < count; ++i) {
+            if (action_.actions[i].selector != IDepositManagerV1_1.rescue.selector) {
+                requiresEnabled = true;
+                break;
+            }
+        }
+        if (requiresEnabled) _requireDepositManagerEnabled();
         _requireAuthorizedConfigOperator();
     }
 

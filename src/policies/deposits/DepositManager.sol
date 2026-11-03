@@ -1218,30 +1218,40 @@ contract DepositManager is
 
     // ========== ADMIN FUNCTIONS ==========
 
-    /// @notice Rescue an unmanaged ERC20 token sent to this contract and send it to TRSRY
+    /// @inheritdoc IDepositManagerV1_1
     /// @dev    This function reverts if:
-    ///         - The caller has neither the admin nor deposit_manager_admin role
-    ///         - token_ is a configured asset, vault entry point, or stored share token
-    ///         - token_ is the zero address
+    ///         - This policy is Kernel-inactive or a guarded operation is in progress.
+    ///         - The caller is neither ADMIN nor the selected nonzero config operator.
+    ///         - Shared preview validation or the mandatory transfer fails.
     ///
     ///         This function remains available while the contract is disabled because it cannot
     ///         move managed custody and always sends rescued tokens to TRSRY.
     ///
-    /// @param  token_ The address of the ERC20 token to rescue
-    function rescue(address token_) external nonReentrant {
+    function rescue(address token_) external override nonReentrant {
         _requireOwnPolicyActive();
-        _requireDepositManagerAdminAuthority();
+        _onlyConfigAuthority(false);
 
-        if (_isManagedToken(token_)) revert DepositManager_CannotRescueAsset(token_);
+        (uint256 balance, address treasury) = _previewRescue(token_);
+        if (balance == 0) return;
+        ERC20(token_).safeTransfer(treasury, balance);
+        emit TokenRescued(token_, balance);
+    }
 
-        // Transfer the token balance to TRSRY
-        // This will revert if the token is not a valid ERC20 or the zero address
-        uint256 balance = ERC20(token_).balanceOf(address(this));
-        address treasury = getModuleAddress(toKeycode("TRSRY"));
-        if (balance > 0 && treasury != address(0)) {
-            ERC20(token_).safeTransfer(treasury, balance);
-            emit TokenRescued(token_, balance);
-        }
+    /// @inheritdoc IDepositManagerV1_1
+    /// @dev Reverts if this policy is Kernel-inactive, the token is ineligible, its balance cannot
+    ///      be read, or TRSRY is missing. Local disablement and viewer roles do not restrict quotes.
+    function previewRescue(address token_) external view override returns (uint256 amount) {
+        _requireOwnPolicyActive();
+        (amount, ) = _previewRescue(token_);
+    }
+
+    function _previewRescue(
+        address token_
+    ) internal view returns (uint256 amount, address treasury) {
+        if (token_.code.length == 0 || _isManagedToken(token_))
+            revert DepositManager_CannotRescueAsset(token_);
+        amount = ERC20(token_).balanceOf(address(this));
+        treasury = getModuleAddress(toKeycode("TRSRY"));
     }
 
     // ========== CONFIGURATION AUTHORIZATION ========== //
