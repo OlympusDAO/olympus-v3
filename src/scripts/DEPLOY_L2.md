@@ -83,7 +83,7 @@ The DAO accepts pool ownership during the initial handoff. The deployer then ret
 Before the CCIP readiness gate, the DAO nominates the configuration policy as pool owner.
 The later `CCIPNonEthereumSetupBatch.setup` accepts that ownership through the configuration policy and binds its timelock.
 CCIP registration, remote routes, rate limits, and enabling remain separate setup work; deployment alone does not enable bridging.
-Follow [the CCIP runbook](../../documentation/bridge/ccip/RUNBOOK.md) and [Robinhood checklist](../../documentation/bridge/ccip/ROBINHOOD_PENDING.md).
+Follow [the CCIP runbook](../../documentation/bridge/ccip/RUNBOOK.md).
 The setup batch skips policies already active in the Kernel. Do not run a second CCIP deployment sequence after this command.
 
 If source verification fails after successful transactions, preserve the deployment manifest and retry
