@@ -16,6 +16,10 @@ import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol"
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
 
+// Calls are made for their effect or their expected revert; a test reads only the returned
+// values it asserts.
+// forge-lint: disable-start(unused-return)
+
 contract CCIPLockReleaseTokenPoolTest is Test {
     event Locked(address indexed sender, uint256 amount);
     event Released(address indexed sender, address indexed recipient, uint256 amount);
@@ -35,6 +39,7 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     address public REMOTE_POOL;
 
+    uint8 public constant OHM_DECIMALS = 9;
     uint256 public constant AMOUNT = 1e9;
     uint64 public constant REMOTE_CHAIN = 111;
 
@@ -48,8 +53,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         REMOTE_POOL = makeAddr("REMOTE_POOL");
 
         // Create the OHM token
-        OHM = new MockOhm("Olympus", "OHM", 9);
-        remoteOHM = new MockOhm("OlympusRemote", "OHMR", 9);
+        OHM = new MockOhm("Olympus", "OHM", OHM_DECIMALS);
+        remoteOHM = new MockOhm("OlympusRemote", "OHMR", OHM_DECIMALS);
 
         // Create the CCIP mocks
         router = new MockCCIPRouter();
@@ -62,7 +67,7 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         vm.prank(OWNER);
         tokenPool = new LockReleaseTokenPool(
             IERC20(address(OHM)),
-            9,
+            OHM_DECIMALS,
             new address[](0),
             address(RMNProxy),
             true,
@@ -227,7 +232,7 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Create a new OHM token that will be passed to lockOrBurn
-        MockOhm newOhm = new MockOhm("Olympus2", "OHM2", 9);
+        MockOhm newOhm = new MockOhm("Olympus2", "OHM2", OHM_DECIMALS);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(TokenPool.InvalidToken.selector, address(newOhm)));
@@ -315,7 +320,7 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         _assertTokenPoolOhmBalance(AMOUNT);
         _assertReceiverOhmBalance(0);
         assertEq(result.destTokenAddress, abi.encode(address(remoteOHM)), "destTokenAddress");
-        assertEq(result.destPoolData, abi.encode(9), "destPoolData");
+        assertEq(result.destPoolData, abi.encode(OHM_DECIMALS), "destPoolData");
     }
 
     // releaseOrMint
@@ -344,7 +349,7 @@ contract CCIPLockReleaseTokenPoolTest is Test {
                 amount: amount_,
                 localToken: address(OHM),
                 sourcePoolAddress: abi.encode(REMOTE_POOL),
-                sourcePoolData: abi.encode(9),
+                sourcePoolData: abi.encode(OHM_DECIMALS),
                 offchainTokenData: ""
             });
     }
@@ -368,7 +373,7 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Create a new OHM token that will be passed to releaseOrMint
-        MockOhm newOhm = new MockOhm("Olympus2", "OHM2", 9);
+        MockOhm newOhm = new MockOhm("Olympus2", "OHM2", OHM_DECIMALS);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(TokenPool.InvalidToken.selector, address(newOhm)));
@@ -383,7 +388,7 @@ contract CCIPLockReleaseTokenPoolTest is Test {
                 amount: AMOUNT,
                 localToken: address(newOhm),
                 sourcePoolAddress: abi.encode(REMOTE_POOL),
-                sourcePoolData: abi.encode(9),
+                sourcePoolData: abi.encode(OHM_DECIMALS),
                 offchainTokenData: ""
             })
         );
@@ -452,13 +457,15 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         vm.prank(OFFRAMP);
         Pool.ReleaseOrMintOutV1 memory result = tokenPool.releaseOrMint(
             Pool.ReleaseOrMintInV1({
+                // casting to 'bytes32' is safe because the string literal is exactly 32 bytes long
+                // forge-lint: disable-next-line(unsafe-typecast)
                 originalSender: abi.encode(bytes32("11111111111111111111111111111111")), // Mimic an SVM address
                 remoteChainSelector: REMOTE_CHAIN,
                 receiver: RECEIVER,
                 amount: sendAmount_,
                 localToken: address(OHM),
                 sourcePoolAddress: abi.encode(REMOTE_POOL),
-                sourcePoolData: abi.encode(9),
+                sourcePoolData: abi.encode(OHM_DECIMALS),
                 offchainTokenData: ""
             })
         );
@@ -497,3 +504,5 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         assertEq(result.destinationAmount, sendAmount_, "destinationAmount");
     }
 }
+
+// forge-lint: disable-end(unused-return)
