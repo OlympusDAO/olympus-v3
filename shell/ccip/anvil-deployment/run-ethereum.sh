@@ -159,17 +159,17 @@ dao_balance="$(cast call "$ohm" 'balanceOf(address)(uint256)' "$dao" --rpc-url "
 # free liquidity short by its amount; start the run again then.
 FREE_LIQUIDITY_COVERED="The free liquidity of the pool already covers the minimum backing"
 solana_mint="$(jq -r '.current.solana.olympus.legacy.OHM' "$REPO_ROOT/$ENV_JSON")"
-solana_supply="$(cast rpc --raw getTokenSupply "[\"$solana_mint\"]" --rpc-url solana \
-    | jq -r 'if (.value.decimals == 9) and (.value.amount | test("^[0-9]+$")) then .value.amount else empty end')" \
-    || die "the Solana RPC (the solana alias of foundry.toml) did not answer getTokenSupply for the OHM mint $solana_mint"
+solana_supply="$(cast rpc --raw getTokenSupply "[\"$solana_mint\"]" --rpc-url solana |
+    jq -r 'if (.value.decimals == 9) and (.value.amount | test("^[0-9]+$")) then .value.amount else empty end')" ||
+    die "the Solana RPC (the solana alias of foundry.toml) did not answer getTokenSupply for the OHM mint $solana_mint"
 [ -n "$solana_supply" ] || die "the Solana RPC returned no 9-decimal supply for the OHM mint $solana_mint"
 free_liquidity=0
 [ "$pool_balance" -le "$solana_supply" ] || free_liquidity="$((pool_balance - solana_supply))"
 fund_amount="$((min_backing - unclaimable))"
 log "key=$min_backing unclaimable=$unclaimable pool=$pool_balance solana=$solana_supply free=$free_liquidity dao=$dao_balance amount=$fund_amount"
 if [ "$free_liquidity" -lt "$min_backing" ]; then
-    [ "$free_liquidity" -ge "$unclaimable" ] \
-        || die "the free liquidity of the pool on this fork ($free_liquidity) is below the unclaimable balance ($unclaimable), so the amount cannot bring it to the key; a lock minted on Solana after the fork block shortens it, start the run again"
+    [ "$free_liquidity" -ge "$unclaimable" ] ||
+        die "the free liquidity of the pool on this fork ($free_liquidity) is below the unclaimable balance ($unclaimable), so the amount cannot bring it to the key; a lock minted on Solana after the fork block shortens it, start the run again"
     if [ "$dao_balance" -lt "$fund_amount" ]; then
         # The live DAO MS balance covers the amount today; this branch keeps the
         # rehearsal green if it ever does not, by minting from the OHM vault (the
@@ -201,8 +201,8 @@ if READINESS_RPC_MAINNET="$RPC" ./shell/ccip/check_rollout_readiness.sh --chains
     > "$LOG_DIR/readiness-mainnet-red.log" 2>&1; then
     die "the readiness report was expected to be RED; see $LOG_DIR/readiness-mainnet-red.log"
 fi
-grep -q "READINESS RESULT mainnet: RED" "$LOG_DIR/readiness-mainnet-red.log" \
-    || die "the readiness report did not print a RED verdict; see $LOG_DIR/readiness-mainnet-red.log"
+grep -q "READINESS RESULT mainnet: RED" "$LOG_DIR/readiness-mainnet-red.log" ||
+    die "the readiness report did not print a RED verdict; see $LOG_DIR/readiness-mainnet-red.log"
 log "OK: readiness is RED before the fee budget mock"
 
 step "Negative: the proposal build must fail before the fee budgets are raised"
@@ -212,8 +212,8 @@ if RPC_URL="$RPC" src/scripts/proposals/executeOnAnvilFork.sh \
     > "$LOG_DIR/proposal-no-budget.log" 2>&1; then
     die "the proposal build was expected to fail; see $LOG_DIR/proposal-no-budget.log"
 fi
-grep -q "OHM delivery gas budget of the lane" "$LOG_DIR/proposal-no-budget.log" \
-    || die "the proposal did not fail on the fee budgets; see $LOG_DIR/proposal-no-budget.log"
+grep -q "OHM delivery gas budget of the lane" "$LOG_DIR/proposal-no-budget.log" ||
+    die "the proposal did not fail on the fee budgets; see $LOG_DIR/proposal-no-budget.log"
 log "OK: the proposal build fails on the fee budgets before the mock"
 
 step "Mock the OHM fee entries of the five mainnet lanes"
@@ -224,8 +224,8 @@ done
 step "Readiness must be GREEN after the fee budget mock"
 READINESS_RPC_MAINNET="$RPC" ./shell/ccip/check_rollout_readiness.sh --chains mainnet \
     2>&1 | tee "$LOG_DIR/readiness-mainnet-green.log"
-grep -q "READINESS RESULT mainnet: GREEN" "$LOG_DIR/readiness-mainnet-green.log" \
-    || die "the readiness report was expected to be GREEN; see $LOG_DIR/readiness-mainnet-green.log"
+grep -q "READINESS RESULT mainnet: GREEN" "$LOG_DIR/readiness-mainnet-green.log" ||
+    die "the readiness report was expected to be GREEN; see $LOG_DIR/readiness-mainnet-green.log"
 
 step "Phase C: execute CCIPTokenPoolConfigProposal from the timelock"
 RPC_URL="$RPC" src/scripts/proposals/executeOnAnvilFork.sh \

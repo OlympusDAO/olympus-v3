@@ -79,8 +79,7 @@ FORGE_ARGS=(./src/scripts/deploy/L2Deploy.s.sol:L2Deploy
     --sig "deploy(string,bool)(string)" "$CHAIN" "$ohm"
     --rpc-url "$RPC_URL" $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv
     --sender "$ACCOUNT_ADDRESS" $BROADCAST_FLAG)
-FOUNDRY_PROFILE=deploy forge script "${FORGE_ARGS[@]}" $RESUME_FLAG \
-    |
+FOUNDRY_PROFILE=deploy forge script "${FORGE_ARGS[@]}" $RESUME_FLAG |
     # The address map is saved in the broadcast for the registry writer; individual
     # deployments are already logged. Flush progress output immediately.
     awk '/^== Return ==$/ || /^addresses: string / {next} {print; fflush()}'

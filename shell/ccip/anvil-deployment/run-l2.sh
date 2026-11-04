@@ -104,8 +104,8 @@ ems="$(env_addr "$CHAIN" olympus.multisig.emergency)"
 mainnet_sel="$(jq -r '.current.mainnet.external.ccip.ChainSelector' "$REPO_ROOT/$ENV_JSON")"
 solana_sel="$(jq -r '.current.solana.external.ccip.ChainSelector' "$REPO_ROOT/$ENV_JSON")"
 # The burn/mint chains declare no Solana route in the rollout; step 10 adds it afterwards
-[ -z "$(env_addr "$CHAIN" olympus.config.CCIP.routes.solana)" ] \
-    || die "$CHAIN already declares a solana route in env.json; the harness adds it after the rollout"
+[ -z "$(env_addr "$CHAIN" olympus.config.CCIP.routes.solana)" ] ||
+    die "$CHAIN already declares a solana route in env.json; the harness adds it after the rollout"
 
 step "Registry handover: deployer EOA -> DAO MS"
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
@@ -145,8 +145,8 @@ if env "$READINESS_VAR=$RPC" ./shell/ccip/check_rollout_readiness.sh --chains "$
     > "$LOG_DIR/readiness-$CHAIN-red.log" 2>&1; then
     die "the readiness report was expected to be RED; see $LOG_DIR/readiness-$CHAIN-red.log"
 fi
-grep -q "READINESS RESULT $CHAIN: RED" "$LOG_DIR/readiness-$CHAIN-red.log" \
-    || die "the readiness report did not print a RED verdict; see $LOG_DIR/readiness-$CHAIN-red.log"
+grep -q "READINESS RESULT $CHAIN: RED" "$LOG_DIR/readiness-$CHAIN-red.log" ||
+    die "the readiness report did not print a RED verdict; see $LOG_DIR/readiness-$CHAIN-red.log"
 log "OK: readiness is RED before the fee budget mock"
 
 step "Negative: setup must fail naming a lane before the fee budgets are raised"
@@ -160,8 +160,8 @@ done < <(l2_route_peers "$CHAIN")
 step "Readiness must be GREEN after the fee budget mock"
 env "$READINESS_VAR=$RPC" ./shell/ccip/check_rollout_readiness.sh --chains "$CHAIN" \
     2>&1 | tee "$LOG_DIR/readiness-$CHAIN-green.log"
-grep -q "READINESS RESULT $CHAIN: GREEN" "$LOG_DIR/readiness-$CHAIN-green.log" \
-    || die "the readiness report was expected to be GREEN; see $LOG_DIR/readiness-$CHAIN-green.log"
+grep -q "READINESS RESULT $CHAIN: GREEN" "$LOG_DIR/readiness-$CHAIN-green.log" ||
+    die "the readiness report was expected to be GREEN; see $LOG_DIR/readiness-$CHAIN-green.log"
 
 step "Setup (DAO MS)"
 run_batch CCIPNonEthereumSetupBatch setup dao
@@ -289,8 +289,8 @@ if env "$READINESS_VAR=$RPC" ./shell/ccip/check_rollout_readiness.sh --chains "$
     > "$LOG_DIR/readiness-$CHAIN-solana.log" 2>&1; then
     die "the readiness report was expected to be RED after finalize; see $LOG_DIR/readiness-$CHAIN-solana.log"
 fi
-grep -q "READINESS RESULT $CHAIN: RED" "$LOG_DIR/readiness-$CHAIN-solana.log" \
-    || die "the readiness report did not print a RED verdict after finalize; see $LOG_DIR/readiness-$CHAIN-solana.log"
+grep -q "READINESS RESULT $CHAIN: RED" "$LOG_DIR/readiness-$CHAIN-solana.log" ||
+    die "the readiness report did not print a RED verdict after finalize; see $LOG_DIR/readiness-$CHAIN-solana.log"
 expect_eq "$(grep -c '\[FAIL\]' "$LOG_DIR/readiness-$CHAIN-solana.log")" "2" \
     "readiness after finalize fails on the two dormancy lines only"
 expect_log_line "$LOG_DIR/readiness-$CHAIN-solana.log" "[FAIL] the pool policy is disabled" \
