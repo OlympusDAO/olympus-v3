@@ -23,14 +23,11 @@ contract ConfigureOracles is BatchScriptV2 {
 
     /// @notice Configure all oracle policies
     /// @param useDaoMS_ Whether to use the DAO multisig
-    /// @param signOnly_ Whether to only sign the batch
     function configureOracles(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, "", ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, "", ledgerDerivationPath) {
         console2.log("=== Configuring Oracle Policies ===");
 
         // Load kernel

@@ -4,7 +4,7 @@
 #
 # Usage: src/scripts/proposals/executeOnAnvilFork.sh --file <proposal-path> --contract <contract-name> --env <env-file>
 #
-# Requires: Anvil running on http://localhost:8545
+# Requires: Anvil running on RPC_URL (default http://localhost:8545)
 #
 # Environment variables:
 # RPC_URL (optional, defaults to http://localhost:8545)
@@ -50,22 +50,38 @@ if [ -z "$contract" ]; then
     exit 1
 fi
 
-# Verify Anvil is running
-if ! curl -sSf -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545 > /dev/null 2>&1; then
-    echo "Error: Anvil is not running on http://localhost:8545"
+# Set default RPC URL if not provided
+export RPC_URL=${RPC_URL:-"http://localhost:8545"}
+
+# Log only the scheme, host and port; the userinfo, path and query can carry provider credentials
+RPC_ENDPOINT=$RPC_URL
+RPC_SCHEME=""
+if [[ $RPC_ENDPOINT == *://* ]]; then
+    RPC_SCHEME="${RPC_ENDPOINT%%://*}://"
+    RPC_ENDPOINT=${RPC_ENDPOINT#*://}
+fi
+RPC_ENDPOINT=${RPC_ENDPOINT%%[/?#]*}
+RPC_ENDPOINT="$RPC_SCHEME${RPC_ENDPOINT##*@}"
+
+# Verify Anvil is running; any node answers basic RPC calls, so check the client name.
+# Discard cast errors, which can print the RPC URL.
+if ! RPC_CLIENT=$(cast client --rpc-url "$RPC_URL" 2> /dev/null); then
+    echo "Error: Anvil is not running on $RPC_ENDPOINT"
     echo "Start it with: pnpm run anvil:fork"
     exit 1
 fi
-
-# Set default RPC URL if not provided
-export RPC_URL=${RPC_URL:-"http://localhost:8545"}
+if [[ $RPC_CLIENT != anvil/* ]]; then
+    echo "Error: $RPC_ENDPOINT is not an Anvil node (client: $RPC_CLIENT)"
+    echo "Point RPC_URL at an Anvil fork (default http://localhost:8545); start one with: pnpm run anvil:fork"
+    exit 1
+fi
 
 echo "Funding timelock with ETH for gas..."
 cast rpc --rpc-url $RPC_URL anvil_setBalance "0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39" "0xDE0B6B3A7640000" --silent
 
 echo "Executing proposal via Anvil fork"
 echo "Proposal contract: $file:$contract"
-echo "RPC URL: $RPC_URL"
+echo "RPC URL: $RPC_ENDPOINT"
 
 # Run the forge script
 forge script $file:$contract --sig "executeOnAnvilFork()" --rpc-url $RPC_URL --broadcast --unlocked

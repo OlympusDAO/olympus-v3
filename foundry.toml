@@ -39,6 +39,10 @@ gas_snapshot_emit = false
 # generating their ABI encoding/decoding assembly.
 additional_compiler_profiles = [{ name = "optimized", optimizer = true, optimizer_runs = 400 }]
 compilation_restrictions = [
+    # The YRF v2 fork tests exhaust the stack unoptimized (the E2E integer model). The facility
+    # itself must compile without the optimizer, so the restriction is on its tests, not on
+    # `YieldRepurchaseFacilityV2.sol`.
+    { paths = "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacility/**", optimizer_runs = 400 },
     { paths = "src/external/governance/GovernorBravoDelegate.sol", optimizer_runs = 400 },
     { paths = "src/policies/BondCallback.sol", optimizer_runs = 400 },
     { paths = "src/policies/BoostedLiquidity/BLVaultLido.sol", optimizer_runs = 400 },
@@ -84,9 +88,11 @@ verbosity = 0
 gas_snapshot_emit = false
 # Coverage output is long enough without solc warnings.
 ignored_warnings_from = ["dependencies", "src"]
-# Emptied so that coverage compiles in a single job. The Operator restriction otherwise adds a
+# Emptied so that coverage compiles in a single job. The restrictions above otherwise add a
 # second job carrying the same compiler version, and coverage items of two such jobs are
-# misattributed between files.
+# misattributed between files. The graphs those restrictions cover still compile here because
+# `shell/test_coverage.sh` runs `forge coverage --ir-minimum`, which routes them through the IR
+# pipeline instead of the optimizer.
 compilation_restrictions = []
 
 # Coverage needs each line reached once, not a wide search. A `forge-config` comment in a test file
@@ -112,7 +118,20 @@ runs = 256
 workers = 4
 
 [lint]
-exclude_lints = ["asm-keccak256", "mixed-case-variable", "mixed-case-function"]
+exclude_lints = [
+    # Prefer auditable Solidity hashing; use assembly only when profiling justifies it.
+    "asm-keccak256",
+    # Framework module handles and test fixtures intentionally use uppercase identifiers.
+    "mixed-case-variable",
+    # Preserve framework and external ABI names such as KEYCODE, VERSION, sOHM, and gOHM.
+    "mixed-case-function",
+    # Events intentionally follow completed external effects. This heuristic cannot recognize
+    # reentrancy guards, STATICCALLs, or trusted dependencies and encourages misleading ordering.
+    "reentrancy-events",
+    # Solidity zero-initializes locals; explicit `= 0` can add gas for little readability gain.
+    "uninitialized-local",
+    "pragma-inconsistent",
+]
 # Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports all of them.
 lint_on_build = false
 
@@ -140,7 +159,7 @@ base64 = { version = "1.1.0", git = "https://github.com/Brechtpd/base64.git", re
 chainlink-ccip = { version = "1.6.0", git = "https://github.com/smartcontractkit/chainlink.git", rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69" }
 chainlink-local = { version = "0.2.5", git = "https://github.com/smartcontractkit/chainlink-local.git", rev = "b429481536095867f9cd2c6480066c472b9594de" }
 forge-std = "1.16.2"
-safe-utils = { version = "0.0.17", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "c057d167139dc4878f10ab7133a8c069fa6b1601" }
+safe-utils = { version = "0.0.23", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "8884959c4416d5f22c9057c51875e20d81555081" }
 base58-solidity = { version = "1.0.3", git = "https://github.com/storyicon/base58-solidity.git", rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f" }
 clones-with-immutable-args = { version = "1.1.2", git = "https://github.com/wighawag/clones-with-immutable-args.git", rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce" }
 # Used at CrossChainBridge deploy; EVM bytecode identical to 1.1.0, only metadata hash differs
@@ -159,3 +178,5 @@ solidity-http = { version = "0.0.7", git = "https://github.com/Recon-Fuzz/solidi
 "@layerzerolabs-lz-evm-v1-0-7" = "3.0.162"
 uniswap-v3-core = { version = "1.0.1", git = "https://github.com/Uniswap/v3-core.git", rev = "6562c52e8f75f0c10f9deaf44861847585fc8129" }
 uniswap-v3-periphery = { version = "1.4.2", git = "https://github.com/Uniswap/v3-periphery.git", rev = "b325bb0905d922ae61fcc7df85ee802e8df5e96c" }
+openzeppelin-community-contracts = { version = "0.0.1", git = "https://github.com/OpenZeppelin/openzeppelin-community-contracts.git", rev = "92f252851c41449bd8417a6ebdcc8db95c8f66c9" }
+openzeppelin-5-7 = { version = "5.7.0", git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git", rev = "cab19933c33c2ad1d4c7a84864a3601dddfd16f3" }
