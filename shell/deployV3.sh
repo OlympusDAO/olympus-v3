@@ -64,7 +64,7 @@ FOUNDRY_PROFILE=deploy forge script "${FORGE_ARGS[@]}" $RESUME_FLAG
 
 echo ""
 echo "Formatting deployment JSON files (best effort)"
-pnpm exec prettier --cache --cache-strategy content --no-error-on-unmatched-pattern --write "deployments/**/*.json" "deployments/**/.*.json" "src/scripts/env.json" || {
+pnpm run format:biome -- deployments src/scripts/env.json || {
     echo "WARNING: Deployment JSON formatting failed; continuing"
 }
 

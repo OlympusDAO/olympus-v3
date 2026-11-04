@@ -2,13 +2,31 @@
 
 Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is a foundation for the future of the protocol, utilizing the [Default Framework](https://github.com/fullyallocated/Default) to allow extensibility at the base layer via fully onchain governance mechanisms.
 
-Prerequisites:
+The development tools are listed in `mise.toml`:
 
-- Node.js >=24
-- pnpm 10.33.0
+- Node.js 24.22.1
+- pnpm 11.28.10
+- Foundry 1.8.1 (`forge`, `cast`, and `anvil`)
+- jq 1.8.2 for shell scripts and permission generation
+- Python 3.13.18 for the bridge supply helper
+- shfmt 3.14.1 for shell formatting
+- SCC 4.1.0 for [scoped nSLOC reports](documentation/METRICS.md)
+
+With [mise](https://mise.jdx.dev/), run `mise trust` and `mise install` from the repository root.
+Use `mise exec --` before a command when your shell does not activate mise.
 
 Run `pnpm install` to install all dependencies.
 Run `pnpm build` or `forge build` to run a build.
+
+Run `pnpm test:coverage` for Forge's coverage summary and `lcov.info` data.
+Forge generates both outputs directly; no separate LCOV installation is needed.
+
+Run `pnpm format` to format files, or `pnpm format:check` to check them.
+Biome formats JSON, YAML, and JavaScript; Taplo formats TOML; shfmt formats shell scripts.
+File exclusions are configured in `biome.json`, `.taplo.toml`, and `.editorconfig`.
+Biome and Taplo are installed through pnpm. CI installs the pinned shfmt executable.
+Prettier still formats Solidity and any HTML files outside the generated report exclusions.
+The existing `pnpm prettier` commands remain aliases for the formatting commands.
 
 Configure foundry settings in foundry.toml.
 
