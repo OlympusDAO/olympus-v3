@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 /// @title  IPositionTokenRenderer
 /// @notice Interface for a contract that can render token URIs for deposit positions

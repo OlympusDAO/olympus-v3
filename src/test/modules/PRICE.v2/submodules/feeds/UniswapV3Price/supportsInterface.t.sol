@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
 import {UniswapV3PriceTest} from "../UniswapV3Price.t.sol";

@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {larping} from "src/test/lib/larping.sol";
-import {console2} from "forge-std/console2.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
 
 import "src/Kernel.sol";
 
@@ -507,18 +506,9 @@ contract BondManagerTest is Test {
         uint256 auctionId = bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
 
         // Verify end state
-        (
-            ERC20 auctioningToken,
-            ERC20 biddingToken,
-            uint256 orderCancellationEndDate,
-            uint256 auctionEndDate,
-            ,
-            ,
-            ,
+        (ERC20 biddingToken, uint256 orderCancellationEndDate, uint256 auctionEndDate) = easyAuction
+            .getAuctionSummary(auctionId);
 
-        ) = easyAuction.auctionData(auctionId);
-
-        // assertEq(auctioningToken, bondToken);
         assertEq(address(biddingToken), address(ohm));
         assertEq(orderCancellationEndDate, block.timestamp + 6 days);
         assertEq(auctionEndDate, block.timestamp + 1 weeks);

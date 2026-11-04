@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 contract DepositManagerSetOperatorNameTest is DepositManagerTest {
     // ========== EVENTS ========== //

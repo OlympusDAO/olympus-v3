@@ -5,10 +5,6 @@ pragma solidity ^0.8.0;
 import "forge-std/Test.sol";
 import {TestSuite} from "proposal-sim/test/TestSuite.t.sol";
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
-import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
-import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
-import {Timelock} from "src/external/governance/Timelock.sol";
 
 import {OIP_170} from "src/proposals/OIP_170.sol";
 

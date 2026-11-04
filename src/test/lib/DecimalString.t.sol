@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity ^0.8;
+pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";

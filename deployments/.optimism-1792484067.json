@@ -1,0 +1,6 @@
+{
+    "olympus.periphery.CCIPCrossChainBridge": "0xcb4E21Eb404d80F3e1dB781aAd9AD6A1217fbbf2",
+    "olympus.policies.CCIPBurnMintTokenPool": "0xD98B5b2E4D5d6Cd554115DE19EfB7A9084BEddd1",
+    "olympus.policies.CCIPTokenPoolConfig": "0x20a3d8510f2e1176E8Db4CeA9883a8287a9029Db",
+    "olympus.policies.CCIPTokenPoolConfigTimelock": "0xEBDe552D851DD6Dfd3D360C596D3F4aF6e5F9678"
+}

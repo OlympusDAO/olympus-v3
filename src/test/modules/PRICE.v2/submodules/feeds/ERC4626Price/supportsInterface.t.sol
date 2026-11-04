@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
 import {ERC4626Test} from "../ERC4626Price.t.sol";

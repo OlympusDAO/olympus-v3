@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Contracts
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";

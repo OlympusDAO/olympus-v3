@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {PeriodicTaskManagerTest} from "src/test/bases/PeriodicTaskManager/PeriodicTaskManagerTest.sol";
 import {MockCustomPeriodicTask} from "src/test/bases/PeriodicTaskManager/MockCustomPeriodicTask.sol";

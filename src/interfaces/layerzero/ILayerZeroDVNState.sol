@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 /// @title ILayerZeroDVNState
 /// @notice Minimal interface for querying DVN contract state on the LZ endpoint.

@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable max-states-count
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 
 // Mocks
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
@@ -26,7 +25,6 @@ import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2P
 
 contract UniswapV2PoolTokenPriceTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for UniswapV2PoolTokenPrice;
 
     MockPrice internal mockPrice;
     MockUniswapV2Pool internal mockPool;

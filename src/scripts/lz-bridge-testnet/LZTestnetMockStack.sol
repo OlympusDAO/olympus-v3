@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity >=0.8.30;
+pragma solidity ^0.8.30;
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusAuthority} from "src/external/OlympusAuthority.sol";

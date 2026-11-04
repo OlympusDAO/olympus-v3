@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 // solhint-disable immutable-vars-naming
 /// forge-lint: disable-start(mixed-case-function,screaming-snake-case-immutable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";

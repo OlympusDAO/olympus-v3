@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import "src/Kernel.sol";
 
 contract RolesAdminTest is Test {

@@ -7,7 +7,6 @@ import {MockFlashloanLender} from "src/test/mocks/MockFlashloanLender.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 
-import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";

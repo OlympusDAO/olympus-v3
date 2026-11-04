@@ -2,16 +2,15 @@
 pragma solidity ^0.8.15;
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
 
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 contract VOTESTest is Test {
     using ModuleTestFixtureGenerator for OlympusVotes;
@@ -39,8 +38,8 @@ contract VOTESTest is Test {
         VOTES = new OlympusVotes(kernel, gOHM);
 
         // generate godmode address
-        user1 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
-        user2 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        user1 = VOTES.generateMultiFunctionFixture(ModulePermissions.olympusVotes());
+        user2 = VOTES.generateMultiFunctionFixture(ModulePermissions.olympusVotes());
 
         // set up kernel
         kernel.executeAction(Actions.InstallModule, address(VOTES));

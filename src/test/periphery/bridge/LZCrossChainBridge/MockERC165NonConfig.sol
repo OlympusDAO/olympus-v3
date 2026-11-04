@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.30;
+pragma solidity ^0.8.30;
 
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 

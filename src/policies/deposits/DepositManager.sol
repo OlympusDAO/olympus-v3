@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(asm-keccak256, mixed-case-function)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";

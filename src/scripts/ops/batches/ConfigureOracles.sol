@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
@@ -9,7 +9,7 @@ import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice Configures oracle policies
 /// @dev    Deployment happens separately - this script activates all oracle factories/policies
@@ -23,14 +23,11 @@ contract ConfigureOracles is BatchScriptV2 {
 
     /// @notice Configure all oracle policies
     /// @param useDaoMS_ Whether to use the DAO multisig
-    /// @param signOnly_ Whether to only sign the batch
     function configureOracles(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, "", ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, "", ledgerDerivationPath) {
         console2.log("=== Configuring Oracle Policies ===");
 
         // Load kernel

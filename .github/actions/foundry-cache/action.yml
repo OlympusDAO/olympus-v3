@@ -1,0 +1,35 @@
+name: Restore Foundry build cache
+description: Restore reusable Foundry compiler artifacts and optionally save the completed build.
+
+inputs:
+    save:
+        description: Save the updated cache after a successful job.
+        required: false
+        default: "false"
+
+runs:
+    using: composite
+    steps:
+        # Only the full-build job writes caches so sparse or partial builds cannot replace the
+        # complete artifact set. Parallel test jobs use that run's uploaded build artifacts.
+        - name: Restore Foundry build cache
+          if: ${{ inputs.save != 'true' }}
+          uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          with:
+              path: |
+                  out
+                  cache/solidity-files-cache.json
+              key: foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.sol') }}
+              restore-keys: |
+                  foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-
+
+        - name: Restore and save Foundry build cache
+          if: ${{ inputs.save == 'true' }}
+          uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          with:
+              path: |
+                  out
+                  cache/solidity-files-cache.json
+              key: foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.sol') }}
+              restore-keys: |
+                  foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-

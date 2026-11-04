@@ -7,7 +7,9 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {SafeCast} from "libraries/SafeCast.sol";
+
+// Unused: nothing here references it
+// import {SafeCast} from "libraries/SafeCast.sol";
 
 /**
  * @title Cooler LTV Oracle
@@ -19,7 +21,8 @@ import {SafeCast} from "libraries/SafeCast.sol";
  *  - Liquidation LTV is a policy set percentage above the Origination LTV
  */
 contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyAdmin {
-    using SafeCast for uint256;
+    // Unused: no call resolves to it
+    // using SafeCast for uint256;
 
     /// @dev The debt token
     ERC20 private immutable _DEBT_TOKEN;

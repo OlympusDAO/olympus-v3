@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.30;
+pragma solidity ^0.8.30;
 
 import {LZEndpointDelegateTestBase} from "src/test/policies/bridge/LZEndpointDelegate/LZEndpointDelegateTestBase.sol";
 
 // Contracts
-import {Permissions, Keycode} from "src/Kernel.sol";
+import {Permissions} from "src/Kernel.sol";
 
 /// @dev configureDependencies, requestPermissions, and VERSION.
 contract LZEndpointDelegateTests_PolicySetup is LZEndpointDelegateTestBase {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";

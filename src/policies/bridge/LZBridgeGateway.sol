@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity >=0.8.30;
+pragma solidity ^0.8.30;
 
 /// Peer management, endpoint send/receive, and enforced-option logic ported from
 /// `@layerzerolabs/oapp-evm` v0.4.1 (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3).

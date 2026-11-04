@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {PolicyEnablerV2TestBase} from "src/test/policies/utils/PolicyEnablerV2/PolicyEnablerV2TestBase.sol";
 import {MockPolicyEnablerV2} from "src/test/policies/utils/PolicyEnablerV2/MockPolicyEnablerV2.sol";

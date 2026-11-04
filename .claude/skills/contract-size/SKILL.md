@@ -39,6 +39,13 @@ pnpm run size
 
 ## When Contract Exceeds Limit
 
+> **Measuring a contract that is already restricted.** If the contract has an entry in
+> `compilation_restrictions`, `--optimizer-runs` does not reach it: the restriction rejects the
+> default profile, Forge falls back to a profile from `additional_compiler_profiles`, and every
+> value reports the same size. Remove the restriction entry for the duration of the measurement and
+> put it back afterwards. Confirm the setting that was actually used by reading
+> `.metadata.settings.optimizer.runs` from the artifact.
+
 ### Step 1: Check Minimum Viable
 
 First verify the contract can fit at all:
@@ -62,39 +69,43 @@ forge build --sizes --optimizer-runs 50 --contracts src/path/to/Contract.sol
 # ... continue until it exceeds, then binary search between last two values
 ```
 
-**Example binary search:**
+Size does not always grow monotonically with runs, so measure every candidate instead of
+interpolating between two of them.
 
-- runs=10 ✅ (24,561 bytes)
-- runs=50 ❌ (24,583 bytes)
-- runs=20 ❌ (24,580 bytes)
-- runs=15 ✅ (24,565 bytes) ← **optimal**
+**Example binary search** (`Operator.sol`, solc 0.8.36):
+
+- runs=10 ✅ (24,001 bytes)
+- runs=100 ✅ (24,067 bytes)
+- runs=400 ✅ (24,179 bytes)
+- runs=10000 ❌ (28,863 bytes) ← narrow between 400 and 10000 from here
 
 ### Step 3: Update Configuration
 
 Once optimal runs found, offer to update:
 
-**foundry.toml** (contract-specific profile):
+**foundry.toml** (restriction plus the profile that satisfies it):
 
 ```toml
 [profile.default]
-optimizer_runs = 10000 # default
+optimizer_runs = 10000
 
-# Add specific profile for large contract
-additional_compiler_profiles = [{ name = "operator", optimizer_runs = 15 }]
-
-[profile.operator]
-via_ir = true
+# A restriction selects a profile, it does not carry settings on its own. Forge uses the default
+# profile when that satisfies the restriction, otherwise the alphabetically first entry here that
+# does. With no satisfying entry the build fails: "Missing profile satisfying settings
+# restrictions".
+additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
+compilation_restrictions = [{ paths = "src/policies/Operator.sol", optimizer_runs = 10 }]
 ```
 
-**package.json** (add to size script if needed):
+Two properties decide whether a new restriction is safe to add:
 
-```json
-{
-    "scripts": {
-        "size": "forge build --sizes && forge build --sizes --optimizer-runs 10 --contracts src/policies/Operator.sol"
-    }
-}
-```
+- `optimizer_runs` matches exactly. Use `min_optimizer_runs` or `max_optimizer_runs` for a range.
+- A restriction applies to the whole connected import graph, not just the file it names. Every
+  contract a script or test reaches through that file compiles with the same settings. Two files
+  restricted to different exact values in one graph fail the build with "Found incompatible
+  settings restrictions", which is why deployment scripts avoid importing restricted contracts.
+
+`package.json` needs no change: `pnpm run size` reads the settings from `foundry.toml`.
 
 ## EIP Limits Reference
 
@@ -115,17 +126,9 @@ Both limits are hard constraints on mainnet.
 
 **Goal:** Use the highest runs that keeps bytecode under 24,576 bytes.
 
-## Example: Operator.sol
+## Operator.sol
 
-| Runs | Runtime Size | Under Limit?     |
-| ---- | ------------ | ---------------- |
-| 1    | 24,597       | ❌ (anomaly)     |
-| 2-4  | 24,540       | ✅               |
-| 10   | 24,561       | ✅               |
-| 15   | 24,565       | ✅ **(optimal)** |
-| 20+  | 24,583+      | ❌               |
-
-The repository default is `optimizer_runs = 10000`; `Operator.sol` is a bytecode-size exception compiled with `optimizer_runs = 10` via the `ten-runs` profile in `foundry.toml`.
+The repository default is `optimizer_runs = 10000`, and `Operator.sol` does not fit at that setting. `foundry.toml` restricts it to `optimizer_runs = 10` and declares the `ten-runs` profile that satisfies the restriction. Measured sizes are in the binary search example above.
 
 ## Workflow Summary
 

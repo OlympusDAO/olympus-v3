@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
 // solhint-disable custom-errors
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";

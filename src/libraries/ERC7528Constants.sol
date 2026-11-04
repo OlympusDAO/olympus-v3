@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 /// @title ERC7528Constants
 /// @notice Constants defined by EIP-7528 for representing the native asset in interfaces

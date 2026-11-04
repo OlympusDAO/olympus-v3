@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {PolicyAdminTest} from "./PolicyAdminTest.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";

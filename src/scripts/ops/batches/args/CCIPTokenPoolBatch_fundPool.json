@@ -1,0 +1,10 @@
+{
+    "functions": [
+        {
+            "args": {
+                "amount": "130720785836811"
+            },
+            "name": "fundPool"
+        }
+    ]
+}

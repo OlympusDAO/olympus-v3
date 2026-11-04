@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Unlicensed
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ERC721ReceiverMock} from "@openzeppelin-5.3.0/mocks/token/ERC721ReceiverMock.sol";
 import {IERC721Receiver} from "@openzeppelin-5.3.0/interfaces/IERC721Receiver.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
@@ -58,8 +59,12 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
         convertibleDepositToken = address(mockERC20);
 
         // Generate fixtures
-        godmode = DEPOS.generateGodmodeFixture(type(OlympusDepositPositionManager).name);
-        godmodeTwo = DEPOS.generateGodmodeFixture(type(OlympusDepositPositionManager).name);
+        godmode = DEPOS.generateMultiFunctionFixture(
+            ModulePermissions.olympusDepositPositionManager()
+        );
+        godmodeTwo = DEPOS.generateMultiFunctionFixture(
+            ModulePermissions.olympusDepositPositionManager()
+        );
 
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(DEPOS));

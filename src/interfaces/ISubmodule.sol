@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 import {Keycode} from "src/Kernel.sol";
 import {SubKeycode} from "src/Submodules.sol";

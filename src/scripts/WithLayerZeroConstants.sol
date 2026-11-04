@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 abstract contract WithLayerZeroConstants {
     /// @notice Returns the LayerZero endpoint ID for a given chain

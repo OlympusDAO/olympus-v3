@@ -368,4 +368,5 @@ After writing or updating NatSpec documentation, run the formatter:
 pnpm run prettier
 ```
 
-This will ensure consistent formatting across the codebase.
+This uses the repository's content-based Prettier cache and ensures consistent formatting across
+the codebase without reprocessing unchanged files.

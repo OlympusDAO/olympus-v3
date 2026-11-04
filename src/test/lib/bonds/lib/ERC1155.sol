@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 /// @notice Minimalist and gas efficient standard ERC1155 implementation.
 /// @dev    Removed `uri()` function. Unnecessary for our use case.

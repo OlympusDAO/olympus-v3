@@ -2,7 +2,6 @@ node_modules/
 out/
 docs/
 cache/
-coverage/
 lib/
 dependencies/
 .context/

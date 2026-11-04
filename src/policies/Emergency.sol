@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+// Unused: nothing here references it; kept because this contract is deployed
+// import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";

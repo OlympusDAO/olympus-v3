@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 // Libraries
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";

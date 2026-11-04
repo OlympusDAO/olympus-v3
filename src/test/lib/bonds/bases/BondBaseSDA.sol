@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
 import {IBondSDA, IBondAuctioneer} from "../interfaces/IBondSDA.sol";
 import {IBondTeller} from "../interfaces/IBondTeller.sol";
-import {IBondCallback} from "../interfaces/IBondCallback.sol";
 import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Bond Sequential Dutch Auctioneer (SDA)
@@ -32,7 +29,6 @@ import {FullMath} from "libraries/FullMath.sol";
 ///
 /// @author Oighty, Zeus, Potted Meat, indigo
 abstract contract BondBaseSDA is IBondSDA, Auth {
-    using TransferHelper for ERC20;
     using FullMath for uint256;
 
     /* ========== ERRORS ========== */

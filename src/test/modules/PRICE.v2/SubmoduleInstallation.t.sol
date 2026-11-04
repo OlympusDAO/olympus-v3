@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 // Bophades
 import {Actions, Kernel, Module} from "src/Kernel.sol";
@@ -17,8 +18,6 @@ import {MockSubmoduleNoERC165} from "test/mocks/MockSubmoduleNoERC165.sol";
 /// @author    0xJem
 /// @notice    Tests for submodule installation validation
 contract SubmoduleInstallationTest is Test {
-    using ModuleTestFixtureGenerator for Module;
-
     Kernel internal kernel;
     OlympusPricev2 internal price;
     ChainlinkPriceFeeds internal validSubmodule;
@@ -35,9 +34,9 @@ contract SubmoduleInstallationTest is Test {
         price = new OlympusPricev2(kernel, 18, 3600);
 
         // Deploy mock module writer
-        moduleWriter = ModuleTestFixtureGenerator.generateGodmodeFixture(
+        moduleWriter = ModuleTestFixtureGenerator.generateMultiFunctionFixture(
             Module(address(price)),
-            type(ModuleWithSubmodules).name
+            ModulePermissions.moduleWithSubmodules()
         );
 
         // Initialize system and kernel

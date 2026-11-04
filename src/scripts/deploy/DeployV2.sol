@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 // Forge
 import {Script, console2} from "forge-std/Script.sol";
@@ -9,7 +9,6 @@ import {stdJson} from "forge-std/StdJson.sol";
 // Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {TransferHelper} from "libraries/TransferHelper.sol";
 
 // Chainlink
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
@@ -49,6 +48,13 @@ import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiqui
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
 // Bophades Policies
+// IMPORTANT: Run this script under the `deploy` profile, which compiles the whole graph with the
+// optimizer at 400 runs and is the source of deployment bytecode. Under the everyday profile the
+// settings follow the import graph, since a `compilation_restrictions` entry covers the whole
+// connected graph: this script lands in the same 400-runs job through its restricted imports
+// (BondCallback, the BLVault contracts, GovernorBravoDelegate). That is incidental rather than
+// guaranteed, and a large contract compiled without the optimizer exceeds the 24,576 B runtime
+// limit.
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
@@ -85,7 +91,6 @@ import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
 
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
@@ -94,7 +99,6 @@ import {SafeCast} from "libraries/SafeCast.sol";
 // solhint-disable gas-custom-errors
 contract OlympusDeploy is Script {
     using stdJson for string;
-    using TransferHelper for ERC20;
     using SafeCast for uint256;
     Kernel public kernel;
 

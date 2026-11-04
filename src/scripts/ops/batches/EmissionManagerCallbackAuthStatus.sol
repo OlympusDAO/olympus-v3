@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 // solhint-disable custom-errors
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
@@ -16,10 +16,8 @@ contract EmissionManagerCallbackAuthStatus is BatchScriptV2 {
 
     function setCallbackAuthStatus(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
+        string calldata ledgerDerivationPath_
     ) external {
         _validateArgsFileEmpty(argsFile_);
 
@@ -32,7 +30,7 @@ contract EmissionManagerCallbackAuthStatus is BatchScriptV2 {
         console2.log("Setting up batch script");
         _loadEnv(ChainUtils._getChainName(block.chainid));
         // No args
-        _setUpBatchScript(signOnly_, BOND_OWNER, ledgerDerivationPath_, signature_);
+        _setUpBatchScript(BOND_OWNER, ledgerDerivationPath_);
 
         // Get addresses
         address bondFixedTermAuctioneer = _envAddressNotZero(

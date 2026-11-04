@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 /// @notice External `pure` no-op used as an observation point for hooks that
 ///         must remain `view` themselves. A test harness installs an instance

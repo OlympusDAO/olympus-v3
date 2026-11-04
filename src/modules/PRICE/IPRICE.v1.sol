@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 /// @notice Price oracle interface for PRICEv1
 /// @dev    Minimal interface extracted from PRICEv1 abstract contract

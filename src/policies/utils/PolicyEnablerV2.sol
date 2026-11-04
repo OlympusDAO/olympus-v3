@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
@@ -20,10 +20,6 @@ import {PolicyAdminOptimized} from "src/policies/utils/PolicyAdminOptimized.sol"
 ///      that target the `IEnabler` interface continue to interoperate with
 ///      policies that derive from this contract.
 abstract contract PolicyEnablerV2 is EnablerV2, PolicyAdminOptimized {
-    // ========== INITIALIZATION ========== //
-
-    constructor() {}
-
     // ========== HOOKS ========== //
 
     /// @inheritdoc EnablerV2

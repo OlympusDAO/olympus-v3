@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.4;
+pragma solidity ^0.8.4;
 
 /// @title IOffsettingRateLimiter
 /// @notice The external interface of a rate limiter that tracks the amount moved

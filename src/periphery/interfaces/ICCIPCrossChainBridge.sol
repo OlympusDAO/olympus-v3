@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 import {ICCIPClient} from "src/external/bridge/ICCIPClient.sol";
 
@@ -65,11 +65,15 @@ interface ICCIPCrossChainBridge {
 
     // ========= DATA STRUCTURES ========= //
 
+    // Both names carry the chain family acronym in capitals, as the `*TrustedRemoteEVM` and
+    // `*TrustedRemoteSVM` functions of the bridge do.
+    // forge-lint: disable-next-line(pascal-case-struct)
     struct TrustedRemoteEVM {
         address remoteAddress;
         bool isSet;
     }
 
+    // forge-lint: disable-next-line(pascal-case-struct)
     struct TrustedRemoteSVM {
         bytes32 remoteAddress;
         bool isSet;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
@@ -12,7 +12,7 @@ import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice Batch script for deploying new oracles via factory policies
 /// @dev    Requires oracle_manager role (held by DAO MS and Timelock)
@@ -69,15 +69,12 @@ contract DeployOracles is BatchScriptV2 {
 
     /// @notice Deploy a single Chainlink oracle for a token pair
     /// @param useDaoMS_ Whether to use the DAO multisig
-    /// @param signOnly_ Whether to only sign the batch
     /// @param argsFilePath_ Path to args file with baseToken, quoteToken, maxAge, minPrice, maxPrice
     function deployChainlinkOracle(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFilePath_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFilePath_, ledgerDerivationPath) {
         console2.log("=== Deploying Chainlink Oracle ===");
 
         _loadFactoryAddresses();
@@ -104,15 +101,12 @@ contract DeployOracles is BatchScriptV2 {
 
     /// @notice Deploy a single Morpho oracle for a token pair
     /// @param useDaoMS_ Whether to use the DAO multisig
-    /// @param signOnly_ Whether to only sign the batch
     /// @param argsFilePath_ Path to args file with baseToken, quoteToken, maxAge, minPrice, maxPrice
     function deployMorphoOracle(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFilePath_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFilePath_, ledgerDerivationPath) {
         console2.log("=== Deploying Morpho Oracle ===");
 
         _loadFactoryAddresses();

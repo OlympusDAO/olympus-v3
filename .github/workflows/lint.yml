@@ -3,14 +3,21 @@ on:
     push:
         branches:
             - master
+            - develop
     pull_request:
 
 permissions:
     contents: read
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
     lint:
         runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours.
+        timeout-minutes: 20
 
         steps:
             - name: Checkout
@@ -21,7 +28,22 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
+            - name: Install shfmt
+              uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+              with:
+                  minimum_release_age: 7d
+                  install_args: shfmt
+                  add_shims_to_path: false
+
+            - name: Restore Foundry build cache
+              uses: ./.github/actions/foundry-cache
+
+            # forge lint emits ABI-only artifacts. Isolate this reporting pass so it cannot replace
+            # the restored full artifacts consumed by the authoritative lint:check step below.
             - name: Run forge lint inline annotations
+              env:
+                  FOUNDRY_OUT: ${{ runner.temp }}/forge-lint-out
+                  FOUNDRY_CACHE_PATH: ${{ runner.temp }}/forge-lint-cache
               uses: 0xJem/forge-lint-inline-action@7f2d23ba91fe2839c0e16034869f4881d3fd2d41 # v0.1.0
               with:
                   install-foundry: false

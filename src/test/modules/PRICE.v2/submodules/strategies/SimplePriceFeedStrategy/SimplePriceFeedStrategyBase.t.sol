@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 
 // Mocks
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
-import {QuickSort} from "libraries/QuickSort.sol";
 
 // Bophades
 import {Kernel} from "src/Kernel.sol";
@@ -20,9 +18,7 @@ import {ISimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/ISim
 /// @title Base test contract for SimplePriceFeedStrategy
 /// @notice Contains shared setup, helpers, and common test infrastructure
 abstract contract SimplePriceFeedStrategyBase is Test {
-    using ModuleTestFixtureGenerator for SimplePriceFeedStrategy;
     using FullMath for uint256;
-    using QuickSort for uint256[];
 
     MockPrice internal mockPrice;
     SimplePriceFeedStrategy internal strategy;

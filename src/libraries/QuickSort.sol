@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Source: https://gist.github.com/Amxx/d3a99fcb79abbe3c76a2f2a5773b3815
 library QuickSort {

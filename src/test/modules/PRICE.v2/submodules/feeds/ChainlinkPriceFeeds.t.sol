@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 
 // Mocks
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
@@ -26,7 +25,6 @@ import {Kernel} from "src/Kernel.sol";
 
 contract ChainlinkPriceFeedsTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for ChainlinkPriceFeeds;
 
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal daiEthPriceFeed;
