@@ -19,42 +19,6 @@ set_broadcast_flag() {
     fi
 }
 
-# Retained for shell/L2/deploy.sh, which still passes the verify flags to forge script.
-# @description Sets the verify flag based on the value of the variable
-# @param {boolean} $1 The verification boolean
-# @param {string} $2 The Etherscan API key
-# @param {string} $3 The verifier URL (optional)
-# @sideEffects Sets the VERIFY_FLAG global variable
-set_verify_flag() {
-    # If the variable is true (case insensitive)
-    local lowercase=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    if [ "$lowercase" = "true" ]; then
-        VERIFY_FLAG="--verify"
-        echo "  Verification: enabled"
-    else
-        VERIFY_FLAG=""
-        echo "  Verification: disabled"
-        return 0
-    fi
-
-    # Check if ETHERSCAN_KEY is set
-    if [ -z "$2" ]; then
-        display_error "No Etherscan API key found. Provide the key in the environment file or disable verification."
-        exit 1
-    fi
-
-    # Append the flag for the verifier URL if provided
-    if [ -n "$3" ]; then
-        # Append the API key and verifier URL
-        VERIFY_FLAG="$VERIFY_FLAG --verifier custom --verifier-api-key $2 --verifier-url $3"
-        echo "  Verifier URL: $3"
-    else
-        # Append the API key
-        VERIFY_FLAG="$VERIFY_FLAG --etherscan-api-key $2"
-        echo "  Verifier URL: standard"
-    fi
-}
-
 # Configure source verification before any deployment transactions are sent.
 # --verify true defaults to all providers; --verifier selects a targeted retry.
 configure_verification() {

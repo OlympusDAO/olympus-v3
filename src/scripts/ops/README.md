@@ -22,15 +22,16 @@ Other Safe owners then approve and execute the transaction in Safe.
 With Ledger mnemonic index 5:
 
 ```bash
-./shell/safeBatchV2.sh --contract ContractRegistryInstall --function function_name --chain mainnet --multisig true --ledger 5 --broadcast true
+./shell/safeBatchV2.sh --contract CCIPNonEthereumSetupBatch --function setup --chain robinhood --multisig true --ledger 5 --broadcast true
 ```
 
 With an imported Cast wallet account:
 
 ```bash
-./shell/safeBatchV2.sh --contract ContractRegistryInstall --function function_name --chain mainnet --multisig true --account dao-signer --broadcast true
+./shell/safeBatchV2.sh --contract CCIPNonEthereumSetupBatch --function setup --chain robinhood --multisig true --account dao-signer --broadcast true
 ```
 
+Run these commands only after the setup prerequisites in the CCIP runbook are complete.
 Omit `--broadcast true` to simulate without signing or submitting a proposal.
 Use `--nonce N` to select a Safe nonce; otherwise the script uses the on-chain Safe nonce.
 Pending proposals do not advance the on-chain nonce, so choose an unused nonce when queueing multiple batches.

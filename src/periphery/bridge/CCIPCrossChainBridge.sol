@@ -224,9 +224,13 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
             revert Bridge_InsufficientAmount(amount_, OHM.balanceOf(msg.sender));
 
         // Pull in OHM from the sender
+        // OHM reverts on a failed transfer and returns true otherwise
+        // forge-lint: disable-next-line(erc20-unchecked-transfer)
         OHM.transferFrom(msg.sender, address(this), amount_);
 
         // Approve the Router to spend the token
+        // OHM reverts on a failed approval and returns true otherwise
+        // forge-lint: disable-next-line(unused-return)
         OHM.approve(address(i_ccipRouter), amount_);
 
         // Send the message to the router
@@ -293,6 +297,8 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
         if (balance == 0) revert Bridge_ZeroAmount();
 
         // Send the balance to the recipient
+        // A plain native transfer to the recipient named by the owner; the result is checked below
+        // forge-lint: disable-next-line(low-level-calls)
         (bool success, ) = recipient_.call{value: balance}("");
         if (!success) revert Bridge_TransferFailed(msg.sender, recipient_, balance);
 
@@ -358,6 +364,8 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
         address recipient = abi.decode(message_.data, (address));
 
         // Transfer the OHM to the actual recipient
+        // OHM reverts on a failed transfer and returns true otherwise
+        // forge-lint: disable-next-line(erc20-unchecked-transfer)
         OHM.transfer(recipient, message_.destTokenAmounts[0].amount);
 
         // Emit the event
@@ -511,15 +519,20 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
     // ========= ENABLER FUNCTIONS ========= //
 
     /// @inheritdoc PeripheryEnabler
+    // Required override: enabling changes nothing beyond the `isEnabled` flag that the base sets
+    // forge-lint: disable-next-line(empty-block)
     function _enable(bytes calldata) internal override {}
 
     /// @inheritdoc PeripheryEnabler
+    // Required override: disabling changes nothing beyond the `isEnabled` flag that the base sets
+    // forge-lint: disable-next-line(empty-block)
     function _disable(bytes calldata) internal override {}
 
     /// @inheritdoc PeripheryEnabler
     function _onlyOwner() internal view override {
         // Validate that the caller is the owner
         // String literal to keep it consistent with the solmate onlyOwner modifier
+        // forge-lint: disable-next-item(custom-errors)
         // solhint-disable-next-line gas-custom-errors
         if (msg.sender != owner) revert("UNAUTHORIZED");
     }

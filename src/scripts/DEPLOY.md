@@ -22,8 +22,7 @@
 
 ## Verification
 
-`shell/deploy.sh` and `shell/deployV3.sh` verify with **Etherscan, Sourcify and Blockscout** when `--verify true` is passed.
-`shell/L2/deploy.sh` verifies during deployment with Etherscan only, using `ETHERSCAN_KEY` (or a custom verifier at `VERIFIER_URL`).
+`shell/deploy.sh`, `shell/deployV3.sh`, and `shell/L2/deploy.sh` verify with **Etherscan, Sourcify and Blockscout** when `--verify true` is passed.
 Set `ETHERSCAN_API_KEY` in the environment or deployment env file. The legacy `ETHERSCAN_KEY` name is also accepted.
 Use `--verifier etherscan`, `--verifier sourcify`, or `--verifier blockscout` to select one provider.
 The default is `all`; `--verifier both` selects only Etherscan and Sourcify.
@@ -40,6 +39,8 @@ Retry the failed provider with the original command plus `--resume true --verify
 Resume uses the saved deployment; confirmed transactions are not sent again.
 
 The wrappers pass the RPC chain ID and use Foundry's explorer configuration.
+The Robinhood entry in `foundry.toml` selects the Etherscan V2 endpoint for chain 4663.
+The same entry directs trace source lookups, including those from `grantRoles.sh`, away from Blockscout.
 See [Etherscan's custom-chain instructions](https://docs.etherscan.io/contract-verification/verify-with-foundry#custom-chains).
 
 ### Manual Verification
