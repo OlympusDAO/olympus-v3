@@ -4,7 +4,7 @@ Queue admission requires own Kernel activity, then local enablement, then an acc
 
 Implemented allowlist/ABI changes: exclude Custody routing/pending recovery and accept complete fee/risk structs. Old partial payloads are not valid inputs to the new API.
 
-Source: [queueBatch](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L317). Coverage is recorded in the Test column.
+Source: [queueBatch](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L334). Coverage is recorded in the Test column.
 
 ## Domains and notation
 
@@ -14,13 +14,13 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 
 Own-policy admission: require Kernel-active BurnerLoansConfigTimelock; own inactivity uses `BurnerLoans_PolicyNotActive(BurnerLoansConfigTimelock)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-Inputs ordered BatchAction[]; 0,1,15,16 and sufficiently sized larger arrays. Allowed target/selector pairs: immutable Config with setAssetDebtCap, setAssetWithdrawAsShares, setAssetFeeConfig, setAssetRiskConfig, setAssetOriginationsEnabled or rescue; current selected Risk with setPriceCacheMaxAge only. Fixed payload sizes 32/64/160/224; no arbitrary forwarded calls.
+Inputs ordered BatchAction[]; 0,1,15,16 and sufficiently sized larger arrays. Allowed target/selector pairs: immutable Config with setAssetDebtCap, setAssetWithdrawAsShares, setAssetFeeConfig, setAssetRiskConfig, setAssetOriginationsEnabled or rescue. Fixed payload sizes 64/160/224; no arbitrary forwarded calls.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
 ## Scenario setup
 
-Queue defaults: BLCT enabled+active; each action target active/enabled and independently selects BLCT as configOperator; proposer ADMIN or BURNER_LOANS_ADMIN_ROLE. The existing Config authorization/lifecycle tables below use a Config-targeted batch. Risk-only batches apply the direct-Risk queue plan and do not require Config active/enabled or selecting BLCT; mixed batches require both targets. `queueBatch` checks own activity, local enablement and caller roles before its length bound 1..15. All wrappers enter the same queue code. Non-proposer fails `NotAuthorised()` after lifecycle checks. Keys are concrete-target-scoped selector keys: global selector; asset/token selector+address. Risk cache-age keys use the captured Risk address; no arbitrary target forwarding is allowed. No public wrapper exists for originations; queueBatch supports its Config selector.
+Queue defaults: BLCT enabled+active; Config active/enabled and selects BLCT as configOperator; proposer ADMIN or BURNER_LOANS_ADMIN_ROLE. The existing Config authorization/lifecycle tables below use a Config-targeted batch. `queueBatch` checks own activity, local enablement and caller roles before its length bound 1..15. All wrappers enter the same queue code. Non-proposer fails `NotAuthorised()` after lifecycle checks. Keys are Config-scoped selector+asset/token keys; no arbitrary target forwarding is allowed. No public wrapper exists for originations; queueBatch supports its Config selector.
 
 ## Authorization
 
@@ -54,9 +54,9 @@ Fixed for this table: Local enabled: true; Local active: true; Config active: tr
 | BLQB-L14 | Any, valid-sized batch | true | true | false | false | any | PolicyDependency_NotActive(Config) | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts] |
 | BLQB-L15 | Fuzz permitted role caller | true | true | true | false | BLCT | PolicyDependency_NotActive(Config) | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts] |
 
-Queue success increments uint64 nextActionId once, stores proposer/payload/order/queuedAt; executableAt=queuedAt+1day and expiresAt=executableAt+3days. No public delay setter exists. Record TimelockSubActionQueued, TimelockActionQueued and ConfigStateQueued exact emitter/fields/hashes. Full fee or six-field risk pre-state hashes reject any field drift; disjoint fee-vs-risk updates use different keys/hashes. Changes in live debt, token balance or vault support may leave hash unchanged but cause downstream failure instead.
+Queue success increments uint64 nextActionId once, stores proposer/payload/order/queuedAt; executableAt=queuedAt+1day and expiresAt=executableAt+3days. No public delay setter exists. Record TimelockSubActionQueued, TimelockActionQueued and ConfigStateQueued exact emitter/fields/hashes. Every selector hash includes current `Config.configOperator()` alongside its existing facility and setting fields; rescue additionally retains `Core.configOperator()`. Full fee or six-field risk pre-state hashes reject any field drift; disjoint fee-vs-risk updates use different keys/hashes. Changes in live debt, token balance or vault support may leave hash unchanged but cause downstream failure instead.
 
-Execution permissionless, pending-state/time checks FIRST, then BLCT admission and the lifecycle/selected-operator checks for each action's actual target. Config-only batches do not require Risk operator equality; Risk-only batches do not require Config admission. Cancellable-state checks FIRST, then BLCT enabled+active and EMERGENCY role only. Failed execution retains action/key and all earlier subaction writes roll back. Successful execute/cancel releases keys and deletes payload/config guards; action metadata remains. Expiry alone does not release keys. Cancellation has no Config-enabled/activity/selected-operator requirement.
+Execution permissionless, pending-state/time checks FIRST, then BLCT admission and Config lifecycle/selected-operator checks. Risk's independent operator is not consulted. Cancellable-state checks FIRST, then BLCT active and EMERGENCY role only; local disablement permits cancellation. Failed execution retains action/key and all earlier subaction writes roll back. Successful execute/cancel releases keys and deletes payload/config guards; action metadata remains. Expiry alone does not release keys. Cancellation has no Config-enabled/activity/selected-operator requirement.
 
 ## Dependency lifecycle
 
@@ -82,11 +82,10 @@ Fixed for this table: Accounting / events: No action ID/key acquired.
 | --- | --- | --- | --- | --- | --- |
 | BLQB-N01 | Fuzz ADMIN proposer identity | Batch length fuzz 16..128; existing boundary seeds retained | ITimelockBatchQueue_BatchTooLarge(length,15) | No action ID/key acquired | Covered: [test_givenAnyCaller_whenOversizedBatchQueued_reverts][test_givenAnyCaller_whenOversizedBatchQueued_reverts] |
 | BLQB-N02 | Fuzz permitted role caller | Target=Config; unsupported selector; fuzz bytes4 excluding admitted selectors | ITimelockBatchQueue_ActionInvalid(Config,selector) | Unchanged; no committed logs | Covered: [test_givenUnsupportedSelector_whenQueued_reverts][test_givenUnsupportedSelector_whenQueued_reverts] |
-| BLQB-N03 | Fuzz permitted role caller | setPriceCacheMaxAge raw word fuzz MAX48+1..MAX256 | ITimelockBatchQueue_ActionInvalid(Risk,selector) | Unchanged; no committed logs | Covered: [test_givenAgeWordAboveUint48_whenQueued_reverts][test_givenAgeWordAboveUint48_whenQueued_reverts]; [test_givenRawAbiN03Endpoints_whenBoundarySeedsRun_thenScenarioHolds][test_givenRawAbiN03Endpoints_whenBoundarySeedsRun_thenScenarioHolds] |
 | BLQB-N04 | Fuzz permitted role caller | Originations/withdraw-as-shares raw bool word fuzz 2..MAX256 | ITimelockBatchQueue_ActionInvalid(Config,selector) | Unchanged; no committed logs | Covered: [test_givenNoncanonicalBool_whenOriginationsQueued_reverts][test_givenNoncanonicalBool_whenOriginationsQueued_reverts]; [test_givenRawAbiN04Endpoints_whenBoundarySeedsRun_thenScenarioHolds][test_givenRawAbiN04Endpoints_whenBoundarySeedsRun_thenScenarioHolds] |
-| BLQB-N05 | Fuzz permitted role caller | nextActionId=MAX64; otherwise valid batch; proposed next counter is uint256(MAX64)+1=2**64 | SafeCastOverflowedUintDowncast(64,2**64) | Injected storage boundary; preserve counter, existing payloads/owners and all keys; no partial batch or committed event | Partial: [test_givenCounterOverflow_whenQueued_thenReadableError][test_givenCounterOverflow_whenQueued_thenReadableError]; test implemented; shared queue still panics on narrow arithmetic overflow |
-| BLQB-N06 | Fuzz permitted role caller | queuedAt=MAX48-delay+1; otherwise valid batch; widened executableAt=uint256(queuedAt)+delay=2**48 | SafeCastOverflowedUintDowncast(48,2**48) while narrowing executableAt | Injected timestamp boundary; counter, pending keys, existing payloads and commitments unchanged; no partial batch or committed event | Partial: [test_givenExecutableTimestampOverflow_whenQueued_thenReadableError][test_givenExecutableTimestampOverflow_whenQueued_thenReadableError]; test implemented; shared queue still panics on narrow arithmetic overflow |
-| BLQB-N07 | Fuzz permitted role caller | queuedAt=MAX48-delay-window+1; executableAt fits uint48; widened expiresAt=uint256(executableAt)+window=2**48 | SafeCastOverflowedUintDowncast(48,2**48) while narrowing expiresAt | Injected timestamp boundary; counter, pending keys, existing payloads and commitments unchanged; no partial batch or committed event | Partial: [test_givenExpiryTimestampOverflow_whenQueued_thenReadableError][test_givenExpiryTimestampOverflow_whenQueued_thenReadableError]; test implemented; shared queue still panics on narrow arithmetic overflow |
+| BLQB-N05 | Fuzz permitted role caller | nextActionId=MAX64; otherwise valid batch; proposed next counter is uint256(MAX64)+1=2**64 | SafeCastOverflowedUintDowncast(64,2**64) | Injected storage boundary; preserve counter, existing payloads/owners and all keys; no partial batch or committed event | Covered: [test_givenCounterOverflow_whenQueued_thenReadableError][test_givenCounterOverflow_whenQueued_thenReadableError] |
+| BLQB-N06 | Fuzz permitted role caller | queuedAt=MAX48-delay+1; otherwise valid batch; widened executableAt=uint256(queuedAt)+delay=2**48 | SafeCastOverflowedUintDowncast(48,2**48) while narrowing executableAt | Injected timestamp boundary; counter, pending keys, existing payloads and commitments unchanged; no partial batch or committed event | Covered: [test_givenExecutableTimestampOverflow_whenQueued_thenReadableError][test_givenExecutableTimestampOverflow_whenQueued_thenReadableError] |
+| BLQB-N07 | Fuzz permitted role caller | queuedAt=MAX48-delay-window+1; executableAt fits uint48; widened expiresAt=uint256(executableAt)+window=2**48 | SafeCastOverflowedUintDowncast(48,2**48) while narrowing expiresAt | Injected timestamp boundary; counter, pending keys, existing payloads and commitments unchanged; no partial batch or committed event | Covered: [test_givenExpiryTimestampOverflow_whenQueued_thenReadableError][test_givenExpiryTimestampOverflow_whenQueued_thenReadableError] |
 
 ## Configuration transitions
 
@@ -124,7 +123,7 @@ For N06/N07, calculate each timestamp addition in uint256 and check its uint48 n
 | ID | Caller | Operation / pre-state | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLQB-P05 | Fuzz permitted role caller | One valid action; scoped key free | Return next ID | Store exact target/selector/payload and current pre-state hash | Covered: [test_givenOneAction_whenQueued_thenExactCommitment][test_givenOneAction_whenQueued_thenExactCommitment] |
-| BLQB-P06 | Fuzz permitted role caller | Fifteen valid actions with distinct keys | Return one ID | Store all15 in order; one key per action | Covered: [test_givenFifteenDistinctKeys_whenQueued_thenExactOrderedMetadata][test_givenFifteenDistinctKeys_whenQueued_thenExactOrderedMetadata] |
+| BLQB-P06 | Fuzz permitted role caller | Fifteen valid actions with distinct keys | Return one ID | Store all15 in order; one key per action; exact setting and current Config operator pre-state for each selector | Covered: [test_givenFifteenDistinctKeys_whenQueued_thenExactOrderedMetadata][test_givenFifteenDistinctKeys_whenQueued_thenExactOrderedMetadata] |
 | BLQB-P07 | Fuzz permitted role caller | Typed asset setter bool field raw word>1; exact payload length | ITimelockBatchQueue_ActionInvalid(target,selector) | Unchanged; no committed logs | Covered: [test_givenNoncanonicalBool_whenWithdrawalQueued_reverts][test_givenNoncanonicalBool_whenWithdrawalQueued_reverts]; [test_givenRawAbiP07Endpoints_whenBoundarySeedsRun_thenScenarioHolds][test_givenRawAbiP07Endpoints_whenBoundarySeedsRun_thenScenarioHolds] |
 | BLQB-P08 | Fuzz permitted role caller | Address word has nonzero upper96 bits; exact payload length | ITimelockBatchQueue_ActionInvalid(target,selector) | Unchanged; no committed logs | Covered: [test_givenDirtyAddressWord_whenQueued_reverts][test_givenDirtyAddressWord_whenQueued_reverts]; [test_givenRawAbiP08Endpoints_whenBoundarySeedsRun_thenScenarioHolds][test_givenRawAbiP08Endpoints_whenBoundarySeedsRun_thenScenarioHolds] |
 | BLQB-P09 | Fuzz permitted role caller | Typed uint16/48/128 field exceeds its type bound; exact payload length; each field separately | ITimelockBatchQueue_ActionInvalid(target,selector) | Unchanged; no committed logs | Covered: [test_givenEachNumericFieldAboveAbiWidth_whenQueued_reverts][test_givenEachNumericFieldAboveAbiWidth_whenQueued_reverts] |
@@ -176,7 +175,7 @@ Co-located API assertions: `nextActionId`, `getQueuedAction`, `getQueuedActionLe
 
 ## Target-specific routing and authority
 
-Defaults from the selected target's queue plan apply. All entries have canonical payload lengths; the target/selector allowlist rejects before dispatch. Both operator identities are independently configured; BLCT holds no ADMIN grant on either target.
+The Config queue defaults apply. All entries have canonical payload lengths; the target/selector allowlist rejects before dispatch. Risk's operator remains independent; BLCT holds no ADMIN grant on Config.
 
 | ID | Caller | Batch / authority | Queue result | Effects / getter assertions | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -184,11 +183,9 @@ Defaults from the selected target's queue plan apply. All entries have canonical
 | BLQB-I13 | Fuzz permitted role caller | Risk target with a Config market setter selector | ITimelockBatchQueue_ActionInvalid(Risk,selector) | No write authority conferred by target whitelist alone | Covered: [test_givenRiskMarketSetter_whenQueued_reverts][test_givenRiskMarketSetter_whenQueued_reverts] |
 | BLQB-I14 | Fuzz permitted role caller | Nonselected Risk target with setPriceCacheMaxAge | ITimelockBatchQueue_ActionInvalid(target,selector) | No stale or arbitrary Risk controller | Covered: [test_givenNonselectedRisk_whenQueued_reverts][test_givenNonselectedRisk_whenQueued_reverts] |
 | BLQB-I15 | Fuzz permitted role caller | Selected Risk with setPriceCache, setBackingOracle or setConfigOperator; each selector separately | ITimelockBatchQueue_ActionInvalid(Risk,selector) | ADMIN dependency/operator replacements remain unavailable to proposers | Covered: [test_givenAdminOnlyRiskSelectors_whenQueued_reverts][test_givenAdminOnlyRiskSelectors_whenQueued_reverts] |
-| BLQB-P11 | Fuzz permitted role caller | Config market update plus direct Risk age update; seed both orders | Return one ID | Exact target/selector/payload order and independent target-scoped keys/hashes; no target setters called | Covered: [test_givenConfigAndRiskActions_whenBatched_thenIndependentTargets][test_givenConfigAndRiskActions_whenBatched_thenIndependentTargets] |
+| BLQB-P11 | Fuzz permitted role caller | Config cap and fee updates; seed both orders | Return one ID | Exact Config selector/payload order and independent setting keys/hashes; no target setters called | Covered: [test_givenConfigAndRiskActions_whenBatched_thenIndependentTargets][test_givenConfigAndRiskActions_whenBatched_thenIndependentTargets] |
 | BLQB-P12 | Fuzz permitted role caller | Config-only batch; Risk has another/zero operator | Return ID | No Risk operator lookup; public validators remain usable; no Risk setter | Covered: [test_givenRiskOperatorDifferent_whenConfigOnlyBatchQueued_thenAccepted][test_givenRiskOperatorDifferent_whenConfigOnlyBatchQueued_thenAccepted] |
-| BLQB-P13 | Fuzz permitted role caller | Risk-only batch; Config inactive/disabled and selects another operator | Return ID | No Config admission/controller check; concrete Risk captured in payload and destination getter | Covered: [test_givenConfigUnavailable_whenRiskOnlyBatchQueued_thenAccepted][test_givenConfigUnavailable_whenRiskOnlyBatchQueued_thenAccepted] |
-| BLQB-D02 | Fuzz permitted role caller | Mixed batch; Config selects BLCT but Risk selects another/zero | NotAuthorised() | Entire queue rolls back, including earlier keys and nextActionId | Covered: [test_givenRiskOperatorRevoked_whenMixedBatchQueued_reverts][test_givenRiskOperatorRevoked_whenMixedBatchQueued_reverts] |
-| BLQB-D03 | Fuzz permitted role caller | Mixed batch; Risk selects BLCT but Config selects another/zero | BurnerLoansConfig_UnauthorizedConfigOperator(BLCT) | Entire queue rolls back; no partial authorization | Covered: [test_givenConfigOperatorRevoked_whenMixedBatchQueued_reverts][test_givenConfigOperatorRevoked_whenMixedBatchQueued_reverts] |
+| BLQB-D03 | Fuzz permitted role caller | Two Config domains; Config selects another/zero | BurnerLoansConfig_UnauthorizedConfigOperator(BLCT) | Entire queue rolls back; no partial authorization | Covered: [test_givenConfigOperatorRevoked_whenMixedBatchQueued_reverts][test_givenConfigOperatorRevoked_whenMixedBatchQueued_reverts] |
 
 ## Co-located queued-state reads
 
@@ -243,63 +240,59 @@ TL denotes this timelock. Unchanged includes the queue, lifecycle and custody fi
 [test_givenLaterUnregisteredAsset_whenQueued_thenEarlierKeyRollsBack]: ./queueBatch.t.sol#L489
 [test_givenAnyCaller_whenOversizedBatchQueued_reverts]: ./queueBatch.t.sol#L397
 [test_givenUnsupportedSelector_whenQueued_reverts]: ./queueBatch.t.sol#L513
-[test_givenAgeWordAboveUint48_whenQueued_reverts]: ./queueBatch.t.sol#L530
-[test_givenRawAbiN03Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1413
-[test_givenNoncanonicalBool_whenOriginationsQueued_reverts]: ./queueBatch.t.sol#L547
-[test_givenRawAbiN04Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1430
-[test_givenCounterOverflow_whenQueued_thenReadableError]: ./queueBatch.t.sol#L579
-[test_givenExecutableTimestampOverflow_whenQueued_thenReadableError]: ./queueBatch.t.sol#L611
-[test_givenExpiryTimestampOverflow_whenQueued_thenReadableError]: ./queueBatch.t.sol#L639
-[test_givenRegisteredAsset_whenOriginationsTrueQueued_thenStored]: ./queueBatch.t.sol#L667
-[test_givenRegisteredAsset_whenOriginationsFalseQueued_thenStored]: ./queueBatch.t.sol#L680
-[test_givenFormerFeeRoutingSelector_whenQueued_reverts]: ./queueBatch.t.sol#L693
-[test_givenFormerYieldRoutingSelector_whenQueued_reverts]: ./queueBatch.t.sol#L707
-[test_givenFormerPendingPayoutRescueSelector_whenQueued_reverts]: ./queueBatch.t.sol#L721
-[test_givenLegacyPartialFeePayload_whenQueued_reverts]: ./queueBatch.t.sol#L735
-[test_givenLegacyPartialRiskPayload_whenQueued_reverts]: ./queueBatch.t.sol#L749
-[test_givenPayoutTarget_whenMarketSetterQueued_reverts]: ./queueBatch.t.sol#L763
-[test_givenEachSetterRepeatedInSameBatch_whenQueued_thenAtomicConflict]: ./queueBatch.t.sol#L838
-[test_givenEachSetterAlreadyPending_whenQueued_thenOriginalPreserved]: ./queueBatch.t.sol#L867
-[test_givenOneAction_whenQueued_thenExactCommitment]: ./queueBatch.t.sol#L891
-[test_givenFifteenDistinctKeys_whenQueued_thenExactOrderedMetadata]: ./queueBatch.t.sol#L904
-[test_givenNoncanonicalBool_whenWithdrawalQueued_reverts]: ./queueBatch.t.sol#L563
-[test_givenRawAbiP07Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1447
-[test_givenDirtyAddressWord_whenQueued_reverts]: ./queueBatch.t.sol#L925
-[test_givenRawAbiP08Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1464
-[test_givenEachNumericFieldAboveAbiWidth_whenQueued_reverts]: ./queueBatch.t.sol#L941
-[test_givenRiskAndFeeForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L962
-[test_givenOriginationsPending_whenSameAssetQueuedAgain_reverts]: ./queueBatch.t.sol#L1092
-[test_givenOriginationsPending_whenOtherAssetQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1113
-[test_givenCapPending_whenOriginationsQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1127
-[test_givenRiskPending_whenOriginationsQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1140
-[test_givenSharesPending_whenOriginationsQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1153
-[test_givenFeePending_whenOriginationsQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1166
-[test_givenCapAndOriginationsForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L975
-[test_givenCapAndRiskForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L988
-[test_givenCapAndSharesForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1001
-[test_givenCapAndFeeForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1014
-[test_givenOriginationsAndRiskForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1027
-[test_givenOriginationsAndSharesForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1040
-[test_givenOriginationsAndFeeForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1053
-[test_givenRiskAndSharesForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1066
-[test_givenSharesAndFeeForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1079
-[test_givenEachSetterForDifferentAssets_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1179
-[test_givenConfigAgeForwarding_whenQueued_reverts]: ./queueBatch.t.sol#L777
-[test_givenRiskMarketSetter_whenQueued_reverts]: ./queueBatch.t.sol#L789
-[test_givenNonselectedRisk_whenQueued_reverts]: ./queueBatch.t.sol#L801
-[test_givenAdminOnlyRiskSelectors_whenQueued_reverts]: ./queueBatch.t.sol#L813
-[test_givenConfigAndRiskActions_whenBatched_thenIndependentTargets]: ./queueBatch.t.sol#L1203
-[test_givenRiskOperatorDifferent_whenConfigOnlyBatchQueued_thenAccepted]: ./queueBatch.t.sol#L1213
-[test_givenConfigUnavailable_whenRiskOnlyBatchQueued_thenAccepted]: ./queueBatch.t.sol#L1228
-[test_givenRiskOperatorRevoked_whenMixedBatchQueued_reverts]: ./queueBatch.t.sol#L1244
-[test_givenConfigOperatorRevoked_whenMixedBatchQueued_reverts]: ./queueBatch.t.sol#L1264
-[test_givenPendingBatch_whenEachValidSubactionRead_thenExactPayload]: ./queueBatch.t.sol#L1289
-[test_givenPendingBatch_whenStateRead_thenIndependentCommitment]: ./queueBatch.t.sol#L1314
-[test_givenMissingId_whenStateGettersRead_thenDefaults]: ./queueBatch.t.sol#L1329
-[test_givenPendingAction_whenStateIndexOutOfBounds_reverts]: ./queueBatch.t.sol#L1348
-[test_givenSTATEP03IndexEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1389
-[test_givenPendingAction_whenPayloadIndexOutOfBounds_reverts]: ./queueBatch.t.sol#L1370
-[test_givenACTIONI01IndexEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1401
-[test_givenPolicyInactive_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1499
-[test_givenActiveDisabled_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1525
-[test_givenUnauthorizedCaller_givenBrokenTarget_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1545
+[test_givenNoncanonicalBool_whenOriginationsQueued_reverts]: ./queueBatch.t.sol#L530
+[test_givenRawAbiN04Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1341
+[test_givenCounterOverflow_whenQueued_thenReadableError]: ./queueBatch.t.sol#L562
+[test_givenExecutableTimestampOverflow_whenQueued_thenReadableError]: ./queueBatch.t.sol#L594
+[test_givenExpiryTimestampOverflow_whenQueued_thenReadableError]: ./queueBatch.t.sol#L622
+[test_givenRegisteredAsset_whenOriginationsTrueQueued_thenStored]: ./queueBatch.t.sol#L650
+[test_givenRegisteredAsset_whenOriginationsFalseQueued_thenStored]: ./queueBatch.t.sol#L663
+[test_givenFormerFeeRoutingSelector_whenQueued_reverts]: ./queueBatch.t.sol#L676
+[test_givenFormerYieldRoutingSelector_whenQueued_reverts]: ./queueBatch.t.sol#L690
+[test_givenFormerPendingPayoutRescueSelector_whenQueued_reverts]: ./queueBatch.t.sol#L704
+[test_givenLegacyPartialFeePayload_whenQueued_reverts]: ./queueBatch.t.sol#L718
+[test_givenLegacyPartialRiskPayload_whenQueued_reverts]: ./queueBatch.t.sol#L732
+[test_givenPayoutTarget_whenMarketSetterQueued_reverts]: ./queueBatch.t.sol#L746
+[test_givenEachSetterRepeatedInSameBatch_whenQueued_thenAtomicConflict]: ./queueBatch.t.sol#L821
+[test_givenEachSetterAlreadyPending_whenQueued_thenOriginalPreserved]: ./queueBatch.t.sol#L850
+[test_givenOneAction_whenQueued_thenExactCommitment]: ./queueBatch.t.sol#L874
+[test_givenFifteenDistinctKeys_whenQueued_thenExactOrderedMetadata]: ./queueBatch.t.sol#L887
+[test_givenNoncanonicalBool_whenWithdrawalQueued_reverts]: ./queueBatch.t.sol#L546
+[test_givenRawAbiP07Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1358
+[test_givenDirtyAddressWord_whenQueued_reverts]: ./queueBatch.t.sol#L908
+[test_givenRawAbiP08Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1375
+[test_givenEachNumericFieldAboveAbiWidth_whenQueued_reverts]: ./queueBatch.t.sol#L1476
+[test_givenRiskAndFeeForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L924
+[test_givenOriginationsPending_whenSameAssetQueuedAgain_reverts]: ./queueBatch.t.sol#L1054
+[test_givenOriginationsPending_whenOtherAssetQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1075
+[test_givenCapPending_whenOriginationsQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1089
+[test_givenRiskPending_whenOriginationsQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1102
+[test_givenSharesPending_whenOriginationsQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1115
+[test_givenFeePending_whenOriginationsQueued_thenIndependentBothOrders]: ./queueBatch.t.sol#L1128
+[test_givenCapAndOriginationsForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L937
+[test_givenCapAndRiskForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L950
+[test_givenCapAndSharesForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L963
+[test_givenCapAndFeeForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L976
+[test_givenOriginationsAndRiskForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L989
+[test_givenOriginationsAndSharesForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1002
+[test_givenOriginationsAndFeeForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1015
+[test_givenRiskAndSharesForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1028
+[test_givenSharesAndFeeForSameAsset_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1041
+[test_givenEachSetterForDifferentAssets_whenBatched_thenIndependentBothOrders]: ./queueBatch.t.sol#L1141
+[test_givenConfigAgeForwarding_whenQueued_reverts]: ./queueBatch.t.sol#L760
+[test_givenRiskMarketSetter_whenQueued_reverts]: ./queueBatch.t.sol#L772
+[test_givenNonselectedRisk_whenQueued_reverts]: ./queueBatch.t.sol#L784
+[test_givenAdminOnlyRiskSelectors_whenQueued_reverts]: ./queueBatch.t.sol#L796
+[test_givenConfigAndRiskActions_whenBatched_thenIndependentTargets]: ./queueBatch.t.sol#L1165
+[test_givenRiskOperatorDifferent_whenConfigOnlyBatchQueued_thenAccepted]: ./queueBatch.t.sol#L1178
+[test_givenConfigOperatorRevoked_whenMixedBatchQueued_reverts]: ./queueBatch.t.sol#L1193
+[test_givenPendingBatch_whenEachValidSubactionRead_thenExactPayload]: ./queueBatch.t.sol#L1217
+[test_givenPendingBatch_whenStateRead_thenIndependentCommitment]: ./queueBatch.t.sol#L1242
+[test_givenMissingId_whenStateGettersRead_thenDefaults]: ./queueBatch.t.sol#L1257
+[test_givenPendingAction_whenStateIndexOutOfBounds_reverts]: ./queueBatch.t.sol#L1276
+[test_givenSTATEP03IndexEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1317
+[test_givenPendingAction_whenPayloadIndexOutOfBounds_reverts]: ./queueBatch.t.sol#L1298
+[test_givenACTIONI01IndexEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./queueBatch.t.sol#L1329
+[test_givenPolicyInactive_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1410
+[test_givenActiveDisabled_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1436
+[test_givenUnauthorizedCaller_givenBrokenTarget_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1456

@@ -504,4 +504,11 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
             0
         );
     }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-P08.
+    function test_whenReferralStateInitiallyEmpty(address referrer_) public view {
+        assertEq(_risk.referralFeeBps(), 0, "referral share starts at zero");
+        assertFalse(_risk.isReferrerAllowed(address(0)), "zero is never whitelisted");
+        assertFalse(_risk.isReferrerAllowed(referrer_), "no embedded partner list");
+    }
 }

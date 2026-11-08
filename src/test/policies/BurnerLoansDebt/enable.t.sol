@@ -58,7 +58,7 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
     function test_givenDisabled_whenAdminEnables_thenExactTransition(address caller_) public {
         vm.assume(caller_ != address(0));
         _debt.disable("");
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
         vm.warp(456);
         vm.expectEmit(address(_debt));
         emit IEnabler.Enabled();
@@ -69,6 +69,11 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
         assertTrue(_debt.isEnabled(), "Admin enables action");
         assertEq(_debt.lastTransitionAt(), 456, "Enable records timestamp");
         _assertLoansPreserved();
+    }
+
+    // Scenarios: BLDEBT-ENABLE-A01.
+    function test_givenExistingAdmin_whenEnables_thenExactTransition() public {
+        test_givenDisabled_whenAdminEnables_thenExactTransition(address(this));
     }
 
     // Scenarios: BLDEBT-ENABLE-I01.

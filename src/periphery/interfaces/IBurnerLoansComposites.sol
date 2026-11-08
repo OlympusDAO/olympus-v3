@@ -58,19 +58,21 @@ interface IBurnerLoansComposites {
     /// @param collateralAmount The collateral amount, in collateral-token decimals.
     /// @param ohmAmount The OHM amount to borrow, in OHM token decimals.
     /// @param recipient The recipient of the borrowed OHM.
-    /// @param maxFee The maximum collateral fee accepted by the caller.
+    /// @param maxFee Maximum accepted total fee (protocolFee + referralFee), in collateral token decimals.
+    /// @param referrer Referral recipient forwarded to the borrow action, or zero for none.
     struct DepositAndBorrowParams {
         address asset;
         uint128 collateralAmount;
         uint128 ohmAmount;
         address recipient;
         uint256 maxFee;
+        address referrer;
     }
 
     /// @notice Results from atomically depositing collateral and borrowing OHM.
     /// @param depositedCollateral The collateral deposited by this call.
     /// @param totalCollateral The position's resulting collateral balance.
-    /// @param fee The collateral fee charged.
+    /// @param fee Total fee charged (protocolFee + referralFee), in collateral token decimals.
     /// @param resultingDebtOhm The position's resulting OHM debt.
     /// @param maturity The position's resulting maturity timestamp.
     /// @param healthFactor The position's resulting health factor.

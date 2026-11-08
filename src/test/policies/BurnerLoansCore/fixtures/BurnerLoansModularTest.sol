@@ -153,7 +153,7 @@ abstract contract BurnerLoansModularTest is Test {
     modifier givenDebtBearingPosition() {
         vm.startPrank(_borrower);
         _collateral.depositCollateral(address(_asset), 2000e6, _borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6, address(0));
         vm.stopPrank();
         _;
     }
@@ -166,5 +166,14 @@ abstract contract BurnerLoansModularTest is Test {
         _ohm.approve(address(_inventory), amount_);
         _inventory.supply(amount_);
         vm.stopPrank();
+    }
+
+    function _referralReservesDigest(address asset_) internal view returns (bytes32) {
+        address[] memory recipients = _payout.getPendingReferralRecipients(asset_);
+        uint256[] memory amounts = new uint256[](recipients.length);
+        for (uint256 i; i < recipients.length; ++i) {
+            amounts[i] = _payout.pendingReferralFee(asset_, recipients[i]);
+        }
+        return keccak256(abi.encode(recipients, amounts));
     }
 }

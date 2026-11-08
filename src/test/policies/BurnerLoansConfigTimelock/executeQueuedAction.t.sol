@@ -525,105 +525,18 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         );
     }
 
-    // Scenarios: BLCT-QUEUE-CACHE-AGE-P04.
-    function test_givenAgeDrift_whenAgeExecuted_thenRejected(address executor_) public {
-        _risk.setConfigOperator(address(_timelock));
-        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
-        uint64 id = _timelock.queueBatch(_single(a));
-        bytes32 expected = _hash(a);
-        _risk.setPriceCacheMaxAge(7200);
-        _makeReady(id);
-        _executeReverts(id, executor_, _stateChanged(id, 0, a, expected));
-    }
-
-    // Scenarios: BLCT-QUEUE-CACHE-AGE-P05.
-    function test_givenDirectRiskDispatch_whenAgeExecuted_thenApplied(address executor_) public {
-        _risk.setConfigOperator(address(_timelock));
-        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
-        uint64 id = _timelock.queueBatch(_single(a));
-        bytes32 expected = _hash(a);
-        _makeReady(id);
-        vm.mockCallRevert(
-            address(_config),
-            abi.encodeWithSignature("setPriceCacheMaxAge(uint48)", uint48(3600)),
-            hex"deadbeef"
-        );
-        vm.expectCall(
-            address(_risk),
-            abi.encodeCall(IBurnerLoansRisk.setPriceCacheMaxAge, (uint48(3600))),
-            1
-        );
-        _executeAndAssert(id, executor_);
-    }
-
-    // Scenarios: BLCT-QUEUE-CACHE-AGE-P06.
-    function test_givenRiskOperatorRevoked_whenAgeExecuted_thenRejected(
-        address executor_,
-        bool zero_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
-        uint64 id = _timelock.queueBatch(_single(a));
-        bytes32 expected = _hash(a);
-        _risk.setConfigOperator(zero_ ? address(0) : _recipient);
-        _makeReady(id);
-        _executeReverts(id, executor_, abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-    }
-
-    // Scenarios: BLCT-QUEUE-CACHE-AGE-D01.
-    function test_givenReplacementRiskSameAge_whenAgeExecuted_thenRejected(
-        address executor_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
-        uint64 id = _timelock.queueBatch(_single(a));
-        bytes32 expected = _hash(a);
-        BurnerLoansRisk replacement = _replaceRisk(0);
-        replacement.setConfigOperator(_recipient);
-        _makeReady(id);
-        _executeReverts(id, executor_, _stateChanged(id, 0, a, expected));
-        assertEq(_risk.priceCacheMaxAge(), 0, "Old Risk untouched");
-        assertEq(replacement.priceCacheMaxAge(), 0, "Replacement Risk untouched");
-    }
-
-    // Scenarios: BLCT-QUEUE-CACHE-AGE-D02.
-    function test_givenReplacementRiskDifferentAge_whenAgeExecuted_thenRejected(
-        address executor_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
-        uint64 id = _timelock.queueBatch(_pair(_capAction(address(_asset), 200000e9), a));
-        bytes32 expected = _hash(a);
-        BurnerLoansRisk replacement = _replaceRisk(1);
-        _makeReady(id);
-        _executeReverts(id, executor_, _stateChanged(id, 1, a, expected));
-        assertEq(replacement.priceCacheMaxAge(), 1, "No retargeted setter");
-    }
-
-    // Scenarios: BLCT-EXECUTE-P13.
-    function test_givenSameAge_whenExecuted_thenNoTargetEvent(
-        address executor_,
-        uint48 age_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        _risk.setPriceCacheMaxAge(age_);
-        uint64 id = _timelock.queueBatch(_single(_ageAction(age_)));
-        _makeReady(id);
-        vm.recordLogs();
-        vm.record();
-        _executeAndAssert(id, executor_);
-        _assertNoTargetLogs(vm.getRecordedLogs(), address(_risk));
-        _assertNoTargetWrites(address(_risk));
-    }
-
     // Scenarios: BLCT-EXECUTE-P14.
-    function test_givenMixedTargets_whenExecuted_thenBothOrdersApply(address executor_) public {
-        _risk.setConfigOperator(address(_timelock));
+    function test_givenIndependentConfigDomains_whenExecuted_thenBothOrdersApply(
+        address executor_
+    ) public {
         uint256 checkpoint = vm.snapshotState();
         for (uint256 order; order < 2; ++order) {
             ITimelockBatchQueue.BatchAction[] memory batch = order == 0
-                ? _pair(_feeAction(address(_asset), _fees()), _ageAction(3600))
-                : _pair(_ageAction(3600), _feeAction(address(_asset), _fees()));
+                ? _pair(_feeAction(address(_asset), _fees()), _capAction(address(_asset), 200000e9))
+                : _pair(
+                    _capAction(address(_asset), 200000e9),
+                    _feeAction(address(_asset), _fees())
+                );
             uint64 id = _timelock.queueBatch(batch);
             _makeReady(id);
             _executeAndAssert(id, executor_);
@@ -632,12 +545,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     }
 
     // Scenarios: BLCT-EXECUTE-T01.
-    function test_givenLaterIndependentTargetReverts_whenExecuted_thenAtomicRollback(
+    function test_givenLaterConfigSetterReverts_whenExecuted_thenAtomicRollback(
         address executor_
     ) public {
-        _risk.setConfigOperator(address(_timelock));
         ITimelockBatchQueue.BatchAction memory configAction = _feeAction(address(_asset), _fees());
-        ITimelockBatchQueue.BatchAction memory riskAction = _ageAction(3600);
+        ITimelockBatchQueue.BatchAction memory riskAction = _capAction(address(_asset), 200000e9);
         uint256 checkpoint = vm.snapshotState();
         for (uint256 order; order < 2; ++order) {
             ITimelockBatchQueue.BatchAction[] memory batch = order == 0
@@ -656,109 +568,6 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         }
     }
 
-    // Scenarios: BLCT-EXECUTE-D02.
-    function test_givenRiskActiveFalse_givenRiskEnabledTrue_whenAgeExecuted_reverts(
-        address executor_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _setState(_risk, false, true);
-        _makeReady(id);
-        _executeReverts(
-            id,
-            executor_,
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_NotActive.selector,
-                address(_risk)
-            )
-        );
-    }
-
-    // Scenarios: BLCT-EXECUTE-D03.
-    function test_givenRiskActiveTrue_givenRiskEnabledFalse_whenAgeExecuted_reverts(
-        address executor_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _setState(_risk, true, false);
-        _makeReady(id);
-        _executeReverts(
-            id,
-            executor_,
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_NotActive.selector,
-                address(_risk)
-            )
-        );
-    }
-
-    // Scenarios: BLCT-EXECUTE-D04.
-    function test_givenRiskActiveFalse_givenRiskEnabledFalse_whenAgeExecuted_reverts(
-        address executor_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _setState(_risk, false, false);
-        _makeReady(id);
-        _executeReverts(
-            id,
-            executor_,
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_NotActive.selector,
-                address(_risk)
-            )
-        );
-    }
-
-    // Scenarios: BLCT-EXECUTE-D05.
-    function test_givenRiskKernelDrift_whenAgeExecuted_reverts(address executor_) public {
-        _risk.setConfigOperator(address(_timelock));
-        uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        vm.mockCall(
-            address(_risk),
-            abi.encodeWithSignature("kernel()"),
-            abi.encode(address(0x1234))
-        );
-        _makeReady(id);
-        _executeReverts(
-            id,
-            executor_,
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_KernelMismatch.selector,
-                address(_risk),
-                address(_kernel),
-                address(0x1234)
-            )
-        );
-    }
-
-    // Scenarios: BLCT-EXECUTE-D06.
-    function test_givenConfigUnavailable_whenAgeExecuted_thenApplied(
-        address executor_,
-        bool active_,
-        bool enabled_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _config.setConfigOperator(_recipient);
-        _setState(_config, active_, enabled_);
-        _makeReady(id);
-        _executeAndAssert(id, executor_);
-    }
-
-    // Scenarios: BLCT-EXECUTE-D07.
-    function test_givenCoreUnavailable_whenAgeExecuted_thenApplied(
-        address executor_,
-        bool active_,
-        bool enabled_
-    ) public {
-        _risk.setConfigOperator(address(_timelock));
-        uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _setState(_core, active_, enabled_);
-        _makeReady(id);
-        _executeAndAssert(id, executor_);
-    }
-
     // Scenarios: BLCT-EXECUTE-D08.
     function test_givenRiskOperatorIndependent_whenConfigExecuted_thenApplied(
         address executor_,
@@ -773,26 +582,113 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     }
 
     // Scenarios: BLCT-EXECUTE-D09.
-    function test_givenMixedTargetOperatorRevoked_whenExecuted_thenAtomicRejection(
-        address executor_,
-        bool risk_
+    function test_givenConfigOperatorRevoked_whenIndependentBatchExecuted_reverts(
+        address executor_
     ) public {
-        _risk.setConfigOperator(address(_timelock));
         uint64 id = _timelock.queueBatch(
-            _pair(_feeAction(address(_asset), _fees()), _ageAction(3600))
+            _pair(_feeAction(address(_asset), _fees()), _capAction(address(_asset), 200000e9))
         );
-        if (risk_) _risk.setConfigOperator(_recipient);
-        else _config.setConfigOperator(_recipient);
+        _config.setConfigOperator(_recipient);
         _makeReady(id);
         _executeReverts(
             id,
             executor_,
-            risk_
-                ? abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
-                : abi.encodeWithSelector(
-                    IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
-                    address(_timelock)
-                )
+            abi.encodeWithSelector(
+                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
+                address(_timelock)
+            )
+        );
+    }
+
+    // Scenarios: BLCT-EXECUTE-D10.
+    function test_givenConfigOperatorRestored_whenOriginalBatchExecuted_thenApplied(
+        address executor_,
+        uint48 elapsed_
+    ) public {
+        uint64 id = _timelock.queueBatch(
+            _pair(_feeAction(address(_asset), _fees()), _capAction(address(_asset), 200000e9))
+        );
+        ITimelockBatchQueue.QueuedAction memory original = _timelock.getQueuedAction(id);
+        bytes32 commitment = _queueDigest(id);
+        _config.setConfigOperator(_recipient);
+        vm.warp(bound(elapsed_, original.executableAt, original.expiresAt));
+        _executeReverts(
+            id,
+            executor_,
+            abi.encodeWithSelector(
+                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
+                address(_timelock)
+            )
+        );
+        assertEq(
+            _queueDigest(id),
+            commitment,
+            "Lost authority preserves original intent and deadlines"
+        );
+        _config.setConfigOperator(address(_timelock));
+        _executeAndAssert(id, executor_);
+    }
+
+    // Scenarios: BLCT-EXECUTE-D11.
+    function test_givenConfigOperatorReadReverts_whenExecuted_reverts(address executor_) public {
+        uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
+        _makeReady(id);
+        vm.mockCallRevert(
+            address(_config),
+            abi.encodeWithSignature("configOperator()"),
+            hex"deadbeef"
+        );
+        _executeReverts(
+            id,
+            executor_,
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
+            )
+        );
+    }
+
+    // Scenarios: BLCT-EXECUTE-D11.
+    function test_givenMalformedConfigOperatorLength_whenExecuted_reverts(
+        address executor_,
+        bytes memory data_
+    ) public {
+        vm.assume(data_.length != 32);
+        uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
+        _makeReady(id);
+        vm.mockCall(address(_config), abi.encodeWithSignature("configOperator()"), data_);
+        _executeReverts(
+            id,
+            executor_,
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
+            )
+        );
+    }
+
+    // Scenarios: BLCT-EXECUTE-D11.
+    function test_givenNoncanonicalConfigOperator_whenExecuted_reverts(address executor_) public {
+        uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
+        _makeReady(id);
+        vm.mockCall(
+            address(_config),
+            abi.encodeWithSignature("configOperator()"),
+            abi.encode(type(uint256).max)
+        );
+        _executeReverts(
+            id,
+            executor_,
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
+            )
         );
     }
 
@@ -865,17 +761,6 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         vm.expectRevert(reason);
         vm.prank(caller_);
         _timelock.getQueuedSubAction(id, 0);
-    }
-
-    // Scenarios: BLCT-EXECUTE-P13.
-    function test_givenUnchangedExecutedAgeEndpoints_whenBoundarySeedsRun_thenScenarioHolds()
-        public
-    {
-        uint256 checkpoint = vm.snapshotState();
-        test_givenSameAge_whenExecuted_thenNoTargetEvent(address(0xabc1), uint48(0));
-        _restore(checkpoint);
-        test_givenSameAge_whenExecuted_thenNoTargetEvent(address(0xabc1), type(uint48).max);
-        _restore(checkpoint);
     }
 
     // Scenarios: BLCT-EXECUTE-P10.
@@ -972,6 +857,30 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
             _config.getAssetConfig(address(_asset)).maxKeeperReward,
             type(uint128).max,
             "uint128 reward must not be truncated"
+        );
+    }
+
+    // Scenarios: BLCT-EXECUTE-D12.
+    function test_givenForeignKernelAndPausedConfig_whenExecuted_reverts(address executor_) public {
+        uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
+        _makeReady(id);
+        _setState(_config, true, false);
+        address foreignKernel = makeAddr("foreignKernel");
+        vm.mockCall(
+            address(_config),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(foreignKernel)
+        );
+
+        _executeReverts(
+            id,
+            executor_,
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_config),
+                address(_kernel),
+                foreignKernel
+            )
         );
     }
 }

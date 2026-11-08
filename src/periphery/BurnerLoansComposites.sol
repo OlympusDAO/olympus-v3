@@ -106,7 +106,8 @@ contract BurnerLoansComposites is
             params_.ohmAmount,
             msg.sender,
             params_.recipient,
-            params_.maxFee
+            params_.maxFee,
+            params_.referrer
         );
         result.fee = borrowed.fee;
         result.resultingDebtOhm = borrowed.resultingDebtOhm;

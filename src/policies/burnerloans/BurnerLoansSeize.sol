@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -42,6 +43,7 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     ///      - A borrower is zero, duplicated or has no debt.
     ///      - A position is healthy and has not matured.
     ///      - Prices are unavailable or custody is insolvent.
+    ///      - A positive keeper reward names zero or the selected Payout as its recipient.
     ///      - Core’s atomic default, redemption, receipt validation or payout credit fails.
     function seize(
         address asset_,
@@ -72,8 +74,12 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
         return id_ == type(IBurnerLoansSeize).interfaceId || super.supportsInterface(id_);
     }
 
-    /// @notice Allocates scan result arrays up to the requested bounds.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @notice Quotes custody output and its keeper/Treasury allocation.
+    /// @dev Reverts if:
+    ///      - Custody withdrawal support or output preview fails.
+    ///      - Reward eligibility or Risk's reward calculation fails.
+    ///      - Risk allocates a reward larger than the quoted output.
+    ///      - A positive keeper reward names zero or the selected Payout as its recipient.
     /// @param evaluator_ Risk implementation using the captured snapshot.
     /// @param snapshot_ Captured operation price/backing values, all in the same PRICE decimal scale.
     /// @param asset_ Underlying collateral token identifying the market.
@@ -110,6 +116,8 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
         );
         if (result_.keeperReward > output)
             revert IBurnerLoansCore.BurnerLoansCore_InvalidSettlement();
+        if (result_.keeperReward != 0)
+            IBurnerLoansPayout(_CORE.payout()).validatePayoutRecipient(actor_);
         result_.collateralToTreasury = output - result_.keeperReward;
         return result_;
     }
@@ -123,6 +131,7 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     ///      - A borrower has no debt or is healthy and unexpired.
     ///      - Custody is unavailable or insolvent, or pricing is unavailable, including an entirely expired batch.
     ///      - Risk allocates a reward larger than the quoted output.
+    ///      - A positive keeper reward names zero or the selected Payout as its recipient.
     ///      Reads without state changes; errors from dependency views propagate.
     /// @param actor_ Keeper identity used to select protocol-caller rewards.
     /// @param asset_ Underlying collateral token identifying the market.

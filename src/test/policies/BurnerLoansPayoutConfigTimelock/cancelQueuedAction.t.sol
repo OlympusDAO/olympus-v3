@@ -79,15 +79,23 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     }
 
     // Scenarios: BLCUCT-CANCEL-L02.
-    function test_givenActiveDisabled_whenCancelled_reverts(
+    function test_givenActiveDisabled_whenCancelled_thenExactCleanup(
         address caller_
     ) public givenPendingRecovery {
+        vm.assume(caller_ != address(0));
+        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
         _setState(_payoutTimelock, true, false);
-        _expectLocalRejected(
-            abi.encodeCall(_payoutTimelock.cancelQueuedAction, (_pendingId)),
-            abi.encodeWithSelector(IEnabler.NotEnabled.selector),
-            caller_
+        bytes32 funds = _payoutDigest();
+        vm.expectEmit(address(_payoutTimelock));
+        emit ITimelockBatchQueue.TimelockActionCancelled(_pendingId, caller_);
+        vm.prank(caller_);
+        _payoutTimelock.cancelQueuedAction(_pendingId);
+        assertTrue(
+            _payoutTimelock.getQueuedAction(_pendingId).cancelled,
+            "Paused cancellation recorded"
         );
+        _assertCleared(_pendingId, _single(_rescueAction()));
+        assertEq(_payoutDigest(), funds, "Cancellation preserves target accounting");
     }
 
     // Scenarios: BLCUCT-CANCEL-L04.
@@ -167,12 +175,14 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
 
     // Scenarios: BLCUCT-CANCEL-D02.
     function test_givenBrokenRetiredTarget_whenCancelled_thenNoTargetReads(
-        address caller_
+        address caller_,
+        bool enabled_
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(0));
         _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
         _payout.setConfigOperator(_recipient);
         _setState(_payout, false, false);
+        if (!enabled_) _payoutTimelock.disable("");
         _rejectTargetReads();
         vm.prank(caller_);
         _payoutTimelock.cancelQueuedAction(_pendingId);

@@ -404,7 +404,7 @@ contract BurnerLoansCollateralWithdrawCollateralIntegrationTest is BurnerLoansCo
         _admitVault(token, address(vault), true);
         _deposit(token, 2);
         vm.prank(_borrower);
-        _debt.borrow(address(token), 1, _borrower, _borrower, 0);
+        _debt.borrow(address(token), 1, _borrower, _borrower, 0, address(0));
         token.mint(address(vault), 2);
         bytes32 beforeState = _accountingDigest(address(token));
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_ZeroCollateralWithdrawal.selector);

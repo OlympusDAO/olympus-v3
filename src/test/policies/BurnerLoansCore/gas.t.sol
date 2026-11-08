@@ -199,12 +199,13 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
             _DEBT,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
 
         vm.startPrank(_borrower);
         vm.startSnapshotGas("BurnerLoansDebt.borrow.first");
-        _debt.borrow(address(_asset), _DEBT, _borrower, _borrower, preview.fee);
+        _debt.borrow(address(_asset), _DEBT, _borrower, _borrower, preview.fee, address(0));
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
@@ -225,12 +226,13 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
             _DEBT,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
 
         vm.startPrank(_borrower);
         vm.startSnapshotGas("BurnerLoansDebt.borrow.inventoryFunded");
-        _debt.borrow(address(_asset), _DEBT, _borrower, _borrower, preview.fee);
+        _debt.borrow(address(_asset), _DEBT, _borrower, _borrower, preview.fee, address(0));
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
@@ -252,12 +254,13 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
             _DEBT,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
 
         vm.startPrank(_borrower);
         vm.startSnapshotGas("BurnerLoansDebt.borrow.mixedFunded");
-        _debt.borrow(address(_asset), _DEBT, _borrower, _borrower, preview.fee);
+        _debt.borrow(address(_asset), _DEBT, _borrower, _borrower, preview.fee, address(0));
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
@@ -278,12 +281,13 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
             50e9,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
 
         vm.startPrank(_borrower);
         vm.startSnapshotGas("BurnerLoansDebt.borrow.additional");
-        _debt.borrow(address(_asset), 50e9, _borrower, _borrower, preview.fee);
+        _debt.borrow(address(_asset), 50e9, _borrower, _borrower, preview.fee, address(0));
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
@@ -386,12 +390,13 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
             address(_asset),
             _borrower,
             1,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
 
         vm.startPrank(_borrower);
         vm.startSnapshotGas("BurnerLoansDebt.extend.oneTerm");
-        _debt.extend(address(_asset), _borrower, 1, preview.fee);
+        _debt.extend(address(_asset), _borrower, 1, preview.fee, address(0));
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
@@ -905,10 +910,11 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
             amount_,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), amount_, _borrower, _borrower, preview.fee);
+        _debt.borrow(address(_asset), amount_, _borrower, _borrower, preview.fee, address(0));
     }
 
     function _configureVaultMarket() internal returns (MockERC20 asset, MockERC4626 vault) {
@@ -1101,7 +1107,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         _fundAndApproveCollateral(account_, collateral_);
         vm.startPrank(account_);
         _collateral.depositCollateral(address(_asset), collateral_, account_);
-        _debt.borrow(address(_asset), debt_, account_, account_, type(uint256).max);
+        _debt.borrow(address(_asset), debt_, account_, account_, type(uint256).max, address(0));
         vm.stopPrank();
     }
 

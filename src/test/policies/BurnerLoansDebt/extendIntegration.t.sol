@@ -69,7 +69,8 @@ contract BurnerLoansDebtExtendIntegrationTest is BurnerLoansDebtIntegrationTest 
             50e9,
             _borrower,
             _borrower,
-            157032
+            157032,
+            address(0)
         );
         // Top-up charges only added backing=50*1.25=62.5 assets.
         // ceil(62.5e6*25.125/10000)=157032 raw collateral units.
@@ -86,7 +87,7 @@ contract BurnerLoansDebtExtendIntegrationTest is BurnerLoansDebtIntegrationTest 
         _openRealDebt(2000e6, 100e9);
         vm.prank(_borrower);
         uint256 originalFee = _debt
-            .previewExtend(address(_asset), _borrower, 1, type(uint256).max)
+            .previewExtend(address(_asset), _borrower, 1, type(uint256).max, address(0))
             .fee;
         assertEq(originalFee, 314063, "Original fee uses one-dollar collateral");
         _expireCacheAndHalveCollateralPrice();
@@ -106,7 +107,7 @@ contract BurnerLoansDebtExtendIntegrationTest is BurnerLoansDebtIntegrationTest 
         _openRealDebt(2000e6, 100e9);
         vm.prank(_borrower);
         uint256 originalFee = _debt
-            .previewExtend(address(_asset), _borrower, 1, type(uint256).max)
+            .previewExtend(address(_asset), _borrower, 1, type(uint256).max, address(0))
             .fee;
         assertEq(originalFee, 314063, "Original fee limit precedes the price change");
         _expireCacheAndHalveCollateralPrice();
@@ -147,7 +148,8 @@ contract BurnerLoansDebtExtendIntegrationTest is BurnerLoansDebtIntegrationTest 
                 address(_asset),
                 _borrower,
                 terms_,
-                fee_
+                fee_,
+                address(0)
             );
             assertEq(_stateDigest(_borrower), beforeQuote, "Real extension quote is read only");
             assertEq(quote.fee, fee_, "Independent real extension fee quote");
@@ -160,14 +162,17 @@ contract BurnerLoansDebtExtendIntegrationTest is BurnerLoansDebtIntegrationTest 
             address(_asset),
             _borrower,
             position.maturity + increment_,
-            fee_
+            fee_,
+            address(0),
+            0
         );
         vm.prank(_borrower);
         IBurnerLoansDebt.ExtendPreview memory result = _debt.extend(
             address(_asset),
             _borrower,
             terms_,
-            fee_
+            fee_,
+            address(0)
         );
         assertEq(result.fee, fee_, "Independent execution fee");
         assertEq(
@@ -209,10 +214,10 @@ contract BurnerLoansDebtExtendIntegrationTest is BurnerLoansDebtIntegrationTest 
         bytes32 state = _stateDigest(_borrower);
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         vm.prank(_borrower);
-        _debt.previewExtend(address(_asset), _borrower, 1, type(uint256).max);
+        _debt.previewExtend(address(_asset), _borrower, 1, type(uint256).max, address(0));
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         vm.prank(_borrower);
-        _debt.extend(address(_asset), _borrower, 1, type(uint256).max);
+        _debt.extend(address(_asset), _borrower, 1, type(uint256).max, address(0));
         assertEq(
             _stateDigest(_borrower),
             state,

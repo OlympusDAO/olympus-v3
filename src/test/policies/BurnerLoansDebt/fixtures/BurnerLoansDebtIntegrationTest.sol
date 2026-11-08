@@ -29,7 +29,14 @@ abstract contract BurnerLoansDebtIntegrationTest is BurnerLoansDebtTest {
         vm.startPrank(borrower_);
         asset_.approve(address(_core), type(uint256).max);
         _collateral.depositCollateral(address(asset_), collateral_, borrower_);
-        _debt.borrow(address(asset_), principal_, borrower_, borrower_, type(uint256).max);
+        _debt.borrow(
+            address(asset_),
+            principal_,
+            borrower_,
+            borrower_,
+            type(uint256).max,
+            address(0)
+        );
         vm.stopPrank();
     }
 

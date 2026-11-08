@@ -2,6 +2,8 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 import {IBurnerLoansPayoutConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansPayoutConfigTimelock.sol";
 
@@ -26,14 +28,19 @@ contract BurnerLoansPayoutConfigTimelockConstructorTest is BurnerLoansPayoutConf
         _expectInvalid(candidate_, deployer_);
     }
 
-    // Scenarios: BLCUCT-CONSTRUCTOR-D01.
-    function test_givenMissingInterface_whenDeployed_reverts(address deployer_) public {
+    // Scenarios: BLCUCT-CONSTRUCTOR-D01, BLCUCT-CONSTRUCTOR-D07, BLCUCT-CONSTRUCTOR-D08.
+    function test_givenMissingInterface_whenDeployed_reverts(
+        address deployer_,
+        uint8 index_
+    ) public {
+        bytes4[3] memory ids = [
+            type(IBurnerLoansPayout).interfaceId,
+            type(IConfigOperator).interfaceId,
+            type(IEnabler).interfaceId
+        ];
         vm.mockCall(
             address(_payout),
-            abi.encodeWithSignature(
-                "supportsInterface(bytes4)",
-                type(IBurnerLoansPayout).interfaceId
-            ),
+            abi.encodeWithSignature("supportsInterface(bytes4)", ids[bound(index_, 0, 2)]),
             abi.encode(false)
         );
         _expectInvalid(address(_payout), deployer_);
@@ -109,11 +116,12 @@ contract BurnerLoansPayoutConfigTimelockConstructorTest is BurnerLoansPayoutConf
     function test_givenIndependentLifecycle_whenDeployed_thenExactDefaults(
         address deployer_,
         bool payoutActive_,
+        bool payoutEnabled_,
         bool coreActive_,
         bool coreEnabled_
     ) public {
         _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, payoutActive_, true);
+        _setState(_payout, payoutActive_, payoutEnabled_);
         bytes32 beforeFunds = _payoutDigest();
         address controller = _payout.configOperator();
         vm.prank(deployer_);
@@ -136,16 +144,49 @@ contract BurnerLoansPayoutConfigTimelockConstructorTest is BurnerLoansPayoutConf
     function test_givenLifecycleSeeds_whenDeployed_thenExactDefaults() public {
         uint256 checkpoint = vm.snapshotState();
         for (uint256 p; p < 2; ++p)
-            for (uint256 a; a < 2; ++a)
-                for (uint256 e; e < 2; ++e) {
-                    test_givenIndependentLifecycle_whenDeployed_thenExactDefaults(
-                        address(0),
-                        p != 0,
-                        a != 0,
-                        e != 0
-                    );
-                    _restore(checkpoint);
-                }
+            for (uint256 pe; pe < 2; ++pe)
+                for (uint256 a; a < 2; ++a)
+                    for (uint256 e; e < 2; ++e) {
+                        test_givenIndependentLifecycle_whenDeployed_thenExactDefaults(
+                            address(0),
+                            p != 0,
+                            pe != 0,
+                            a != 0,
+                            e != 0
+                        );
+                        _restore(checkpoint);
+                    }
+    }
+
+    // Scenarios: BLCUCT-CONSTRUCTOR-D01, BLCUCT-CONSTRUCTOR-D07, BLCUCT-CONSTRUCTOR-D08.
+    function test_givenEachRequiredInterfaceMissing_whenDeployed_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 i; i < 3; ++i) {
+            test_givenMissingInterface_whenDeployed_reverts(address(this), i);
+            _restore(checkpoint);
+        }
+    }
+
+    // Scenarios: BLCUCT-CONSTRUCTOR-L03.
+    function test_givenRuntimeReadinessGettersRevert_whenConstructed(address deployer_) public {
+        vm.mockCallRevert(address(_payout), abi.encodeWithSignature("isEnabled()"), hex"ff");
+        vm.mockCallRevert(address(_payout), abi.encodeWithSignature("configOperator()"), hex"ff");
+        vm.mockCallRevert(
+            address(_kernel),
+            abi.encodeWithSignature("isPolicyActive(address)", address(_payout)),
+            hex"ff"
+        );
+        vm.prank(deployer_);
+        BurnerLoansPayoutConfigTimelock fresh = new BurnerLoansPayoutConfigTimelock(
+            _kernel,
+            _payout
+        );
+        assertEq(
+            address(fresh.payout()),
+            address(_payout),
+            "Compatible target bound without readiness reads"
+        );
+        assertFalse(fresh.isEnabled(), "Construction leaves queue disabled");
     }
 
     function _expectInvalid(address candidate_, address deployer_) internal {

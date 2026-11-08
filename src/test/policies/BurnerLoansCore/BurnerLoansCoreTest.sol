@@ -93,6 +93,8 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
                 _recipient,
                 amount_,
                 uint48(vm.getBlockTimestamp() + 30 days),
+                0,
+                address(0),
                 0
             )
         );
@@ -157,7 +159,9 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
                 _floan.getMarketPrincipalDefaulted(market)
             )
         );
-        (uint256 fee, uint256 seized, uint256 reserved) = _payout.payoutReserves(address(_asset));
+        (uint256 fee, , uint256 seized, , uint256 reserved) = _payout.pendingAmounts(
+            address(_asset)
+        );
         bytes32 payouts = keccak256(
             abi.encode(
                 fee,
@@ -166,6 +170,7 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
                 _payout.getPendingPayoutTokens(),
                 _payout.getPendingKeepers(address(_asset)),
                 _payout.getPendingPayoutRecipients(address(_asset)),
+                _referralReservesDigest(address(_asset)),
                 _asset.allowance(_borrower, address(_core)),
                 _asset.allowance(address(_core), address(_depositManager)),
                 _ohm.allowance(_recipient, address(_core))

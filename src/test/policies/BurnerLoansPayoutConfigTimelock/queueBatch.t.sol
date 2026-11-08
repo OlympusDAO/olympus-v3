@@ -53,6 +53,44 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
         );
     }
 
+    // Scenarios: BLCUCT-BATCH-D04.
+    function test_givenInactivePayout_whenRoutingBatchQueued_reverts(
+        address caller_,
+        bool bl_,
+        bool overlap_,
+        bool payoutEnabled_,
+        bool flag_
+    ) public {
+        _grantProposer(caller_, bl_, overlap_);
+        _distributor();
+        _setState(_payout, false, payoutEnabled_);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _action(
+            IBurnerLoansPayout.setSendFeesToDistributor.selector,
+            abi.encode(flag_)
+        );
+        actions[1] = _action(
+            IBurnerLoansPayout.setSendYieldToDistributor.selector,
+            abi.encode(flag_)
+        );
+        vm.recordLogs();
+        _expectQueueRejected(
+            abi.encodeCall(_payoutTimelock.queueBatch, (actions)),
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_payout)
+            ),
+            caller_
+        );
+        assertEq(_payoutTimelock.pendingActionId(_scopedKey(actions[0])), 0, "No fee key reserved");
+        assertEq(
+            _payoutTimelock.pendingActionId(_scopedKey(actions[1])),
+            0,
+            "No yield key reserved"
+        );
+        assertEq(_timelockLogCount(), 0, "Rejected batch commits no queue events");
+    }
+
     // Scenarios: BLCUCT-BATCH-N01.
     function test_whenBatchEmpty_reverts(address caller_) public {
         _grantProposer(caller_, false, false);

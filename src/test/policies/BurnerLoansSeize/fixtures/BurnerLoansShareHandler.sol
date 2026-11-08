@@ -152,7 +152,14 @@ contract BurnerLoansShareHandler is Test {
         uint128 amount = uint128(bound(amountSeed_, 1, 1000e9));
         IBurnerLoansDebt.BorrowPreview memory quote;
         try
-            _services.debt.previewBorrow(address(_ASSET), amount, actor, actor, type(uint256).max)
+            _services.debt.previewBorrow(
+                address(_ASSET),
+                amount,
+                actor,
+                actor,
+                type(uint256).max,
+                address(0)
+            )
         returns (IBurnerLoansDebt.BorrowPreview memory preview) {
             quote = preview;
         } catch {
@@ -170,7 +177,8 @@ contract BurnerLoansShareHandler is Test {
             amount,
             actor,
             actor,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         principal[actor] += amount;
         assertEq(result.resultingDebtOhm, principal[actor], "Borrow updates modeled principal");

@@ -74,7 +74,7 @@ abstract contract YieldClaimerModularTest is BurnerLoansModularTest {
             0,
             "Yield never enters payout custody"
         );
-        (uint256 fees, uint256 seized, uint256 total) = _payout.payoutReserves(token_);
+        (uint256 fees, , uint256 seized, , uint256 total) = _payout.pendingAmounts(token_);
         assertEq(fees + seized + total, 0, "No new pending payout obligation");
     }
 }

@@ -96,9 +96,9 @@ contract BurnerLoansCore is
 
     /// @notice Binds deployment dependencies and initializes the local contract state.
     /// @dev Reverts if:
-    ///      - A required address is zero.
     ///      - The supplied DepositManager does not implement the required interface.
-    ///      - A token reports unsupported decimals.
+    ///      - DepositManager's Kernel getter fails, returns malformed data or reports a different Kernel.
+    ///      - OHM has no code, its decimals getter fails or returns malformed data, or its decimals exceed 36.
     /// @param kernel_ Kernel supplying modules and governance authority.
     /// @param ohm_ Principal token used by the facility.
     /// @param depositManager_ Permanent operator-namespaced collateral custodian.
@@ -129,6 +129,7 @@ contract BurnerLoansCore is
 
     /// @inheritdoc Policy
     /// @dev Reverts if:
+    ///      - Another guarded Core operation is executing.
     ///      - A declared module is missing.
     ///      - A declared module has an incompatible version.
     ///
@@ -173,7 +174,6 @@ contract BurnerLoansCore is
     /// @dev Reverts if:
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
-    ///      - Another guarded Core operation is executing.
     /// @param role_ Governance role required for this operation.
     modifier onlyAction(bytes32 role_) {
         _requireOperational();
@@ -200,7 +200,7 @@ contract BurnerLoansCore is
     /// @notice Requires governance ADMIN authority.
     /// @dev Reverts if:
     ///      - The caller lacks the authority required by this operation.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function _onlyAdmin() internal view {
         if (!_isAdmin(msg.sender)) revert NotAuthorised();
     }
@@ -208,14 +208,16 @@ contract BurnerLoansCore is
     /// @notice Requires active Kernel membership.
     /// @dev Reverts if:
     ///      - Core is inactive in the required Kernel.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function _requireActive() internal view {
         if (!kernel.isPolicyActive(this))
             revert IBurnerLoansErrors.BurnerLoans_PolicyNotActive(address(this));
     }
 
     /// @notice Requires active and enabled Core lifecycle state.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reverts if:
+    ///      - Core is Kernel-inactive.
+    ///      - Core is locally disabled.
     function _requireOperational() internal view {
         _requireActive();
         _requireEnabled();
@@ -225,13 +227,14 @@ contract BurnerLoansCore is
     /// @dev Reverts if:
     ///      - Core is Kernel-inactive, before checking enablement or authorization inputs.
     ///      - Core is disabled, before checking authorization inputs or consuming a nonce.
-    ///      Cancellation remains available in every lifecycle state.
+    /// @dev Cancellation remains available in every lifecycle state.
     function _beforeSetAuthorization() internal view override {
         _requireOperational();
     }
 
     /// @notice Requires active membership and an explicitly matching Kernel.
     /// @dev Reverts if:
+    ///      - The policy's Kernel getter fails or returns malformed data.
     ///      - The policy is inactive in Core’s Kernel.
     ///      - The policy reports a different Kernel.
     /// @param policy_ Policy whose live Kernel binding is checked.
@@ -317,7 +320,8 @@ contract BurnerLoansCore is
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
     ///      - Another guarded Core operation is executing.
-    ///      - The position is absent or FLOAN rejects principal/maturity changes.
+    ///      - The market or position is absent, or FLOAN rejects principal/maturity changes.
+    ///      - The combined protocol and referral fee exceeds the uint256 maximum.
     ///      - Mandatory fee collection or Inventory funding fails.
     function settleBorrow(
         BorrowRequest calldata request_
@@ -330,7 +334,13 @@ contract BurnerLoansCore is
             0,
             request_.maturity
         );
-        _collectFee(request_.asset, request_.payer, request_.fee);
+        _collectFee(
+            request_.asset,
+            request_.payer,
+            request_.protocolFee,
+            request_.referrer,
+            request_.referralFee
+        );
         _INVENTORY.draw(request_.recipient, request_.amount);
         return (afterPosition.principalDue, afterPosition.maturity);
     }
@@ -340,7 +350,7 @@ contract BurnerLoansCore is
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
     ///      - Another guarded Core operation is executing.
-    ///      - The position is absent or FLOAN rejects repayment.
+    ///      - The market or position is absent, or FLOAN rejects repayment.
     ///      - Exact OHM collection or Inventory repayment settlement fails.
     function settleRepay(
         address asset_,
@@ -365,17 +375,20 @@ contract BurnerLoansCore is
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
     ///      - Another guarded Core operation is executing.
-    ///      - The position is absent or FLOAN rejects maturity extension.
+    ///      - The market or position is absent, or FLOAN rejects maturity extension.
+    ///      - The combined protocol and referral fee exceeds the uint256 maximum.
     ///      - Mandatory fee collection fails.
     function settleExtend(
         address asset_,
         address borrower_,
         address payer_,
         uint48 maturity_,
-        uint256 fee_
+        uint256 protocolFee_,
+        address referrer_,
+        uint256 referralFee_
     ) external override nonReentrant onlyAction(BL_DEBT_POLICY_ROLE) returns (uint48 maturity) {
         maturity = _FLOAN.extendMaturity(_positionId(asset_, borrower_), maturity_).maturity;
-        _collectFee(asset_, payer_, fee_);
+        _collectFee(asset_, payer_, protocolFee_, referrer_, referralFee_);
     }
 
     /// @inheritdoc IBurnerLoansCore
@@ -383,7 +396,7 @@ contract BurnerLoansCore is
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
     ///      - Another guarded Core operation is executing.
-    ///      - A position is absent or FLOAN rejects default.
+    ///      - The market or a position is absent, or FLOAN rejects default.
     ///      - DepositManager redemption fails or new Payout receipts mismatch returned proceeds.
     ///      - Risk allocates a reward larger than actual proceeds.
     ///      - Inventory principal reduction or Payout payout credit fails.
@@ -456,7 +469,9 @@ contract BurnerLoansCore is
 
     /// @notice Redeems operator collateral directly to its final recipient.
     /// @dev Reverts if:
-    ///      - A custody receipt, output token or market identity disagrees with the settlement instruction.
+    ///      - DepositManager's output-token lookup or withdrawal fails.
+    ///      - The returned output token differs from DepositManager's selected withdrawal token.
+    ///      - Payout's token balance cannot be read or its increase differs from the reported output.
     /// @param asset_ Underlying collateral token identifying the market.
     /// @param amount_ Token amount in the operation's documented token units.
     /// @param recipient_ Final output recipient or pending entitlement holder.
@@ -503,24 +518,37 @@ contract BurnerLoansCore is
 
     /// @notice Collects a mandatory fee directly into selected Payout and credits it.
     /// @dev Reverts if:
+    ///      - protocolFee_ + referralFee_ exceeds the uint256 maximum (BurnerLoansCore_FeeOverflow).
     ///      - The fee transfer fails or Payout receives an inexact amount.
     ///      - Payout rejects the new fee credit.
     /// @param asset_ Underlying collateral token identifying the market.
     /// @param payer_ Actual action caller funding this transfer.
-    /// @param fee_ Policy-approved collateral-denominated fee.
-    function _collectFee(address asset_, address payer_, uint256 fee_) private {
-        if (fee_ == 0) return;
+    /// @param protocolFee_ Policy-approved protocol allocation in raw collateral units.
+    /// @param referrer_ Fixed recipient of the referral allocation.
+    /// @param referralFee_ Policy-approved referral allocation in raw collateral units.
+    function _collectFee(
+        address asset_,
+        address payer_,
+        uint256 protocolFee_,
+        address referrer_,
+        uint256 referralFee_
+    ) private {
+        if (referralFee_ > type(uint256).max - protocolFee_)
+            revert BurnerLoansCore_FeeOverflow(protocolFee_, referralFee_);
+        uint256 totalFee = protocolFee_ + referralFee_;
+        if (totalFee == 0) return;
         // Core pulls the payer's tokens directly into Payout under Core's settlement guard.
         // Token callbacks can occur before creditFee enters Payout's local guard.
         // A blocked Payout reverts the entire borrow, including its debt/maturity changes.
         // A failed extension preserves the old maturity: that loan can still expire normally.
-        // OCG may replace Payout; only the subsequent protocol payout is allowed to defer.
-        ERC20(asset_).safeTransferFromExact(payer_, address(_PAYOUT), fee_);
-        _PAYOUT.creditFee(asset_, fee_);
+        // OCG may replace Payout; subsequent protocol and referral deliveries may defer.
+        ERC20(asset_).safeTransferFromExact(payer_, address(_PAYOUT), totalFee);
+        _PAYOUT.creditFee(asset_, protocolFee_, referrer_, referralFee_);
     }
 
     /// @notice Authorizes DepositManager to burn Core-owned collateral receipts.
     /// @dev Reverts if:
+    ///      - DepositManager's receipt-token-manager lookup fails.
     ///      - Burner Loans could not approve the ReceiptTokenManager for collateral custody.
     /// @param asset_ Underlying collateral token identifying the market.
     function _approveReceiptBurn(address asset_) private {
@@ -540,7 +568,7 @@ contract BurnerLoansCore is
     /// @inheritdoc IBurnerLoansCore
     /// @dev Reverts if:
     ///      - The collateral asset is not registered by Burner Loans.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads the local market registry without external calls.
     function marketId(address asset_) public view override returns (uint32) {
         if (!_MARKETS[asset_].registered)
             // Each selected position must pass validation and settle atomically with the batch.
@@ -551,8 +579,9 @@ contract BurnerLoansCore is
 
     /// @notice Resolves the canonical position for an asset and borrower.
     /// @dev Reverts if:
+    ///      - The collateral asset is not registered.
     ///      - The borrower has no outstanding debt for the asset.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param asset_ Underlying collateral token identifying the market.
     /// @param borrower_ Account whose canonical position is queried or changed.
     /// @return uint64 Canonical FLOAN position identifier.
@@ -565,43 +594,44 @@ contract BurnerLoansCore is
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Returns the immutable token address without external calls.
     function ohm() external view override returns (address) {
         return address(_OHM);
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Returns the immutable custodian address without external calls.
     function depositManager() external view override returns (address) {
         return address(_DEPOSIT_MANAGER);
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads the selected Inventory address without external calls.
     function inventory() external view override returns (address) {
         return address(_INVENTORY);
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads the cached FLOAN module address without external calls.
     function floan() external view override returns (address) {
         return address(_FLOAN);
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads the local asset registry without external calls.
     function isAssetRegistered(address asset_) external view override returns (bool) {
         return _ASSETS.contains(asset_);
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads the local asset count without external calls.
     function getAssetCount() external view override returns (uint256) {
         return _ASSETS.length();
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reverts if:
+    ///      - index_ is greater than or equal to the registered asset count.
     function getAssetAt(uint256 index_) external view override returns (address) {
         return _ASSETS.at(index_);
     }
@@ -614,9 +644,12 @@ contract BurnerLoansCore is
 
     /// @inheritdoc IBurnerLoansCore
     /// @dev Reverts if:
-    ///      - The caller lacks ADMIN or a guarded Core operation is executing.
-    ///      - Risk lacks required interfaces, uses another OHM or reports a different Kernel.
-    ///      Install a preconfigured replacement; this function preserves its independent authority.
+    ///      - Another guarded Core operation is executing, Core is inactive or the caller lacks ADMIN.
+    ///      - The replacement is the current nonzero Risk address.
+    ///      - Risk lacks required interfaces, reports another Kernel or is bound to another Core.
+    ///      - A required dependency getter fails or returns malformed data.
+    ///      - Risk is inactive or disabled, or uses a different OHM token.
+    /// @dev Install a preconfigured replacement; this function preserves its independent authority.
     function setRisk(address risk_) external override nonReentrant onlyActive onlyAdminRole {
         if (risk_ != address(0) && risk_ == risk) revert BurnerLoans_UnchangedAddress(risk_);
         if (
@@ -640,8 +673,11 @@ contract BurnerLoansCore is
 
     /// @inheritdoc IBurnerLoansCore
     /// @dev Reverts if:
-    ///      - The caller lacks ADMIN or a guarded Core operation is executing.
-    ///      - Inventory is inactive, reports another Kernel or has a different facility/OHM.
+    ///      - Another guarded Core operation is executing, Core is inactive or the caller lacks ADMIN.
+    ///      - The replacement is the current nonzero Inventory address.
+    ///      - Inventory lacks required interfaces, reports another Kernel or is bound to another Core.
+    ///      - A required dependency getter fails or returns malformed data.
+    ///      - Inventory is inactive or disabled, or uses a different OHM token.
     ///      - Replacement principal differs from canonical FLOAN debt.
     ///      - Old and replacement principal or aggregate provider claims differ.
     function setInventory(
@@ -682,7 +718,7 @@ contract BurnerLoansCore is
     ///      - The caller lacks ADMIN or a guarded Core operation is executing.
     ///      - Core is inactive or the new authority is zero/unchanged.
     ///      - FLOAN manager handoff fails.
-    ///      Governance validates the upstream Config; Core stores only its authority address.
+    /// @dev Governance validates the upstream Config; Core stores only its authority address.
     ///      Payout and Inventory have independent controllers and are not changed here.
     function setConfigOperator(address operator_) public override nonReentrant {
         // Admit Core before authorization, validation or manager writes.
@@ -710,6 +746,7 @@ contract BurnerLoansCore is
 
     /// @inheritdoc IBurnerLoansCore
     /// @dev Reverts if:
+    ///      - Core is inactive or disabled.
     ///      - The caller is not the selected Config address.
     ///      - A guarded Core operation is executing.
     ///      - An existing asset is assigned a different market ID.
@@ -768,8 +805,10 @@ contract BurnerLoansCore is
             );
     }
 
-    /// @notice Validates dependencies before initial or ADMIN activation.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @notice Validates the enable payload, then delegates settlement and dependency checks.
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty.
+    /// @dev Then calls _requireNotReentrant() and _validateLifecycle(); their errors propagate.
     function _beforeEnable(bytes calldata data_) internal view override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
 
@@ -778,7 +817,9 @@ contract BurnerLoansCore is
     }
 
     /// @notice Checks that a lifecycle transition cannot interrupt settlement.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty.
+    /// @dev Calls _requireNotReentrant() before checking the payload; its errors propagate.
     function _beforeDisable(bytes calldata data_) internal view override {
         _requireNotReentrant();
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
@@ -787,7 +828,7 @@ contract BurnerLoansCore is
     /// @notice Revalidates the grace window and current dependency graph.
     /// @dev Reverts if:
     ///      - Core is settling.
-    ///      - The re-enable grace deadline has passed.
+    ///      - The re-enable grace deadline exceeds uint48 or has passed.
     ///      - Current lifecycle dependencies fail validation.
     function _beforeReEnable() internal override {
         _requireNotReentrant();
@@ -798,7 +839,7 @@ contract BurnerLoansCore is
     /// @notice Checks authority for fast re-enablement.
     /// @dev Reverts if:
     ///      - The caller lacks the authority required by this operation.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function _authorizeReEnable() internal view override {
         if (!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE))
             revert NotAuthorised();
@@ -815,7 +856,9 @@ contract BurnerLoansCore is
         super.setGracePeriod(period_);
     }
 
-    /// @dev The public setter applies settlement, activity and enablement admission first.
+    /// @dev The public setter first applies settlement, activity and local enablement checks.
+    /// @dev Reverts if:
+    ///      - The caller lacks ADMIN.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
     /// @notice Requires the complete Core settlement guard to be idle.
@@ -827,8 +870,12 @@ contract BurnerLoansCore is
 
     /// @notice Validates the selected dependencies before enabling Core.
     /// @dev Reverts if:
-    ///      - A supplied configuration parameter violates its required bounds.
-    ///      Reads without state changes; errors from dependency views propagate.
+    ///      - Core is Kernel-inactive.
+    ///      - Inventory, Payout or Risk is unset.
+    ///      - A selected dependency has invalid interfaces, metadata or system binding.
+    ///      - A selected dependency reports a different Kernel.
+    ///      - DepositManager, Inventory, Payout or Risk is Kernel-inactive.
+    ///      - DepositManager, Inventory, Payout or Risk is locally disabled.
     function _validateLifecycle() private view {
         _requireActive();
         if (address(_INVENTORY) == address(0)) revert BurnerLoansCore_InvalidInventory(address(0));
@@ -882,16 +929,18 @@ contract BurnerLoansCore is
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads the selected Payout address without external calls.
     function payout() external view override returns (address) {
         return address(_PAYOUT);
     }
 
     /// @inheritdoc IBurnerLoansCore
     /// @dev Reverts if:
-    ///      - The caller lacks ADMIN or a guarded Core operation is executing.
-    ///      - Payout lacks code/interface support, is inactive or reports another Kernel.
-    ///      - Payout is bound to another Core or Config synchronization fails.
+    ///      - Another guarded Core operation is executing, Core is inactive or the caller lacks ADMIN.
+    ///      - The replacement is the current nonzero Payout address.
+    ///      - Payout lacks required interfaces, reports another Kernel or is bound to another Core.
+    ///      - A required dependency getter fails or returns malformed data.
+    ///      - Payout is inactive or disabled.
     function setPayout(address payout_) external override nonReentrant onlyActive onlyAdminRole {
         if (payout_ != address(0) && payout_ == address(_PAYOUT))
             revert BurnerLoans_UnchangedAddress(payout_);
@@ -910,9 +959,8 @@ contract BurnerLoansCore is
     }
 
     /// @inheritdoc IBurnerLoansCore
-    /// @dev Payout uses this read-only check before local recovery/routing to protect incoming
-    ///      funds before the Core-only credit reserves them.
-    ///      Reverts if:
+    /// @dev Payout uses this check to protect incoming funds before Core-only credit reserves them.
+    /// @dev Reverts if:
     ///      - Core's settlement guard is entered.
     function requireNotReentrant() external view override {
         _requireNotReentrant();
@@ -920,6 +968,10 @@ contract BurnerLoansCore is
 
     /// @dev Common compatibility boundary for selected services. Availability is returned so
     ///      replacement setters and lifecycle transitions retain their specified errors.
+    /// @dev Reverts if:
+    ///      - The candidate lacks a required interface or returns a value other than true for its interface check.
+    ///      - A required dependency getter fails or returns malformed data.
+    ///      - The candidate reports a different Kernel or is bound to another Core.
     function _validateDependency(
         address candidate_,
         bytes4 service_,
@@ -957,7 +1009,10 @@ contract BurnerLoansCore is
         return kernel.isPolicyActive(Policy(candidate_)) && enabled;
     }
 
-    /// @dev Copies one word only and rejects failed or noncanonical-length metadata reads.
+    /// @dev Reads dependency metadata and requires a return value of exactly 32 bytes.
+    /// @dev Reverts if:
+    ///      - The dependency call fails.
+    ///      - The dependency does not return exactly 32 bytes.
     function _readDependencyUint256(
         address candidate_,
         bytes memory data_,
@@ -973,7 +1028,8 @@ contract BurnerLoansCore is
         return abi.decode(result, (uint256));
     }
 
-    /// @dev All component-owned invalid-dependency errors encode the candidate address.
+    /// @dev Reverts if:
+    ///      - This helper is called; it always raises the selected component-owned invalid-dependency error.
     function _invalidDependency(address candidate_, bytes4 invalid_) private pure {
         if (invalid_ == BurnerLoansCore_InvalidDepositManager.selector)
             // Reject this batch component with its own typed dependency error.
@@ -1034,7 +1090,12 @@ contract BurnerLoansCore is
         return _rescueAmount(token_, destination_);
     }
 
-    /// @dev Shared surplus validation; the execution entry point already holds the guard.
+    /// @dev The execution entry point already holds the settlement guard.
+    /// @dev Reverts if:
+    ///      - Core is Kernel-inactive.
+    ///      - The token address has no deployed code.
+    ///      - The destination is zero, Core, the token, Payout, the current Config operator or Kernel.
+    ///      - The token balance getter fails or cannot be ABI-decoded.
     function _rescueAmount(address token_, address destination_) private view returns (uint256) {
         _requireActive();
         if (token_.code.length == 0) revert IBurnerLoansErrors.BurnerLoans_InvalidAsset(token_);

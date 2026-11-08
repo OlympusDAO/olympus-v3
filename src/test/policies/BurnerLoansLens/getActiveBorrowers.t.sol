@@ -100,7 +100,7 @@ contract BurnerLoansLensGetActiveBorrowersTest is BurnerLoansLensTest {
     function test_givenRepeatedBorrow_whenQueried(address caller_) public {
         _seedDebt(_ALICE, 1000e6, 100e9);
         vm.prank(_ALICE);
-        _debt.borrow(address(_asset), 50e9, _ALICE, _ALICE, type(uint256).max);
+        _debt.borrow(address(_asset), 50e9, _ALICE, _ALICE, type(uint256).max, address(0));
         _assertBorrowers(caller_, _one(_ALICE), 150e9);
     }
 
@@ -134,7 +134,7 @@ contract BurnerLoansLensGetActiveBorrowersTest is BurnerLoansLensTest {
         _seedDebt(_ALICE, 1000e6, 100e9);
         _repay(_ALICE, 100e9);
         vm.prank(_ALICE);
-        _debt.borrow(address(_asset), 70e9, _ALICE, _ALICE, type(uint256).max);
+        _debt.borrow(address(_asset), 70e9, _ALICE, _ALICE, type(uint256).max, address(0));
         _assertBorrowers(caller_, _one(_ALICE), 70e9);
     }
 

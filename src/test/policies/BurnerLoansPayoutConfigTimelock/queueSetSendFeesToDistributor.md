@@ -10,16 +10,16 @@ Implemented responsibility change: this command queues a delayed call directly t
 
 Permitted proposers: ADMIN_ROLE or BURNER_LOANS_ADMIN_ROLE holders. Fuzz both exclusive classes and overlap; unauthorized callers exclude both classes. Execution is permissionless after the notice delay and through the inclusive expiry boundary. `Local` means this timelock. Payout stores this timelock as its configuration authority, without granting it ADMIN_ROLE. Authority is limited to the routing and recovery selectors; distributor replacement is a direct ADMIN-only call on Payout, outside this queue. Config and Core's selected Config are not in this forwarding path.
 
-The queue binds to one concrete Payout. Core replacing its selected Payout does not retarget this queue: the old instance and its obligations remain independently recoverable. Payout enablement gates new credits, not recovery. Core activity/enablement and Payout activity are independent of routing/recovery admission; Core must be idle when the Payout write executes. Queue validation is read-only and does not reserve tokens or debit entitlements. `Unchanged` includes queue IDs, keys, payloads, target state, balances and committed logs on rejection.
+The queue binds to one concrete Payout. Core replacing its selected Payout does not retarget this queue: the old instance and its obligations remain independently recoverable. Payout enablement gates new credits, not recovery. Core activity/enablement are independent of routing/recovery admission; Payout must remain Kernel-active, while local pause is permitted; Core must be idle when the Payout write executes. Queue validation is read-only and does not reserve tokens or debit entitlements. `Unchanged` includes queue IDs, keys, payloads, target state, balances and committed logs on rejection.
 
-Required queue infrastructure behavior: preserve the existing delay, expiry, scoped-key conflicts, pre-state commitments and whole-transaction rollback. Queue admission requires local activity/enablement and selected Payout authority; execution validates its recorded commitments; authority and inactivity errors are defined in IBurnerLoansPayoutConfigTimelock. Payout admits its local controller by address, without reverse lifecycle checks.
+Required queue infrastructure behavior: preserve the existing delay, expiry, scoped-key conflicts, pre-state commitments and whole-transaction rollback. Queue admission requires local activity/enablement, selected Payout authority and Payout Kernel activity; execution validates its recorded commitments; authority and inactivity errors are defined in IBurnerLoansPayoutConfigTimelock. Payout admits its local controller by address, without reverse lifecycle checks.
 
 ## Proposal authorization
 
 | ID | Caller | Local active | Local enabled | Queue result | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCTF-A01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | true | Return queued action ID | No token movement or target setter event | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards](queueSetSendFeesToDistributor.t.sol#L22), [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue](queueSetSendFeesToDistributor.t.sol#L321) |
-| BLCTF-A02 | Fuzz callers excluding every ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holder | true | true | NotAuthorised() | Unchanged; invalid payload cannot bypass role check | Covered: [test_givenUnauthorizedCaller_whenQueued_reverts](queueSetSendFeesToDistributor.t.sol#L47) |
+| BLCTF-A01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | true | Return queued action ID | No token movement or target setter event | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards][test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards], [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue][test_whenProposerAndLifecycleSeedsUsed_thenExactQueue] |
+| BLCTF-A02 | Fuzz callers excluding every ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holder | true | true | NotAuthorised() | Unchanged; invalid payload cannot bypass role check | Covered: [test_givenUnauthorizedCaller_whenQueued_reverts][test_givenUnauthorizedCaller_whenQueued_reverts] |
 
 ## Local lifecycle
 
@@ -27,22 +27,23 @@ Valid queue inputs and selected authority; fuzz the two permitted proposer roles
 
 | ID | Caller | Local active | Local enabled | Result | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCTF-L01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | true | Admitted | Queue metadata/key acquisition only; target unchanged | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards](queueSetSendFeesToDistributor.t.sol#L22), [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue](queueSetSendFeesToDistributor.t.sol#L321) |
-| BLCTF-L02 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | false | NotEnabled() | Unchanged | Covered: [test_givenActiveDisabled_whenQueued_reverts](queueSetSendFeesToDistributor.t.sol#L63) |
-| BLCTF-L03 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | true | BurnerLoans_PolicyNotActive(BurnerLoansPayoutConfigTimelock) | Unchanged | Covered: [test_givenInactiveEnabled_whenQueued_reverts](queueSetSendFeesToDistributor.t.sol#L96) |
-| BLCTF-L04 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | false | BurnerLoans_PolicyNotActive(TL) | Unchanged | Covered: [test_givenInactiveDisabled_whenQueued_reverts](queueSetSendFeesToDistributor.t.sol#L78) |
+| BLCTF-L01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | true | Admitted | Queue metadata/key acquisition only; target unchanged | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards][test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards], [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue][test_whenProposerAndLifecycleSeedsUsed_thenExactQueue] |
+| BLCTF-L02 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | false | NotEnabled() | Unchanged | Covered: [test_givenActiveDisabled_whenQueued_reverts][test_givenActiveDisabled_whenQueued_reverts] |
+| BLCTF-L03 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | true | BurnerLoans_PolicyNotActive(BurnerLoansPayoutConfigTimelock) | Unchanged | Covered: [test_givenInactiveEnabled_whenQueued_reverts][test_givenInactiveEnabled_whenQueued_reverts] |
+| BLCTF-L04 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | false | BurnerLoans_PolicyNotActive(TL) | Unchanged | Covered: [test_givenInactiveDisabled_whenQueued_reverts][test_givenInactiveDisabled_whenQueued_reverts] |
 
 ## Payout authority and recovery availability
 
-Local active/enabled; otherwise valid command. Core and Payout lifecycle do not gate read-only queue validation. The Payout flags are explicit independent inputs; no target state changes.
+Local active/enabled; otherwise valid command. Core lifecycle does not gate read-only queue validation. Payout activity is required; local pause is permitted. The Payout flags are explicit independent inputs; no target state changes.
 
 | ID | Caller | Core active | Core enabled | Payout active | Payout enabled | Payout controller | Result | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCTF-D01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | true | Fuzz true/false | Fuzz false/true | This timelock | Queue admitted with immutable Payout target | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards](queueSetSendFeesToDistributor.t.sol#L22), [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue](queueSetSendFeesToDistributor.t.sol#L321) |
-| BLCTF-D02 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | false | Fuzz true/false | Fuzz false/true | This timelock | Queue admitted with immutable Payout target | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards](queueSetSendFeesToDistributor.t.sol#L22), [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue](queueSetSendFeesToDistributor.t.sol#L321) |
-| BLCTF-D03 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | true | Fuzz true/false | Fuzz false/true | This timelock | Queue admitted with immutable Payout target | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards](queueSetSendFeesToDistributor.t.sol#L22), [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue](queueSetSendFeesToDistributor.t.sol#L321) |
-| BLCTF-D04 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | false | Fuzz true/false | Fuzz false/true | This timelock | Queue admitted with immutable Payout target | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards](queueSetSendFeesToDistributor.t.sol#L22), [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue](queueSetSendFeesToDistributor.t.sol#L321) |
-| BLCTF-D05 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz true/false | Fuzz true/false | Fuzz true/false | Fuzz false/true | Another address | NotAuthorised(); no implicit ADMIN grant on the timelock | Covered: [test_givenControllerReplaced_whenQueued_reverts](queueSetSendFeesToDistributor.t.sol#L114) |
+| BLCTF-D01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | true | true | Fuzz false/true | This timelock | Queue admitted with immutable Payout target | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards][test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards], [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue][test_whenProposerAndLifecycleSeedsUsed_thenExactQueue] |
+| BLCTF-D02 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | false | true | Fuzz false/true | This timelock | Queue admitted with immutable Payout target | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards][test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards], [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue][test_whenProposerAndLifecycleSeedsUsed_thenExactQueue] |
+| BLCTF-D03 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | true | true | Fuzz false/true | This timelock | Queue admitted with immutable Payout target | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards][test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards], [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue][test_whenProposerAndLifecycleSeedsUsed_thenExactQueue] |
+| BLCTF-D04 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | false | true | Fuzz false/true | This timelock | Queue admitted with immutable Payout target | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards][test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards], [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue][test_whenProposerAndLifecycleSeedsUsed_thenExactQueue] |
+| BLCTF-D05 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz true/false | Fuzz true/false | Fuzz true/false | Fuzz false/true | Another address | NotAuthorised(); no implicit ADMIN grant on the timelock | Covered: [test_givenControllerReplaced_whenQueued_reverts][test_givenControllerReplaced_whenQueued_reverts] |
+| BLCTF-D06 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap; seed all | Fuzz true/false | Fuzz true/false | false | Fuzz false/true | This timelock; requested flag false/true | BurnerLoans_PolicyNotActive(Payout); no ID, key, target-state, custody or committed event changes | Covered: [test][test_givenInactivePayout_whenPermittedProposerQueues_reverts], [seeds][test_whenInactivePayoutLifecycleSeedsUsed_reverts] |
 
 ## Queue commitments and conflicts
 
@@ -54,8 +55,8 @@ Execution timing, commitment drift, target dispatch, bounded revert handling and
 
 | ID | Caller | Queue condition | Result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCTF-P01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Valid payload; free scoped key | Return next ID | Exact metadata, payload, commitment and key owner returned by queue getters; no target mutation; exact queue events | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards](queueSetSendFeesToDistributor.t.sol#L22), [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue](queueSetSendFeesToDistributor.t.sol#L321) |
-| BLCTF-I01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Same selector/key already pending | ConfigKeyPending(key,owner) | No ID consumed; old action retained | Covered: [test_givenKeyAlreadyOwned_whenQueued_reverts](queueSetSendFeesToDistributor.t.sol#L135) |
+| BLCTF-P01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Valid payload; free scoped key | Return next ID | Exact metadata, payload, commitment and key owner returned by queue getters; no target mutation; exact queue events | Covered: [test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards][test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards], [test_whenProposerAndLifecycleSeedsUsed_thenExactQueue][test_whenProposerAndLifecycleSeedsUsed_thenExactQueue] |
+| BLCTF-I01 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Same selector/key already pending | ConfigKeyPending(key,owner) | No ID consumed; old action retained | Covered: [test_givenKeyAlreadyOwned_whenQueued_reverts][test_givenKeyAlreadyOwned_whenQueued_reverts] |
 
 ## Routing model
 
@@ -67,22 +68,41 @@ Timelock admission/selection passes. Old flag is independently false or true in 
 
 | ID | Caller | Old flag | New flag | Selected RD state | Queue result | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCTF-I02 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | true | Interface compatible, same Kernel, active, enabled | Queue succeeds | Payout flag unchanged; validator called; canonical true payload stored; no target setter event | Covered: [test_whenTrueQueued_thenDistributorRevalidated](queueSetSendFeesToDistributor.t.sol#L161) |
-| BLCTF-I03 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | true | Compatible, same Kernel, active, enabled | Queue succeeds after distributor revalidation | Flag unchanged; a new pending action is stored; no target setter event | Covered: [test_whenTrueQueued_thenDistributorRevalidated](queueSetSendFeesToDistributor.t.sol#L161) |
-| BLCTF-I04 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | RD pointer zero | BurnerLoans_RevenueDistributorRequired() | Unchanged | Covered: [test_givenNoDistributor_whenTrueQueued_reverts](queueSetSendFeesToDistributor.t.sol#L187) |
-| BLCTF-I05 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | RD Kernel-inactive, locally enabled | PolicyDependency_NotActive(RD) | Unchanged | Covered: [test_givenUnavailableDistributor_whenTrueQueued_reverts](queueSetSendFeesToDistributor.t.sol#L213) |
-| BLCTF-I06 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | RD Kernel-active, locally disabled | PolicyDependency_NotActive(RD) | Unchanged | Covered: [test_givenUnavailableDistributor_whenTrueQueued_reverts](queueSetSendFeesToDistributor.t.sol#L213) |
-| BLCTF-I07 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | RD inactive and disabled | PolicyDependency_NotActive(RD) | Unchanged | Covered: [test_givenUnavailableDistributor_whenTrueQueued_reverts](queueSetSendFeesToDistributor.t.sol#L213) |
-| BLCTF-I08 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | Stored RD reports different Kernel after migration | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) | Unchanged | Covered: [test_givenDistributorKernelChanged_whenTrueQueued_reverts](queueSetSendFeesToDistributor.t.sol#L237) |
-| BLCTF-I09 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | Payout validator raises its typed invalid-distributor error | BurnerLoans_InvalidRevenueDistributor(RD) propagates | No write/event; The timelock does not bypass validation | Covered: [test_givenValidatorRejects_whenTrueQueued_reverts](queueSetSendFeesToDistributor.t.sol#L260) |
+| BLCTF-I02 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | true | Interface compatible, same Kernel, active, enabled | Queue succeeds | Payout flag unchanged; validator called; canonical true payload stored; no target setter event | Covered: [test_whenTrueQueued_thenDistributorRevalidated][test_whenTrueQueued_thenDistributorRevalidated] |
+| BLCTF-I03 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | true | Compatible, same Kernel, active, enabled | Queue succeeds after distributor revalidation | Flag unchanged; a new pending action is stored; no target setter event | Covered: [test_whenTrueQueued_thenDistributorRevalidated][test_whenTrueQueued_thenDistributorRevalidated] |
+| BLCTF-I04 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | RD pointer zero | BurnerLoans_RevenueDistributorRequired() | Unchanged | Covered: [test_givenNoDistributor_whenTrueQueued_reverts][test_givenNoDistributor_whenTrueQueued_reverts] |
+| BLCTF-I05 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | RD Kernel-inactive, locally enabled | PolicyDependency_NotActive(RD) | Unchanged | Covered: [test_givenUnavailableDistributor_whenTrueQueued_reverts][test_givenUnavailableDistributor_whenTrueQueued_reverts] |
+| BLCTF-I06 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | RD Kernel-active, locally disabled | PolicyDependency_NotActive(RD) | Unchanged | Covered: [test_givenUnavailableDistributor_whenTrueQueued_reverts][test_givenUnavailableDistributor_whenTrueQueued_reverts] |
+| BLCTF-I07 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | RD inactive and disabled | PolicyDependency_NotActive(RD) | Unchanged | Covered: [test_givenUnavailableDistributor_whenTrueQueued_reverts][test_givenUnavailableDistributor_whenTrueQueued_reverts] |
+| BLCTF-I08 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | Stored RD reports different Kernel after migration | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) | Unchanged | Covered: [test_givenDistributorKernelChanged_whenTrueQueued_reverts][test_givenDistributorKernelChanged_whenTrueQueued_reverts] |
+| BLCTF-I09 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Fuzz false/true | true | Payout validator raises its typed invalid-distributor error | BurnerLoans_InvalidRevenueDistributor(RD) propagates | No write/event; The timelock does not bypass validation | Covered: [test_givenValidatorRejects_whenTrueQueued_reverts][test_givenValidatorRejects_whenTrueQueued_reverts] |
 
 ## False requests and unchanged flags
 
 | ID | Caller | Old flag | New flag | RD state | Queue result | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCTF-P02 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | false | Fuzz zero, valid, inactive or disabled; expect validator not called | Queue succeeds | Canonical false payload stored; current flags/pointer/buckets unchanged; no target setter event | Covered: [test_whenFalseQueued_thenNoDistributorValidation](queueSetSendFeesToDistributor.t.sol#L286) |
-| BLCTF-P03 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | false | Same states; validation must not run | Queue succeeds | New pending action stored; same current flag; no target setter event | Covered: [test_whenFalseQueued_thenNoDistributorValidation](queueSetSendFeesToDistributor.t.sol#L286) |
+| BLCTF-P02 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | true | false | Fuzz zero, valid, inactive or disabled; expect validator not called | Queue succeeds | Canonical false payload stored; current flags/pointer/buckets unchanged; no target setter event | Covered: [test_whenFalseQueued_thenNoDistributorValidation][test_whenFalseQueued_thenNoDistributorValidation] |
+| BLCTF-P03 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | false | false | Same states; validation must not run | Queue succeeds | New pending action stored; same current flag; no target setter event | Covered: [test_whenFalseQueued_thenNoDistributorValidation][test_whenFalseQueued_thenNoDistributorValidation] |
 
 Queue tests prove validator delegation and stored arguments, without executing the setter. [Payout.setSendFeesToDistributor](../BurnerLoansPayout/setSendFeesToDistributor.md) owns flag updates/no-ops/events and independence from setSendYieldToDistributor; [executeQueuedAction](executeQueuedAction.md) owns dispatch and rollback after delay.
 
 Core replacement does not retarget this immutable queue. The Payout setter plan defines local authorization and exact target errors.
+
+[test_givenInactivePayout_whenPermittedProposerQueues_reverts]: ./queueSetSendFeesToDistributor.t.sol#L46
+
+[test_whenInactivePayoutLifecycleSeedsUsed_reverts]: ./queueSetSendFeesToDistributor.t.sol#L81
+
+[test_givenActiveDisabled_whenQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L116
+[test_givenControllerReplaced_whenQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L167
+[test_givenDistributorKernelChanged_whenTrueQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L290
+[test_givenInactiveDisabled_whenQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L131
+[test_givenInactiveEnabled_whenQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L149
+[test_givenKeyAlreadyOwned_whenQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L188
+[test_givenNoDistributor_whenTrueQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L240
+[test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards]: queueSetSendFeesToDistributor.t.sol#L22
+[test_givenUnauthorizedCaller_whenQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L100
+[test_givenUnavailableDistributor_whenTrueQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L266
+[test_givenValidatorRejects_whenTrueQueued_reverts]: queueSetSendFeesToDistributor.t.sol#L313
+[test_whenFalseQueued_thenNoDistributorValidation]: queueSetSendFeesToDistributor.t.sol#L339
+[test_whenProposerAndLifecycleSeedsUsed_thenExactQueue]: queueSetSendFeesToDistributor.t.sol#L374
+[test_whenTrueQueued_thenDistributorRevalidated]: queueSetSendFeesToDistributor.t.sol#L214

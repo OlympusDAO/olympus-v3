@@ -126,7 +126,7 @@ contract BurnerLoansLensGetPositionTest is BurnerLoansLensTest {
         vm.warp(vm.getBlockTimestamp() + 1);
         vm.roll(vm.getBlockNumber() + 1);
         vm.prank(_ALICE);
-        _debt.borrow(address(_asset), 70e9, _ALICE, _ALICE, type(uint256).max);
+        _debt.borrow(address(_asset), 70e9, _ALICE, _ALICE, type(uint256).max, address(0));
         _assertPosition(
             caller_,
             _ALICE,

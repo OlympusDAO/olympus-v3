@@ -11,6 +11,52 @@ import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuar
 import {ReentrantPayoutToken} from "src/test/mocks/ReentrantPayoutToken.sol";
 
 contract BurnerLoansPayoutTransferPendingPayoutCallbackTest is BurnerLoansPayoutCallbackTest {
+    // Scenarios: BLCUTRY-C05.
+    function test_givenReferralPending_whenCaughtCallbackRetries() public {
+        _callbackToken.setTransferBlocked(_keeper, true);
+        _callbackToken.mint(address(_payout), 25);
+        vm.prank(address(_core));
+        _payout.creditFee(address(_callbackToken), 0, _keeper, 25);
+        _callbackToken.setTransferBlocked(_keeper, false);
+        _callbackToken.armOutgoing(
+            address(_payout),
+            _keeper,
+            abi.encodeCall(_payout.transferPendingPayout, (address(_callbackToken), _keeper)),
+            false
+        );
+        assertEq(
+            _payout.transferPendingPayout(address(_callbackToken), _keeper),
+            25,
+            "Outer referral retry pays once"
+        );
+        _assertCallbackRejected();
+        _assertReferral(address(_callbackToken), _keeper, 0);
+        _assertBuckets(address(_callbackToken), _keeper, 0, 0, 0, 0);
+    }
+
+    // Scenarios: BLCUTRY-C07.
+    function test_givenReferralPending_whenPropagatedCallbackRetries() public {
+        _callbackToken.setTransferBlocked(_keeper, true);
+        _callbackToken.mint(address(_payout), 25);
+        vm.prank(address(_core));
+        _payout.creditFee(address(_callbackToken), 0, _keeper, 25);
+        _callbackToken.setTransferBlocked(_keeper, false);
+        bytes memory nested = abi.encodeCall(
+            _payout.transferPendingPayout,
+            (address(_callbackToken), _keeper)
+        );
+        _callbackToken.armOutgoing(address(_payout), _keeper, nested, true);
+        vm.expectCall(address(_payout), nested, 2);
+        assertEq(
+            _payout.transferPendingPayout(address(_callbackToken), _keeper),
+            0,
+            "Propagated callback defers entire reward"
+        );
+        _assertReferral(address(_callbackToken), _keeper, 25);
+        _assertBuckets(address(_callbackToken), _keeper, 0, 0, 0, 25);
+        assertEq(_callbackToken.balanceOf(address(_payout)), 25, "Retry failure preserves backing");
+    }
+
     // Scenarios: BLCUTRY-C03.
     function test_givenCaughtNestedRetry_whenRetried_thenOnePayment() public givenPendingBuckets {
         _seedUnrelatedClaims();
@@ -112,10 +158,10 @@ contract BurnerLoansPayoutTransferPendingPayoutCallbackTest is BurnerLoansPayout
         token.setTransferBlocked(_treasury(), true);
         token.mint(address(_payout), 5);
         vm.prank(address(_core));
-        _payout.creditFee(address(token), 5);
+        _payout.creditFee(address(token), 5, address(0), 0);
         token.mint(address(_otherPayout), 7);
         vm.prank(address(_core));
-        _otherPayout.creditFee(address(token), 7);
+        _otherPayout.creditFee(address(token), 7, address(0), 0);
         token.setTransferBlocked(_treasury(), false);
         token.setCallbackFrom(
             address(_otherPayout),
@@ -130,7 +176,7 @@ contract BurnerLoansPayoutTransferPendingPayoutCallbackTest is BurnerLoansPayout
         );
         assertTrue(token.callbackSucceeded(), "Other instance has an independent guard and ledger");
         _assertBuckets(address(token), _keeper, 0, 0, 0, 0);
-        (, , uint256 oldTotal) = _otherPayout.payoutReserves(address(token));
+        (, , , , uint256 oldTotal) = _otherPayout.pendingAmounts(address(token));
         assertEq(oldTotal, 0, "Previous instance settles independently");
         assertEq(token.balanceOf(_treasury()), 12, "Both distinct entitlements paid once");
     }

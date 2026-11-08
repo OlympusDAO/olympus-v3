@@ -23,7 +23,7 @@ contract BurnerLoansDebtBorrowCallbacksTest is BurnerLoansDebtTest {
         bytes32 rollbackBefore = _stateDigest(_borrower);
         vm.expectRevert(ReentrantFeeToken.CallbackFailed.selector);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 7);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 7, address(0));
         assertEq(_asset.balanceOf(_borrower), payerBalance, "Earlier fee collection restored");
         assertEq(_asset.balanceOf(address(_payout)), 0, "No new custody receipt");
         assertEq(token.balanceOf(_borrower), 0, "Failed principal delivery restored");
@@ -42,7 +42,7 @@ contract BurnerLoansDebtBorrowCallbacksTest is BurnerLoansDebtTest {
         ReentrantFeeToken token = _prepareOhmDeliveryCallback();
 
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 7);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 7, address(0));
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -65,12 +65,15 @@ contract BurnerLoansDebtBorrowCallbacksTest is BurnerLoansDebtTest {
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),
-            abi.encode(uint256(7))
+            abi.encode(uint256(7), uint256(0))
         );
         token.setCallbackFrom(
             address(_inventory),
             address(_debt),
-            abi.encodeCall(_debt.borrow, (address(_asset), 1, _borrower, _borrower, uint256(7)))
+            abi.encodeCall(
+                _debt.borrow,
+                (address(_asset), 1, _borrower, _borrower, uint256(7), address(0))
+            )
         );
         token.setCallbackPhases(true, false);
     }
@@ -84,7 +87,7 @@ contract BurnerLoansDebtBorrowCallbacksTest is BurnerLoansDebtTest {
         bytes32 rollbackBefore = _stateDigestFor(address(token), _borrower);
         vm.expectRevert(ReentrantFeeToken.CallbackFailed.selector);
         vm.prank(_borrower);
-        _debt.borrow(address(token), 100e9, _borrower, _borrower, 7);
+        _debt.borrow(address(token), 100e9, _borrower, _borrower, 7, address(0));
         assertEq(token.balanceOf(_borrower), beforeBalance, "Fee payer funds restored");
         assertEq(token.balanceOf(address(_payout)), 0, "No fee receipt");
         assertEq(_inventory.activePrincipalOhm(), 0, "No funding exposure");
@@ -100,7 +103,7 @@ contract BurnerLoansDebtBorrowCallbacksTest is BurnerLoansDebtTest {
         ReentrantFeeToken token = _prepareFeeTokenCallback();
 
         vm.prank(_borrower);
-        _debt.borrow(address(token), 100e9, _borrower, _borrower, 7);
+        _debt.borrow(address(token), 100e9, _borrower, _borrower, 7, address(0));
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -124,12 +127,15 @@ contract BurnerLoansDebtBorrowCallbacksTest is BurnerLoansDebtTest {
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),
-            abi.encode(uint256(7))
+            abi.encode(uint256(7), uint256(0))
         );
         token.setCallbackFrom(
             address(_core),
             address(_debt),
-            abi.encodeCall(_debt.borrow, (address(token), 1, _borrower, _borrower, uint256(7)))
+            abi.encodeCall(
+                _debt.borrow,
+                (address(token), 1, _borrower, _borrower, uint256(7), address(0))
+            )
         );
     }
 }

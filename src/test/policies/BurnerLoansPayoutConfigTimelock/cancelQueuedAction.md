@@ -1,6 +1,6 @@
 # BurnerLoansPayoutConfigTimelock.cancelQueuedAction coverage plan
 
-Shared action existence and terminal-status checks precede the concrete hook. The hook requires own Kernel activity, then local enablement and EMERGENCY authorization. Cancellation does not probe target readiness or operator selection.
+Shared action existence and terminal-status checks precede the concrete hook. The hook requires own Kernel activity, then EMERGENCY authorization; local pause is permitted. Cancellation does not probe target readiness or operator selection.
 
 Coverage records implemented domains and assertions independently of pass/fail status.
 
@@ -28,7 +28,7 @@ Pending action; cached ROLES retained for inactive fixtures.
 | ID | Caller | Local active | Local enabled | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
 | BLCUCT-CANCEL-L01 | Fuzz EMERGENCY holder | true | true | Success | Exact cancellation effects | Covered: [test][test_givenEmergencyCaller_whenCancelled_thenExactCleanup] |
-| BLCUCT-CANCEL-L02 | Fuzz all callers | true | false | NotEnabled() | Unchanged | Covered: [test][test_givenActiveDisabled_whenCancelled_reverts] |
+| BLCUCT-CANCEL-L02 | Fuzz EMERGENCY holder | true | false | Success | Exact cancellation effects | Covered: [test][test_givenActiveDisabled_whenCancelled_thenExactCleanup] |
 | BLCUCT-CANCEL-L03 | Fuzz all callers | false | true | BurnerLoans_PolicyNotActive(BurnerLoansPayoutConfigTimelock) | Unchanged | Covered: [test][test_givenInactiveEnabled_whenCancelled_reverts] |
 | BLCUCT-CANCEL-L04 | Fuzz all callers | false | false | BurnerLoans_PolicyNotActive(TL) | Unchanged | Covered: [test][test_givenInactiveDisabled_whenCancelled_reverts] |
 
@@ -52,13 +52,17 @@ Timelock active/enabled; cancellation checks no target binding or current contro
 - [x] Derive concrete acceptance criteria from the implemented call path.
 - [x] Implement focused tests and map exact domains/effects; execution results are tracked separately.
 
-[test_givenBrokenRetiredTarget_whenCancelled_thenNoTargetReads]: ./cancelQueuedAction.t.sol#L169
-[test_givenCancelled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L153
-[test_givenActiveDisabled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L82
+## Cancellation lifecycle
+
+EMERGENCY cancellation requires this timelock Kernel-active, regardless of local enablement. Target activity, enablement, Kernel/status metadata and operator selection are not read. The notice period and expiry do not block cancellation of a still-pending action. Successful cancellation clears all payloads, commitments and reservations without target calls or custody/accounting changes; own Policy inactivity still rejects before role checks.
+
+[test_givenBrokenRetiredTarget_whenCancelled_thenNoTargetReads]: ./cancelQueuedAction.t.sol#L177
+[test_givenCancelled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L161
+[test_givenActiveDisabled_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L82
 [test_givenEmergencyCaller_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L19
-[test_givenExecuted_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L139
-[test_givenInactiveEnabled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L109
+[test_givenExecuted_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L147
+[test_givenInactiveEnabled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L117
 [test_givenNoEmergencyRole_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L70
-[test_whenCancellationBoundarySeedsUsed]: ./cancelQueuedAction.t.sol#L183
-[test_whenUnknownIdCancelled_reverts]: ./cancelQueuedAction.t.sol#L124
-[test_givenInactiveDisabled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L94
+[test_whenCancellationBoundarySeedsUsed]: ./cancelQueuedAction.t.sol#L193
+[test_whenUnknownIdCancelled_reverts]: ./cancelQueuedAction.t.sol#L132
+[test_givenInactiveDisabled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L102

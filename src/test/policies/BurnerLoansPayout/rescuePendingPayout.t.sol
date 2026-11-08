@@ -24,6 +24,240 @@ import {BurnerLoansPayoutTest} from "./BurnerLoansPayoutTest.sol";
 import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
 
 contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
+    // Scenarios: BLCU-PENDING-RESCUE-P08.
+    function test_givenReferralAndOldCategories_whenCombinedAmountRedirected(
+        uint256 amount_,
+        bool operatorOnly_
+    ) public {
+        amount_ = bound(amount_, 1, 100);
+        address recipient = _treasury();
+        _seedBuckets(20, 30, 10, recipient);
+        _creditReferral(_token, 0, recipient, 40);
+        assertEq(
+            _payout.previewRescuePendingPayout(address(_token), recipient, _destination, amount_),
+            100,
+            "Rescue preview includes every pending bucket"
+        );
+        uint256 beforeTransfers = _token.transferCallCount();
+        vm.prank(operatorOnly_ ? _controller : address(this));
+        _payout.rescuePendingPayout(address(_token), recipient, _destination, amount_);
+        // Raw token units. Consume K10, protocol20, seized30, then referral40.
+        uint256 keeperRemaining = amount_ <= 10 ? 10 - amount_ : 0;
+        uint256 feeRemaining = amount_ <= 10 ? 20 : (amount_ <= 30 ? 30 - amount_ : 0);
+        uint256 seizedRemaining = amount_ <= 30 ? 30 : (amount_ <= 60 ? 60 - amount_ : 0);
+        uint256 referralRemaining = amount_ <= 60 ? 40 : 100 - amount_;
+        _assertReferral(address(_token), recipient, referralRemaining);
+        _assertBuckets(
+            address(_token),
+            recipient,
+            feeRemaining,
+            seizedRemaining,
+            keeperRemaining,
+            100 - amount_
+        );
+        assertEq(
+            _payout.pendingRecipientAmount(address(_token), recipient),
+            100 - amount_,
+            "Combined remainder matches each debit"
+        );
+        assertEq(_token.balanceOf(_destination), amount_, "Exact authorized redirection");
+        assertEq(
+            _token.balanceOf(address(_payout)),
+            100 - amount_,
+            "Every remaining liability stays backed"
+        );
+        assertEq(
+            _token.transferCallCount(),
+            beforeTransfers + 1,
+            "One strict transfer across all debited buckets"
+        );
+    }
+
+    // Scenarios: BLCU-PENDING-RESCUE-P08.
+    function test_givenAllBuckets_whenEntireEntitlementRescued() public {
+        address recipient = _treasury();
+        _seedBuckets(20, 30, 10, recipient);
+        _creditReferral(_token, 0, recipient, 40);
+        vm.expectEmit(address(_payout));
+        emit IBurnerLoansPayout.PendingSeizureRewardRescued(
+            address(_token),
+            recipient,
+            _destination,
+            10
+        );
+        vm.expectEmit(address(_payout));
+        emit IBurnerLoansPayout.PendingFeeRescued(address(_token), _destination, 20);
+        vm.expectEmit(address(_payout));
+        emit IBurnerLoansPayout.PendingSeizureRescued(address(_token), _destination, 30);
+        vm.expectEmit(address(_payout));
+        emit IBurnerLoansPayout.PendingReferralFeeRescued(
+            address(_token),
+            recipient,
+            _destination,
+            40
+        );
+        _payout.rescuePendingPayout(address(_token), recipient, _destination, 100);
+        _assertBuckets(address(_token), recipient, 0, 0, 0, 0);
+        _assertReferral(address(_token), recipient, 0);
+        assertEq(_token.balanceOf(_destination), 100, "All four debited buckets transfer together");
+    }
+
+    // Scenarios: BLCU-PENDING-RESCUE-I10.
+    function test_givenReferralAndOldCategories_whenRescueExceedsCombinedEntitlement_reverts(
+        uint256 amount_,
+        bool operatorOnly_
+    ) public {
+        amount_ = bound(amount_, 101, type(uint256).max);
+        address recipient = _treasury();
+        _seedBuckets(20, 30, 10, recipient);
+        _creditReferral(_token, 0, recipient, 40);
+        bytes32 beforeState = _ledgerDigest();
+        bytes memory reason = abi.encodeWithSelector(
+            IBurnerLoansPayout.BurnerLoans_InsufficientPendingPayout.selector,
+            address(_token),
+            amount_,
+            uint256(100)
+        );
+        vm.expectRevert(reason);
+        _payout.previewRescuePendingPayout(address(_token), recipient, _destination, amount_);
+        vm.expectRevert(reason);
+        vm.prank(operatorOnly_ ? _controller : address(this));
+        _payout.rescuePendingPayout(address(_token), recipient, _destination, amount_);
+        assertEq(
+            _ledgerDigest(),
+            beforeState,
+            "Excess amount changes no reserves, indexes or custody"
+        );
+    }
+
+    // Scenarios: BLCU-PENDING-RESCUE-P09.
+    function test_givenOnlyReferral_whenRescued(
+        uint256 pending_,
+        uint256 amount_,
+        bool operatorOnly_,
+        bool paused_,
+        bool retired_
+    ) public {
+        pending_ = bound(pending_, 1, type(uint256).max);
+        amount_ = bound(amount_, 1, pending_);
+        _token.setTransferReverts(_keeper, true);
+        _creditReferral(_token, 0, _keeper, pending_);
+        if (paused_) _payout.disable("");
+        if (retired_) _core.setPayout(address(_otherPayout));
+        assertEq(
+            _payout.previewRescuePendingPayout(address(_token), _keeper, _destination, amount_),
+            pending_,
+            "Referral-only entitlement is eligible"
+        );
+        vm.prank(operatorOnly_ ? _controller : address(this));
+        _payout.rescuePendingPayout(address(_token), _keeper, _destination, amount_);
+        _assertReferral(address(_token), _keeper, pending_ - amount_);
+        _assertBuckets(address(_token), _keeper, 0, 0, 0, pending_ - amount_);
+        assertEq(
+            _token.balanceOf(_destination),
+            amount_,
+            "Referral rescue pays the exact destination amount"
+        );
+        assertEq(
+            _token.balanceOf(address(_payout)),
+            pending_ - amount_,
+            "Remainder retains backing"
+        );
+        assertEq(
+            _payout.transferPendingPayout(address(_token), _keeper),
+            0,
+            "Blocked retry cannot duplicate the rescued amount"
+        );
+        _assertReferral(address(_token), _keeper, pending_ - amount_);
+    }
+
+    // Scenarios: BLCU-PENDING-RESCUE-P10.
+    function test_givenDistinctProtocolRecipient_whenKeeperAndReferralRescued() public {
+        _seedBuckets(7, 10, 5, _keeper);
+        _creditReferral(_token, 0, _keeper, 13);
+        _token.setTransferReverts(_secondKeeper, true);
+        _creditReferral(_token, 0, _secondKeeper, 7);
+        _otherToken.setTransferReverts(_keeper, true);
+        _creditReferral(_otherToken, 0, _keeper, 11);
+        assertEq(
+            _payout.previewRescuePendingPayout(address(_token), _keeper, _destination, 6),
+            18,
+            "Only this keeper5 and referral13 are eligible"
+        );
+        _payout.rescuePendingPayout(address(_token), _keeper, _destination, 6);
+        _assertBuckets(address(_token), _keeper, 7, 10, 0, 36);
+        _assertReferral(address(_token), _keeper, 12);
+        _assertReferral(address(_token), _secondKeeper, 7);
+        _assertReferral(address(_otherToken), _keeper, 11);
+        assertEq(_token.balanceOf(_destination), 6, "Keeper5 plus referral1 transferred once");
+    }
+
+    // Scenarios: BLCU-PENDING-RESCUE-T02.
+    function test_givenReferralPending_whenRescueTransferFails_reverts() public {
+        _token.setTransferReverts(_keeper, true);
+        _creditReferral(_token, 0, _keeper, 25);
+        _token.setTransferReverts(_destination, true);
+        bytes32 beforeState = _ledgerDigest();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MockRevertingTransferToken.TransferReverted.selector,
+                _destination
+            )
+        );
+        _payout.rescuePendingPayout(address(_token), _keeper, _destination, 25);
+        assertEq(
+            _ledgerDigest(),
+            beforeState,
+            "Strict transfer failure restores referral bucket, aggregate and indexes"
+        );
+        _token.setTransferReverts(_destination, false);
+        _payout.rescuePendingPayout(address(_token), _keeper, _destination, 25);
+        _assertReferral(address(_token), _keeper, 0);
+        _assertBuckets(address(_token), _keeper, 0, 0, 0, 0);
+        assertEq(_token.balanceOf(_destination), 25, "Retry redirects the referral exactly once");
+    }
+
+    // Scenarios: BLCU-PENDING-RESCUE-P08.
+    function test_givenReferralAndOldCategories_whenRescueBoundarySeeds() public {
+        uint256 checkpoint = vm.snapshotState();
+        uint256[9] memory amounts = [uint256(1), 10, 11, 30, 31, 60, 61, 99, 100];
+        for (uint256 i; i < amounts.length; ++i) {
+            test_givenReferralAndOldCategories_whenCombinedAmountRedirected(amounts[i], false);
+            _restore(checkpoint);
+            test_givenReferralAndOldCategories_whenCombinedAmountRedirected(amounts[i], true);
+            _restore(checkpoint);
+        }
+    }
+
+    // Scenarios: BLCU-PENDING-RESCUE-P09.
+    function test_givenOnlyReferral_whenRescueBoundarySeeds() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenOnlyReferral_whenRescued(1, 1, false, false, false);
+        _restore(checkpoint);
+        test_givenOnlyReferral_whenRescued(type(uint256).max, 1, true, true, true);
+        _restore(checkpoint);
+        test_givenOnlyReferral_whenRescued(
+            type(uint256).max,
+            type(uint256).max,
+            false,
+            true,
+            false
+        );
+        _restore(checkpoint);
+        test_givenOnlyReferral_whenRescued(type(uint256).max, type(uint256).max, true, false, true);
+    }
+
+    // Scenarios: BLCU-PENDING-RESCUE-I10.
+    function test_givenReferralAndOldCategories_whenRescueInvalidBoundarySeeds_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenReferralAndOldCategories_whenRescueExceedsCombinedEntitlement_reverts(101, false);
+        _restore(checkpoint);
+        test_givenReferralAndOldCategories_whenRescueExceedsCombinedEntitlement_reverts(
+            type(uint256).max,
+            true
+        );
+    }
+
     // Scenarios: BLCU-PENDING-RESCUE-L03.
     function test_givenInactivePayoutAndRolesUpgrade_whenFormerAdminCalls_thenBlockedUntilReactivation()
         public

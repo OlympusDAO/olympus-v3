@@ -25,7 +25,7 @@ contract BurnerLoansDebtExtendPriceCallbacksTest is BurnerLoansDebtPriceCallback
         bytes32 rollbackBefore = _priceStateDigest();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector);
         vm.prank(_borrower);
-        _debt.extend(address(_asset), _borrower, 1, 0);
+        _debt.extend(address(_asset), _borrower, 1, 0, address(0));
         assertEq(_inventory.activePrincipalOhm(), 100e9, "Nested full repayment rolls back");
         assertEq(_ohm.balanceOf(address(_cache)), 100e9, "Nested payer restored");
         assertEq(
@@ -44,7 +44,8 @@ contract BurnerLoansDebtExtendPriceCallbacksTest is BurnerLoansDebtPriceCallback
             address(_asset),
             _borrower,
             1,
-            0
+            0,
+            address(0)
         );
         assertEq(result.maturity, block.timestamp + 60 days, "Only outer extension");
         assertEq(_inventory.activePrincipalOhm(), 100e9, "Debt unchanged");
@@ -57,7 +58,7 @@ contract BurnerLoansDebtExtendPriceCallbacksTest is BurnerLoansDebtPriceCallback
         bytes32 rollbackBefore = _priceStateDigest();
         vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
         vm.prank(_borrower);
-        _debt.extend(address(_asset), _borrower, 1, 0);
+        _debt.extend(address(_asset), _borrower, 1, 0, address(0));
         assertEq(
             _lens.getPosition(address(_asset), _borrower).maturity,
             block.timestamp + 30 days,

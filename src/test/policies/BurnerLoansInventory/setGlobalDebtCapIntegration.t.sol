@@ -237,7 +237,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
             abi.encodeCall(_inventory.setGlobalDebtCap, (uint128(1)))
         );
         vm.prank(_borrower);
-        _debt.borrow(address(token), 100e9, _borrower, _borrower, 7);
+        _debt.borrow(address(token), 100e9, _borrower, _borrower, 7, address(0));
         _assertCoreCallbackCaught(token);
     }
 
@@ -253,7 +253,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
         uint256 payerBalance = token.balanceOf(_borrower);
         vm.expectRevert(ReentrantFeeToken.CallbackFailed.selector);
         vm.prank(_borrower);
-        _debt.borrow(address(token), 100e9, _borrower, _borrower, 7);
+        _debt.borrow(address(token), 100e9, _borrower, _borrower, 7, address(0));
         _assertCoreCallbackRolledBack(token, payerBalance);
     }
 }

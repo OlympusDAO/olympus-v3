@@ -1,6 +1,8 @@
 # BurnerLoansRisk.constructor coverage plan
 
-Source: [constructor](../../../policies/burnerloans/BurnerLoansRisk.sol#L92).
+> Referral scenarios supplement the retained baseline. Their mappings identify the assertions for the extended API.
+
+Source: [constructor](../../../policies/burnerloans/BurnerLoansRisk.sol#L97).
 
 ## Domains and notation
 
@@ -79,6 +81,22 @@ Interface/version discovery scenarios live in [supportsInterface](supportsInterf
 - [x] Review these expectations.
 - [x] Complete focused tests and mappings.
 
+## Referral fee sharing: review draft
+
+R4,R19: new referral state must start neutral without altering existing deployment bindings or lifecycle. Review draft chooses zero percentage and an empty membership mapping; no launch partner list is embedded.
+
+Existing Test mappings above describe baseline behavior only. The following cases are mapped to their implemented proof; execution results are reported separately. Existing scenario IDs and test links are retained.
+
+### Initial referral state
+
+Use an otherwise successful existing Risk construction fixture; no queue deployment/selection is required.
+
+| ID | Caller | Construction | Execution / getters | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLRISK-CONSTRUCTOR-P08 | Deployer | Valid existing constructor args | referralFeeBps()=0; isReferrerAllowed(0)=false and fuzz nonzero=false | No partner pre-whitelisted; no invented module-write permission or enabled queue prerequisite | Covered: [test_whenReferralStateInitiallyEmpty][test_whenReferralStateInitiallyEmpty] |
+
+- [x] Review the referral cases before writing tests.
+
 [test_givenCache00_whenDeployed]: constructor.t.sol#L477
 [test_givenCache01_whenDeployed]: constructor.t.sol#L461
 [test_givenCache10_whenDeployed]: constructor.t.sol#L445
@@ -110,11 +128,8 @@ Interface/version discovery scenarios live in [supportsInterface](supportsInterf
 [test_whenZeroOhm_reverts]: constructor.t.sol#L113
 [test_whenZeroOracle_reverts]: constructor.t.sol#L170
 [test_whenCoreBindingIsZero_reverts]: constructor.t.sol#L99
-
 [test_whenDeployed_thenPricingBindingsEmitEvents]: constructor.t.sol#L26
-
 [test_whenInitialPricingBindingsUseBoundaryValues_thenEventsEmit]: constructor.t.sol#L47
-
 [test_whenOhmDecimalsResponseIsOversized_reverts]: constructor.t.sol#L53
-
 [test_whenOhmDecimalsOversizedResponseBoundaries_reverts]: constructor.t.sol#L62
+[test_whenReferralStateInitiallyEmpty]: constructor.t.sol#L509

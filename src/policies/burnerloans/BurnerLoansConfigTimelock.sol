@@ -20,6 +20,7 @@ import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Check
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
+import {SafeCallDecoder} from "src/libraries/SafeCallDecoder.sol";
 import {LoanParameters} from "src/policies/burnerloans/libraries/LoanParameters.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
@@ -34,9 +35,9 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
 /// @title Burner Loans Config Timelock
 /// @notice Timelock implementation for bounded Burner Loans Config updates.
-/// @dev Market updates call Config through its delegated config operator. Cache-age updates instead
-///      call Core's selected Risk through Risk's independently delegated operator, so Config/Core
-///      pauses do not block that route. Both routes validate the proposer's role and target readiness.
+/// @dev Market updates and Core surplus rescue call Config through its delegated config operator.
+///      Risk settings use BurnerLoansRiskConfigTimelock. This queue validates the proposer's role
+///      and Config's current lifecycle, Kernel binding and operator selection.
 ///      ConfigTimelockBatchQueue owns delay handling, conflict-key reservations and checks of the
 ///      recorded configuration state before each dispatch. This contract defines admitted selectors,
 ///      canonical payloads and the live settings protected by those checks. Debt and balances may move
@@ -66,7 +67,10 @@ contract BurnerLoansConfigTimelock is
 
     // ========== STATE ========== //
 
-    /// @dev Product boundary errors use widened arithmetic before the shared queue narrows values.
+    /// @dev Checks queue bounds with widened arithmetic before the shared queue stores them.
+    /// @dev Reverts if:
+    ///      - The next action ID exceeds uint64.
+    ///      - The queue timestamp, executable timestamp or expiry exceeds uint48.
     modifier withinQueueBounds() {
         // Each conversion intentionally validates the bound; the base stores the same values.
 
@@ -84,10 +88,12 @@ contract BurnerLoansConfigTimelock is
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Deploys the Burner Loans config timelock.
+    /// @dev Construction does not query target activity, enablement or operator selection.
     /// @dev Reverts if:
-    ///      - `burnerLoansConfig_` is zero, does not advertise `IBurnerLoansConfig`,
-    ///      `IConfigOperator`, and `IEnabler` support through ERC165, or belongs to a different
-    ///      Kernel.
+    ///      - The target is zero or lacks a consumed Config, ConfigOperator or Enabler interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///
     /// @param kernel_ Kernel contract used by the policy.
     /// @param burnerLoansConfig_ Same-Kernel Burner Loans Config policy that receives updates.
     constructor(
@@ -98,20 +104,7 @@ contract BurnerLoansConfigTimelock is
         ReEnablerGracePeriod(LoanParameters._REENABLE_GRACE_PERIOD)
         ConfigTimelockBatchQueue(MIN_TIMELOCK_DELAY)
     {
-        address burnerLoansConfigAddress = address(burnerLoansConfig_);
-        if (
-            !ERC165Checker.supportsInterface(
-                burnerLoansConfigAddress,
-                type(IBurnerLoansConfig).interfaceId
-            ) ||
-            !ERC165Checker.supportsInterface(
-                burnerLoansConfigAddress,
-                type(IConfigOperator).interfaceId
-            ) ||
-            !ERC165Checker.supportsInterface(burnerLoansConfigAddress, type(IEnabler).interfaceId)
-        ) {
-            revert BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(address(burnerLoansConfig_));
-        }
+        _requireTargetInterfaces(address(burnerLoansConfig_));
         PolicyDependency.requireSameKernel(address(burnerLoansConfig_), address(kernel_));
 
         _BURNER_LOANS_CONFIG = burnerLoansConfig_;
@@ -119,9 +112,12 @@ contract BurnerLoansConfigTimelock is
 
     // ========== POLICY SETUP ========== //
 
+    /// @inheritdoc Policy
     /// @notice Configures module dependencies for the policy.
     /// @dev Reverts if:
-    ///      - the installed ROLES module major version is not 1.
+    ///      - The ROLES module is not installed.
+    ///      - The installed ROLES module does not have major version 1.
+    ///
     /// @return dependencies Keycodes for required modules.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
@@ -145,9 +141,11 @@ contract BurnerLoansConfigTimelock is
 
     // ========== VIEW FUNCTIONS ========== //
 
+    /// @inheritdoc IBurnerLoansConfigTimelock
     /// @notice Returns the Burner Loans Config policy targeted by this timelock.
+    /// @dev Returns the immutable target without external calls.
+    ///
     /// @return IBurnerLoansConfig The Burner Loans Config policy.
-    /// @dev Reads without state changes; errors from dependency views propagate.
     function burnerLoans() external view override returns (IBurnerLoansConfig) {
         return _BURNER_LOANS_CONFIG;
     }
@@ -168,20 +166,22 @@ contract BurnerLoansConfigTimelock is
 
     // ========== QUEUE FUNCTIONS ========== //
 
+    /// @inheritdoc IBurnerLoansConfigTimelock
     /// @notice Queues an asset fee-curve update.
+    /// @dev Execution revalidates the stored configuration commitment and the target's live checks.
     /// @dev Reverts if:
-    ///      - The timelock or BurnerLoansConfig is Kernel-inactive or disabled.
-    ///      - The caller lacks both `admin` and `burner_loans_admin`.
-    ///      - This contract is not the configured config operator.
-    ///      - `asset_` is not configured in Burner Loans Config.
-    ///      - The resulting fee curve violates Burner Loans Config fee bounds.
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither ADMIN nor BURNER_LOANS_ADMIN.
+    ///      - Config reports a different Kernel or its Kernel metadata cannot be read.
+    ///      - Config is Kernel-inactive.
+    ///      - This timelock is not Config's selected operator or its operator metadata is invalid.
+    ///      - Config is locally disabled or its enabled-state getter fails.
+    ///      - The asset is not configured.
+    ///      - The proposed fee curve violates Config's fee bounds.
+    ///      - A conflicting configuration key is already reserved.
+    ///      - The next action ID or a queue deadline exceeds its stored integer width.
     ///
-    /// @dev Execution later reverts if:
-    ///      - The asset is disabled.
-    ///      - The recorded configuration pre-state changed.
-    ///      - The timelock or Burner Loans Config is Kernel-inactive or disabled.
-    ///      - The selected config operator changed.
-    ///      - The downstream setter rejects the fee curve against live state.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete fee curve.
     /// @return uint64 The queued action ID.
@@ -197,20 +197,22 @@ contract BurnerLoansConfigTimelock is
             );
     }
 
+    /// @inheritdoc IBurnerLoansConfigTimelock
     /// @notice Queues an asset active debt cap update.
+    /// @dev Execution revalidates the stored configuration commitment and the target's live checks.
     /// @dev Reverts if:
-    ///      - The timelock or BurnerLoansConfig is Kernel-inactive or disabled.
-    ///      - The caller lacks both `admin` and `burner_loans_admin`.
-    ///      - This contract is not the configured config operator.
-    ///      - `asset_` is not configured in Burner Loans Config.
-    ///      - `debtCapOhm_` is below current active debt for `asset_`.
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither ADMIN nor BURNER_LOANS_ADMIN.
+    ///      - Config reports a different Kernel or its Kernel metadata cannot be read.
+    ///      - Config is Kernel-inactive.
+    ///      - This timelock is not Config's selected operator or its operator metadata is invalid.
+    ///      - Config is locally disabled or its enabled-state getter fails.
+    ///      - The asset is not configured.
+    ///      - The proposed cap is below the asset's current active debt.
+    ///      - A conflicting configuration key is already reserved.
+    ///      - The next action ID or a queue deadline exceeds its stored integer width.
     ///
-    /// @dev Execution later reverts if:
-    ///      - The asset is disabled.
-    ///      - The recorded configuration pre-state changed.
-    ///      - The timelock or Burner Loans Config is Kernel-inactive or disabled.
-    ///      - The selected config operator changed.
-    ///      - The downstream setter rejects the debt cap against live state.
     /// @param asset_ Collateral asset to update.
     /// @param debtCapOhm_ New active debt cap, in OHM decimals.
     /// @return uint64 The queued action ID.
@@ -227,28 +229,20 @@ contract BurnerLoansConfigTimelock is
     }
 
     /// @inheritdoc IBurnerLoansConfigTimelock
+    /// @dev Execution revalidates the stored configuration commitment and the target's live checks.
     /// @dev Reverts if:
-    ///      - The timelock or Config is disabled or Kernel-inactive.
-    ///      - The caller lacks ADMIN and burner_loans_admin.
-    ///      - Config’s selected operator is not this timelock.
-    ///      - The scoped configuration key is already pending, or queue ID/time arithmetic overflows.
-    function queueSetPriceCacheMaxAge(
-        uint48 priceCacheMaxAge_
-    ) external onlyActive givenEnabled onlyProposerRole withinQueueBounds returns (uint64) {
-        return
-            _queueAction(
-                IBurnerLoansCore(_BURNER_LOANS_CONFIG.facility()).risk(),
-                IBurnerLoansRisk.setPriceCacheMaxAge.selector,
-                abi.encode(priceCacheMaxAge_)
-            );
-    }
-
-    /// @inheritdoc IBurnerLoansConfigTimelock
-    /// @dev Reverts if:
-    ///      - The caller lacks admin or burner_loans_admin authority.
-    ///      - This timelock or Config is disabled, either policy is inactive, or this operator is no longer selected.
-    ///      - The preview rejects the token or destination, or a surplus rescue for the token is
-    ///        already queued.
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither ADMIN nor BURNER_LOANS_ADMIN.
+    ///      - Config reports a different Kernel or its Kernel metadata cannot be read.
+    ///      - Config is Kernel-inactive.
+    ///      - This timelock is not Config's selected operator or its operator metadata is invalid.
+    ///      - Config is locally disabled or its enabled-state getter fails.
+    ///      - The rescue preview rejects the token.
+    ///      - The rescue preview rejects the destination.
+    ///      - Config's Core binding, selected Core operator or settlement guard rejects rescue.
+    ///      - A conflicting configuration key is already reserved.
+    ///      - The next action ID or a queue deadline exceeds its stored integer width.
     function queueRescue(
         address token_,
         address destination_
@@ -262,9 +256,19 @@ contract BurnerLoansConfigTimelock is
     }
 
     /// @inheritdoc IBurnerLoansConfigTimelock
+    /// @dev Execution revalidates the stored configuration commitment and the target's live checks.
     /// @dev Reverts if:
-    ///      - queue validation fails or another output-mode transition is already pending
-    ///      for the asset. Originations transitions use an independent configuration key.
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither ADMIN nor BURNER_LOANS_ADMIN.
+    ///      - Config reports a different Kernel or its Kernel metadata cannot be read.
+    ///      - Config is Kernel-inactive.
+    ///      - This timelock is not Config's selected operator or its operator metadata is invalid.
+    ///      - Config is locally disabled or its enabled-state getter fails.
+    ///      - The asset is not configured.
+    ///      - DepositManager rejects the proposed withdrawal mode.
+    ///      - A conflicting configuration key is already reserved.
+    ///      - The next action ID or a queue deadline exceeds its stored integer width.
     function queueSetAssetWithdrawAsShares(
         address asset_,
         bool withdrawAsShares_
@@ -277,20 +281,22 @@ contract BurnerLoansConfigTimelock is
             );
     }
 
+    /// @inheritdoc IBurnerLoansConfigTimelock
     /// @notice Queues a complete asset risk-configuration update.
+    /// @dev Execution revalidates the stored configuration commitment and the target's live checks.
     /// @dev Reverts if:
-    ///      - The timelock or BurnerLoansConfig is Kernel-inactive or disabled.
-    ///      - The caller lacks both `admin` and `burner_loans_admin`.
-    ///      - This contract is not the configured config operator.
-    ///      - `asset_` is not configured in Burner Loans Config.
-    ///      - The resulting risk config violates Burner Loans Config bps or maturity bounds.
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither ADMIN nor BURNER_LOANS_ADMIN.
+    ///      - Config reports a different Kernel or its Kernel metadata cannot be read.
+    ///      - Config is Kernel-inactive.
+    ///      - This timelock is not Config's selected operator or its operator metadata is invalid.
+    ///      - Config is locally disabled or its enabled-state getter fails.
+    ///      - The asset is not configured.
+    ///      - The proposed risk configuration violates Config's bounds.
+    ///      - A conflicting configuration key is already reserved.
+    ///      - The next action ID or a queue deadline exceeds its stored integer width.
     ///
-    /// @dev Execution later reverts if:
-    ///      - The asset is disabled.
-    ///      - The recorded configuration pre-state changed.
-    ///      - The timelock or Burner Loans Config is Kernel-inactive or disabled.
-    ///      - The selected config operator changed.
-    ///      - The downstream setter rejects the risk configuration against live state.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete risk and term configuration.
     /// @return uint64 The queued action ID.
@@ -306,12 +312,23 @@ contract BurnerLoansConfigTimelock is
             );
     }
 
+    /// @inheritdoc IBurnerLoansConfigTimelock
     /// @notice Queues a batch of Burner Loans configuration updates.
+    /// @dev Validation and later execution are atomic in array order.
     /// @dev Reverts if:
-    ///      - the timelock or BurnerLoansConfig is Kernel-inactive or disabled, or if any
-    ///      sub-action fails the same validation as the typed queue helpers. These lifecycle checks
-    ///      are enforced for every queue entrypoint through `_onSubActionQueued`. The batch is
-    ///      stored and executed atomically in array order.
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither ADMIN nor BURNER_LOANS_ADMIN.
+    ///      - Config reports a different Kernel or its Kernel metadata cannot be read.
+    ///      - Config is Kernel-inactive.
+    ///      - This timelock is not Config's selected operator or its operator metadata is invalid.
+    ///      - Config is locally disabled or its enabled-state getter fails.
+    ///      - The batch is empty or exceeds the shared action or key limits.
+    ///      - A sub-action has an unsupported target, selector or noncanonical payload.
+    ///      - A sub-action fails its typed queue helper's input or live-preview validation.
+    ///      - The batch repeats a key or conflicts with a pending action.
+    ///      - The next action ID or a queue deadline exceeds its stored integer width.
+    ///
     /// @param actions_ Burner Loans configuration sub-actions.
     /// @return uint64 The queued action ID.
     function queueBatch(
@@ -323,7 +340,10 @@ contract BurnerLoansConfigTimelock is
     // ========== TIMELOCK HOOKS ========== //
 
     /// @notice Validates queue-wide authorization and lifecycle requirements.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither ADMIN nor BURNER_LOANS_ADMIN.
     function _validateConfigQueue(address caller_) internal view override {
         _requireOwnPolicyActive();
         _requireEnabled();
@@ -331,7 +351,15 @@ contract BurnerLoansConfigTimelock is
     }
 
     /// @notice Validates one product sub-action before shared key acquisition.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - Config's Kernel metadata is invalid or reports a different Kernel.
+    ///      - Config is Kernel-inactive.
+    ///      - Config's selected operator is different or its metadata is invalid.
+    ///      - Config is locally disabled or its enabled-state getter fails.
+    ///      - The target, selector or canonical payload validation fails.
+    ///      - The asset configuration or target preview rejects the requested change.
+    ///
     /// @param action_ Admitted queued configuration setter and payload.
     function _validateConfigSubAction(
         address,
@@ -339,41 +367,30 @@ contract BurnerLoansConfigTimelock is
         uint256,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override {
-        if (action_.selector == IBurnerLoansRisk.setPriceCacheMaxAge.selector) {
-            // _validateConfigQueue checks this timelock's lifecycle; _requireRiskReady checks
-            // Risk's Kernel, lifecycle and config operator. Config and Core may be paused.
-            if (action_.target != IBurnerLoansCore(_BURNER_LOANS_CONFIG.facility()).risk())
-                revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
-            _requireRiskReady(action_.target);
-        } else {
-            _requirePoliciesActive();
-            _requireAuthorizedConfigOperator();
-            _requireBurnerLoansConfigEnabled();
-        }
+        _requirePoliciesActive();
+        _requireAuthorizedConfigOperator();
+        _requireBurnerLoansConfigEnabled();
         _validateQueuedBurnerLoansAction(action_);
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    /// @dev Queue validation admits selectors before key acquisition. Each selector owns a
-    ///      separate conflict domain: global, per asset/token, or per token/recipient for pending rescue.
+    /// @dev Selectors define separate per-asset or per-token conflict domains.
+    /// @dev Reverts if:
+    ///      - The payload cannot be decoded as an asset or token address.
     function _configKeys(
         ITimelockBatchQueue.BatchAction memory action_
     ) internal pure override returns (bytes32[] memory keys) {
-        bytes32 key = action_.selector == IBurnerLoansConfig.setPriceCacheMaxAge.selector
-            ? keccak256(abi.encode(action_.selector))
-            : keccak256(abi.encode(action_.selector, abi.decode(action_.payload, (address))));
         keys = new bytes32[](1);
-        keys[0] = key;
+        keys[0] = keccak256(abi.encode(action_.selector, abi.decode(action_.payload, (address))));
     }
 
     /// @notice Selects the configuration contract that owns the guarded domains.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Returns the immutable Config target without external calls.
+    ///
     /// @return address Bound Config policy receiving the queued setter.
     function _configDestination(
-        ITimelockBatchQueue.BatchAction memory action_
+        ITimelockBatchQueue.BatchAction memory
     ) internal view override returns (address) {
-        if (action_.selector == IBurnerLoansRisk.setPriceCacheMaxAge.selector)
-            return action_.target;
         return address(_BURNER_LOANS_CONFIG);
     }
 
@@ -391,77 +408,74 @@ contract BurnerLoansConfigTimelock is
         // parameter updates should not invalidate a queued action that owns a different conflict key.
         bytes4 selector = action_.selector;
         address facility = _BURNER_LOANS_CONFIG.facility();
-        if (selector == IBurnerLoansConfig.setPriceCacheMaxAge.selector) {
-            // Bind the quote to this Risk instance as well as its age. Replacing Risk requires
-            // a new notice period rather than applying an old queued change to the replacement.
-            IBurnerLoansRisk evaluator = IBurnerLoansRisk(IBurnerLoansCore(facility).risk());
-            return
-                keccak256(abi.encode(facility, address(evaluator), evaluator.priceCacheMaxAge()));
-        }
+        address operator = _readConfigOperator();
+
         if (selector == IBurnerLoansConfig.rescue.selector)
-            return keccak256(abi.encode(facility, IConfigOperator(facility).configOperator()));
+            return
+                keccak256(
+                    abi.encode(facility, IConfigOperator(facility).configOperator(), operator)
+                );
         address asset = abi.decode(action_.payload, (address));
         if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector)
             return
                 keccak256(
-                    abi.encode(facility, asset, _BURNER_LOANS_CONFIG.getAssetFeeConfig(asset))
+                    abi.encode(
+                        facility,
+                        asset,
+                        _BURNER_LOANS_CONFIG.getAssetFeeConfig(asset),
+                        operator
+                    )
                 );
         IBurnerLoansCore.AssetConfig memory config = _BURNER_LOANS_CONFIG.getAssetConfig(asset);
         if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector)
-            return keccak256(abi.encode(facility, asset, _toRiskConfig(config)));
+            return keccak256(abi.encode(facility, asset, _toRiskConfig(config), operator));
         if (selector == IBurnerLoansConfig.setAssetDebtCap.selector)
-            return keccak256(abi.encode(facility, asset, config.debtCap));
+            return keccak256(abi.encode(facility, asset, config.debtCap, operator));
         if (selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector)
-            return keccak256(abi.encode(facility, asset, config.originationsEnabled));
+            return keccak256(abi.encode(facility, asset, config.originationsEnabled, operator));
         if (selector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector)
-            return keccak256(abi.encode(facility, asset, config.withdrawAsShares));
+            return keccak256(abi.encode(facility, asset, config.withdrawAsShares, operator));
         revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
-    }
-
-    /// @inheritdoc TimelockBatchQueue
-    /// @dev Reads without state changes; errors from dependency views propagate.
-    function _validateExecution(
-        address,
-        uint64,
-        ITimelockBatchQueue.QueuedAction storage action_
-    ) internal view override {
-        _requireOwnPolicyActive();
-        _requireEnabled();
-        bool configValidated;
-        for (uint256 i; i < action_.actions.length; ++i) {
-            if (action_.actions[i].selector == IBurnerLoansRisk.setPriceCacheMaxAge.selector) {
-                // Repeat Risk's own readiness and operator checks at execution, independently
-                // of Config/Core lifecycle. Risk.setPriceCacheMaxAge rechecks its lifecycle
-                // and caller authorization.
-                _requireRiskReady(action_.actions[i].target);
-            } else if (!configValidated) {
-                _requireBurnerLoansConfigEnabled();
-                _requirePoliciesActive();
-                _requireAuthorizedConfigOperator();
-                configValidated = true;
-            }
-        }
     }
 
     /// @inheritdoc TimelockBatchQueue
     /// @dev Reverts if:
     ///      - This timelock is Kernel-inactive.
     ///      - This timelock is locally disabled.
-    ///      - The caller lacks the emergency role.
+    ///      - Config's Kernel metadata is invalid or reports a different Kernel.
+    ///      - Config is Kernel-inactive.
+    ///      - Config's enabled-state getter fails or reports false.
+    ///      - Config's operator metadata is invalid or this timelock is no longer selected.
+    function _validateExecution(
+        address,
+        uint64,
+        ITimelockBatchQueue.QueuedAction storage
+    ) internal view override {
+        _requireOwnPolicyActive();
+        _requireEnabled();
+        _requirePoliciesActive();
+        _requireBurnerLoansConfigEnabled();
+        _requireAuthorizedConfigOperator();
+    }
+
+    /// @inheritdoc TimelockBatchQueue
+    /// @dev Local pause, target state and operator selection do not gate cancellation.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - The caller lacks EMERGENCY.
     function _validateCancellation(
         address caller_,
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
         _requireOwnPolicyActive();
-        _requireEnabled();
         _requireRole(caller_, EMERGENCY_ROLE);
     }
 
     /// @notice Authorizes a re-enable transition during the grace period.
-    /// @dev The grace-period deadline is enforced by `ReEnablerGracePeriod` before re-enablement.
-    ///      Reverts if:
-    ///      - The caller lacks admin or burner_loans_admin authority (`NotAuthorised`).
+    /// @dev The inherited re-enable hook separately enforces the grace window.
+    /// @dev Reverts if:
+    ///      - The caller holds neither ADMIN nor BURNER_LOANS_ADMIN.
     function _authorizeReEnable() internal view override {
         _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
     }
@@ -482,24 +496,52 @@ contract BurnerLoansConfigTimelock is
     ///      - The caller lacks admin authority (`ROLESv1.ROLES_RequireRole(ADMIN_ROLE)`).
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
-    /// @dev Revalidates the constructor-bound Config policy before operational enablement.
+    /// @dev Target local enablement is neither read nor required.
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _beforeEnable(bytes calldata data_) internal view override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
 
         _requireBurnerLoansActive();
     }
 
-    /// @dev Preserves the grace-period gate and revalidates Config before re-enabling.
+    /// @dev Target local enablement is neither read nor required.
+    /// @dev Reverts if:
+    ///      - The inclusive grace deadline exceeds uint48.
+    ///      - The inclusive grace deadline has expired.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
         _requireBurnerLoansActive();
     }
 
+    /// @dev A target pause does not block activation.
     /// @dev Reverts if:
-    ///      - The constructor-bound Config is inactive in this policy's Kernel.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _requireBurnerLoansActive() internal view {
         _requireOwnPolicyActive();
-        PolicyDependency.requireActiveAndEnabled(address(_BURNER_LOANS_CONFIG), address(kernel));
+        address target = address(_BURNER_LOANS_CONFIG);
+        _requireTargetInterfaces(target);
+        PolicyDependency.requireActive(target, address(kernel));
         _requireAuthorizedConfigOperator();
     }
 
@@ -545,7 +587,7 @@ contract BurnerLoansConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
-    /// @dev No external state or token calls; checked arithmetic errors propagate.
+    /// @dev Returns the constant window without external calls or arithmetic.
     function _executionWindow() internal pure override returns (uint48) {
         return EXECUTION_WINDOW;
     }
@@ -565,14 +607,7 @@ contract BurnerLoansConfigTimelock is
         // Inspect full ABI words before decoding narrow types. This rejects dirty address bits,
         // out-of-range integers and noncanonical booleans with this timelock's admission error.
         bytes4 selector = action_.selector;
-        if (selector == IBurnerLoansConfig.setPriceCacheMaxAge.selector) {
-            if (action_.target != IBurnerLoansCore(_BURNER_LOANS_CONFIG.facility()).risk())
-                revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
-            _requirePayloadLength(action_, 32);
-            if (abi.decode(action_.payload, (uint256)) > type(uint48).max)
-                revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
-            return;
-        }
+
         if (action_.target != address(_BURNER_LOANS_CONFIG))
             revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
         if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
@@ -649,13 +684,38 @@ contract BurnerLoansConfigTimelock is
         revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
     }
 
+    /// @dev Reverts if:
+    ///      - The target lacks Config, ConfigOperator or Enabler interface support.
+    function _requireTargetInterfaces(address target_) private view {
+        if (
+            !ERC165Checker.supportsInterface(target_, type(IBurnerLoansConfig).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IConfigOperator).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IEnabler).interfaceId)
+        ) revert BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(target_);
+    }
+
+    /// @dev Reverts if:
+    ///      - Config's operator getter fails or returns a noncanonical address.
+    function _readConfigOperator() private view returns (address operator) {
+        bool success;
+        (success, operator) = SafeCallDecoder.safeReadAddress(
+            address(_BURNER_LOANS_CONFIG),
+            IConfigOperator.configOperator.selector
+        );
+        if (!success)
+            revert BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(
+                address(_BURNER_LOANS_CONFIG)
+            );
+    }
+
     /// @notice Requires this timelock to remain the Config policy's authorized operator.
     /// @dev Reverts if:
-    ///      - Config's selected operator is no longer this timelock.
+    ///      - Config's operator getter fails or returns a noncanonical address.
+    ///      - Config's selected operator is not this timelock.
     function _requireAuthorizedConfigOperator() internal view {
         // Each queued action revalidates its own policy binding and readiness.
         // forge-lint: disable-next-line(calls-loop)
-        if (IConfigOperator(address(_BURNER_LOANS_CONFIG)).configOperator() != address(this)) {
+        if (_readConfigOperator() != address(this)) {
             // Each queued action revalidates its own policy binding and readiness.
             // forge-lint: disable-next-line(require-revert-in-loop)
             revert IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator(address(this));
@@ -664,7 +724,8 @@ contract BurnerLoansConfigTimelock is
 
     /// @notice Validates that the controlled BurnerLoansConfig policy is enabled.
     /// @dev Reverts if:
-    ///      - BurnerLoansConfig is disabled (`IEnabler.NotEnabled`).
+    ///      - Config's enabled-state getter fails or cannot be ABI-decoded.
+    ///      - Config is locally disabled (PolicyDependency_NotActive).
     function _requireBurnerLoansConfigEnabled() internal view {
         // Each queued action revalidates its own policy binding and readiness.
         // forge-lint: disable-next-line(calls-loop)
@@ -687,22 +748,14 @@ contract BurnerLoansConfigTimelock is
         }
     }
 
-    /// @dev Both policies must retain Kernel membership for queueing and execution.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - Config's Kernel getter fails or returns malformed data.
+    ///      - Config reports a different Kernel.
+    ///      - Config is Kernel-inactive.
     function _requirePoliciesActive() internal view {
         _requireOwnPolicyActive();
         PolicyDependency.requireActive(address(_BURNER_LOANS_CONFIG), address(kernel));
-    }
-
-    /// @dev Risk age has its own controller and readiness; Config and Core may be paused.
-    ///      Reverts if:
-    ///      - Risk reports another Kernel or is inactive or disabled.
-    ///      - This timelock is not Risk's selected config operator.
-    function _requireRiskReady(address risk_) private view {
-        // Kernel membership can survive migration, so it does not replace the live binding check.
-        PolicyDependency.requireActiveAndEnabled(risk_, address(kernel));
-        // Each queued action revalidates its own policy binding and readiness.
-        // forge-lint: disable-next-line(calls-loop,require-revert-in-loop)
-        if (IConfigOperator(risk_).configOperator() != address(this)) revert NotAuthorised();
     }
 
     /// @notice Requires an action payload to match the ABI length for its selector.
@@ -759,7 +812,8 @@ contract BurnerLoansConfigTimelock is
     // ========== QUEUED CONFIGURATION TRANSFORMATIONS ========== //
 
     /// @notice Projects a complete asset configuration into the risk setter's input shape.
-    /// @dev No external state or token calls; checked arithmetic errors propagate.
+    /// @dev Copies the mutable risk fields without external calls or arithmetic.
+    ///
     /// @param config_ Canonical market or proposed parameter configuration.
     /// @return IBurnerLoansRisk.AssetRiskConfigInput Mutable risk fields extracted from the complete market configuration.
     function _toRiskConfig(
@@ -777,15 +831,17 @@ contract BurnerLoansConfigTimelock is
     }
 
     /// @notice Rejects unused pause payloads while preserving inactive disable.
+    /// @dev No target readiness is required.
     /// @dev Reverts if:
-    ///      - Data is nonempty; no dependency readiness is required.
+    ///      - Lifecycle data is nonempty.
     function _beforeDisable(bytes calldata data_) internal pure override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
     }
 
     /// @notice Checks grace overflow without altering the shared ReEnabler.
     /// @dev Reverts if:
-    ///      - The inclusive deadline overflows uint48 or expired.
+    ///      - The inclusive grace deadline exceeds uint48.
+    ///      - The current timestamp exceeds the inclusive grace deadline.
     function _requireGrace() internal view override {
         uint48 deadline = SafeCast.toUint48(uint256(lastTransitionAt) + gracePeriod);
         if (_getBlockTimestamp() > deadline) revert GracePeriod_Expired(deadline);

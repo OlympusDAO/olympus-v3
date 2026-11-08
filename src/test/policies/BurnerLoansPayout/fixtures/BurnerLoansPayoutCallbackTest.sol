@@ -22,7 +22,7 @@ abstract contract BurnerLoansPayoutCallbackTest is BurnerLoansPayoutTest {
         _callbackToken.setTransferBlocked(_treasury(), true);
         _callbackToken.mint(address(_payout), amount_);
         vm.prank(address(_core));
-        _payout.creditFee(address(_callbackToken), amount_);
+        _payout.creditFee(address(_callbackToken), amount_, address(0), 0);
     }
 
     function _deferCallbackSeizure(uint256 reward_, uint256 seized_) internal {
@@ -52,7 +52,7 @@ abstract contract BurnerLoansPayoutCallbackTest is BurnerLoansPayoutTest {
     }
 
     function _callbackDigest() internal view returns (bytes32) {
-        (uint256 fee, uint256 seized, uint256 total) = _payout.payoutReserves(
+        (uint256 fee, , uint256 seized, , uint256 total) = _payout.pendingAmounts(
             address(_callbackToken)
         );
         return
@@ -78,7 +78,7 @@ abstract contract BurnerLoansPayoutCallbackTest is BurnerLoansPayoutTest {
         _token.setTransferReverts(_treasury(), true);
         _token.mint(address(_otherPayout), 17);
         vm.prank(address(_core));
-        _otherPayout.creditFee(address(_token), 17);
+        _otherPayout.creditFee(address(_token), 17, address(0), 0);
     }
 }
 

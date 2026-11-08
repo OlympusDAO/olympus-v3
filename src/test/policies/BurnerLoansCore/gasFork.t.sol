@@ -7,11 +7,12 @@ pragma solidity >=0.8.24;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoansCollateral} from "src/policies/interfaces/burnerloans/IBurnerLoansCollateral.sol";
-import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
@@ -296,7 +297,8 @@ contract BurnerLoansLivePriceForkGasTest is Test {
             _DEBT,
             _bob,
             _bob,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
@@ -359,7 +361,8 @@ contract BurnerLoansLivePriceForkGasTest is Test {
             _USDS,
             _alice,
             1,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
@@ -449,7 +452,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         // live feeds, strategy, price storage and measured price calls remain unchanged.
         vm.mockCall(
             address(_price),
-            abi.encodeWithSignature("VERSION()"),
+            abi.encodeWithSelector(IVersioned.VERSION.selector),
             abi.encode(uint8(2), uint8(0))
         );
 
@@ -566,7 +569,8 @@ contract BurnerLoansLivePriceForkGasTest is Test {
             amount_,
             account_,
             account_,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         assertEq(_ohm.balanceOf(account_), amount_, "setup borrowed principal");
         assertGt(result.fee, 0, "setup borrow fee");

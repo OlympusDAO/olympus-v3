@@ -292,9 +292,11 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
             assertEq(_share.balanceOf(periphery[i]), 0, "No external shares remain in periphery");
             assertEq(_shareAsset.balanceOf(periphery[i]), 0, "No underlying remains in periphery");
         }
-        (uint256 fees, uint256 seized, uint256 pending) = _payout.payoutReserves(address(_share));
+        (uint256 fees, , uint256 seized, , uint256 pending) = _payout.pendingAmounts(
+            address(_share)
+        );
         assertEq(fees + seized + pending, 0, "Successful share payouts leave no obligations");
-        (fees, seized, pending) = _payout.payoutReserves(address(_shareAsset));
+        (fees, , seized, , pending) = _payout.pendingAmounts(address(_shareAsset));
         assertEq(fees + seized + pending, 0, "Successful underlying payouts leave no obligations");
         assertEq(_ohm.balanceOf(address(_composites)), 0, "Composite refunds all transient OHM");
     }

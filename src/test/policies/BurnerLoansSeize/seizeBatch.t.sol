@@ -33,7 +33,7 @@ contract BurnerLoansSeizeBatchTest is BurnerLoansSeizeTestBase {
                 "Additional borrower approves Core"
             );
             _collateral.depositCollateral(address(_asset), 20e6, borrower);
-            _debt.borrow(address(_asset), 1, borrower, borrower, 0);
+            _debt.borrow(address(_asset), 1, borrower, borrower, 0, address(0));
             vm.stopPrank();
         }
         uint256 debt = 100e9 + length_ - 1;

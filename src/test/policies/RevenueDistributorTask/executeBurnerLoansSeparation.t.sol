@@ -44,7 +44,8 @@ contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansModularTe
             _BORROW_AMOUNT,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         assertGt(borrowed.fee, 0, "Real borrow creates a fee");
         assertEq(borrowed.resultingDebtOhm, _BORROW_AMOUNT, "Real borrow records principal");
@@ -80,11 +81,11 @@ contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansModularTe
             "Task settles distributor custody only"
         );
         assertEq(
-            _payout.pendingPayout(address(_asset), address(distributor)),
+            _payout.pendingRecipientAmount(address(_asset), address(distributor)),
             borrowed.fee,
             "Task leaves deferred Burner Loans fee owed"
         );
-        (uint256 pendingFee, uint256 seized, uint256 total) = _payout.payoutReserves(
+        (uint256 pendingFee, , uint256 seized, , uint256 total) = _payout.pendingAmounts(
             address(_asset)
         );
         assertEq(pendingFee, borrowed.fee, "Raw fee bucket is unchanged");
@@ -102,7 +103,7 @@ contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansModularTe
             );
             _payout.transferPendingPayout(address(_asset), address(distributor));
             assertEq(
-                _payout.pendingPayout(address(_asset), address(distributor)),
+                _payout.pendingRecipientAmount(address(_asset), address(distributor)),
                 borrowed.fee,
                 "Inactive retry preserves fee"
             );
@@ -127,7 +128,7 @@ contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansModularTe
             "Task settles fee only after direct delivery"
         );
         assertEq(
-            _payout.pendingPayout(address(_asset), address(distributor)),
+            _payout.pendingRecipientAmount(address(_asset), address(distributor)),
             0,
             "Fee entitlement clears once"
         );

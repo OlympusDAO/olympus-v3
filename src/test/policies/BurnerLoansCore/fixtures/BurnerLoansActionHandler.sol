@@ -59,7 +59,14 @@ contract BurnerLoansActionHandler is Test {
         if (room > 100000e9 - principal) room = 100000e9 - principal;
         amount_ = uint128(bound(amount_, 1, room));
         _asset.mint(address(this), 100000e6);
-        _debt.borrow(address(_asset), amount_, address(this), address(this), type(uint256).max);
+        _debt.borrow(
+            address(_asset),
+            amount_,
+            address(this),
+            address(this),
+            type(uint256).max,
+            address(0)
+        );
         principal += amount_;
         ++borrows;
     }

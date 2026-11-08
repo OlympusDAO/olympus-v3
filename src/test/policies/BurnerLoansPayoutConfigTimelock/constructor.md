@@ -21,32 +21,44 @@ Unchanged means authoritative state, balances, allowances and committed logs app
 
 | ID | Caller | Fault | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCUCT-CONSTRUCTOR-D01 | Fuzz deployer | Deployed Payout lacks IBurnerLoansPayout | InvalidPayout(candidate) | No deployment | Covered: [test][test_givenMissingInterface_whenDeployed_reverts] |
+| BLCUCT-CONSTRUCTOR-D01 | Fuzz deployer | Deployed Payout lacks IBurnerLoansPayout | InvalidPayout(candidate) | No deployment | Covered: [test][test_givenMissingInterface_whenDeployed_reverts], [seeds][test_givenEachRequiredInterfaceMissing_whenDeployed_reverts] |
 | BLCUCT-CONSTRUCTOR-D02 | Fuzz deployer | ERC165 reverts | InvalidPayout(candidate) | No deployment | Covered: [test][test_givenERC165Reverts_whenDeployed_reverts] |
 | BLCUCT-CONSTRUCTOR-D03 | Fuzz deployer | ERC165 malformed response | InvalidPayout(candidate) | No deployment | Covered: [test][test_givenERC165Malformed_whenDeployed_reverts] |
 | BLCUCT-CONSTRUCTOR-D04 | Fuzz deployer | Interface supported; reports another Kernel | PolicyDependency_KernelMismatch(Payout,expectedKernel,reportedKernel) | No deployment | Covered: [test][test_givenWrongKernel_whenDeployed_reverts] |
 | BLCUCT-CONSTRUCTOR-D05 | Fuzz deployer | Interface supported; kernel() reverts | PolicyDependency_InvalidDependency(Payout) | No deployment | Covered: [test][test_givenKernelProbeReverts_whenDeployed_reverts] |
 | BLCUCT-CONSTRUCTOR-D06 | Fuzz deployer | Interface supported; kernel() returns malformed data | PolicyDependency_InvalidDependency(Payout) | No deployment | Covered: [test][test_givenKernelProbeMalformed_whenDeployed_reverts] |
+| BLCUCT-CONSTRUCTOR-D07 | Fuzz deployer | Missing IConfigOperator interface | InvalidPayout(candidate) | No deployment | Covered: [test][test_givenMissingInterface_whenDeployed_reverts], [test][test_givenEachRequiredInterfaceMissing_whenDeployed_reverts] |
+| BLCUCT-CONSTRUCTOR-D08 | Fuzz deployer | Missing IEnabler interface | InvalidPayout(candidate) | No deployment | Covered: [test][test_givenMissingInterface_whenDeployed_reverts], [test][test_givenEachRequiredInterfaceMissing_whenDeployed_reverts] |
 
 ## Lifecycle independence
 
 Keep constructor Kernel/interface bindings valid while varying lifecycle independently.
 
-| ID | Caller | Payout active | Core active | Core enabled | Expected result | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCUCT-CONSTRUCTOR-L01 | Fuzz deployer | true | Fuzz true/false | Fuzz true/false | Success | Immutable target/Kernel; local disabled; nextActionId=1; delay=1 day; grace=7 days; no payout/controller write | Covered: [test][test_givenIndependentLifecycle_whenDeployed_thenExactDefaults], [test][test_givenLifecycleSeeds_whenDeployed_thenExactDefaults] |
-| BLCUCT-CONSTRUCTOR-L02 | Fuzz deployer | false | Fuzz true/false | Fuzz true/false | Success | Same initialization; controller may be unset at deployment | Covered: [test][test_givenIndependentLifecycle_whenDeployed_thenExactDefaults], [test][test_givenLifecycleSeeds_whenDeployed_thenExactDefaults] |
+| ID | Caller | Payout active | Payout enabled | Core active | Core enabled | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| BLCUCT-CONSTRUCTOR-L01 | Fuzz deployer | true | Fuzz false/true | Fuzz true/false | Fuzz true/false | Success | Immutable target/Kernel; local disabled; nextActionId=1; delay=1 day; grace=7 days; no payout/controller write | Covered: [test][test_givenIndependentLifecycle_whenDeployed_thenExactDefaults], [test][test_givenLifecycleSeeds_whenDeployed_thenExactDefaults] |
+| BLCUCT-CONSTRUCTOR-L02 | Fuzz deployer | false | Fuzz false/true | Fuzz true/false | Fuzz true/false | Success | Same initialization; controller may be unset at deployment | Covered: [test][test_givenIndependentLifecycle_whenDeployed_thenExactDefaults], [test][test_givenLifecycleSeeds_whenDeployed_thenExactDefaults] |
 
 - [x] Derive concrete acceptance criteria from the implemented call path.
 - [x] Implement focused tests and map exact domains/effects; execution results are tracked separately.
 
-[test_givenERC165Malformed_whenDeployed_reverts]: ./constructor.t.sol#L53
-[test_givenERC165Reverts_whenDeployed_reverts]: ./constructor.t.sol#L43
-[test_givenIndependentLifecycle_whenDeployed_thenExactDefaults]: ./constructor.t.sol#L109
-[test_givenKernelProbeMalformed_whenDeployed_reverts]: ./constructor.t.sol#L96
-[test_givenKernelProbeReverts_whenDeployed_reverts]: ./constructor.t.sol#L79
-[test_givenLifecycleSeeds_whenDeployed_thenExactDefaults]: ./constructor.t.sol#L136
-[test_givenMissingInterface_whenDeployed_reverts]: ./constructor.t.sol#L30
-[test_givenWrongKernel_whenDeployed_reverts]: ./constructor.t.sol#L63
-[test_whenPayoutEOA_reverts]: ./constructor.t.sol#L24
-[test_whenPayoutZero_reverts]: ./constructor.t.sol#L19
+## Construction without runtime readiness
+
+The constructor validates the same consumed interface set as enable/reEnable and the same-Kernel binding. It does not read target activity, enabled state or selected configOperator.
+
+| ID | Caller | Target condition | Result | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCUCT-CONSTRUCTOR-L03 | Fuzz deployer | Target activity, isEnabled and configOperator reads revert; consumed interfaces and Kernel binding valid | Success | No readiness/selection reads; target bound; queue disabled | Covered: [test][test_givenRuntimeReadinessGettersRevert_whenConstructed] |
+
+[test_givenERC165Malformed_whenDeployed_reverts]: ./constructor.t.sol#L60
+[test_givenERC165Reverts_whenDeployed_reverts]: ./constructor.t.sol#L50
+[test_givenIndependentLifecycle_whenDeployed_thenExactDefaults]: ./constructor.t.sol#L116
+[test_givenKernelProbeMalformed_whenDeployed_reverts]: ./constructor.t.sol#L103
+[test_givenKernelProbeReverts_whenDeployed_reverts]: ./constructor.t.sol#L86
+[test_givenLifecycleSeeds_whenDeployed_thenExactDefaults]: ./constructor.t.sol#L144
+[test_givenMissingInterface_whenDeployed_reverts]: ./constructor.t.sol#L32
+[test_givenWrongKernel_whenDeployed_reverts]: ./constructor.t.sol#L70
+[test_whenPayoutEOA_reverts]: ./constructor.t.sol#L26
+[test_whenPayoutZero_reverts]: ./constructor.t.sol#L21
+[test_givenEachRequiredInterfaceMissing_whenDeployed_reverts]: ./constructor.t.sol#L162
+[test_givenRuntimeReadinessGettersRevert_whenConstructed]: ./constructor.t.sol#L171

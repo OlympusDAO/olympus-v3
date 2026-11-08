@@ -2,7 +2,7 @@
 
 Shared action existence, terminal-status and execution-window checks precede concrete admission. Execution then requires own Kernel activity before local enablement and target checks; its caller remains permissionless.
 
-Source: [executeQueuedAction](../../../policies/utils/TimelockBatchQueue.sol#L136). Coverage is recorded in the Test column.
+Source: [executeQueuedAction](../../../policies/utils/TimelockBatchQueue.sol#L138). Coverage is recorded in the Test column.
 
 ## Domains and notation
 
@@ -16,7 +16,7 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 
 ## Scenario setup
 
-The action exists and is pending; execution additionally lies inside the inclusive execution window. Those metadata/time checks precede the concrete lifecycle hook. Each actual target independently selects BLCT for success. The existing Config lifecycle table uses Config-targeted actions; Risk-only execution uses the Risk-specific table below. No global equality between Core Config, Config.configOperator and Risk.configOperator is required.
+The action exists and is pending; execution additionally lies inside the inclusive execution window. Those metadata/time checks precede the concrete lifecycle hook. Config selects BLCT for successful dispatch. Risk's independent operator is not consulted for Config-owned market updates.
 
 ## Authorization
 
@@ -46,7 +46,7 @@ Fixed for this table: Local active: true; Local enabled: true; Config active: tr
 | BLCT-EXECUTE-L14 | Fuzz all executors | false | false | false | true | BurnerLoans_PolicyNotActive(TL) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenExecute_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenExecute_reverts] |
 | BLCT-EXECUTE-L15 | Fuzz all executors | false | false | false | false | BurnerLoans_PolicyNotActive(TL) | Covered: [test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenExecute_reverts][test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenExecute_reverts] |
 
-Proposer/ADMIN/BL-admin roles are not required to execute. For Config-targeted actions, a different/zero Config.configOperator rejects `BurnerLoansConfig_UnauthorizedConfigOperator(BLCT)`. For Risk-targeted actions, a different/zero Risk.configOperator rejects `NotAuthorised()` without an ADMIN fallback grant on BLCT. All failures preserve action, payload and held keys.
+Proposer/ADMIN/BL-admin roles are not required to execute. A different/zero Config.configOperator rejects `BurnerLoansConfig_UnauthorizedConfigOperator(BLCT)`. All failures preserve action, payload and held keys. Every configuration hash includes current Config.configOperator(), with existing setting/facility fields and Core.configOperator() for rescue. Authority remains checked live before hash comparison; restoring the original operator and configuration permits retry within the original window.
 
 ## Invalid inputs
 
@@ -112,38 +112,19 @@ Port real-setter rollback test, not only a mock target. Test risk+fee disjoint o
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map every row to its scenario test and boundary seeds; retain production-blocked rows as Partial.
 
-## Direct Risk execution and committed selection
+## Independent Config domains
 
-The action was validly queued, is pending and time-valid; BLCT active/enabled. The queue captured concrete Risk R, age A, target-scoped key K and hash keccak256(abi.encode(Core,R,A)). Risk-only actions do not require Config active/enabled or selecting BLCT. Core selection getters remain readable. These retained BLCT-QUEUE-CACHE-AGE IDs move here because they prove execution, not queue admission. Drift failures retain all actions/payloads/keys and roll back earlier batch writes/events.
+Risk cache-age dispatch is covered in the directly bound [Risk queue execution plan](../BurnerLoansRiskConfigTimelock/executeQueuedAction.md). These retained Config cases assert atomicity and independent settings without a second target.
 
-| ID | Caller | Drift / execution inputs | Execution | Effects | Test |
+| ID | Caller | Configuration / fault | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCT-QUEUE-CACHE-AGE-P04 | Fuzz all executors | Same selected Risk; age changed after queue | IConfigTimelockBatchQueue_ConfigStateChanged(id,index,key,expected,current) | No setter dispatch or key release | Covered: [test_givenAgeDrift_whenAgeExecuted_thenRejected][test_givenAgeDrift_whenAgeExecuted_thenRejected] |
-| BLCT-QUEUE-CACHE-AGE-P05 | Fuzz all executors | Same selected Risk/age; Risk selects BLCT; requested age differs | Success | Exactly one Risk.setPriceCacheMaxAge(requested) call with caller BLCT; no Config setter; exact Risk value/event and queue cleanup | Covered: [test_givenDirectRiskDispatch_whenAgeExecuted_thenApplied][test_givenDirectRiskDispatch_whenAgeExecuted_thenApplied] |
-| BLCT-QUEUE-CACHE-AGE-P06 | Fuzz all executors | Same Risk/age; Risk operator changed to distinct address or zero; seed each | NotAuthorised() | No assumed ADMIN role on BLCT; no age change or key release | Covered: [test_givenRiskOperatorRevoked_whenAgeExecuted_thenRejected][test_givenRiskOperatorRevoked_whenAgeExecuted_thenRejected] |
-| BLCT-QUEUE-CACHE-AGE-D01 | Fuzz all executors | Core selects replacement Risk with same age; replacement operator independent of Core Config | IConfigTimelockBatchQueue_ConfigStateChanged(id,index,key,expected,current) | Neither old nor new Risk receives setter; no proposal retargeting | Covered: [test_givenReplacementRiskSameAge_whenAgeExecuted_thenRejected][test_givenReplacementRiskSameAge_whenAgeExecuted_thenRejected] |
-| BLCT-QUEUE-CACHE-AGE-D02 | Fuzz all executors | Core selects replacement Risk with different age | IConfigTimelockBatchQueue_ConfigStateChanged(id,index,key,expected,current) | No stale dispatch to old Risk; earlier batch writes roll back | Covered: [test_givenReplacementRiskDifferentAge_whenAgeExecuted_thenRejected][test_givenReplacementRiskDifferentAge_whenAgeExecuted_thenRejected] |
-| BLCT-EXECUTE-P13 | Fuzz all executors | Requested age equals queued/current age; include 0/MAX48 | Success | Risk setter admitted and no-ops without setter event/write; timelock still marks executed and releases key | Covered: [test_givenSameAge_whenExecuted_thenNoTargetEvent][test_givenSameAge_whenExecuted_thenNoTargetEvent]; [test_givenUnchangedExecutedAgeEndpoints_whenBoundarySeedsRun_thenScenarioHolds][test_givenUnchangedExecutedAgeEndpoints_whenBoundarySeedsRun_thenScenarioHolds] |
-| BLCT-EXECUTE-P14 | Fuzz all executors | Mixed Config fee/risk update and direct Risk cache age; seed both action orders | Success | Exact calls to independent targets in stored order; all getters match; release both keys | Covered: [test_givenMixedTargets_whenExecuted_thenBothOrdersApply][test_givenMixedTargets_whenExecuted_thenBothOrdersApply] |
-| BLCT-EXECUTE-T01 | Fuzz all executors | Mixed batch; later Risk setter raises injected error after earlier Config write; seed reverse order with later Config failure | Exact target error | Earlier target writes/events and executed marker roll back; all actions, payloads and keys retained | Covered: [test_givenLaterIndependentTargetReverts_whenExecuted_thenAtomicRollback][test_givenLaterIndependentTargetReverts_whenExecuted_thenAtomicRollback] |
-
-## Risk target lifecycle
-
-Defaults as above; no selection, age or authority drift. These faults arise after valid queueing. Restore only the named fault and retry within the execution window.
-
-| ID | Caller | Risk active | Risk enabled | Execution | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- |
-| BLCT-EXECUTE-D02 | Fuzz all executors | false | true | PolicyDependency_NotActive(Risk) | No dispatch or key release | Covered: [test_givenRiskActiveFalse_givenRiskEnabledTrue_whenAgeExecuted_reverts][test_givenRiskActiveFalse_givenRiskEnabledTrue_whenAgeExecuted_reverts] |
-| BLCT-EXECUTE-D03 | Fuzz all executors | true | false | PolicyDependency_NotActive(Risk) | No dispatch or key release | Covered: [test_givenRiskActiveTrue_givenRiskEnabledFalse_whenAgeExecuted_reverts][test_givenRiskActiveTrue_givenRiskEnabledFalse_whenAgeExecuted_reverts] |
-| BLCT-EXECUTE-D04 | Fuzz all executors | false | false | PolicyDependency_NotActive(Risk) | No dispatch or key release | Covered: [test_givenRiskActiveFalse_givenRiskEnabledFalse_whenAgeExecuted_reverts][test_givenRiskActiveFalse_givenRiskEnabledFalse_whenAgeExecuted_reverts] |
-
-| ID | Caller | Dependency drift / independent state | Execution | Effects | Test |
-| --- | --- | --- | --- | --- | --- |
-| BLCT-EXECUTE-D05 | Fuzz all executors | Captured and still selected Risk reports another Kernel | PolicyDependency_KernelMismatch(Risk,expectedKernel,reportedKernel) | No target call; key/action retained | Covered: [test_givenRiskKernelDrift_whenAgeExecuted_reverts][test_givenRiskKernelDrift_whenAgeExecuted_reverts] |
-| BLCT-EXECUTE-D06 | Fuzz all executors | Risk-only action; Config independently inactive/disabled and operator changed away from BLCT | Success | Risk age updated directly; no Config lifecycle/operator or setter call; its state unchanged | Covered: [test_givenConfigUnavailable_whenAgeExecuted_thenApplied][test_givenConfigUnavailable_whenAgeExecuted_thenApplied] |
-| BLCT-EXECUTE-D07 | Fuzz all executors | Risk-only action; Core independently inactive/disabled; selection unchanged/readable | Success | No Core lifecycle requirement or mutation | Covered: [test_givenCoreUnavailable_whenAgeExecuted_thenApplied][test_givenCoreUnavailable_whenAgeExecuted_thenApplied] |
+| BLCT-EXECUTE-P14 | Fuzz all executors | Independent Config fee and debt-cap updates; seed both action orders | Success | Exact Config calls in stored order; all getters match; release both keys | Covered: [test_givenIndependentConfigDomains_whenExecuted_thenBothOrdersApply][test_givenIndependentConfigDomains_whenExecuted_thenBothOrdersApply] |
+| BLCT-EXECUTE-T01 | Fuzz all executors | Two independent Config domains; the later setter raises an injected error after the earlier write; seed both orders | Exact target error | Earlier target writes/events and executed marker roll back; all actions, payloads and keys retained | Covered: [test_givenLaterConfigSetterReverts_whenExecuted_thenAtomicRollback][test_givenLaterConfigSetterReverts_whenExecuted_thenAtomicRollback] |
 | BLCT-EXECUTE-D08 | Fuzz all executors | Config-only fee/risk update; Risk operator independently zero or another address | Success | No Risk configuration authorization required for public validators | Covered: [test_givenRiskOperatorIndependent_whenConfigExecuted_thenApplied][test_givenRiskOperatorIndependent_whenConfigExecuted_thenApplied] |
-| BLCT-EXECUTE-D09 | Fuzz all executors | Mixed Config/Risk batch; either target loses its own operator grant | That target's exact unauthorized error | No partial execution or released keys | Covered: [test_givenMixedTargetOperatorRevoked_whenExecuted_thenAtomicRejection][test_givenMixedTargetOperatorRevoked_whenExecuted_thenAtomicRejection] |
+| BLCT-EXECUTE-D09 | Fuzz all executors | Two independent Config domains; Config no longer selects BLCT | BurnerLoansConfig_UnauthorizedConfigOperator(BLCT) | No partial execution or released keys | Covered: [test_givenConfigOperatorRevoked_whenIndependentBatchExecuted_reverts][test_givenConfigOperatorRevoked_whenIndependentBatchExecuted_reverts] |
+| BLCT-EXECUTE-D10 | Fuzz all executors | Config operator revoked, execution rejected, then restored; fuzz original inclusive execution window | Original two-domain batch executes after restoration | Original commitments/deadlines retained during failure; both setters apply and keys release | Covered: [test_givenConfigOperatorRestored_whenOriginalBatchExecuted_thenApplied][test_givenConfigOperatorRestored_whenOriginalBatchExecuted_thenApplied] |
+| BLCT-EXECUTE-D11 | Fuzz all executors | Config operator getter reverts, returns a non-word length, or noncanonical address | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Target, payload, commitments and key owners unchanged | Covered: [revert][test_givenConfigOperatorReadReverts_whenExecuted_reverts], [length fuzz][test_givenMalformedConfigOperatorLength_whenExecuted_reverts], [noncanonical][test_givenNoncanonicalConfigOperator_whenExecuted_reverts] |
+| BLCT-EXECUTE-D12 | Fuzz all executors | Config is locally paused and reports a foreign Kernel | PolicyDependency_KernelMismatch(Config,expectedKernel,reportedKernel), before enabled-state validation | Action, payloads, key owners and economic state unchanged | Covered: [test][test_givenForeignKernelAndPausedConfig_whenExecuted_reverts] |
 
 ## Co-located terminal-state reads
 
@@ -160,8 +141,8 @@ After the corresponding successful/cancelled action, metadata remains readable w
 | BLCT-QUEUED-ACTION-I02 | Fuzz getter caller | Payload getter after successful cancellation | ActionCancelled(id) | No mutation; cancelled metadata remains readable | Covered: [test_givenCancelledAction_whenPayloadRead_reverts][test_givenCancelledAction_whenPayloadRead_reverts] |
 
 [test_givenReadyAction_whenExecute_thenComplete]: ./executeQueuedAction.t.sol#L290
-[test_whenCompleteFeeConfigIsQueued_thenAllFieldsApplyAfterDelay]: ./executeQueuedAction.t.sol#L940
-[test_whenCompleteRiskConfigIsQueued_thenMaximumKeeperRewardIsPreserved]: ./executeQueuedAction.t.sol#L965
+[test_whenCompleteFeeConfigIsQueued_thenAllFieldsApplyAfterDelay]: ./executeQueuedAction.t.sol#L825
+[test_whenCompleteRiskConfigIsQueued_thenMaximumKeeperRewardIsPreserved]: ./executeQueuedAction.t.sol#L850
 [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenExecute_reverts]: ./executeQueuedAction.t.sol#L23
 [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenExecute_reverts]: ./executeQueuedAction.t.sol#L41
 [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenExecute_reverts]: ./executeQueuedAction.t.sol#L59
@@ -190,30 +171,23 @@ After the corresponding successful/cancelled action, metadata remains readable w
 [test_givenOneSecondAfterExpiry_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L341
 [test_givenEmptyTargetRevert_whenExecuted_thenBoundedWrapper]: ./executeQueuedAction.t.sol#L428
 [test_givenBoundedTargetRevert_whenExecuted_thenExactBubble]: ./executeQueuedAction.t.sol#L446
-[test_givenRevertDataP10Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./executeQueuedAction.t.sol#L882
+[test_givenRevertDataP10Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./executeQueuedAction.t.sol#L767
 [test_givenExactlyLimitTargetRevert_whenExecuted_thenBoundedWrapper]: ./executeQueuedAction.t.sol#L459
 [test_givenOversizedTargetRevert_whenExecuted_thenBoundedWrapper]: ./executeQueuedAction.t.sol#L479
-[test_givenRevertDataP12Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./executeQueuedAction.t.sol#L891
+[test_givenRevertDataP12Endpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./executeQueuedAction.t.sol#L776
 [test_givenTargetCatchesSameActionCallback_whenExecuted_thenOneExecution]: ./executeQueuedAction.t.sol#L500
 [test_givenTargetPropagatesSameActionCallback_whenExecuted_thenRollback]: ./executeQueuedAction.t.sol#L511
-[test_givenAgeDrift_whenAgeExecuted_thenRejected]: ./executeQueuedAction.t.sol#L529
-[test_givenDirectRiskDispatch_whenAgeExecuted_thenApplied]: ./executeQueuedAction.t.sol#L540
-[test_givenRiskOperatorRevoked_whenAgeExecuted_thenRejected]: ./executeQueuedAction.t.sol#L560
-[test_givenReplacementRiskSameAge_whenAgeExecuted_thenRejected]: ./executeQueuedAction.t.sol#L574
-[test_givenReplacementRiskDifferentAge_whenAgeExecuted_thenRejected]: ./executeQueuedAction.t.sol#L590
-[test_givenSameAge_whenExecuted_thenNoTargetEvent]: ./executeQueuedAction.t.sol#L604
-[test_givenUnchangedExecutedAgeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: ./executeQueuedAction.t.sol#L871
-[test_givenMixedTargets_whenExecuted_thenBothOrdersApply]: ./executeQueuedAction.t.sol#L620
-[test_givenLaterIndependentTargetReverts_whenExecuted_thenAtomicRollback]: ./executeQueuedAction.t.sol#L635
-[test_givenRiskActiveFalse_givenRiskEnabledTrue_whenAgeExecuted_reverts]: ./executeQueuedAction.t.sol#L660
-[test_givenRiskActiveTrue_givenRiskEnabledFalse_whenAgeExecuted_reverts]: ./executeQueuedAction.t.sol#L678
-[test_givenRiskActiveFalse_givenRiskEnabledFalse_whenAgeExecuted_reverts]: ./executeQueuedAction.t.sol#L696
-[test_givenRiskKernelDrift_whenAgeExecuted_reverts]: ./executeQueuedAction.t.sol#L714
-[test_givenConfigUnavailable_whenAgeExecuted_thenApplied]: ./executeQueuedAction.t.sol#L736
-[test_givenCoreUnavailable_whenAgeExecuted_thenApplied]: ./executeQueuedAction.t.sol#L750
-[test_givenRiskOperatorIndependent_whenConfigExecuted_thenApplied]: ./executeQueuedAction.t.sol#L763
-[test_givenMixedTargetOperatorRevoked_whenExecuted_thenAtomicRejection]: ./executeQueuedAction.t.sol#L776
-[test_givenMissingId_whenMetadataRead_reverts]: ./executeQueuedAction.t.sol#L800
-[test_givenEachEstablishedActionState_whenMetadataRead_thenFlagsAndPayloadsAgree]: ./executeQueuedAction.t.sol#L815
-[test_givenExecutedAction_whenPayloadRead_reverts]: ./executeQueuedAction.t.sol#L838
-[test_givenCancelledAction_whenPayloadRead_reverts]: ./executeQueuedAction.t.sol#L855
+[test_givenIndependentConfigDomains_whenExecuted_thenBothOrdersApply]: ./executeQueuedAction.t.sol#L529
+[test_givenLaterConfigSetterReverts_whenExecuted_thenAtomicRollback]: ./executeQueuedAction.t.sol#L548
+[test_givenRiskOperatorIndependent_whenConfigExecuted_thenApplied]: ./executeQueuedAction.t.sol#L572
+[test_givenConfigOperatorRevoked_whenIndependentBatchExecuted_reverts]: ./executeQueuedAction.t.sol#L585
+[test_givenMissingId_whenMetadataRead_reverts]: ./executeQueuedAction.t.sol#L696
+[test_givenEachEstablishedActionState_whenMetadataRead_thenFlagsAndPayloadsAgree]: ./executeQueuedAction.t.sol#L711
+[test_givenExecutedAction_whenPayloadRead_reverts]: ./executeQueuedAction.t.sol#L734
+[test_givenCancelledAction_whenPayloadRead_reverts]: ./executeQueuedAction.t.sol#L751
+
+[test_givenConfigOperatorRestored_whenOriginalBatchExecuted_thenApplied]: ./executeQueuedAction.t.sol#L604
+[test_givenConfigOperatorReadReverts_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L633
+[test_givenMalformedConfigOperatorLength_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L654
+[test_givenNoncanonicalConfigOperator_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L675
+[test_givenForeignKernelAndPausedConfig_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L864

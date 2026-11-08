@@ -29,7 +29,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             address(_debt),
             abi.encodeCall(
                 _debt.borrow,
-                (address(_asset), nested_, _borrower, address(_cache), uint256(0))
+                (address(_asset), nested_, _borrower, address(_cache), uint256(0), address(0))
             ),
             true
         );
@@ -42,7 +42,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             )
         );
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), outer_, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), outer_, _borrower, _borrower, 0, address(0));
         assertEq(
             _inventory.activePrincipalOhm(),
             0,
@@ -76,7 +76,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             address(_debt),
             abi.encodeCall(
                 _debt.borrow,
-                (address(_asset), nested_, _borrower, address(_cache), uint256(0))
+                (address(_asset), nested_, _borrower, address(_cache), uint256(0), address(0))
             ),
             true
         );
@@ -90,7 +90,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             )
         );
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), outer_, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), outer_, _borrower, _borrower, 0, address(0));
         assertEq(_inventory.activePrincipalOhm(), 0, "Nested asset exposure rolls back");
         assertEq(
             _priceStateDigest(),
@@ -111,7 +111,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             address(_debt),
             abi.encodeCall(
                 _debt.borrow,
-                (address(_asset), nested_, _borrower, address(_cache), uint256(0))
+                (address(_asset), nested_, _borrower, address(_cache), uint256(0), address(0))
             ),
             true
         );
@@ -121,7 +121,8 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             outer_,
             _borrower,
             _borrower,
-            0
+            0,
+            address(0)
         );
         assertEq(
             result.resultingDebtOhm,
@@ -155,12 +156,12 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             address(_debt),
             abi.encodeCall(
                 _debt.borrow,
-                (address(_asset), 1, _borrower, address(_cache), uint256(0))
+                (address(_asset), 1, _borrower, address(_cache), uint256(0), address(0))
             ),
             false
         );
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         assertEq(
             _cache.rejection(),
             abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
@@ -177,14 +178,14 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             address(_debt),
             abi.encodeCall(
                 _debt.borrow,
-                (address(_asset), 1, _borrower, address(_cache), uint256(0))
+                (address(_asset), 1, _borrower, address(_cache), uint256(0), address(0))
             ),
             true
         );
         bytes32 rollbackBefore = _priceStateDigest();
         vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         assertEq(_inventory.activePrincipalOhm(), 0, "No funding after refresh callback failure");
         assertEq(
             _priceStateDigest(),

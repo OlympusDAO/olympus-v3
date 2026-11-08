@@ -2,8 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IBurnerLoansRiskConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansRiskConfigTimelock.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -11,16 +13,17 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
 // Contracts
-import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+import {BurnerLoansRiskConfigTimelockTest} from "./BurnerLoansRiskConfigTimelockTest.sol";
 
-contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansConfigTimelockTest {
+contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
+    BurnerLoansRiskConfigTimelockTest
+{
     // Scenarios: BLCT-QUEUE-CACHE-AGE-A05.
     function test_givenPermittedProposer_whenAgeQueued_thenStored(
         address caller_,
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
         vm.prank(caller_);
@@ -34,7 +37,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
         vm.prank(caller_);
@@ -48,7 +50,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
         vm.prank(caller_);
@@ -63,7 +64,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint48 age_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _risk.setPriceCacheMaxAge(age_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(age_);
         _expectQueue(_single(a), caller_);
@@ -78,7 +78,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _risk.setPriceCacheMaxAge(1);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(0);
         _expectQueue(_single(a), caller_);
@@ -94,7 +93,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint48 age_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         age_ = uint48(bound(age_, 1, type(uint48).max));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(age_);
         _expectQueue(_single(a), caller_);
@@ -106,7 +104,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
     // Scenarios: BLCT-QUEUE-CACHE-AGE-A01.
     function test_givenUnauthorizedProposer_whenAgeQueued_reverts(address caller_) public {
         _outsider(caller_);
-        _risk.setConfigOperator(address(_timelock));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(caller_);
@@ -122,7 +119,11 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         _proposer(caller_, role_);
         _risk.setConfigOperator(_recipient);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
-        _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        _expectRejectedQueue(
+            abi.encodeWithSelector(
+                IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_NotController.selector
+            )
+        );
         vm.prank(caller_);
         _queue(a);
         _assertRejectedQueue(_single(a));
@@ -136,7 +137,11 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         _proposer(caller_, role_);
         _risk.setConfigOperator(address(0));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
-        _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        _expectRejectedQueue(
+            abi.encodeWithSelector(
+                IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_NotController.selector
+            )
+        );
         vm.prank(caller_);
         _queue(a);
         _assertRejectedQueue(_single(a));
@@ -148,7 +153,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _setState(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
@@ -163,7 +167,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _setState(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
@@ -183,7 +186,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _setState(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
@@ -203,7 +205,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _setState(_risk, false, true);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
@@ -223,7 +224,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _setState(_risk, true, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
@@ -243,7 +243,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _setState(_risk, false, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
@@ -263,7 +262,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSignature("kernel()"),
@@ -291,7 +289,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         bool enabled_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _config.setConfigOperator(_recipient);
         _setState(_config, active_, enabled_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
@@ -309,7 +306,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         bool enabled_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _setState(_core, active_, enabled_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
@@ -324,7 +320,6 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
         vm.prank(caller_);
@@ -345,8 +340,26 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
-        _independentActions(_capAction(address(_asset), 200000e9), _ageAction(3600), caller_);
+        vm.startPrank(caller_);
+        uint64 bps = _timelock.queueSetReferralFeeBps(2500);
+        uint64 referrer = _timelock.queueSetReferrerAllowed(_recipient, true);
+        uint64 age = _timelock.queueSetPriceCacheMaxAge(3600);
+        vm.stopPrank();
+        assertEq(
+            _timelock.pendingActionId(_key(_bpsAction(2500))),
+            bps,
+            "percentage keeps independent key"
+        );
+        assertEq(
+            _timelock.pendingActionId(_key(_referrerAction(_recipient, true))),
+            referrer,
+            "membership keeps independent key"
+        );
+        assertEq(
+            _timelock.pendingActionId(_key(_ageAction(3600))),
+            age,
+            "age owns only selector key"
+        );
     }
 
     // Scenarios: BLCT-QUEUE-CACHE-AGE-A05.
@@ -414,5 +427,217 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is BurnerLoansCon
         vm.prank(caller_);
         _timelock.queueSetPriceCacheMaxAge(0);
         assertEq(_timelock.nextActionId(), next, "Rejected wrapper consumes no ID");
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D10.
+    function test_givenFailedRiskStatus_whenAgeQueued_reverts(bool kernel_) public {
+        vm.mockCallRevert(
+            address(_risk),
+            kernel_ ? abi.encodeWithSignature("kernel()") : abi.encodeWithSignature("isEnabled()"),
+            hex"deadbeef"
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_risk)
+            )
+        );
+        _timelock.queueSetPriceCacheMaxAge(3600);
+        assertEq(_timelock.nextActionId(), 1, "status failure consumes no ID");
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D11.
+    function test_givenFailedSettingMetadata_whenAgeQueued_reverts(bool operator_) public {
+        vm.mockCallRevert(
+            address(_risk),
+            operator_
+                ? abi.encodeWithSignature("configOperator()")
+                : abi.encodeWithSignature("priceCacheMaxAge()"),
+            hex"deadbeef"
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_InvalidRisk.selector,
+                address(_risk)
+            )
+        );
+        _timelock.queueSetPriceCacheMaxAge(3600);
+        assertEq(_timelock.nextActionId(), 1, "setting failure consumes no ID");
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D10.
+    function test_givenInvalidStatusMetadata_whenQueueRejected(
+        bool kernel_,
+        bool reverts_,
+        bytes memory data_
+    ) public {
+        vm.assume(data_.length != 32);
+        _beforeQueue = _economicDigest();
+        _next = _timelock.nextActionId();
+        bytes memory callData = kernel_
+            ? abi.encodeWithSignature("kernel()")
+            : abi.encodeWithSignature("isEnabled()");
+        if (reverts_) vm.mockCallRevert(address(_risk), callData, data_);
+        else vm.mockCall(address(_risk), callData, data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_risk)
+            )
+        );
+        _timelock.queueSetPriceCacheMaxAge(3600);
+        vm.clearMockedCalls();
+        _assertRejectedQueue(_single(_ageAction(3600)));
+        assertEq(
+            _timelock.pendingActionId(_key(_ageAction(3600))),
+            0,
+            "metadata rejection leaves no key"
+        );
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D11.
+    function test_givenInvalidSettingMetadata_whenQueueRejected(
+        bool operator_,
+        bool reverts_,
+        bytes memory data_
+    ) public {
+        vm.assume(data_.length != 32);
+        _beforeQueue = _economicDigest();
+        _next = _timelock.nextActionId();
+        bytes memory callData = operator_
+            ? abi.encodeWithSignature("configOperator()")
+            : abi.encodePacked(IBurnerLoansRisk.priceCacheMaxAge.selector);
+        if (reverts_) vm.mockCallRevert(address(_risk), callData, data_);
+        else vm.mockCall(address(_risk), callData, data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_InvalidRisk.selector,
+                address(_risk)
+            )
+        );
+        _timelock.queueSetPriceCacheMaxAge(3600);
+        vm.clearMockedCalls();
+        _assertRejectedQueue(_single(_ageAction(3600)));
+        assertEq(
+            _timelock.pendingActionId(_key(_ageAction(3600))),
+            0,
+            "metadata rejection leaves no key"
+        );
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D08, BLCT-QUEUE-CACHE-AGE-D09.
+    function test_givenIndependentUpstreamStates_whenQueued(
+        bool configActive_,
+        bool configEnabled_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) public {
+        _expectNoUpstreamDiscoveryCalls();
+        _exerciseIndependentUpstreamState(configActive_, configEnabled_, coreActive_, coreEnabled_);
+    }
+
+    function _exerciseIndependentUpstreamState(
+        bool configActive_,
+        bool configEnabled_,
+        bool coreActive_,
+        bool coreEnabled_
+    ) private {
+        _setState(_config, configActive_, configEnabled_);
+        _setState(_core, coreActive_, coreEnabled_);
+        _expectQueue(_single(_ageAction(3600)), address(this));
+        vm.mockCallRevert(address(_config), abi.encodeWithSignature("facility()"), hex"deadbeef");
+        vm.mockCallRevert(address(_core), abi.encodeWithSignature("risk()"), hex"deadbeef");
+        uint64 id = _timelock.queueSetPriceCacheMaxAge(3600);
+        vm.clearMockedCalls();
+        _assertQueued(id, _single(_ageAction(3600)), address(this));
+    }
+
+    function _expectNoUpstreamDiscoveryCalls() private {
+        vm.expectCall(address(_config), abi.encodeWithSignature("facility()"), uint64(0));
+        vm.expectCall(address(_core), abi.encodeWithSignature("risk()"), uint64(0));
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D08, BLCT-QUEUE-CACHE-AGE-D09.
+    function test_givenEveryIndependentUpstreamState_whenQueued() public {
+        _expectNoUpstreamDiscoveryCalls();
+        uint256 checkpoint = vm.snapshotState();
+        for (uint256 bits; bits < 16; ++bits) {
+            _exerciseIndependentUpstreamState(
+                (bits & 1) != 0,
+                (bits & 2) != 0,
+                (bits & 4) != 0,
+                (bits & 8) != 0
+            );
+            _restore(checkpoint);
+        }
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D10.
+    function test_givenDirtyStatusWords_whenQueueRejected(bool kernel_) public {
+        _beforeQueue = _economicDigest();
+        _next = _timelock.nextActionId();
+        vm.mockCall(
+            address(_risk),
+            kernel_ ? abi.encodeWithSignature("kernel()") : abi.encodeWithSignature("isEnabled()"),
+            abi.encode(type(uint256).max)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_risk)
+            )
+        );
+        _timelock.queueSetPriceCacheMaxAge(3600);
+        vm.clearMockedCalls();
+        _assertRejectedQueue(_single(_ageAction(3600)));
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D11.
+    function test_givenDirtySettingWords_whenQueueRejected(bool operator_) public {
+        _beforeQueue = _economicDigest();
+        _next = _timelock.nextActionId();
+        vm.mockCall(
+            address(_risk),
+            operator_
+                ? abi.encodeWithSignature("configOperator()")
+                : abi.encodePacked(IBurnerLoansRisk.priceCacheMaxAge.selector),
+            abi.encode(type(uint256).max)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_InvalidRisk.selector,
+                address(_risk)
+            )
+        );
+        _timelock.queueSetPriceCacheMaxAge(3600);
+        vm.clearMockedCalls();
+        _assertRejectedQueue(_single(_ageAction(3600)));
+    }
+
+    // Scenarios: BLCT-QUEUE-CACHE-AGE-D10, BLCT-QUEUE-CACHE-AGE-D11.
+    function test_givenMetadataShapeSeeds_whenQueueRejected() public {
+        uint256 checkpoint = vm.snapshotState();
+        bytes[3] memory shapes = [
+            bytes(""),
+            new bytes(31),
+            bytes.concat(abi.encode(true), hex"00")
+        ];
+        for (uint256 i; i < 2; ++i) {
+            bool first = i == 0;
+            for (uint256 j; j < shapes.length; ++j) {
+                test_givenInvalidStatusMetadata_whenQueueRejected(first, false, shapes[j]);
+                _restore(checkpoint);
+                test_givenInvalidSettingMetadata_whenQueueRejected(first, false, shapes[j]);
+                _restore(checkpoint);
+            }
+            test_givenInvalidStatusMetadata_whenQueueRejected(first, true, hex"deadbeef");
+            _restore(checkpoint);
+            test_givenInvalidSettingMetadata_whenQueueRejected(first, true, hex"deadbeef");
+            _restore(checkpoint);
+            test_givenDirtyStatusWords_whenQueueRejected(first);
+            _restore(checkpoint);
+            test_givenDirtySettingWords_whenQueueRejected(first);
+            _restore(checkpoint);
+        }
     }
 }

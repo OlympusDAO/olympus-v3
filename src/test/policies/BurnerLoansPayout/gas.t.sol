@@ -22,7 +22,7 @@ abstract contract BurnerLoansPayoutGasTest is BurnerLoansModularTest {
     function _openLoan() internal {
         vm.startPrank(_borrower);
         _collateral.depositCollateral(address(_asset), 2000e6, _borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, type(uint256).max);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, type(uint256).max, address(0));
         vm.stopPrank();
     }
 
@@ -41,7 +41,7 @@ contract BurnerLoansTransferPendingPayoutTest is BurnerLoansPayoutGasTest {
             abi.encodeWithSignature("BlockedTransfer()")
         );
         _openLoan();
-        (uint256 fee, , ) = _payout.payoutReserves(address(_asset));
+        (uint256 fee, , , , ) = _payout.pendingAmounts(address(_asset));
         assertGt(fee, 0, "Real borrow creates a pending fee");
         vm.clearMockedCalls();
         RevenueDistributor current = _distributor();
@@ -50,7 +50,7 @@ contract BurnerLoansTransferPendingPayoutTest is BurnerLoansPayoutGasTest {
         assertEq(recipients[0], address(current), "Recipient list follows replacement");
         _payout.transferPendingPayout(address(_asset), address(former));
         assertEq(
-            _payout.pendingPayout(address(_asset), address(current)),
+            _payout.pendingRecipientAmount(address(_asset), address(current)),
             fee,
             "Fee follows replacement before retry"
         );
@@ -61,7 +61,11 @@ contract BurnerLoansTransferPendingPayoutTest is BurnerLoansPayoutGasTest {
         assertEq(paid, fee, "Retry returns the exact pending fee");
         assertEq(_asset.balanceOf(address(former)), 0, "Former distributor receives nothing");
         assertEq(_asset.balanceOf(address(current)), fee, "Replacement receives old fee");
-        assertEq(_payout.pendingPayout(address(_asset), address(current)), 0, "Fee clears once");
+        assertEq(
+            _payout.pendingRecipientAmount(address(_asset), address(current)),
+            0,
+            "Fee clears once"
+        );
     }
 }
 
@@ -74,7 +78,7 @@ contract BurnerLoansTransferPendingSeizurePayoutTest is BurnerLoansPayoutGasTest
             abi.encodeWithSignature("BlockedTransfer()")
         );
         _openLoan();
-        uint256 fee = _payout.pendingPayout(address(_asset), treasury);
+        uint256 fee = _payout.pendingRecipientAmount(address(_asset), treasury);
         IBurnerLoansCore.Position memory position = _lens.getPosition(address(_asset), _borrower);
         vm.warp(position.maturity);
         _price.setTimestamp(position.maturity);
@@ -101,7 +105,11 @@ contract BurnerLoansTransferPendingSeizurePayoutTest is BurnerLoansPayoutGasTest
         assertGt(fee, 0, "Fee was owed before retry");
         assertEq(paid, fee + seized, "Both pending obligations paid");
         assertEq(_asset.balanceOf(treasury) - beforeBalance, paid, "Treasury receives exact retry");
-        assertEq(_payout.pendingPayout(address(_asset), treasury), 0, "Treasury buckets clear");
+        assertEq(
+            _payout.pendingRecipientAmount(address(_asset), treasury),
+            0,
+            "Treasury buckets clear"
+        );
         assertEq(_lens.getPosition(address(_asset), _borrower).debtOhm, 0, "Default clears debt");
     }
 }

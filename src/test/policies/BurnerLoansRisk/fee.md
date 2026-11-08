@@ -1,12 +1,14 @@
 # BurnerLoansRisk.fee coverage plan
 
-Source: [fee](../../../policies/burnerloans/BurnerLoansRisk.sol#L403). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+> Referral scenarios supplement the retained gross-fee cases. The API accepts referrer and returns protocolFee/referralFee; mappings identify both calculation and allocation proof.
+
+Source: [fee](../../../policies/burnerloans/BurnerLoansRisk.sol#L412). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
 Scenario scope: `BLRISK-FEE` identifies this contract/function.
 
-Permissionless view; canonical FLOAN market ID supplied, market debt token must match Risk OHM. principal:uint256 OHM, terms:uint16, snapshot prices:uint256. Utilization uses canonical market principal BEFORE the requested borrow; debt above cfg.debtCap rejects rather than clamps. Fee is returned in raw underlying collateral units, even when exits return vault shares. The API returns a fee, not utilization or a fee rate; intermediate values below are independent working, not additional return fields.
+Permissionless view; canonical FLOAN market ID supplied, market debt token must match Risk OHM. principal:uint256 OHM, terms:uint16, snapshot prices:uint256. Utilization uses canonical market principal BEFORE the requested borrow; debt above cfg.debtCap rejects rather than clamps. Fee is returned in raw underlying collateral units, even when exits return vault shares. The API returns protocolFee and referralFee whose sum is the gross fee, not utilization or a fee rate; intermediate values below are independent working, not additional return fields.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
@@ -154,156 +156,135 @@ Preserve the original helper-level inputs exactly. The legacy math helper suppor
 | --- | --- | --- | --- | --- |
 | BLRISK-FEE-N25 | Fixed caller | Required collateral=1000e6; rate=1e14 WAD (1 bps); ceil(1000e6/10000) | 100000 raw collateral units | Covered: [test][test_whenBorrowFeeIsCalculated] |
 
+## Referral fee sharing: review draft
+
+Risk.fee returns the two fee components directly. Signature: fee(snapshot,marketId,principal,terms,referrer) returns (uint256 protocolFee,uint256 referralFee). The unchanged existing curve computes total F internally; the same call validates nonzero referrer eligibility and returns P=F-R and R=floor(F*S/10000). S is the shared uint16 BPS setting in0..10000. Debt receives P,R, computes its combined maxFee charge F=P+R, and forwards the two components to Core. Core/Payout do not call Risk or calculate referral percentages.
+
+Existing BLRISK-FEE scenarios remain the owners of curve, market, pricing, lifecycle and arithmetic failure behavior. Port them with referrer=0: their independently expected fee F becomes protocolFee=F and referralFee=0. No duplicate lifecycle/curve matrix is added. The ported baseline tests assert the extended return shape alongside the retained gross-fee expectations. Referral cases below are mapped to implemented tests.
+
+The BLRISK-SPLIT IDs are retained from the merged draft; they now identify fee scenarios, not an independently callable function. Use the existing BLRISK-FEE-N16 full-width flat-100% identity-conversion fixture to produce independently specified total F from principal. That permits raw F=0..MAX256 without exposing F as a new public fee argument or reproducing production math as the expected result. Market, snapshot, terms and own Risk admission are otherwise valid. No mutation, token call, payer approval read, or caller-authorization lookup is allowed in this permissionless view. Old Kernel/local lifecycle cases remain applicable, including re-enable/reactivation. Upstream queue/controller lifecycle is not consulted.
+
+Referrer r is an address; R is a uint256 raw collateral amount. Zero r requires R=0. A nonzero approved r may also produce R=0 (zero fee, zero percentage or floor rounding). A nonzero unapproved r always rejects, even if total F=0 or S=0. Risk performs gross-fee economic validation before the new eligibility/split step; its own existing guards still run first.
+
+### Eligibility and named return components
+
+Fuzz every view caller, independently of referrer. Seed F=0,1,MAX256 and S=0,1,9999,10000 when inside the row's stated domains. Failed calls leave all configuration, accounting and committed logs unchanged.
+
+| ID | Caller | Referrer r | Membership | Expected total F | Share S | Return / error | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| BLRISK-SPLIT-P01 | Fuzz every caller | Zero | Always false | Fuzz0..MAX256 | Fuzz0..10000 | protocolFee=F, referralFee=0 | Read-only; no stored referral attribution | Covered: [test_whenZeroReferrer][test_whenZeroReferrer] |
+| BLRISK-SPLIT-I01 | Fuzz every caller | Nonzero r | Never added or removed; seed each | Fuzz1..MAX256 | Fuzz1..10000 | BurnerLoansRisk_ReferrerNotAllowed(r) | Read-only; no outputs returned | Covered: [test_givenRejectedReferrer_whenFeeQuoted_reverts][test_givenRejectedReferrer_whenFeeQuoted_reverts] |
+| BLRISK-SPLIT-I02 | Fuzz every caller | Nonzero r | Not allowed | 0 | Fuzz0..10000 | BurnerLoansRisk_ReferrerNotAllowed(r) | No zero-total shortcut before eligibility | Covered: [test_givenRejectedReferrer_whenFeeQuoted_reverts][test_givenRejectedReferrer_whenFeeQuoted_reverts], [test_givenRejectedReferrer_whenZeroFeeOrShare_reverts][test_givenRejectedReferrer_whenZeroFeeOrShare_reverts] |
+| BLRISK-SPLIT-I03 | Fuzz every caller | Nonzero r | Not allowed | Fuzz1..MAX256 | 0 | BurnerLoansRisk_ReferrerNotAllowed(r) | No zero-share shortcut before eligibility | Covered: [test_givenRejectedReferrer_whenFeeQuoted_reverts][test_givenRejectedReferrer_whenFeeQuoted_reverts], [test_givenRejectedReferrer_whenZeroFeeOrShare_reverts][test_givenRejectedReferrer_whenZeroFeeOrShare_reverts] |
+| BLRISK-SPLIT-P02 | Fuzz every caller | Nonzero r | Allowed | Fuzz0..MAX256 | Fuzz0..10000 | protocolFee=F-floor(F*S/10000); referralFee=floor(F*S/10000) | P+R=F and R≤F. Queue paused/inactive or operator changed does not alter the stored settings used; no upstream readiness lookup | Covered: [test_givenApprovedReferrer_whenFeeQuoted][test_givenApprovedReferrer_whenFeeQuoted], [test_givenSharedReferralPercentage_whenDifferentMarketsAndTermsQuoted][test_givenSharedReferralPercentage_whenDifferentMarketsAndTermsQuoted], [test_givenRiskQueueLifecycle_whenBorrowed][test_givenRiskQueueLifecycle_whenBorrowed], [test_givenRiskQueueOperational_whenBorrowed][test_givenRiskQueueOperational_whenBorrowed], [test_givenRiskQueuePaused_whenBorrowed][test_givenRiskQueuePaused_whenBorrowed], [test_givenRiskQueueInactive_whenBorrowed][test_givenRiskQueueInactive_whenBorrowed], [test_givenRiskQueueInactivePaused_whenBorrowed][test_givenRiskQueueInactivePaused_whenBorrowed], [test_givenRiskQueueLifecycle_whenExtended][test_givenRiskQueueLifecycle_whenExtended], [test_givenRiskQueueOperational_whenExtended][test_givenRiskQueueOperational_whenExtended], [test_givenRiskQueuePaused_whenExtended][test_givenRiskQueuePaused_whenExtended], [test_givenRiskQueueInactive_whenExtended][test_givenRiskQueueInactive_whenExtended], [test_givenRiskQueueInactivePaused_whenExtended][test_givenRiskQueueInactivePaused_whenExtended] |
+
+### Fixed split arithmetic and type maximum
+
+Fixed caller, approved nonzero referrer and the independently controlled gross-fee fixture above. F,P,R are raw collateral units; the split does not rescale decimals. Reuse the existing decimal fixtures (0,6,9,18) without duplicating their gross-fee arithmetic matrix. Hard-code the following expected named components.
+
+| ID | Caller | Expected total F | S | Independent working | Expected (protocolFee,referralFee) | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLRISK-SPLIT-N01 | Fixed viewer | 0 | 10000 | No charge exists to divide | (0,0) | Covered: [test_whenReferralRoundingBoundaries][test_whenReferralRoundingBoundaries] |
+| BLRISK-SPLIT-N02 | Fixed viewer | 1 | 9999 | floor(9999/10000)=0; residual1 | (1,0) | Covered: [test_whenReferralRoundingBoundaries][test_whenReferralRoundingBoundaries] |
+| BLRISK-SPLIT-N03 | Fixed viewer | 9999 / 10000 / 10001; three fixed calls | 1 | Referral crosses a raw unit at F=10000 | (9999,0) / (9999,1) / (10000,1) | Covered: [test_whenReferralRoundingBoundaries][test_whenReferralRoundingBoundaries] |
+| BLRISK-SPLIT-N04 | Fixed viewer | 101 | 2500 | Referral=floor(252500/10000)=25; protocol=101-25=76 | (76,25) | Covered: [test_whenReferralRoundingBoundaries][test_whenReferralRoundingBoundaries] |
+| BLRISK-SPLIT-N05 | Fixed viewer | 1 and MAX256; seed both | 10000 | All collected fee allocated to referrer; multiply may exceed256 bits | (0,F), no phantom overflow | Covered: [test_whenReferralRoundingBoundaries][test_whenReferralRoundingBoundaries] |
+| BLRISK-SPLIT-N06 | Fixed viewer | MAX256 | 1 | MAX256=10000*q+9935; q=11579208923731619542357098500868790785326998466564056403945758400791312963 | (MAX256-q,q), exact full-precision floor | Covered: [test_whenReferralRoundingBoundaries][test_whenReferralRoundingBoundaries] |
+| BLRISK-SPLIT-N07 | Fixed viewer | 1 and MAX256; seed both | 0 | Zero referral percentage | (F,0), with approved nonzero referrer | Covered: [test_whenReferralRoundingBoundaries][test_whenReferralRoundingBoundaries] |
+
+- [x] Review the extended fee API and component assertions.
+- [x] Port existing fee tests, add the new cases, execute and map evidence.
+
 [test_givenAfterKink_whenFeeQuoted]: fee.t.sol#L279
-
-[test_givenAnotherMarketHasDebt_whenSelectedMarketFeeIsQuoted]: feeIntegration.t.sol#L224
-
+[test_givenAnotherMarketHasDebt_whenSelectedMarketFeeIsQuoted]: feeIntegration.t.sol#L212
 [test_givenAtCap_whenFeeQuoted]: fee.t.sol#L295
-
 [test_givenAtKink_whenFeeQuoted]: fee.t.sol#L267
-
 [test_givenBeforeKink_whenFeeQuoted]: fee.t.sol#L251
-
 [test_givenDebtAboveCap_whenFeeQuoted_reverts]: fee.t.sol#L148
-
 [test_givenDefaultCurve_whenCrossingKink]: ../../libraries/LoanMath/fee.t.sol#L153
-
 [test_givenDefaultCurve_whenUtilizationEndpointsAreCompared]: ../../libraries/LoanMath/fee.t.sol#L226
-
 [test_givenDefaultCurve_whenUtilizationIncreases]: ../../libraries/LoanMath/fee.t.sol#L204
-
 [test_givenDefaultCurve_whenUtilizationIsAtKink]: ../../libraries/LoanMath/fee.t.sol#L65
-
 [test_givenDefaultCurve_whenUtilizationIsAtKink_whenRiskIsCalled]: feeIntegration.t.sol#L57
-
 [test_givenDefaultCurve_whenUtilizationIsFull]: ../../libraries/LoanMath/fee.t.sol#L95
-
 [test_givenDefaultCurve_whenUtilizationIsFull_whenRiskIsCalled]: feeIntegration.t.sol#L90
-
 [test_givenDefaultCurve_whenUtilizationIsOneWadAboveKink]: ../../libraries/LoanMath/fee.t.sol#L73
-
 [test_givenDefaultCurve_whenUtilizationIsOneWadAboveKink_whenRiskIsCalled]: feeIntegration.t.sol#L68
-
 [test_givenDefaultCurve_whenUtilizationIsOneWadBelowKink]: ../../libraries/LoanMath/fee.t.sol#L50
-
 [test_givenDefaultCurve_whenUtilizationIsOneWadBelowKink_whenRiskIsCalled]: feeIntegration.t.sol#L46
-
 [test_givenDefaultCurve_whenUtilizationIsPostKinkMidpoint]: ../../libraries/LoanMath/fee.t.sol#L86
-
 [test_givenDefaultCurve_whenUtilizationIsPostKinkMidpoint_whenRiskIsCalled]: feeIntegration.t.sol#L79
-
 [test_givenDefaultCurve_whenUtilizationIsPreKinkMidpoint]: ../../libraries/LoanMath/fee.t.sol#L41
-
 [test_givenDefaultCurve_whenUtilizationIsPreKinkMidpoint_whenRiskIsCalled]: feeIntegration.t.sol#L35
-
 [test_givenDefaultCurve_whenUtilizationIsZero]: ../../libraries/LoanMath/fee.t.sol#L32
-
 [test_givenDefaultCurve_whenUtilizationIsZero_whenRiskIsCalled]: feeIntegration.t.sol#L24
-
 [test_givenDisabled_whenCalled_reverts]: fee.t.sol#L101
-
-[test_givenDustFee_whenMaximumTermsAreQuoted]: feeIntegration.t.sol#L164
-
-[test_givenDustFee_whenThreeTermsAreQuoted]: feeIntegration.t.sol#L153
-
+[test_givenDustFee_whenMaximumTermsAreQuoted]: feeIntegration.t.sol#L156
+[test_givenDustFee_whenThreeTermsAreQuoted]: feeIntegration.t.sol#L149
 [test_givenEmptyMarketZeroCap_whenFeeQuoted]: fee.t.sol#L175
-
-[test_givenExistingMarketDebt_whenRequestedPrincipalDoubles]: feeIntegration.t.sol#L208
-
-[test_givenFlatCurve_whenFeeIsExactlyAnInteger]: feeIntegration.t.sol#L186
-
-[test_givenFlatCurve_whenFeeIsImmediatelyAboveAnInteger]: feeIntegration.t.sol#L197
-
-[test_givenFlatCurve_whenFeeIsImmediatelyBelowAnInteger]: feeIntegration.t.sol#L175
-
-[test_givenFlatCurve_whenPrincipalIsOneRawOhmUnit]: feeIntegration.t.sol#L134
-
-[test_givenFlatCurve_whenThreeTermsAreQuoted]: feeIntegration.t.sol#L142
-
-[test_givenGlobalFundingChanges_whenSelectedMarketFeeQuoted]: feeIntegration.t.sol#L295
-
+[test_givenExistingMarketDebt_whenRequestedPrincipalDoubles]: feeIntegration.t.sol#L196
+[test_givenFlatCurve_whenFeeIsExactlyAnInteger]: feeIntegration.t.sol#L174
+[test_givenFlatCurve_whenFeeIsImmediatelyAboveAnInteger]: feeIntegration.t.sol#L185
+[test_givenFlatCurve_whenFeeIsImmediatelyBelowAnInteger]: feeIntegration.t.sol#L167
+[test_givenFlatCurve_whenPrincipalIsOneRawOhmUnit]: feeIntegration.t.sol#L130
+[test_givenFlatCurve_whenThreeTermsAreQuoted]: feeIntegration.t.sol#L138
+[test_givenGlobalFundingChanges_whenSelectedMarketFeeQuoted]: feeIntegration.t.sol#L283
 [test_givenInactiveAndDisabled_whenCalled_reverts]: fee.t.sol#L115
-
 [test_givenInactive_whenCalled_reverts]: fee.t.sol#L108
-
 [test_givenLinearCurve_whenDebtIsTiny]: feeIntegration.t.sol#L118
-
 [test_givenLinearCurve_whenUtilizationIsNearCap]: feeIntegration.t.sol#L101
-
 [test_givenOperational_whenCalled]: fee.t.sol#L95
-
 [test_givenReEnabled_whenCalled]: fee.t.sol#L124
-
-[test_givenReplacementSelected_whenOldRiskQuoted]: feeIntegration.t.sol#L315
-
+[test_givenReplacementSelected_whenOldRiskQuoted]: feeIntegration.t.sol#L303
 [test_givenZeroCap_whenFeeQuoted_reverts]: fee.t.sol#L138
-
 [test_givenZeroKinkFlatCurve_whenFeeQuoted]: fee.t.sol#L183
-
 [test_givenZeroKink_whenNearCapBorrowFeeIsCalculated]: ../../libraries/LoanMath/fee.t.sol#L173
-
 [test_givenZeroKink_whenSlopeContributionHasRemainder]: ../../libraries/LoanMath/fee.t.sol#L119
-
 [test_givenZeroKink_whenSlopeIsNonzero]: ../../libraries/LoanMath/fee.t.sol#L103
-
 [test_givenZeroKink_whenUtilizationIsNearCap]: ../../libraries/LoanMath/fee.t.sol#L136
-
 [test_givenZeroPrincipal_whenFeeQuoted]: fee.t.sol#L190
-
 [test_givenZeroTermsAndZeroCap_whenFeeQuoted_reverts]: fee.t.sol#L156
-
 [test_givenZeroTerms_whenFeeQuoted]: fee.t.sol#L196
-
 [test_whenBackingMultiplier]: fee.t.sol#L407
-
 [test_whenBackingRequirement]: fee.t.sol#L332
-
 [test_whenBackingRoundUpOverflows_thenFeeAndHealthRevert]: fee.t.sol#L73
-
 [test_whenBorrowFeeIsCalculated]: ../../libraries/LoanMath/fee.t.sol#L166
-
 [test_whenCollateralConversionRoundsUp]: fee.t.sol#L432
-
 [test_whenCollateralPriceIsZero_whenTermsAreZero_reverts]: fee.t.sol#L24
-
-[test_whenDebtTokenDiffers_reverts]: fee.t.sol#L528
-
+[test_whenDebtTokenDiffers_reverts]: fee.t.sol#L532
 [test_whenDiscountedLtv]: fee.t.sol#L382
-
 [test_whenEighteenOhmDecimals]: fee.t.sol#L489
-
 [test_whenEqualRequirements]: fee.t.sol#L357
-
 [test_whenFeePerTermTimesTermsOverflows_reverts]: fee.t.sol#L50
-
-[test_whenFlatBase]: fee.t.sol#L510
-
-[test_whenMarketExitsAsShares]: fee.t.sol#L554
-
+[test_whenFlatBase]: fee.t.sol#L518
+[test_whenMarketExitsAsShares]: fee.t.sol#L558
 [test_whenMarketMissing_reverts]: fee.t.sol#L166
-
 [test_whenMarketRequirement]: fee.t.sol#L307
-
-[test_whenMarketSchemaDiffers_reverts]: fee.t.sol#L539
-
+[test_whenMarketSchemaDiffers_reverts]: fee.t.sol#L543
 [test_whenNonzeroDebtIsTiny]: ../../libraries/LoanMath/fee.t.sol#L220
-
 [test_whenPrincipalAndTermEndpoints]: fee.t.sol#L220
-
 [test_whenRequiredDebtValueOverflows_reverts]: fee.t.sol#L37
-
 [test_whenSixPriceDecimals]: fee.t.sol#L457
-
 [test_whenSixPriceEighteenCollateralDecimals]: fee.t.sol#L473
-
-[test_whenSnapshotFieldsAreMaximum]: fee.t.sol#L568
-
+[test_whenSnapshotFieldsAreMaximum]: fee.t.sol#L572
 [test_whenTermsAndPrincipalAreRepresentable]: fee.t.sol#L202
-
 [test_whenUtilizationIsNearCap]: ../../libraries/LoanMath/fee.t.sol#L20
-
 [test_whenUtilizationIsRoundedUp]: ../../libraries/LoanMath/fee.t.sol#L191
-
 [test_whenUtilizationRoundsUp]: fee.t.sol#L236
-
-[test_whenZeroCurve]: fee.t.sol#L521
+[test_whenZeroCurve]: fee.t.sol#L525
+[test_givenApprovedReferrer_whenFeeQuoted]: fee.t.sol#L663
+[test_givenRejectedReferrer_whenFeeQuoted_reverts]: fee.t.sol#L688
+[test_givenRejectedReferrer_whenZeroFeeOrShare_reverts]: fee.t.sol#L711
+[test_givenRiskQueueInactivePaused_whenBorrowed]: ../BurnerLoansDebt/borrowReferralIntegration.t.sol#L548
+[test_givenRiskQueueInactivePaused_whenExtended]: ../BurnerLoansDebt/extendReferralIntegration.t.sol#L480
+[test_givenRiskQueueInactive_whenBorrowed]: ../BurnerLoansDebt/borrowReferralIntegration.t.sol#L543
+[test_givenRiskQueueInactive_whenExtended]: ../BurnerLoansDebt/extendReferralIntegration.t.sol#L475
+[test_givenRiskQueueLifecycle_whenBorrowed]: ../BurnerLoansDebt/borrowReferralIntegration.t.sol#L468
+[test_givenRiskQueueLifecycle_whenExtended]: ../BurnerLoansDebt/extendReferralIntegration.t.sol#L402
+[test_givenRiskQueueOperational_whenBorrowed]: ../BurnerLoansDebt/borrowReferralIntegration.t.sol#L533
+[test_givenRiskQueueOperational_whenExtended]: ../BurnerLoansDebt/extendReferralIntegration.t.sol#L465
+[test_givenRiskQueuePaused_whenBorrowed]: ../BurnerLoansDebt/borrowReferralIntegration.t.sol#L538
+[test_givenRiskQueuePaused_whenExtended]: ../BurnerLoansDebt/extendReferralIntegration.t.sol#L470
+[test_givenSharedReferralPercentage_whenDifferentMarketsAndTermsQuoted]: feeIntegration.t.sol#L338
+[test_whenReferralRoundingBoundaries]: fee.t.sol#L629
+[test_whenZeroReferrer]: fee.t.sol#L647

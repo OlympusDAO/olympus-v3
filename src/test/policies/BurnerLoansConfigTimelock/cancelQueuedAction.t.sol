@@ -51,7 +51,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     }
 
     // Scenarios: BLCT-CANCEL-L04.
-    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenCancel_reverts(
+    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenCancel_thenCleared(
         address caller_
     ) public {
         _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
@@ -60,11 +60,11 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
         _makeReady(id);
         _setState(_config, true, true);
         _setState(_timelock, true, false);
-        _cancelReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        _cancelAndAssert(id, caller_);
     }
 
     // Scenarios: BLCT-CANCEL-L05.
-    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenCancel_reverts(
+    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenCancel_thenCleared(
         address caller_
     ) public {
         _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
@@ -73,11 +73,11 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
         _makeReady(id);
         _setState(_config, true, false);
         _setState(_timelock, true, false);
-        _cancelReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        _cancelAndAssert(id, caller_);
     }
 
     // Scenarios: BLCT-CANCEL-L06.
-    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenCancel_reverts(
+    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenCancel_thenCleared(
         address caller_
     ) public {
         _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
@@ -86,11 +86,11 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
         _makeReady(id);
         _setState(_config, false, true);
         _setState(_timelock, true, false);
-        _cancelReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        _cancelAndAssert(id, caller_);
     }
 
     // Scenarios: BLCT-CANCEL-L07.
-    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenCancel_reverts(
+    function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenCancel_thenCleared(
         address caller_
     ) public {
         _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
@@ -99,7 +99,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
         _makeReady(id);
         _setState(_config, false, false);
         _setState(_timelock, true, false);
-        _cancelReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        _cancelAndAssert(id, caller_);
     }
 
     // Scenarios: BLCT-CANCEL-L08.

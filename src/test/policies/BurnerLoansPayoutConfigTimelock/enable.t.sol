@@ -2,6 +2,9 @@
 pragma solidity >=0.8.24;
 
 // Libraries
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
+import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 // Interfaces
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
@@ -17,10 +20,9 @@ import {BurnerLoansPayoutConfigTimelockTest} from "./BurnerLoansPayoutConfigTime
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTimelockTest {
-    // Scenarios: BLCUCT-ENABLE-A01, BLCUCT-ENABLE-L03, BLCUCT-ENABLE-D03, BLCUCT-ENABLE-I01.
+    // Scenarios: BLCUCT-ENABLE-A01, BLCUCT-ENABLE-L03, BLCUCT-ENABLE-D06, BLCUCT-ENABLE-I01.
     function test_givenReadyBinding_whenActivated_thenExactTransition(
         address caller_,
-        bool payoutActive_,
         bool payoutEnabled_,
         bool coreActive_,
         bool coreEnabled_
@@ -28,7 +30,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         _grantProposer(caller_, false, false);
         _payoutTimelock.disable("");
         _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, payoutActive_, payoutEnabled_);
+        _setState(_payout, true, payoutEnabled_);
         vm.mockCallRevert(address(_payout), abi.encodeWithSignature("isEnabled()"), hex"deadbeef");
         bytes32 beforeQueue = _queueDigest(_pendingId);
         bytes32 funds = _payoutDigest();
@@ -188,5 +190,54 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         _restore(checkpoint);
         test_whenNonemptyPayload_reverts(address(0x113), new bytes(256));
         _restore(checkpoint);
+    }
+
+    // Scenarios: BLCUCT-ENABLE-D03.
+    function test_givenInactivePayout_whenActivated_reverts(
+        bool enabled_
+    ) public givenPendingRecovery {
+        _payoutTimelock.disable("");
+        _setState(_payout, false, enabled_);
+        _expectLocalRejected(
+            abi.encodeCall(_payoutTimelock.enable, (bytes(""))),
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_payout)
+            ),
+            address(this)
+        );
+    }
+
+    // Scenarios: BLCUCT-ENABLE-D07.
+    function test_givenMissingConsumedInterface_whenActivated_reverts(bool enabled_) public {
+        _payoutTimelock.disable("");
+        _setState(_payout, true, enabled_);
+        bytes4[3] memory ids = [
+            type(IBurnerLoansPayout).interfaceId,
+            type(IConfigOperator).interfaceId,
+            type(IEnabler).interfaceId
+        ];
+        for (uint256 i; i < ids.length; ++i) {
+            vm.mockCall(
+                address(_payout),
+                abi.encodeCall(IERC165.supportsInterface, (ids[i])),
+                abi.encode(false)
+            );
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IBurnerLoansPayoutConfigTimelock
+                        .BurnerLoansPayoutTimelock_InvalidPayout
+                        .selector,
+                    address(_payout)
+                )
+            );
+            _payoutTimelock.enable("");
+            assertFalse(_payoutTimelock.isEnabled(), "Incompatible target cannot activate queue");
+            vm.mockCall(
+                address(_payout),
+                abi.encodeCall(IERC165.supportsInterface, (ids[i])),
+                abi.encode(true)
+            );
+        }
     }
 }

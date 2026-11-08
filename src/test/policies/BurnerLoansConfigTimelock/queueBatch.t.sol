@@ -526,23 +526,6 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
         _assertRejectedQueue(_single(a));
     }
 
-    // Scenarios: BLQB-N03.
-    function test_givenAgeWordAboveUint48_whenQueued_reverts(
-        address caller_,
-        uint8 role_,
-        uint256 value_
-    ) public {
-        _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
-        value_ = bound(value_, uint256(type(uint48).max) + 1, type(uint256).max);
-        ITimelockBatchQueue.BatchAction memory a = _ageAction(1);
-        a.payload = abi.encode(value_);
-        _expectRejectedQueue(_invalid(a));
-        vm.prank(caller_);
-        _queue(a);
-        _assertRejectedQueue(_single(a));
-    }
-
     // Scenarios: BLQB-N04.
     function test_givenNoncanonicalBool_whenOriginationsQueued_reverts(
         address caller_,
@@ -937,27 +920,6 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
         _assertRejectedQueue(_single(a));
     }
 
-    // Scenarios: BLQB-P09.
-    function test_givenEachNumericFieldAboveAbiWidth_whenQueued_reverts(
-        address caller_,
-        uint8 role_
-    ) public {
-        _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
-        _rejectWideField(_capAction(address(_asset), 200000e9), 1, 128, caller_);
-        _rejectWideField(_riskAction(address(_asset), _riskInput()), 1, 16, caller_);
-        _rejectWideField(_riskAction(address(_asset), _riskInput()), 2, 16, caller_);
-        _rejectWideField(_riskAction(address(_asset), _riskInput()), 3, 16, caller_);
-        _rejectWideField(_riskAction(address(_asset), _riskInput()), 4, 48, caller_);
-        _rejectWideField(_riskAction(address(_asset), _riskInput()), 5, 48, caller_);
-        _rejectWideField(_riskAction(address(_asset), _riskInput()), 6, 128, caller_);
-        _rejectWideField(_feeAction(address(_asset), _fees()), 1, 16, caller_);
-        _rejectWideField(_feeAction(address(_asset), _fees()), 2, 16, caller_);
-        _rejectWideField(_feeAction(address(_asset), _fees()), 3, 16, caller_);
-        _rejectWideField(_feeAction(address(_asset), _fees()), 4, 16, caller_);
-        _rejectWideField(_ageAction(3600), 0, 48, caller_);
-    }
-
     // Scenarios: BLQB-P10.
     function test_givenRiskAndFeeForSameAsset_whenBatched_thenIndependentBothOrders(
         address caller_,
@@ -1205,8 +1167,11 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
-        _batchPair(_capAction(address(_asset), 200000e9), _ageAction(3600), caller_);
+        _batchPair(
+            _capAction(address(_asset), 200000e9),
+            _feeAction(address(_asset), _fees()),
+            caller_
+        );
     }
 
     // Scenarios: BLQB-P12.
@@ -1224,42 +1189,6 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
         _assertQueued(id, _single(a), caller_);
     }
 
-    // Scenarios: BLQB-P13.
-    function test_givenConfigUnavailable_whenRiskOnlyBatchQueued_thenAccepted(
-        address caller_,
-        uint8 role_
-    ) public {
-        _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
-        _config.setConfigOperator(_recipient);
-        _setState(_config, false, false);
-        ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
-        _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
-        _assertQueued(id, _single(a), caller_);
-    }
-
-    // Scenarios: BLQB-D02.
-    function test_givenRiskOperatorRevoked_whenMixedBatchQueued_reverts(
-        address caller_,
-        uint8 role_,
-        bool zero_
-    ) public {
-        _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
-        _risk.setConfigOperator(zero_ ? address(0) : _recipient);
-        ITimelockBatchQueue.BatchAction[] memory batch = _pair(
-            _capAction(address(_asset), 200000e9),
-            _ageAction(3600)
-        );
-        _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(caller_);
-        _timelock.queueBatch(batch);
-        _assertRejectedQueue(batch);
-        assertEq(_timelock.pendingActionId(_key(batch[0])), 0, "Mixed queue owns no partial key");
-    }
-
     // Scenarios: BLQB-D03.
     function test_givenConfigOperatorRevoked_whenMixedBatchQueued_reverts(
         address caller_,
@@ -1267,11 +1196,10 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
         bool zero_
     ) public {
         _proposer(caller_, role_);
-        _risk.setConfigOperator(address(_timelock));
         _config.setConfigOperator(zero_ ? address(0) : _recipient);
         ITimelockBatchQueue.BatchAction[] memory batch = _pair(
             _capAction(address(_asset), 200000e9),
-            _ageAction(3600)
+            _feeAction(address(_asset), _fees())
         );
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -1404,23 +1332,6 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
         _restore(checkpoint);
         test_givenPendingAction_whenPayloadIndexOutOfBounds_reverts(
             address(0xabc1),
-            type(uint256).max
-        );
-        _restore(checkpoint);
-    }
-
-    // Scenarios: BLQB-N03.
-    function test_givenRawAbiN03Endpoints_whenBoundarySeedsRun_thenScenarioHolds() public {
-        uint256 checkpoint = vm.snapshotState();
-        test_givenAgeWordAboveUint48_whenQueued_reverts(
-            address(0xabc1),
-            uint8(1),
-            uint256(type(uint48).max) + 1
-        );
-        _restore(checkpoint);
-        test_givenAgeWordAboveUint48_whenQueued_reverts(
-            address(0xabc1),
-            uint8(1),
             type(uint256).max
         );
         _restore(checkpoint);
@@ -1559,5 +1470,25 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
             "Unauthorized admission stores no payload"
         );
         assertEq(vm.getRecordedLogs().length, 0, "Unauthorized admission commits no logs");
+    }
+
+    // Scenarios: BLQB-P09.
+    function test_givenEachNumericFieldAboveAbiWidth_whenQueued_reverts(
+        address caller_,
+        uint8 role_
+    ) public {
+        _proposer(caller_, role_);
+        _risk.setConfigOperator(address(_timelock));
+        _rejectWideField(_capAction(address(_asset), 200000e9), 1, 128, caller_);
+        _rejectWideField(_riskAction(address(_asset), _riskInput()), 1, 16, caller_);
+        _rejectWideField(_riskAction(address(_asset), _riskInput()), 2, 16, caller_);
+        _rejectWideField(_riskAction(address(_asset), _riskInput()), 3, 16, caller_);
+        _rejectWideField(_riskAction(address(_asset), _riskInput()), 4, 48, caller_);
+        _rejectWideField(_riskAction(address(_asset), _riskInput()), 5, 48, caller_);
+        _rejectWideField(_riskAction(address(_asset), _riskInput()), 6, 128, caller_);
+        _rejectWideField(_feeAction(address(_asset), _fees()), 1, 16, caller_);
+        _rejectWideField(_feeAction(address(_asset), _fees()), 2, 16, caller_);
+        _rejectWideField(_feeAction(address(_asset), _fees()), 3, 16, caller_);
+        _rejectWideField(_feeAction(address(_asset), _fees()), 4, 16, caller_);
     }
 }

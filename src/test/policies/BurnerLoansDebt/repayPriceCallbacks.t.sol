@@ -18,7 +18,7 @@ contract BurnerLoansDebtRepayPriceCallbacksTest is BurnerLoansDebtPriceCallbackT
         public
     {
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         vm.roll(vm.getBlockNumber() + 1);
         vm.prank(_borrower);
         _ohm.approve(address(_core), type(uint256).max);
@@ -26,7 +26,7 @@ contract BurnerLoansDebtRepayPriceCallbacksTest is BurnerLoansDebtPriceCallbackT
             address(_debt),
             abi.encodeCall(
                 _debt.borrow,
-                (address(_asset), 1, _borrower, address(_cache), uint256(0))
+                (address(_asset), 1, _borrower, address(_cache), uint256(0), address(0))
             ),
             true
         );
@@ -50,7 +50,7 @@ contract BurnerLoansDebtRepayPriceCallbacksTest is BurnerLoansDebtPriceCallbackT
     // Scenarios: BLDEBT-REPAY-C05.
     function test_givenCacheFullyRepays_whenOuterReloads_thenExcessRepaymentRejected() public {
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         vm.roll(block.number + 1);
         _ohm.mint(address(_cache), 100e9);
         vm.prank(address(_cache));

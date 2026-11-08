@@ -64,11 +64,6 @@ interface IBurnerLoansConfigTimelock {
         uint128 debtCapOhm_
     ) external returns (uint64 actionId);
 
-    /// @notice Queues a facility-wide maximum cached-price age update.
-    /// @param priceCacheMaxAge_ New maximum cached-price age, in seconds.
-    /// @return actionId The queued action ID.
-    function queueSetPriceCacheMaxAge(uint48 priceCacheMaxAge_) external returns (uint64 actionId);
-
     /// @notice Queues rescue of all unreserved tokens at execution time.
     /// @param token_ Token to rescue.
     /// @param destination_ Rescue recipient.

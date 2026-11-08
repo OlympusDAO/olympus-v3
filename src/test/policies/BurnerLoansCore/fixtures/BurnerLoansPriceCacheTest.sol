@@ -26,7 +26,7 @@ abstract contract BurnerLoansPriceCacheTest is BurnerLoansModularTest {
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),
-            abi.encode(uint256(0))
+            abi.encode(uint256(0), uint256(0))
         );
         vm.prank(_borrower);
         _core.setAuthorization(address(_cache), type(uint48).max);

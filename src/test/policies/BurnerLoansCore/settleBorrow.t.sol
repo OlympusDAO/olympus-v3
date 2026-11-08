@@ -2,10 +2,16 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansCollateral} from "src/policies/interfaces/burnerloans/IBurnerLoansCollateral.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
+import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
 import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
@@ -38,7 +44,17 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
         vm.prank(caller_);
         _core.settleBorrow(
-            IBurnerLoansCore.BorrowRequest(address(0), address(0), address(0), address(0), 0, 0, 0)
+            IBurnerLoansCore.BorrowRequest(
+                address(0),
+                address(0),
+                address(0),
+                address(0),
+                0,
+                0,
+                0,
+                address(0),
+                0
+            )
         );
         assertEq(_state(), before, "Unauthorized instruction has no effects");
     }
@@ -52,7 +68,17 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
         vm.prank(address(sibling));
         _core.settleBorrow(
-            IBurnerLoansCore.BorrowRequest(address(0), address(0), address(0), address(0), 0, 0, 0)
+            IBurnerLoansCore.BorrowRequest(
+                address(0),
+                address(0),
+                address(0),
+                address(0),
+                0,
+                0,
+                0,
+                address(0),
+                0
+            )
         );
     }
 
@@ -61,7 +87,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _actor.changeKernel(other);
-        vm.expectCall(address(_actor), abi.encodeWithSignature("kernel()"), uint64(0));
+        vm.expectCall(address(_actor), abi.encodeWithSelector(_core.kernel.selector), uint64(0));
         vm.expectCall(
             address(_kernel),
             abi.encodeCall(_kernel.isPolicyActive, (Policy(address(_actor)))),
@@ -77,7 +103,17 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(address(_actor));
         _core.settleBorrow(
-            IBurnerLoansCore.BorrowRequest(address(0), address(0), address(0), address(0), 0, 0, 0)
+            IBurnerLoansCore.BorrowRequest(
+                address(0),
+                address(0),
+                address(0),
+                address(0),
+                0,
+                0,
+                0,
+                address(0),
+                0
+            )
         );
         assertEq(_state(), before, "Disabled Core rejects before inputs");
     }
@@ -94,7 +130,17 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
         vm.prank(address(_actor));
         _core.settleBorrow(
-            IBurnerLoansCore.BorrowRequest(address(0), address(0), address(0), address(0), 0, 0, 0)
+            IBurnerLoansCore.BorrowRequest(
+                address(0),
+                address(0),
+                address(0),
+                address(0),
+                0,
+                0,
+                0,
+                address(0),
+                0
+            )
         );
         assertEq(_state(), before, "Own inactivity precedes local state and inputs");
     }
@@ -133,6 +179,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
                 _recipient,
                 1,
                 uint48(vm.getBlockTimestamp() + 30 days),
+                0,
+                address(0),
                 0
             )
         );
@@ -285,12 +333,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         _deposit(2000e6);
         vm.mockCallRevert(
             address(_asset),
-            abi.encodeWithSignature(
-                "transferFrom(address,address,uint256)",
-                _borrower,
-                address(_payout),
-                1
-            ),
+            abi.encodeWithSelector(IERC20.transferFrom.selector, _borrower, address(_payout), 1),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         bytes32 before = _ledger();
@@ -309,7 +352,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         _deposit(2000e6);
         vm.mockCallRevert(
             address(_inventory),
-            abi.encodeWithSignature("draw(address,uint128)", _recipient, 1),
+            abi.encodeWithSelector(IBurnerLoansInventory.draw.selector, _recipient, 1),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         bytes32 before = _ledger();
@@ -332,7 +375,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         uint256 before = _ohm.balanceOf(_recipient);
         vm.expectCall(
             address(_payout),
-            abi.encodeWithSignature("creditFee(address,uint256)"),
+            abi.encodeWithSelector(IBurnerLoansPayout.creditFee.selector),
             uint64(0)
         );
         uint48 due = uint48(vm.getBlockTimestamp() + 30 days);
@@ -357,13 +400,13 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         address treasury = _payout.treasury();
         vm.mockCallRevert(
             address(_asset),
-            abi.encodeWithSignature("transfer(address,uint256)", treasury, 17),
+            abi.encodeWithSelector(IERC20.transfer.selector, treasury, 17),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         uint256 payerBefore = _asset.balanceOf(_borrower);
         vm.prank(address(_actor));
         _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
-        (uint256 fee, , uint256 total) = _payout.payoutReserves(address(_asset));
+        (uint256 fee, , , , uint256 total) = _payout.pendingAmounts(address(_asset));
         assertEq(fee, 17, "Failed optional route remains in fee bucket");
         assertEq(total, 17, "Exact reserved aggregate");
         assertEq(_asset.balanceOf(address(_payout)), 17, "Pending fee fully backed");
@@ -388,7 +431,9 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
                 _recipient,
                 amount_,
                 maturity_,
-                fee_
+                fee_,
+                address(0),
+                0
             );
     }
 
@@ -403,8 +448,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_collateral),
-                abi.encodeWithSignature(
-                    "depositCollateral(address,uint128,address)",
+                abi.encodeWithSelector(
+                    IBurnerLoansCollateral.depositCollateral.selector,
                     address(_asset),
                     uint128(1),
                     _recipient
@@ -436,8 +481,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_collateral),
-                abi.encodeWithSignature(
-                    "depositCollateral(address,uint128,address)",
+                abi.encodeWithSelector(
+                    IBurnerLoansCollateral.depositCollateral.selector,
                     address(_asset),
                     uint128(1),
                     _recipient
@@ -468,7 +513,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_core),
-                abi.encodeWithSignature("setGracePeriod(uint32)", uint32(1))
+                abi.encodeWithSelector(IGracePeriod.setGracePeriod.selector, uint32(1))
             )
         );
         token.setCallbackPhases(false, true);
@@ -496,7 +541,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_core),
-                abi.encodeWithSignature("setGracePeriod(uint32)", uint32(1))
+                abi.encodeWithSelector(IGracePeriod.setGracePeriod.selector, uint32(1))
             )
         );
         token.setCallbackPhases(false, true);
@@ -523,7 +568,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(
+                    IBurnerLoansCore.rescue.selector,
+                    address(_asset),
+                    _recipient
+                )
             )
         );
         token.setCallbackPhases(false, true);
@@ -551,7 +600,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(
+                    IBurnerLoansCore.rescue.selector,
+                    address(_asset),
+                    _recipient
+                )
             )
         );
         token.setCallbackPhases(false, true);
@@ -578,7 +631,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(
+                    IBurnerLoansCore.rescue.selector,
+                    address(_asset),
+                    _recipient
+                )
             )
         );
         token.setCallbackPhases(true, false);
@@ -587,7 +644,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         vm.prank(address(_actor));
         _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
         uint256 expected = 17;
-        uint256 pending = _payout.pendingPayout(address(_asset), _payout.treasury());
+        uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -607,7 +664,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(
+                    IBurnerLoansCore.rescue.selector,
+                    address(_asset),
+                    _recipient
+                )
             )
         );
         token.setCallbackPhases(true, false);
@@ -616,7 +677,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         vm.prank(address(_actor));
         _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
         uint256 expected = 17;
-        uint256 pending = _payout.pendingPayout(address(_asset), _payout.treasury());
+        uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(pending, expected, "Optional callback propagation defers exactly one entitlement");
         assertEq(token.balanceOf(address(_payout)), expected, "Deferred entitlement backed");
         token.setCallbackFrom(address(0), address(0), bytes(""));
@@ -644,8 +705,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_collateral),
-                abi.encodeWithSignature(
-                    "depositCollateral(address,uint128,address)",
+                abi.encodeWithSelector(
+                    IBurnerLoansCollateral.depositCollateral.selector,
                     address(_asset),
                     uint128(1),
                     _recipient
@@ -678,8 +739,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_collateral),
-                abi.encodeWithSignature(
-                    "depositCollateral(address,uint128,address)",
+                abi.encodeWithSelector(
+                    IBurnerLoansCollateral.depositCollateral.selector,
                     address(_asset),
                     uint128(1),
                     _recipient
@@ -706,7 +767,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         token.setCallbackFrom(
             address(_core),
             address(token),
-            abi.encodeWithSignature("burn(address,uint256)", address(_payout), uint256(1))
+            abi.encodeWithSelector(_asset.burn.selector, address(_payout), uint256(1))
         );
         token.setCallbackPhases(false, true);
         bytes32 before = _ledger();
@@ -738,7 +799,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         token.setCallbackFrom(
             address(_core),
             address(token),
-            abi.encodeWithSignature("mint(address,uint256)", address(_payout), uint256(1))
+            abi.encodeWithSelector(_asset.mint.selector, address(_payout), uint256(1))
         );
         token.setCallbackPhases(false, true);
         bytes32 before = _ledger();
@@ -766,5 +827,138 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-SETTLE-BORROW-I03.
     function test_whenOnePrincipalSeed() public {
         test_givenZeroFee_whenBorrowed(1);
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-P06.
+    function test_whenFeeComponentsForwarded(uint256 total_, uint256 protocol_) public {
+        _deposit(2000e6);
+
+        total_ = bound(total_, 1, type(uint256).max - _asset.totalSupply());
+        protocol_ = bound(protocol_, 0, total_);
+        uint256 referral = total_ - protocol_;
+        address referrer = address(0xFEED);
+        _asset.mint(_recipient, total_);
+        vm.prank(_recipient);
+        _asset.approve(address(_core), total_);
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),
+            abi.encodeWithSelector(DependencyFailed.selector)
+        );
+        vm.expectCall(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),
+            uint64(0)
+        );
+        bytes memory credit = abi.encodeCall(
+            IBurnerLoansPayout.creditFee,
+            (address(_asset), protocol_, referrer, referral)
+        );
+        vm.mockCall(address(_payout), credit, bytes(""));
+        vm.expectCall(address(_payout), credit, uint64(1));
+        uint256 payerBalance = _asset.balanceOf(_recipient);
+        uint256 payoutBalance = _asset.balanceOf(address(_payout));
+        uint256 coreBalance = _asset.balanceOf(address(_core));
+        IBurnerLoansCore.BorrowRequest memory request = _request(
+            1,
+            uint48(vm.getBlockTimestamp() + 30 days),
+            protocol_
+        );
+        request.payer = _recipient;
+        request.referrer = referrer;
+        request.referralFee = referral;
+        vm.prank(address(_actor));
+        _core.settleBorrow(request);
+        assertEq(
+            _asset.balanceOf(_recipient),
+            payerBalance - total_,
+            "Exact combined fee collected from independent payer"
+        );
+        assertEq(
+            _asset.balanceOf(address(_payout)),
+            payoutBalance + total_,
+            "Selected Payout receives both fee components"
+        );
+        assertEq(_asset.balanceOf(address(_core)), coreBalance, "Core retains no fee tokens");
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-N04.
+    function test_whenFeeComponentSumOverflows_reverts(
+        uint256 protocol_,
+        uint256 referral_
+    ) public {
+        _deposit(2000e6);
+
+        protocol_ = bound(protocol_, 1, type(uint256).max);
+        uint256 referral = bound(referral_, type(uint256).max - protocol_ + 1, type(uint256).max);
+        bytes32 beforeState = _ledger();
+        vm.expectCall(
+            address(_asset),
+            abi.encodeWithSelector(_asset.transferFrom.selector),
+            uint64(0)
+        );
+        vm.expectCall(
+            address(_payout),
+            abi.encodeWithSelector(IBurnerLoansPayout.creditFee.selector),
+            uint64(0)
+        );
+        IBurnerLoansCore.BorrowRequest memory request = _request(
+            1,
+            uint48(vm.getBlockTimestamp() + 30 days),
+            protocol_
+        );
+        request.referrer = address(0xFEED);
+        request.referralFee = referral;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansCore.BurnerLoansCore_FeeOverflow.selector,
+                protocol_,
+                referral
+            )
+        );
+        vm.prank(address(_actor));
+        _core.settleBorrow(request);
+        assertEq(
+            _ledger(),
+            beforeState,
+            "Overflow restores position and all settlement accounting"
+        );
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-P06.
+    function test_whenLiteralComponentFunding() public {
+        test_whenFeeComponentsForwarded(101, 76);
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-P06.
+    function test_whenOnlyReferralFunded() public {
+        test_whenFeeComponentsForwarded(1, 0);
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-P06.
+    function test_whenOnlyProtocolFunded() public {
+        test_whenFeeComponentsForwarded(1, 1);
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-N04.
+    function test_whenMinimumProtocolOverflows_reverts() public {
+        test_whenFeeComponentSumOverflows_reverts(1, type(uint256).max);
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-N04.
+    function test_whenMaximumProtocolOverflows_reverts() public {
+        test_whenFeeComponentSumOverflows_reverts(type(uint256).max, 1);
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-P06.
+    function test_whenMaximumFundableProtocolComponent() public {
+        uint256 maximum = type(uint256).max - _asset.totalSupply() - 2000e6;
+        test_whenFeeComponentsForwarded(maximum, maximum);
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-P06.
+    function test_whenMaximumFundableReferralComponent() public {
+        uint256 maximum = type(uint256).max - _asset.totalSupply() - 2000e6;
+        test_whenFeeComponentsForwarded(maximum, 0);
     }
 }

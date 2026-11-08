@@ -2,6 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
@@ -34,20 +38,19 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
     }
 
     // Scenarios: BLCT-ENABLE-D02.
-    function test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_reverts(
+    function test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_thenEnabled(
         address caller_
     ) public {
         _admin(caller_);
         _timelock.disable("");
         _setState(_config, true, false);
-        _transitionReverts(
-            abi.encodeCall(_timelock.enable, (bytes(""))),
-            caller_,
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_NotActive.selector,
-                address(_config)
-            )
-        );
+        vm.mockCallRevert(address(_config), abi.encodeWithSignature("isEnabled()"), hex"deadbeef");
+        bytes32 funds = _economicDigest();
+        _expectTransition(caller_, true, "");
+        vm.prank(caller_);
+        _timelock.enable("");
+        assertTrue(_timelock.isEnabled(), "Paused target permits activation for repair");
+        assertEq(_economicDigest(), funds, "Activation preserves accounting");
     }
 
     // Scenarios: BLCT-ENABLE-D03.
@@ -242,5 +245,38 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
         _restore(checkpoint);
         test_givenNonAdmin_whenNonemptyData_thenRoleError(address(0xabc1), new bytes(256));
         _restore(checkpoint);
+    }
+
+    // Scenarios: BLCT-ENABLE-D07.
+    function test_givenMissingConsumedInterface_whenActivated_reverts(bool enabled_) public {
+        _timelock.disable("");
+        _setState(_config, true, enabled_);
+        bytes4[3] memory ids = [
+            type(IBurnerLoansConfig).interfaceId,
+            type(IConfigOperator).interfaceId,
+            type(IEnabler).interfaceId
+        ];
+        for (uint256 i; i < ids.length; ++i) {
+            vm.mockCall(
+                address(_config),
+                abi.encodeCall(IERC165.supportsInterface, (ids[i])),
+                abi.encode(false)
+            );
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IBurnerLoansConfigTimelock
+                        .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                        .selector,
+                    address(_config)
+                )
+            );
+            _timelock.enable("");
+            assertFalse(_timelock.isEnabled(), "Incompatible target cannot activate queue");
+            vm.mockCall(
+                address(_config),
+                abi.encodeCall(IERC165.supportsInterface, (ids[i])),
+                abi.encode(true)
+            );
+        }
     }
 }

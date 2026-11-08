@@ -429,7 +429,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         uint256 expected = result.keeperReward;
         assertGt(expected, 0, "Fixture produces positive obligation");
         assertEq(
-            _payout.pendingPayout(address(_asset), _recipient),
+            _payout.pendingRecipientAmount(address(_asset), _recipient),
             expected,
             "Failed optional delivery preserves entitlement"
         );
@@ -456,7 +456,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         uint256 expected = result.collateralToTreasury;
         assertGt(expected, 0, "Fixture produces positive obligation");
         assertEq(
-            _payout.pendingPayout(address(_asset), _payout.treasury()),
+            _payout.pendingRecipientAmount(address(_asset), _payout.treasury()),
             expected,
             "Failed optional delivery preserves entitlement"
         );
@@ -715,7 +715,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
         );
         uint256 expected = 7;
-        uint256 pending = _payout.pendingPayout(address(_asset), _recipient);
+        uint256 pending = _payout.pendingRecipientAmount(address(_asset), _recipient);
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -758,7 +758,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
         );
         uint256 expected = 7;
-        uint256 pending = _payout.pendingPayout(address(_asset), _recipient);
+        uint256 pending = _payout.pendingRecipientAmount(address(_asset), _recipient);
         assertEq(pending, expected, "Optional callback propagation defers exactly one entitlement");
         assertEq(token.balanceOf(address(_payout)), expected, "Deferred entitlement backed");
         token.setCallbackFrom(address(0), address(0), bytes(""));
@@ -807,7 +807,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
         );
         uint256 expected = 93;
-        uint256 pending = _payout.pendingPayout(address(_asset), _payout.treasury());
+        uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -850,7 +850,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
         );
         uint256 expected = 93;
-        uint256 pending = _payout.pendingPayout(address(_asset), _payout.treasury());
+        uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(pending, expected, "Optional callback propagation defers exactly one entitlement");
         assertEq(token.balanceOf(address(_payout)), expected, "Deferred entitlement backed");
         token.setCallbackFrom(address(0), address(0), bytes(""));
@@ -1008,7 +1008,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             _accountingHandler.principal() == 0 ? 0 : 1,
             "Underlying active index agrees with independent principal"
         );
-        (, , uint256 reserved) = _payout.payoutReserves(address(_asset));
+        (, , , , uint256 reserved) = _payout.pendingAmounts(address(_asset));
         assertEq(reserved, 0, "Ordinary-token payouts leave no deferred reserve");
     }
 }

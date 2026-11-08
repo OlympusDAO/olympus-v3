@@ -7,6 +7,7 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
+import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
@@ -25,6 +26,14 @@ import {BaseBurnerLoansAction} from "src/policies/burnerloans/abstracts/BaseBurn
 /// @dev Borrowing and extensions require borrower authority; repayment is permissionless. The actual
 ///      caller supplies fees and repayments, including when acting as an authorized borrower operator.
 contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
+    /// @notice Internal fee components passed separately to Core for settlement.
+    /// @param protocolFee Protocol allocation, in collateral token decimals.
+    /// @param referralFee Referrer allocation, in collateral token decimals.
+    struct FeeAllocation {
+        uint256 protocolFee;
+        uint256 referralFee;
+    }
+
     /// @notice Binds deployment dependencies and initializes the local contract state.
     /// @dev Reverts if:
     ///      - Core does not advertise IBurnerLoansCore and IEnabler through ERC165.
@@ -45,26 +54,26 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
     ///      - Collateral is absent or existing debt has matured.
     ///      - The requested principal exceeds the global or asset cap.
     ///      - Prices are unavailable or the current/resulting position is unhealthy.
-    ///      - The fee exceeds maxFee, or mandatory fee/principal settlement fails.
+    ///      - A positive referral allocation names the selected Payout as its recipient.
+    ///      - The total fee (protocolFee + referralFee) exceeds maxFee, or mandatory fee/principal settlement fails.
     function borrow(
         address asset_,
         uint128 amount_,
         address borrower_,
         address recipient_,
-        uint256 maxFee_
+        uint256 maxFee_,
+        address referrer_
     ) external override onlyOperational returns (IBurnerLoansDebt.BorrowPreview memory) {
         _authorizeBorrower(borrower_);
         _validateBorrowInputs(amount_, recipient_);
-        IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        // Capture prices once for this operation so health and fee calculations agree. FLOAN state
-        // is read after refreshSnapshot, since refreshing the shared cache is an external write.
-        IBurnerLoansCore.PriceSnapshot memory snapshot = evaluator.refreshSnapshot(asset_);
-        IBurnerLoansDebt.BorrowPreview memory result = _quoteBorrow(
-            asset_,
-            amount_,
-            borrower_,
-            snapshot
-        );
+        IBurnerLoansDebt.BorrowPreview memory result;
+        FeeAllocation memory allocation;
+        {
+            // Capture prices once so health and fees agree. Read FLOAN after this external write.
+            IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
+                .refreshSnapshot(asset_);
+            (result, allocation) = _quoteBorrow(asset_, amount_, borrower_, snapshot, referrer_);
+        }
         if (result.fee > maxFee_)
             revert IBurnerLoansDebt.BurnerLoans_FeeExceedsMax(result.fee, maxFee_);
         (uint128 principal, uint48 maturity) = _CORE.settleBorrow(
@@ -75,7 +84,9 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
                 recipient_,
                 amount_,
                 result.maturity,
-                result.fee
+                allocation.protocolFee,
+                referrer_,
+                allocation.referralFee
             )
         );
         result.resultingDebtOhm = principal;
@@ -86,17 +97,24 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
             borrower_,
             recipient_,
             amount_,
-            result.fee
+            allocation.protocolFee,
+            referrer_,
+            allocation.referralFee
         );
         return result;
     }
 
     /// @notice	Validates borrow exposure and returns the position and resulting maturity.
-    /// @dev	Reverts if:
-    /// @dev	- Originations or Inventory are disabled.
-    /// @dev	- DepositManager custody is insolvent.
-    /// @dev	- Collateral is absent or the debt position has matured.
-    /// @dev	- The requested principal exceeds the global or asset cap.
+    /// @dev Reverts if:
+    ///      - The market is not configured.
+    ///      - Originations are disabled.
+    ///      - Inventory is unavailable.
+    ///      - DepositManager custody is insolvent.
+    ///      - Collateral is absent.
+    ///      - An existing debt position has matured.
+    ///      - The requested principal exceeds global capacity.
+    ///      - The requested principal exceeds the asset debt cap.
+    ///      - The initial maturity cannot be represented as uint48.
     ///
     /// @param	asset_	Underlying collateral token identifying the market.
     /// @param	borrower_	Account whose canonical position is queried or changed.
@@ -179,24 +197,44 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
     }
 
     /// @inheritdoc IBurnerLoansDebt
-    /// @dev Permissionless. Retains borrower/amount/recipient, action/Core admission,
-    ///      settlement role, origination, funding/capacity, solvency, pricing, health and maxFee
-    ///      checks. Execution alone authenticates its caller and collects that caller's fee.
+    /// @dev Permissionless: execution alone authenticates the caller and collects the total fee (protocolFee + referralFee).
+    /// @dev Reverts if:
+    ///      - Debt or Core is Kernel-inactive or locally disabled.
+    ///      - Debt lacks its required Core settlement role.
+    ///      - The borrower address is invalid.
+    ///      - The market configuration or pricing snapshot is invalid.
+    ///      - Originations are disabled.
+    ///      - DepositManager custody is insolvent.
+    ///      - Risk rejects the referrer or fee calculation.
+    ///      - A nonzero total fee requires an unavailable Payout dependency.
+    ///      - A positive referral allocation names the selected Payout as its recipient.
+    ///      - The total fee (protocolFee + referralFee) exceeds maxFee_.
+    ///      - The amount is zero.
+    ///      - The recipient is invalid.
+    ///      - Inventory is unavailable.
+    ///      - The borrower has no collateral.
+    ///      - An existing debt position has matured.
+    ///      - The requested principal exceeds global capacity.
+    ///      - The requested principal exceeds the asset debt cap.
+    ///      - The current or resulting position fails its required health threshold.
+    ///      - The resulting maturity cannot be represented as uint48.
     function previewBorrow(
         address asset_,
         uint128 amount_,
         address onBehalfOf_,
         address recipient_,
-        uint256 maxFee_
+        uint256 maxFee_,
+        address referrer_
     ) external view override returns (IBurnerLoansDebt.BorrowPreview memory result) {
         _requirePreviewOperational();
         _validateBorrower(onBehalfOf_);
         _validateBorrowInputs(amount_, recipient_);
-        result = _quoteBorrow(
+        (result, ) = _quoteBorrow(
             asset_,
             amount_,
             onBehalfOf_,
-            IBurnerLoansRisk(_CORE.risk()).snapshot(asset_)
+            IBurnerLoansRisk(_CORE.risk()).snapshot(asset_),
+            referrer_
         );
         if (result.fee > maxFee_)
             revert IBurnerLoansDebt.BurnerLoans_FeeExceedsMax(result.fee, maxFee_);
@@ -215,7 +253,7 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
     ///      - The borrower has no outstanding debt for the asset.
     ///      - A repayment exceeds the borrower's outstanding principal.
     ///      - A repayment was attempted in the same block as the position's latest borrow.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function previewRepay(
         address asset_,
         uint128 amount_,
@@ -238,18 +276,21 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
     ///      - Debt is absent or custody is insolvent.
     ///      - Resulting maturity is not in the future or exceeds the configured horizon.
     ///      - Prices are unavailable or the position is unhealthy.
-    ///      - The fee exceeds maxFee or mandatory collection/settlement fails.
+    ///      - A positive referral allocation names the selected Payout as its recipient.
+    ///      - The total fee (protocolFee + referralFee) exceeds maxFee or mandatory collection/settlement fails.
     function extend(
         address asset_,
         address borrower_,
         uint16 terms_,
-        uint256 maxFee_
+        uint256 maxFee_,
+        address referrer_
     ) external override onlyOperational returns (IBurnerLoansDebt.ExtendPreview memory result) {
         _authorizeBorrower(borrower_);
         if (terms_ == 0) revert IBurnerLoansCore.BurnerLoansCore_ZeroAmount();
         IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
             .refreshSnapshot(asset_);
-        result = _quoteExtend(asset_, borrower_, terms_, snapshot);
+        FeeAllocation memory allocation;
+        (result, allocation) = _quoteExtend(asset_, borrower_, terms_, snapshot, referrer_);
         if (result.fee > maxFee_)
             revert IBurnerLoansDebt.BurnerLoans_FeeExceedsMax(result.fee, maxFee_);
         result.maturity = _CORE.settleExtend(
@@ -257,29 +298,55 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
             borrower_,
             msg.sender,
             result.maturity,
-            result.fee
+            allocation.protocolFee,
+            referrer_,
+            allocation.referralFee
         );
-        emit IBurnerLoansDebt.Extended(msg.sender, asset_, borrower_, result.maturity, result.fee);
+        emit IBurnerLoansDebt.Extended(
+            msg.sender,
+            asset_,
+            borrower_,
+            result.maturity,
+            allocation.protocolFee,
+            referrer_,
+            allocation.referralFee
+        );
     }
 
     /// @inheritdoc IBurnerLoansDebt
-    /// @dev Permissionless. Retains borrower/terms, action/Core admission, settlement role,
-    ///      origination, debt, custody solvency, maturity/horizon, pricing, health and maxFee
-    ///      checks. Execution alone authenticates its caller and collects that caller's fee.
+    /// @dev Permissionless: execution alone authenticates the caller and collects the total fee (protocolFee + referralFee).
+    /// @dev Reverts if:
+    ///      - Debt or Core is Kernel-inactive or locally disabled.
+    ///      - Debt lacks its required Core settlement role.
+    ///      - The borrower address is invalid.
+    ///      - The market configuration or pricing snapshot is invalid.
+    ///      - Originations are disabled.
+    ///      - DepositManager custody is insolvent.
+    ///      - Risk rejects the referrer or fee calculation.
+    ///      - A nonzero total fee requires an unavailable Payout dependency.
+    ///      - A positive referral allocation names the selected Payout as its recipient.
+    ///      - The total fee (protocolFee + referralFee) exceeds maxFee_.
+    ///      - The number of terms is zero.
+    ///      - The borrower has no debt.
+    ///      - The resulting maturity is not in the future.
+    ///      - The resulting maturity exceeds the permitted horizon.
+    ///      - The position fails its required health threshold.
     function previewExtend(
         address asset_,
         address onBehalfOf_,
         uint16 terms_,
-        uint256 maxFee_
+        uint256 maxFee_,
+        address referrer_
     ) external view override returns (IBurnerLoansDebt.ExtendPreview memory result) {
         _requirePreviewOperational();
         _validateBorrower(onBehalfOf_);
         if (terms_ == 0) revert IBurnerLoansCore.BurnerLoansCore_ZeroAmount();
-        result = _quoteExtend(
+        (result, ) = _quoteExtend(
             asset_,
             onBehalfOf_,
             terms_,
-            IBurnerLoansRisk(_CORE.risk()).snapshot(asset_)
+            IBurnerLoansRisk(_CORE.risk()).snapshot(asset_),
+            referrer_
         );
         if (result.fee > maxFee_)
             revert IBurnerLoansDebt.BurnerLoans_FeeExceedsMax(result.fee, maxFee_);
@@ -316,13 +383,20 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
     /// @param amount_ Requested OHM principal in native OHM units.
     /// @param borrower_ Borrower whose canonical position is evaluated.
     /// @param snapshot_ Prices captured once for this operation, in PRICE decimals.
-    /// @return result Fee, resulting principal, expiry and WAD health.
+    /// @param referrer_ Recipient used by Risk for this operation's fee allocation.
+    /// @return result Total fee (protocolFee + referralFee), resulting principal, expiry and WAD health.
+    /// @return allocation Separate protocol and referral fees for internal settlement.
     function _quoteBorrow(
         address asset_,
         uint128 amount_,
         address borrower_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_
-    ) private view returns (IBurnerLoansDebt.BorrowPreview memory result) {
+        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        address referrer_
+    )
+        private
+        view
+        returns (IBurnerLoansDebt.BorrowPreview memory result, FeeAllocation memory allocation)
+    {
         uint32 market;
         IFLOANv1.Position memory position;
         (market, position, result.maturity) = _prepareBorrow(asset_, borrower_, amount_);
@@ -346,9 +420,16 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
             result.resultingDebtOhm,
             true
         );
-        result.fee = evaluator.fee(snapshot_, market, amount_, 1);
+        (allocation.protocolFee, allocation.referralFee) = evaluator.fee(
+            snapshot_,
+            market,
+            amount_,
+            1,
+            referrer_
+        );
+        result.fee = allocation.protocolFee + allocation.referralFee;
         // A zero-fee operation creates no payout obligation, so Payout availability is irrelevant.
-        if (result.fee != 0) _requirePayoutOperational();
+        _requireFeePayoutOperational(allocation, referrer_);
     }
 
     /// @notice Shared extension validation; Inventory is not consumed by this operation.
@@ -359,42 +440,52 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
     /// @param borrower_ Borrower whose canonical position is evaluated.
     /// @param terms_ Whole configured terms added to the stored expiry.
     /// @param snapshot_ Prices captured once for this operation, in PRICE decimals.
-    /// @return result Fee, resulting expiry and WAD health.
+    /// @param referrer_ Recipient used by Risk for this operation's fee allocation.
+    /// @return result Total fee (protocolFee + referralFee), resulting expiry and WAD health.
+    /// @return allocation Separate protocol and referral fees for internal settlement.
     function _quoteExtend(
         address asset_,
         address borrower_,
         uint16 terms_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_
-    ) private view returns (IBurnerLoansDebt.ExtendPreview memory result) {
-        (, IBurnerLoansCore.AssetConfig memory cfg, ) = LoanMarket.configuration(_CORE, asset_);
-        if (!cfg.originationsEnabled)
-            revert IBurnerLoansCore.BurnerLoansCore_AssetOriginationsDisabled(asset_);
-        LoanSolvency.requireSolvent(
-            IDepositManager(_CORE.depositManager()),
-            asset_,
-            address(_CORE)
-        );
-        (, , IFLOANv1.Position memory position) = LoanPositions.forCore(_CORE, asset_, borrower_);
-        if (position.principalDue == 0) revert IBurnerLoansCore.BurnerLoansCore_NoDebt();
-        // Extend from the stored deadline, not from now. An expired loan may be extended only if
-        // the purchased terms reach the future and stay within the horizon measured from now.
-        uint256 maturity = uint256(position.maturity) + uint256(cfg.termLength) * terms_;
-        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
-        // forge-lint: disable-next-line(block-timestamp)
-        if (maturity <= block.timestamp)
-            revert IBurnerLoansDebt.BurnerLoans_ExtensionMaturityNotFuture(
-                maturity,
-                block.timestamp
+        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        address referrer_
+    )
+        private
+        view
+        returns (IBurnerLoansDebt.ExtendPreview memory result, FeeAllocation memory allocation)
+    {
+        IFLOANv1.Position memory position;
+        {
+            (, IBurnerLoansCore.AssetConfig memory cfg, ) = LoanMarket.configuration(_CORE, asset_);
+            if (!cfg.originationsEnabled)
+                revert IBurnerLoansCore.BurnerLoansCore_AssetOriginationsDisabled(asset_);
+            LoanSolvency.requireSolvent(
+                IDepositManager(_CORE.depositManager()),
+                asset_,
+                address(_CORE)
             );
-        uint256 maximum = block.timestamp + uint256(cfg.maxMaturityHorizon);
-        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
-        // forge-lint: disable-next-line(block-timestamp)
-        if (maximum > type(uint48).max) maximum = type(uint48).max;
-        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
-        // forge-lint: disable-next-line(block-timestamp)
-        if (maturity > maximum)
-            revert IBurnerLoansDebt.BurnerLoans_MaturityHorizonExceeded(maturity, maximum);
-        result.maturity = SafeCast.toUint48(maturity);
+            (, , position) = LoanPositions.forCore(_CORE, asset_, borrower_);
+            if (position.principalDue == 0) revert IBurnerLoansCore.BurnerLoansCore_NoDebt();
+            // Extend from the stored deadline, not from now. An expired loan may be extended only if
+            // the purchased terms reach the future and stay within the horizon measured from now.
+            uint256 maturity = uint256(position.maturity) + uint256(cfg.termLength) * terms_;
+            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+            // forge-lint: disable-next-line(block-timestamp)
+            if (maturity <= block.timestamp)
+                revert IBurnerLoansDebt.BurnerLoans_ExtensionMaturityNotFuture(
+                    maturity,
+                    block.timestamp
+                );
+            uint256 maximum = block.timestamp + uint256(cfg.maxMaturityHorizon);
+            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+            // forge-lint: disable-next-line(block-timestamp)
+            if (maximum > type(uint48).max) maximum = type(uint48).max;
+            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+            // forge-lint: disable-next-line(block-timestamp)
+            if (maturity > maximum)
+                revert IBurnerLoansDebt.BurnerLoans_MaturityHorizonExceeded(maturity, maximum);
+            result.maturity = SafeCast.toUint48(maturity);
+        }
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
         result.healthFactor = evaluator.validateHealth(
             snapshot_,
@@ -403,13 +494,32 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
             position.principalDue,
             false
         );
-        result.fee = evaluator.fee(
+        (allocation.protocolFee, allocation.referralFee) = evaluator.fee(
             snapshot_,
             _CORE.marketId(asset_),
             position.principalDue,
-            terms_
+            terms_,
+            referrer_
         );
-        if (result.fee != 0) _requirePayoutOperational();
+        result.fee = allocation.protocolFee + allocation.referralFee;
+        _requireFeePayoutOperational(allocation, referrer_);
+    }
+
+    /// @notice Validates the payout service and referral destination shared by quotes and execution.
+    /// @dev Zero allocations require no payout service or destination admission.
+    /// @dev Reverts if:
+    ///      - The selected Payout for a positive allocation is inactive, paused or uses another Kernel.
+    ///      - Payout rejects a positive referral allocation's recipient.
+    /// @param allocation_ Risk-approved protocol and referral fees in raw collateral units.
+    /// @param referrer_ Fixed recipient of the referral allocation.
+    function _requireFeePayoutOperational(
+        FeeAllocation memory allocation_,
+        address referrer_
+    ) private view {
+        if (allocation_.protocolFee == 0 && allocation_.referralFee == 0) return;
+        _requirePayoutOperational();
+        if (allocation_.referralFee != 0)
+            IBurnerLoansPayout(_CORE.payout()).validatePayoutRecipient(referrer_);
     }
 
     /// @notice Quotes a repayment position against the current principal and latest borrow block.

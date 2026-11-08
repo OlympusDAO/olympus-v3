@@ -198,18 +198,44 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
                     )
                 );
         if (a_.selector == IBurnerLoansConfig.rescue.selector)
-            return keccak256(abi.encode(address(_core), _core.configOperator()));
+            return
+                keccak256(
+                    abi.encode(address(_core), _core.configOperator(), _config.configOperator())
+                );
         address asset = abi.decode(a_.payload, (address));
         if (a_.selector == IBurnerLoansConfig.setAssetFeeConfig.selector)
-            return keccak256(abi.encode(address(_core), asset, _config.getAssetFeeConfig(asset)));
+            return
+                keccak256(
+                    abi.encode(
+                        address(_core),
+                        asset,
+                        _config.getAssetFeeConfig(asset),
+                        _config.configOperator()
+                    )
+                );
         IBurnerLoansCore.AssetConfig memory c = _config.getAssetConfig(asset);
         if (a_.selector == IBurnerLoansConfig.setAssetRiskConfig.selector)
-            return keccak256(abi.encode(address(_core), asset, _riskFields(c)));
+            return
+                keccak256(
+                    abi.encode(address(_core), asset, _riskFields(c), _config.configOperator())
+                );
         if (a_.selector == IBurnerLoansConfig.setAssetDebtCap.selector)
-            return keccak256(abi.encode(address(_core), asset, c.debtCap));
+            return
+                keccak256(abi.encode(address(_core), asset, c.debtCap, _config.configOperator()));
         if (a_.selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector)
-            return keccak256(abi.encode(address(_core), asset, c.originationsEnabled));
-        return keccak256(abi.encode(address(_core), asset, c.withdrawAsShares));
+            return
+                keccak256(
+                    abi.encode(
+                        address(_core),
+                        asset,
+                        c.originationsEnabled,
+                        _config.configOperator()
+                    )
+                );
+        return
+            keccak256(
+                abi.encode(address(_core), asset, c.withdrawAsShares, _config.configOperator())
+            );
     }
 
     function _economicDigest() internal view returns (bytes32) {
@@ -513,14 +539,13 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
         view
         returns (ITimelockBatchQueue.BatchAction[] memory a)
     {
-        a = new ITimelockBatchQueue.BatchAction[](7);
+        a = new ITimelockBatchQueue.BatchAction[](6);
         a[0] = _capAction(address(_asset), 200000e9);
         a[1] = _originationsAction(address(_asset), false);
         a[2] = _riskAction(address(_asset), _riskInput());
         a[3] = _sharesAction(address(_asset), false);
         a[4] = _feeAction(address(_asset), _fees());
-        a[5] = _ageAction(3600);
-        a[6] = _rescueAction(address(_asset), _recipient);
+        a[5] = _rescueAction(address(_asset), _recipient);
     }
 
     function _alternative(
@@ -565,7 +590,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
         _supplyInventory(_borrower, 1000e9);
         vm.startPrank(_borrower);
         _collateral.depositCollateral(address(_asset), 2000e6, _borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6, address(0));
         vm.stopPrank();
     }
 

@@ -25,4 +25,8 @@ contract BurnerLoansPayoutHarness is BurnerLoansPayout {
     function hasPendingKeeper(address token_, address keeper_) external view returns (bool) {
         return _payouts.pendingKeeperRecipients[token_].contains(keeper_);
     }
+
+    function hasPendingReferrer(address token_, address recipient_) external view returns (bool) {
+        return _payouts.pendingReferralRecipients[token_].contains(recipient_);
+    }
 }

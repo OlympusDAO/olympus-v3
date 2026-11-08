@@ -232,7 +232,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
         );
         assertEq(token, address(_ohm), "Actual token forwarded");
         assertEq(output, actual_, "Actual output not nominal request");
-        (, , uint256 reserved) = _payout.payoutReserves(address(_ohm));
+        (, , , , uint256 reserved) = _payout.pendingAmounts(address(_ohm));
         assertEq(reserved, 0, "No deferred-yield obligation");
     }
 

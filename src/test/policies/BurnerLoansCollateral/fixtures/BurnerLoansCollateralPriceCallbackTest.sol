@@ -14,7 +14,7 @@ import {BurnerLoansPriceCacheTest} from "src/test/policies/BurnerLoansCore/fixtu
 abstract contract BurnerLoansCollateralPriceCallbackTest is BurnerLoansPriceCacheTest {
     function _openDebt() internal {
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         vm.roll(block.number + 1);
     }
 
@@ -25,7 +25,7 @@ abstract contract BurnerLoansCollateralPriceCallbackTest is BurnerLoansPriceCach
             address(_debt),
             abi.encodeCall(
                 _debt.borrow,
-                (address(_asset), 1, _borrower, address(_cache), uint256(0))
+                (address(_asset), 1, _borrower, address(_cache), uint256(0), address(0))
             ),
             propagate_
         );

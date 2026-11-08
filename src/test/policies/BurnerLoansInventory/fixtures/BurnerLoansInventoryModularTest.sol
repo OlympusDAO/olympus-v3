@@ -68,7 +68,7 @@ abstract contract BurnerLoansInventoryModularTest is BurnerLoansModularTest {
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),
-            abi.encode(uint256(7))
+            abi.encode(uint256(7), uint256(0))
         );
     }
 

@@ -25,7 +25,7 @@ library LoanPayouts {
 
     /// @notice Unpaid obligations and addresses needed to enumerate direct retries.
     struct State {
-        mapping(address token => uint256 amount) pendingFees;
+        mapping(address token => uint256 amount) pendingProtocolFees;
         // Seized backing follows the current TRSRY module when retried, never the address at seizure.
         mapping(address token => uint256 amount) pendingSeizedCollateral;
         mapping(address token => mapping(address keeper => uint256 amount)) pendingKeeperRewards;
@@ -33,29 +33,57 @@ library LoanPayouts {
         mapping(address token => uint256 amount) totalPending;
         EnumerableSet.AddressSet pendingTokens;
         mapping(address token => EnumerableSet.AddressSet keepers) pendingKeeperRecipients;
+        mapping(address token => mapping(address referrer => uint256 amount)) pendingReferralFees;
+        mapping(address token => EnumerableSet.AddressSet referrers) pendingReferralRecipients;
+        // Aggregate of the fixed-recipient referral buckets, for constant-time reserve queries.
+        mapping(address token => uint256 amount) totalPendingReferralFees;
+        // Aggregate of the original keepers' reward buckets, maintained on credit, payment and rescue.
+        mapping(address token => uint256 amount) totalPendingKeeperRewards;
     }
 
-    /// @notice Collects an exact caller fee and attempts the current fee destination.
+    /// @notice Reserves both received fee allocations before attempting either delivery.
     /// @dev Reverts if:
-    ///      - The payer's transfer fails or the facility receives an inexact amount.
-    ///      - Adding the new fee to its pending balance overflows.
+    ///      - Adding an allocation to its pending balance or aggregate reserve overflows.
+    ///      The caller validates the combined incoming receipt before invoking this helper.
     /// @param state_ Payout accounting stored by the calling facility.
     /// @param token_ Fee token.
     /// @param recipient_ Current fee destination.
-    /// @param amount_ Fee collected in token units.
+    /// @param protocolFee_ Protocol allocation in raw token units.
+    /// @param referrer_ Fixed-original recipient of the referral allocation.
+    /// @param referralFee_ Referral allocation in raw token units.
     function creditFee(
         State storage state_,
         address token_,
         address recipient_,
-        uint256 amount_
+        uint256 protocolFee_,
+        address referrer_,
+        uint256 referralFee_
     ) internal {
-        if (amount_ == 0) return;
-        // Record the liability before attempting delivery. A failed optional transfer retains both
-        // the source bucket and aggregate reserve, so recovery cannot mistake owed tokens for surplus.
-        state_.pendingFees[token_] += amount_;
-        state_.totalPending[token_] += amount_;
+        if (protocolFee_ == 0 && referralFee_ == 0) return;
+        state_.pendingProtocolFees[token_] += protocolFee_;
+        state_.totalPending[token_] += protocolFee_ + referralFee_;
         state_.pendingTokens.add(token_);
-        transferPendingFee(state_, token_, recipient_);
+        if (referralFee_ != 0) {
+            state_.pendingReferralFees[token_][referrer_] += referralFee_;
+            state_.totalPendingReferralFees[token_] += referralFee_;
+            state_.pendingReferralRecipients[token_].add(referrer_);
+        }
+        if (protocolFee_ != 0) transferPendingProtocolFee(state_, token_, recipient_);
+        if (referralFee_ != 0) transferPendingReferralFee(state_, token_, referrer_);
+    }
+
+    /// @notice Attempts the entire referral fee owed to its original referrer.
+    /// @dev A failed optional delivery retains the fully backed obligation and indexes.
+    /// @param state_ Payout accounting stored by the calling facility.
+    /// @param token_ Token in which the referral fee is owed.
+    /// @param referrer_ Fixed-original recipient.
+    /// @return uint256 Amount successfully delivered in raw token units.
+    function transferPendingReferralFee(
+        State storage state_,
+        address token_,
+        address referrer_
+    ) internal returns (uint256) {
+        return _transferPending(state_, token_, referrer_, IBurnerLoansPayout.PayoutKind.Referral);
     }
 
     /// @notice Accrues a seizure reward to its original keeper and attempts delivery.
@@ -75,6 +103,7 @@ library LoanPayouts {
     ) internal returns (uint256) {
         if (amount_ != 0) {
             state_.pendingKeeperRewards[token_][keeper_] += amount_;
+            state_.totalPendingKeeperRewards[token_] += amount_;
             state_.totalPending[token_] += amount_;
             state_.pendingTokens.add(token_);
             state_.pendingKeeperRecipients[token_].add(keeper_);
@@ -140,7 +169,7 @@ library LoanPayouts {
     /// @param token_ Fee token.
     /// @param recipient_ Current fee destination.
     /// @return uint256 Amount transferred to the recipient, or zero if unpaid.
-    function transferPendingFee(
+    function transferPendingProtocolFee(
         State storage state_,
         address token_,
         address recipient_
@@ -166,9 +195,9 @@ library LoanPayouts {
 
     /// @notice Validates the recovery token and destination.
     /// @dev Reverts if:
-    ///      - The rescue asset is not a deployed token contract.
-    ///      - The destination cannot receive this rescue.
-    ///      Reads without state changes; errors from dependency views propagate.
+    ///      - The token address has no deployed code.
+    ///      - The destination is zero, this contract, the token, the configurator or Kernel.
+    ///
     /// @param token_ Token whose balance or payout accounting is used.
     /// @param destination_ Recovery destination.
     /// @param configurator_ Selected Config authority.
@@ -189,28 +218,36 @@ library LoanPayouts {
         ) revert IBurnerLoansErrors.BurnerLoans_InvalidRescueDestination(destination_);
     }
 
-    /// @notice Returns the entitlement using current fee/Treasury routes and fixed keeper identity.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @notice Returns every pending entitlement for a recipient, including fixed referral fees.
+    /// @dev Recipient-scoped: includes this account's fixed keeper/referral claims plus any current
+    ///      protocol routes it owns. The token-wide pendingAmounts getter instead includes every recipient.
+    ///      Rescue preview uses this same complete entitlement; there is no separate rescue-only total.
     /// @param state_ Payout buckets and indexes owned by Payout.
-    /// @param token_ Token whose balance or payout accounting is used.
-    /// @param recipient_ Final output recipient or pending entitlement holder.
+    /// @param token_ Token whose pending obligations are queried.
+    /// @param recipient_ Account entitled to the payout.
     /// @param feeRecipient_ Current local fee route.
-    /// @param treasury_ Local Treasury route for protocol-owned seized collateral.
-    /// @return amount Combined pending fee, seized backing and keeper entitlement for this recipient.
-    function pendingAmount(
+    /// @param treasury_ Current Treasury route.
+    /// @return amount Combined protocol, seized, keeper and referral entitlement.
+    function pendingRecipientAmount(
         State storage state_,
         address token_,
         address recipient_,
         address feeRecipient_,
         address treasury_
     ) internal view returns (uint256 amount) {
-        amount = state_.pendingKeeperRewards[token_][recipient_];
-        if (recipient_ == feeRecipient_) amount += state_.pendingFees[token_];
+        amount =
+            state_.pendingKeeperRewards[token_][recipient_] +
+            state_.pendingReferralFees[token_][recipient_];
+        if (recipient_ == feeRecipient_) amount += state_.pendingProtocolFees[token_];
         if (recipient_ == treasury_) amount += state_.pendingSeizedCollateral[token_];
     }
 
     /// @notice Quotes unreserved custody surplus available for recovery.
-    /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev Reverts if:
+    ///      - The token address has no deployed code.
+    ///      - The destination is zero, this contract, the token, the configurator or Kernel.
+    ///      - The token balance getter fails or cannot be ABI-decoded.
+    ///
     /// @param state_ Payout buckets and indexes owned by Payout.
     /// @param token_ Token whose balance or payout accounting is used.
     /// @param destination_ Recovery destination.
@@ -234,7 +271,7 @@ library LoanPayouts {
     ///      - A required address is zero.
     ///      - An operation was requested with a zero token amount.
     ///      - A requested rescue exceeds the recipient's combined pending payout.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param state_ Payout buckets and indexes owned by Payout.
     /// @param token_ Token whose balance or payout accounting is used.
     /// @param recipient_ Final output recipient or pending entitlement holder.
@@ -259,7 +296,7 @@ library LoanPayouts {
         _validateRescueAddresses(token_, destination_, configurator_, kernel_);
         if (recipient_ == address(0)) revert IBurnerLoansErrors.BurnerLoans_ZeroAddress();
         if (amount_ == 0) revert IBurnerLoansCore.BurnerLoansCore_ZeroAmount();
-        available = pendingAmount(state_, token_, recipient_, feeRecipient_, treasury_);
+        available = pendingRecipientAmount(state_, token_, recipient_, feeRecipient_, treasury_);
         if (amount_ > available)
             revert IBurnerLoansPayout.BurnerLoans_InsufficientPendingPayout(
                 token_,
@@ -334,34 +371,50 @@ library LoanPayouts {
             configurator_,
             kernel_
         );
-        // One recipient can hold several kinds of entitlement. Consume keeper reward, then fees,
-        // then Treasury backing so the combined rescue debits each source and the reserve exactly once.
-        uint256 seizureReward = Math.min(amount_, state_.pendingKeeperRewards[token_][recipient_]);
-        uint256 fee;
-        if (recipient_ == feeRecipient_) {
-            fee = Math.min(amount_ - seizureReward, state_.pendingFees[token_]);
-        }
-        uint256 seizure = amount_ - seizureReward - fee;
-
-        if (seizureReward != 0) {
-            state_.pendingKeeperRewards[token_][recipient_] -= seizureReward;
+        // Consume keeper rewards, protocol fees, seized collateral, then referral fees.
+        // Preview validated their combined availability. No external calls occur until every debit is recorded.
+        uint256 remaining = amount_;
+        uint256 debit = Math.min(remaining, state_.pendingKeeperRewards[token_][recipient_]);
+        if (debit != 0) {
+            state_.pendingKeeperRewards[token_][recipient_] -= debit;
+            state_.totalPendingKeeperRewards[token_] -= debit;
             if (state_.pendingKeeperRewards[token_][recipient_] == 0)
                 state_.pendingKeeperRecipients[token_].remove(recipient_);
+            remaining -= debit;
             emit IBurnerLoansPayout.PendingSeizureRewardRescued(
                 token_,
                 recipient_,
                 destination_,
-                seizureReward
+                debit
             );
         }
-        if (fee != 0) {
-            state_.pendingFees[token_] -= fee;
-            emit IBurnerLoansPayout.PendingFeeRescued(token_, destination_, fee);
+        if (recipient_ == feeRecipient_) {
+            debit = Math.min(remaining, state_.pendingProtocolFees[token_]);
+            if (debit != 0) {
+                state_.pendingProtocolFees[token_] -= debit;
+                remaining -= debit;
+                emit IBurnerLoansPayout.PendingFeeRescued(token_, destination_, debit);
+            }
         }
-        if (seizure != 0) {
-            // The validated entitlement includes seized collateral only for the current Treasury.
-            state_.pendingSeizedCollateral[token_] -= seizure;
-            emit IBurnerLoansPayout.PendingSeizureRescued(token_, destination_, seizure);
+        if (recipient_ == treasury_) {
+            debit = Math.min(remaining, state_.pendingSeizedCollateral[token_]);
+            if (debit != 0) {
+                state_.pendingSeizedCollateral[token_] -= debit;
+                remaining -= debit;
+                emit IBurnerLoansPayout.PendingSeizureRescued(token_, destination_, debit);
+            }
+        }
+        if (remaining != 0) {
+            state_.pendingReferralFees[token_][recipient_] -= remaining;
+            state_.totalPendingReferralFees[token_] -= remaining;
+            if (state_.pendingReferralFees[token_][recipient_] == 0)
+                state_.pendingReferralRecipients[token_].remove(recipient_);
+            emit IBurnerLoansPayout.PendingReferralFeeRescued(
+                token_,
+                recipient_,
+                destination_,
+                remaining
+            );
         }
         state_.totalPending[token_] -= amount_;
         if (state_.totalPending[token_] == 0) state_.pendingTokens.remove(token_);
@@ -372,7 +425,7 @@ library LoanPayouts {
     /// @param state_ Payout buckets and indexes owned by Payout.
     /// @param token_ Token whose balance or payout accounting is used.
     /// @param recipient_ Final output recipient or pending entitlement holder.
-    /// @param kind_ Fee, seized backing or keeper entitlement bucket.
+    /// @param kind_ Fee, seized backing, keeper or referral entitlement bucket.
     /// @return amount Amount successfully delivered in token units; zero on no entitlement or delivery failure.
     function _transferPending(
         State storage state_,
@@ -381,23 +434,31 @@ library LoanPayouts {
         IBurnerLoansPayout.PayoutKind kind_
     ) private returns (uint256 amount) {
         // 1. Resolve the entire entitlement for this payout kind.
-        if (kind_ == IBurnerLoansPayout.PayoutKind.Fee) amount = state_.pendingFees[token_];
+        if (kind_ == IBurnerLoansPayout.PayoutKind.Fee) amount = state_.pendingProtocolFees[token_];
         else if (kind_ == IBurnerLoansPayout.PayoutKind.Seizure)
             amount = state_.pendingSeizedCollateral[token_];
-        else amount = state_.pendingKeeperRewards[token_][recipient_];
+        else if (kind_ == IBurnerLoansPayout.PayoutKind.SeizureReward)
+            amount = state_.pendingKeeperRewards[token_][recipient_];
+        else amount = state_.pendingReferralFees[token_][recipient_];
         if (amount == 0) return 0;
         // 2. Attempt delivery; retain every bucket/index on failure. The caller holds Payout's guard.
+        // Payout validates allocation destinations before admitting any new credit.
         if (!IERC20(token_).trySafeTransfer(recipient_, amount)) {
             emit IBurnerLoansPayout.PayoutDeferred(token_, recipient_, kind_, amount);
             return 0;
         }
         // 3. Successful delivery clears the bucket and its recipient/token indexes exactly once.
-        if (kind_ == IBurnerLoansPayout.PayoutKind.Fee) state_.pendingFees[token_] = 0;
+        if (kind_ == IBurnerLoansPayout.PayoutKind.Fee) state_.pendingProtocolFees[token_] = 0;
         else if (kind_ == IBurnerLoansPayout.PayoutKind.Seizure)
             state_.pendingSeizedCollateral[token_] = 0;
-        else {
+        else if (kind_ == IBurnerLoansPayout.PayoutKind.SeizureReward) {
             state_.pendingKeeperRewards[token_][recipient_] = 0;
+            state_.totalPendingKeeperRewards[token_] -= amount;
             state_.pendingKeeperRecipients[token_].remove(recipient_);
+        } else {
+            state_.pendingReferralFees[token_][recipient_] = 0;
+            state_.totalPendingReferralFees[token_] -= amount;
+            state_.pendingReferralRecipients[token_].remove(recipient_);
         }
         state_.totalPending[token_] -= amount;
         _removeTokenIfPaid(state_, token_);

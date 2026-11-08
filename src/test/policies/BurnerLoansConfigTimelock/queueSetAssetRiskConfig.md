@@ -4,7 +4,7 @@ Queue admission requires own Kernel activity, then local enablement, then an acc
 
 Implemented complete-struct API: selection masks/merge helpers are removed while preserving the full old-state commitment and queue behavior. The current source accepts complete structs; legacy tests still exercise the former partial-update ABI.
 
-Source: [queueSetAssetRiskConfig](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L297). Coverage is recorded in the Test column.
+Source: [queueSetAssetRiskConfig](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L303). Coverage is recorded in the Test column.
 
 ## Domains and notation
 
@@ -14,7 +14,7 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 
 Own-policy admission: require Kernel-active BurnerLoansConfigTimelock; own inactivity uses `BurnerLoans_PolicyNotActive(BurnerLoansConfigTimelock)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-Queue authorization/lifecycle matrix is normative. Inputs: asset address and complete six-field RiskConfig; canonical payload 224 bytes. Committed prestate: Full old six-field risk struct.
+Queue authorization/lifecycle matrix is normative. Inputs: asset address and complete six-field RiskConfig; canonical payload 224 bytes. Committed prestate: Core facility identity, asset address, full old six-field risk struct, and current `Config.configOperator()`.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
@@ -54,9 +54,9 @@ Fixed for this table: Local enabled: true; Local active: true; Config active: tr
 | BLQRC-L14 | Any, valid-sized batch | true | true | false | false | any | PolicyDependency_NotActive(Config) | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenQueued_reverts] |
 | BLQRC-L15 | Fuzz permitted role caller | true | true | true | false | BLCT | PolicyDependency_NotActive(Config) | Covered: [test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts][test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenQueued_reverts] |
 
-Queue success increments uint64 nextActionId once, stores proposer/payload/order/queuedAt; executableAt=queuedAt+1day and expiresAt=executableAt+3days. No public delay setter exists. Record TimelockSubActionQueued, TimelockActionQueued and ConfigStateQueued exact emitter/fields/hashes. Full fee or six-field risk pre-state hashes reject any field drift; disjoint fee-vs-risk updates use different keys/hashes. Changes in live debt, token balance or vault support may leave hash unchanged but cause downstream failure instead.
+Queue success increments uint64 nextActionId once, stores proposer/payload/order/queuedAt; executableAt=queuedAt+1day and expiresAt=executableAt+3days. No public delay setter exists. Record TimelockSubActionQueued, TimelockActionQueued and ConfigStateQueued exact emitter/fields/hashes. Every selector hash includes current `Config.configOperator()` alongside its existing facility and setting fields; rescue additionally retains `Core.configOperator()`. Full fee or six-field risk pre-state hashes reject any field drift; disjoint fee-vs-risk updates use different keys/hashes. Changes in live debt, token balance or vault support may leave hash unchanged but cause downstream failure instead.
 
-Execution permissionless, pending-state/time checks FIRST, then BLCT enabled, Config enabled, both active, selected operator. Cancellable-state checks FIRST, then BLCT enabled+active and EMERGENCY role only. Failed execution retains action/key and all earlier subaction writes roll back. Successful execute/cancel releases keys and deletes payload/config guards; action metadata remains. Expiry alone does not release keys. Cancellation has no Config-enabled/activity/selected-operator requirement.
+Execution permissionless, pending-state/time checks FIRST, then BLCT enabled, Config enabled, both active, selected operator. Cancellable-state checks FIRST, then BLCT active and EMERGENCY role only; local disablement permits cancellation. Failed execution retains action/key and all earlier subaction writes roll back. Successful execute/cancel releases keys and deletes payload/config guards; action metadata remains. Expiry alone does not release keys. Cancellation has no Config-enabled/activity/selected-operator requirement.
 
 ## Invalid inputs
 

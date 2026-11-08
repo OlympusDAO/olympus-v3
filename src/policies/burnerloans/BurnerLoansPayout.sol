@@ -95,11 +95,11 @@ contract BurnerLoansPayout is
         _;
     }
 
-    /// @notice	Requires the selected config operator or governance ADMIN.
+    /// @notice Requires the local config operator or governance ADMIN; ignores operator lifecycle.
     /// @dev Reverts if:
+    ///      - Payout is Kernel-inactive.
     ///      - The caller is neither the selected config operator nor a Kernel ADMIN.
-    ///
-    /// @dev The operator's lifecycle is not queried.
+    ///      - A required ROLES read fails.
     modifier onlyConfigOrAdmin() {
         _requireConfigOrAdmin();
         _;
@@ -292,16 +292,38 @@ contract BurnerLoansPayout is
     ///      - Payout is Kernel-inactive.
     ///      - Payout is locally disabled.
     ///      - The caller is not the immutable Core.
+    ///      - A positive referral allocation has a zero referrer.
+    ///      - A positive protocol allocation is addressed to zero or this Payout, or a positive referral names this Payout.
+    ///      - The protocol and referral allocation sum overflows.
     ///      - Reserves plus the receipt overflow.
     ///      - Reserves plus the receipt exceed the held token balance.
     ///      - A required token-balance, route or accounting read fails.
     ///
-    /// @dev Reserves the receipt before attempting delivery to the current fee route; failed delivery remains pending.
-    function creditFee(address token_, uint256 amount_) external nonReentrant onlyCore {
+    /// @dev Reserves both allocations before any optional transfer. Referral ownership remains fixed.
+    function creditFee(
+        address token_,
+        uint256 protocolFee_,
+        address referrer_,
+        uint256 referralFee_
+    ) external nonReentrant onlyCore {
+        if (referralFee_ != 0) {
+            if (referrer_ == address(0))
+                revert IBurnerLoansCore.BurnerLoansCore_InvalidSettlement();
+            validatePayoutRecipient(referrer_);
+        }
         // Core has already transferred the mandatory receipt. Reserve it before best-effort delivery;
         // LoanPayouts leaves the obligation pending if the destination cannot receive the transfer.
-        _requireBacked(token_, amount_);
-        LoanPayouts.creditFee(_payouts, token_, _feeRecipient(), amount_);
+        _requireBacked(token_, _sumAmounts(protocolFee_, referralFee_));
+        address protocolFeeRecipient = _feeRecipient();
+        if (protocolFee_ != 0) validatePayoutRecipient(protocolFeeRecipient);
+        LoanPayouts.creditFee(
+            _payouts,
+            token_,
+            protocolFeeRecipient,
+            protocolFee_,
+            referrer_,
+            referralFee_
+        );
     }
 
     /// @inheritdoc	IBurnerLoansPayout
@@ -310,6 +332,7 @@ contract BurnerLoansPayout is
     ///      - Payout is Kernel-inactive.
     ///      - Payout is locally disabled.
     ///      - The caller is not the immutable Core.
+    ///      - A positive keeper or Treasury allocation is addressed to zero or this Payout.
     ///      - Allocation or reserve sums overflow.
     ///      - Reserves plus the combined receipt exceed the held token balance.
     ///      - A required token-balance, route or accounting read fails.
@@ -325,9 +348,12 @@ contract BurnerLoansPayout is
     ) external nonReentrant onlyCore {
         // Reward and Treasury allocations share one receipt. Check their combined backing before
         // attempting either payment so an old pending obligation cannot fund a new credit.
+        if (reward_ != 0) validatePayoutRecipient(keeper_);
         _requireBacked(token_, _sumAmounts(reward_, remainder_));
+        address treasuryRecipient = treasury();
+        if (remainder_ != 0) validatePayoutRecipient(treasuryRecipient);
         LoanPayouts.queueSeizureReward(_payouts, token_, keeper_, reward_);
-        LoanPayouts.queueSeizedCollateral(_payouts, token_, treasury(), remainder_);
+        LoanPayouts.queueSeizedCollateral(_payouts, token_, treasuryRecipient, remainder_);
     }
 
     /// @inheritdoc	IBurnerLoansPayout
@@ -336,6 +362,7 @@ contract BurnerLoansPayout is
     ///      - Core is settling.
     ///      - Payout is Kernel-inactive.
     ///      - A required route lookup fails.
+    ///      - The retry recipient is zero or this Payout.
     ///      - Payout accounting overflows.
     ///
     /// @dev Permissionless while locally paused or replaced; Core enablement does not gate retries.
@@ -345,11 +372,10 @@ contract BurnerLoansPayout is
         address recipient_
     ) external nonReentrant whenCoreNotSettling returns (uint256 transferred) {
         _requireActive();
-        // Fees and seized backing follow the current routing addresses; keeper rewards belong to
-        // their original keeper. These independent buckets may all resolve to the same recipient.
+        validatePayoutRecipient(recipient_);
         // Retries remain available after local pause or Core replacement while this policy stays active.
         if (recipient_ == _feeRecipient())
-            transferred += LoanPayouts.transferPendingFee(_payouts, token_, recipient_);
+            transferred += LoanPayouts.transferPendingProtocolFee(_payouts, token_, recipient_);
         if (recipient_ == treasury())
             transferred += LoanPayouts.transferPendingSeizedCollateral(
                 _payouts,
@@ -357,6 +383,7 @@ contract BurnerLoansPayout is
                 recipient_
             );
         transferred += LoanPayouts.transferPendingSeizureReward(_payouts, token_, recipient_);
+        transferred += LoanPayouts.transferPendingReferralFee(_payouts, token_, recipient_);
     }
 
     /// @inheritdoc	IBurnerLoansPayout
@@ -422,6 +449,14 @@ contract BurnerLoansPayout is
     /// @return	address	Locally selected Treasury or RevenueDistributor.
     function _feeRecipient() private view returns (address) {
         return sendFeesToDistributor ? revenueDistributor : treasury();
+    }
+
+    /// @inheritdoc IBurnerLoansPayout
+    /// @dev Reverts if:
+    ///      - The recipient is zero or this Payout (BurnerLoansPayout_InvalidRecipient).
+    function validatePayoutRecipient(address recipient_) public view override {
+        if (recipient_ == address(0) || recipient_ == address(this))
+            revert BurnerLoansPayout_InvalidRecipient(recipient_);
     }
 
     /// @notice	Rejects Core as a recovery destination.
@@ -494,23 +529,38 @@ contract BurnerLoansPayout is
         address token_
     ) external view returns (address[] memory result) {
         address[] memory keepers = _payouts.pendingKeeperRecipients[token_].values();
-        address feeRecipient = _feeRecipient();
-        address treasuryRecipient = treasury();
-        bool includeFee = _payouts.pendingFees[token_] != 0 && feeRecipient != address(0);
-        bool includeTreasury = _payouts.pendingSeizedCollateral[token_] != 0 &&
-            treasuryRecipient != address(0);
-        // Present each address once even when a keeper is also the fee destination or Treasury.
-        // pendingPayout still sums every entitlement held by that address across the separate buckets.
-        for (uint256 i; i < keepers.length; ++i) {
-            if (keepers[i] == feeRecipient) includeFee = false;
-            if (keepers[i] == treasuryRecipient) includeTreasury = false;
-        }
-        if (includeFee && feeRecipient == treasuryRecipient) includeTreasury = false;
-        result = new address[](keepers.length + (includeFee ? 1 : 0) + (includeTreasury ? 1 : 0));
+        address[] memory referrers = _payouts.pendingReferralRecipients[token_].values();
+        address[2] memory protocolRecipients = [_feeRecipient(), treasury()];
+        uint256[2] memory protocolReserves = [
+            _payouts.pendingProtocolFees[token_],
+            _payouts.pendingSeizedCollateral[token_]
+        ];
+        // Allocate an upper bound, then copy only populated entries into the returned array.
+        address[] memory recipients = new address[](keepers.length + referrers.length + 2);
         uint256 length;
-        for (uint256 i; i < keepers.length; ++i) result[length++] = keepers[i];
-        if (includeFee) result[length++] = feeRecipient;
-        if (includeTreasury) result[length] = treasuryRecipient;
+
+        // Keeper membership is already unique within its own set.
+        for (uint256 i; i < keepers.length; ++i) recipients[length++] = keepers[i];
+
+        // Append referrers only if the keeper pass has not included them.
+        for (uint256 i; i < referrers.length; ++i) {
+            if (!_payouts.pendingKeeperRecipients[token_].contains(referrers[i]))
+                recipients[length++] = referrers[i];
+        }
+
+        // Append funded protocol routes absent from both fixed-recipient sets.
+        // A shared fee/Treasury route is included once even when both buckets are funded.
+        for (uint256 i; i < protocolRecipients.length; ++i) {
+            address recipient = protocolRecipients[i];
+            if (protocolReserves[i] == 0 || recipient == address(0)) continue;
+            if (_payouts.pendingKeeperRecipients[token_].contains(recipient)) continue;
+            if (_payouts.pendingReferralRecipients[token_].contains(recipient)) continue;
+            if (i == 1 && recipient == protocolRecipients[0] && protocolReserves[0] != 0) continue;
+            recipients[length++] = recipient;
+        }
+
+        result = new address[](length);
+        for (uint256 i; i < length; ++i) result[i] = recipients[i];
     }
 
     /// @inheritdoc	IBurnerLoansPayout
@@ -519,8 +569,19 @@ contract BurnerLoansPayout is
     ///      - The checked entitlement sum overflows.
     ///
     /// @dev Available independently of lifecycle.
-    function pendingPayout(address token_, address recipient_) external view returns (uint256) {
-        return LoanPayouts.pendingAmount(_payouts, token_, recipient_, _feeRecipient(), treasury());
+    /// @dev Recipient-scoped sum; pendingAmounts reports the token-wide totals across all recipients.
+    function pendingRecipientAmount(
+        address token_,
+        address recipient_
+    ) external view returns (uint256) {
+        return
+            LoanPayouts.pendingRecipientAmount(
+                _payouts,
+                token_,
+                recipient_,
+                _feeRecipient(),
+                treasury()
+            );
     }
 
     /// @inheritdoc	IBurnerLoansPayout
@@ -529,20 +590,44 @@ contract BurnerLoansPayout is
         return LoanPayouts.tokens(_payouts);
     }
 
-    /// @inheritdoc	IBurnerLoansPayout
-    /// @dev	Returns fee, seized-collateral and aggregate reserves without external calls; does not revert.
-    function payoutReserves(address token_) external view returns (uint256, uint256, uint256) {
+    /// @inheritdoc IBurnerLoansPayout
+    /// @dev Token-wide stored totals across every recipient; no external calls or recipient iteration.
+    ///      Returns protocol fees, referral fees, seized collateral, keeper rewards and their total; does not revert.
+    function pendingAmounts(
+        address token_
+    ) external view returns (uint256, uint256, uint256, uint256, uint256) {
         return (
-            _payouts.pendingFees[token_],
+            _payouts.pendingProtocolFees[token_],
+            _payouts.totalPendingReferralFees[token_],
             _payouts.pendingSeizedCollateral[token_],
+            _payouts.totalPendingKeeperRewards[token_],
             _payouts.totalPending[token_]
         );
+    }
+
+    /// @inheritdoc IBurnerLoansPayout
+    /// @dev Storage-only, independent of lifecycle; does not revert.
+    function pendingKeeperReward(address token_, address keeper_) external view returns (uint256) {
+        return _payouts.pendingKeeperRewards[token_][keeper_];
     }
 
     /// @inheritdoc	IBurnerLoansPayout
     /// @dev	Returns keeper addresses with unpaid rewards without external calls; does not revert.
     function getPendingKeepers(address token_) external view returns (address[] memory) {
         return _payouts.pendingKeeperRecipients[token_].values();
+    }
+
+    /// @inheritdoc IBurnerLoansPayout
+    function pendingReferralFee(
+        address token_,
+        address recipient_
+    ) external view returns (uint256) {
+        return _payouts.pendingReferralFees[token_][recipient_];
+    }
+
+    /// @inheritdoc IBurnerLoansPayout
+    function getPendingReferralRecipients(address token_) external view returns (address[] memory) {
+        return _payouts.pendingReferralRecipients[token_].values();
     }
 
     /// @notice	Adds reserve/allocation amounts with an informative overflow error.

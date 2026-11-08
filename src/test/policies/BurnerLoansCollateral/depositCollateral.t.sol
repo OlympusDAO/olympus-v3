@@ -1316,7 +1316,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         amount_ = uint128(bound(amount_, 1, uint256(type(uint128).max) - prior_));
         _depositAsset(_asset, prior_, _borrower);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), debt_, _borrower, _borrower, type(uint256).max);
+        _debt.borrow(address(_asset), debt_, _borrower, _borrower, type(uint256).max, address(0));
         _asset.mint(_borrower, amount_);
         IBurnerLoansCore.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
         vm.mockCall(

@@ -70,6 +70,11 @@ contract BurnerLoansRisk is
     /// @inheritdoc IBurnerLoansRisk
     uint48 public override priceCacheMaxAge;
 
+    /// @inheritdoc IBurnerLoansRisk
+    uint16 public override referralFeeBps;
+
+    mapping(address referrer => bool allowed) internal _referrersAllowed;
+
     /// @notice Native OHM precision captured at deployment for principal conversions.
     uint8 internal immutable _OHM_DECIMALS;
 
@@ -192,7 +197,7 @@ contract BurnerLoansRisk is
     /// @dev Reverts if:
     ///      - Risk is inactive or locally disabled.
     ///      - A required dependency read or numeric conversion fails.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function snapshot(
         address asset_
     ) external view onlyOperational returns (IBurnerLoansCore.PriceSnapshot memory prices) {
@@ -248,7 +253,7 @@ contract BurnerLoansRisk is
     /// @notice Adds a scaled canonical backing value to the captured price pair.
     /// @dev Reverts if:
     ///      - A required asset price is zero or otherwise invalid.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param price_ Current PRICE module.
     /// @param snapshot_ Captured operation price/backing values, all in the same PRICE decimal scale.
     /// @return IBurnerLoansCore.PriceSnapshot Captured OHM/collateral prices and backing, all in PRICE decimals.
@@ -282,7 +287,7 @@ contract BurnerLoansRisk is
     /// @notice Reads a nonzero PRICE observation within its configured freshness window.
     /// @dev Reverts if:
     ///      - A required asset price is zero or otherwise invalid.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param price_ Current PRICE module.
     /// @param asset_ Underlying collateral token identifying the market.
     /// @return price Nonzero fresh USD price in current PRICE decimals.
@@ -317,7 +322,7 @@ contract BurnerLoansRisk is
     /// @dev Reverts if:
     ///      - Risk is inactive or locally disabled.
     ///      - A required dependency read or numeric conversion fails.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function health(
         IBurnerLoansCore.PriceSnapshot calldata snapshot_,
         uint32 marketId_,
@@ -332,7 +337,7 @@ contract BurnerLoansRisk is
     ///      - Risk is inactive or locally disabled.
     ///      - A proposed final position is below its required health factor.
     ///      - An operation requires a healthy position but the current or resulting position is unhealthy.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function validateHealth(
         IBurnerLoansCore.PriceSnapshot calldata snapshot_,
         uint32 marketId_,
@@ -349,8 +354,12 @@ contract BurnerLoansRisk is
     }
 
     /// @notice Computes WAD-scaled health from captured prices and canonical market parameters.
-    /// @dev USD values share the snapshot's PRICE scale; this cancels in the ratio. The result
-    ///      always has 18 decimals, independent of PRICE.decimals(). Dependency errors propagate.
+    /// @dev The shared PRICE scale cancels in the ratio; the result has 18 decimals.
+    /// @dev Debt-free positions return max uint without querying market configuration.
+    /// @dev Reverts if:
+    ///      - A debt-bearing position has an invalid canonical market configuration.
+    ///      - The collateral-value or required-value calculation overflows or has an invalid denominator.
+    ///
     /// @param snapshot_ Captured operation price/backing values, all in the same PRICE decimal scale.
     /// @param marketId_ Canonical FLOAN market.
     /// @param collateral_ Asset-denominated position collateral.
@@ -399,13 +408,14 @@ contract BurnerLoansRisk is
     /// @dev Reverts if:
     ///      - Risk is inactive or locally disabled.
     ///      - A debt cap is invalid for the requested operation.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function fee(
         IBurnerLoansCore.PriceSnapshot calldata snapshot_,
         uint32 marketId_,
         uint256 principal_,
-        uint16 terms_
-    ) external view onlyOperational returns (uint256) {
+        uint16 terms_,
+        address referrer_
+    ) external view onlyOperational returns (uint256 protocolFee, uint256 referralFee) {
         (
             IBurnerLoansCore.AssetConfig memory cfg,
             IBurnerLoansRisk.AssetFeeConfig memory curve
@@ -429,14 +439,21 @@ contract BurnerLoansRisk is
             cfg.collateralDecimals
         );
         // Required collateral units times WAD fee; round each term up before multiplying.
-        return LoanMath.borrowFee(requiredAssets, feeRate) * terms_;
+        uint256 totalFee = LoanMath.borrowFee(requiredAssets, feeRate) * terms_;
+        if (referrer_ != address(0)) {
+            if (!_referrersAllowed[referrer_]) revert BurnerLoansRisk_ReferrerNotAllowed(referrer_);
+            // Raw collateral units * BPS / BPS = raw collateral units. Full precision avoids
+            // phantom overflow; flooring leaves the residual with the protocol.
+            referralFee = Math.mulDiv(totalFee, referralFeeBps, _BPS);
+        }
+        protocolFee = totalFee - referralFee;
     }
 
     /// @inheritdoc IBurnerLoansRisk
     /// @dev Reverts if:
     ///      - Risk is inactive or locally disabled.
     ///      - A required dependency read or numeric conversion fails.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function keeperReward(
         IBurnerLoansCore.PriceSnapshot calldata snapshot_,
         uint32 marketId_,
@@ -475,10 +492,14 @@ contract BurnerLoansRisk is
     }
 
     /// @inheritdoc IBurnerLoansRisk
+    /// @dev Validates locally without external calls.
     /// @dev Reverts if:
-    ///      - A basis-point value exceeds the permitted range.
-    ///      - A supplied configuration parameter violates its required bounds.
-    ///      No external state or token calls; checked arithmetic errors propagate.
+    ///      - maxLtvBps is zero or exceeds 10,000.
+    ///      - backingMultiplierBps is outside the permitted backing-multiplier range.
+    ///      - keeperRewardBps exceeds 10,000.
+    ///      - termLength is zero or exceeds the maximum term length.
+    ///      - maxMaturityHorizon does not exceed termLength.
+    ///      - maxMaturityHorizon exceeds the maximum horizon.
     function validateRiskConfig(
         IBurnerLoansRisk.AssetRiskConfigInput calldata config_
     ) external pure {
@@ -499,10 +520,14 @@ contract BurnerLoansRisk is
     }
 
     /// @inheritdoc IBurnerLoansRisk
+    /// @dev Validates locally without external calls.
     /// @dev Reverts if:
-    ///      - A basis-point value exceeds the permitted range.
-    ///      - A utilization fee configuration violates the required bounds.
-    ///      No external state or token calls; checked arithmetic errors propagate.
+    ///      - baseFeeBps exceeds 10,000.
+    ///      - preKinkSlopeBps exceeds 10,000.
+    ///      - postKinkSlopeBps exceeds 10,000.
+    ///      - kinkBps is at least 10,000.
+    ///      - kinkBps is zero and either utilization slope is nonzero.
+    ///      - The base fee and both utilization slopes sum to more than 10,000.
     function validateFeeConfig(IBurnerLoansRisk.AssetFeeConfig calldata config_) external pure {
         if (config_.baseFeeBps > _BPS)
             revert IBurnerLoansRisk.BurnerLoans_InvalidBps(config_.baseFeeBps);
@@ -522,7 +547,7 @@ contract BurnerLoansRisk is
     /// @dev Reverts if:
     ///      - Risk is inactive or locally disabled.
     ///      - A required asset price is zero or otherwise invalid.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function validatePriceSupport(address asset_) external view onlyOperational {
         IPRICEv2 price = _PRICE;
         if (
@@ -570,13 +595,55 @@ contract BurnerLoansRisk is
     ///      - Risk is inactive or locally disabled.
     ///      - Caller is neither the selected nonzero config operator nor ADMIN.
     function setPriceCacheMaxAge(uint48 age_) external {
+        _requireConfigAuthority();
+        if (priceCacheMaxAge == age_) return;
+        priceCacheMaxAge = age_;
+        emit IBurnerLoansRisk.PriceCacheMaxAgeSet(age_);
+    }
+
+    /// @inheritdoc IBurnerLoansRisk
+    /// @dev Reverts if:
+    ///      - Risk is Kernel-inactive.
+    ///      - Risk is locally disabled.
+    ///      - The caller is neither ADMIN nor the current nonzero config operator.
+    ///      - The referral share exceeds 10,000 basis points.
+    function setReferralFeeBps(uint16 bps_) external {
+        _requireConfigAuthority();
+        if (bps_ > _BPS) revert BurnerLoansRisk_InvalidReferralFeeBps(bps_);
+        if (referralFeeBps == bps_) return;
+        referralFeeBps = bps_;
+        emit ReferralFeeBpsSet(bps_);
+    }
+
+    /// @inheritdoc IBurnerLoansRisk
+    function isReferrerAllowed(address referrer_) external view returns (bool) {
+        return _referrersAllowed[referrer_];
+    }
+
+    /// @inheritdoc IBurnerLoansRisk
+    /// @dev Reverts if:
+    ///      - Risk is Kernel-inactive.
+    ///      - Risk is locally disabled.
+    ///      - The caller is neither ADMIN nor the current nonzero config operator.
+    ///      - The referrer is the zero address.
+    function setReferrerAllowed(address referrer_, bool allowed_) external {
+        _requireConfigAuthority();
+        if (referrer_ == address(0)) revert IBurnerLoansErrors.BurnerLoans_ZeroAddress();
+        if (_referrersAllowed[referrer_] == allowed_) return;
+        _referrersAllowed[referrer_] = allowed_;
+        emit ReferrerAllowedSet(referrer_, allowed_);
+    }
+
+    /// @notice Requires local readiness and either selected operator or direct governance authority.
+    /// @dev Reverts if:
+    ///      - Risk is Kernel-inactive.
+    ///      - Risk is locally disabled.
+    ///      - The caller is neither ADMIN nor the current nonzero config operator.
+    function _requireConfigAuthority() private view {
         _requireActive();
         _requireEnabled();
         if ((msg.sender != configOperator || configOperator == address(0)) && !_isAdmin(msg.sender))
             revert IPolicyAdmin.NotAuthorised();
-        if (priceCacheMaxAge == age_) return;
-        priceCacheMaxAge = age_;
-        emit IBurnerLoansRisk.PriceCacheMaxAgeSet(age_);
     }
 
     /// @inheritdoc ConfigOperatorSingleStep
@@ -591,7 +658,7 @@ contract BurnerLoansRisk is
     /// @notice Requires governance ADMIN authority.
     /// @dev Reverts if:
     ///      - The caller lacks the required Kernel role.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     function _onlyAdmin() private view {
         _requireActive();
         _requireRole(msg.sender, ADMIN_ROLE);
@@ -600,7 +667,7 @@ contract BurnerLoansRisk is
     /// @notice Validates the backing-oracle interface at installation.
     /// @dev Reverts if:
     ///      - The configured backing oracle lacks IOlympusBackingOracle or IVersioned.
-    ///      Reads without state changes; errors from dependency views propagate.
+    /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param oracle_ Canonical backing-oracle dependency.
     function _validateBackingOracle(address oracle_) private view {
         if (
@@ -669,7 +736,9 @@ contract BurnerLoansRisk is
 
     /// @notice Validates Risk's own policy state and direct pricing bindings.
     /// @dev Reverts if:
-    ///      - Risk is inactive or the oracle/nonzero cache binding is incompatible.
+    ///      - Risk is Kernel-inactive.
+    ///      - The backing oracle binding is incompatible.
+    ///      - A nonzero price-cache binding is incompatible.
     function _validateActivation() private view {
         _requireActive();
         _validateBackingOracle(backingOracle);
@@ -677,7 +746,12 @@ contract BurnerLoansRisk is
     }
 
     /// @inheritdoc ReEnablerGracePeriod
-    /// @dev Reuses enable's prerequisites after validating the grace window.
+    /// @dev Reverts if:
+    ///      - The inclusive grace deadline exceeds uint48.
+    ///      - The inclusive grace deadline has expired.
+    ///      - Risk is Kernel-inactive.
+    ///      - The backing oracle binding is incompatible.
+    ///      - A nonzero price-cache binding is incompatible.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
         _validateActivation();
@@ -701,7 +775,9 @@ contract BurnerLoansRisk is
         super.setGracePeriod(period_);
     }
 
-    /// @dev The public setter applies activity and local enablement before authorization.
+    /// @dev The public setter first applies activity and local enablement checks.
+    /// @dev Reverts if:
+    ///      - The caller lacks ADMIN.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
     /// @inheritdoc ReEnablerGracePeriod

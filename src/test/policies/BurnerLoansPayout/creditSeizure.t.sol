@@ -15,6 +15,144 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {BurnerLoansPayoutTest} from "./BurnerLoansPayoutTest.sol";
 
 contract BurnerLoansPayoutCreditSeizureTest is BurnerLoansPayoutTest {
+    // Scenarios: BLCU-CREDIT-SEIZURE-D04.
+    function test_whenKeeperIsZero_whenRewardPositive_reverts(
+        uint256 reward_,
+        uint256 seized_
+    ) public {
+        reward_ = bound(reward_, 1, type(uint256).max);
+        seized_ = bound(seized_, 0, type(uint256).max - reward_);
+        bytes32 beforeState = _ledgerDigest();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidRecipient.selector,
+                address(0)
+            )
+        );
+        vm.prank(address(_core));
+        _payout.creditSeizure(address(_token), address(0), reward_, seized_);
+        assertEq(_ledgerDigest(), beforeState, "Zero keeper rejects before credit or transfer");
+        assertEq(
+            _payout.pendingKeeperReward(address(_token), address(0)),
+            0,
+            "Zero keeper has no claim"
+        );
+    }
+
+    // Scenarios: BLCU-CREDIT-SEIZURE-D04.
+    function test_whenZeroKeeperRewardBoundarySeeds_reverts() public {
+        test_whenKeeperIsZero_whenRewardPositive_reverts(1, 0);
+        test_whenKeeperIsZero_whenRewardPositive_reverts(type(uint256).max, 0);
+        test_whenKeeperIsZero_whenRewardPositive_reverts(1, type(uint256).max - 1);
+    }
+
+    // Scenarios: BLCU-CREDIT-SEIZURE-P05.
+    function test_whenKeeperIsZero_whenRewardZero() public {
+        _creditSeizure(_token, address(0), 0, 7);
+        _assertBuckets(address(_token), address(0), 0, 0, 0, 0);
+        assertEq(_token.balanceOf(_treasury()), 7, "Unused zero keeper permits Treasury payout");
+    }
+
+    // Scenarios: BLCU-CREDIT-SEIZURE-P04.
+    function test_givenOverlappingEntitlements_whenKeeperRewardRead(address caller_) public {
+        address recipient = _treasury();
+        _seedBuckets(7, 17, 11, recipient);
+        _creditReferral(_token, 0, recipient, 13);
+        _deferSeizure(_token, _secondKeeper, 3, 0);
+        _deferSeizure(_otherToken, _secondKeeper, 5, 0);
+        vm.startPrank(caller_);
+        assertEq(
+            _payout.pendingKeeperReward(address(_token), recipient),
+            11,
+            "Keeper bucket excludes referral and protocol allocations"
+        );
+        assertEq(
+            _payout.pendingRecipientAmount(address(_token), recipient),
+            48,
+            "Recipient total includes keeper11 plus referral13 plus protocol7 plus seized17"
+        );
+        assertEq(
+            _payout.pendingKeeperReward(address(_token), _secondKeeper),
+            3,
+            "Another keeper has a separate claim"
+        );
+        assertEq(
+            _payout.pendingKeeperReward(address(_otherToken), _secondKeeper),
+            5,
+            "Another token has a separate claim"
+        );
+        assertEq(
+            _payout.pendingKeeperReward(address(_token), address(0)),
+            0,
+            "Unknown zero keeper has no claim"
+        );
+        assertEq(
+            _payout.pendingKeeperReward(address(0), recipient),
+            0,
+            "Unknown zero token has no claim"
+        );
+        vm.stopPrank();
+        _assertBuckets(address(_token), recipient, 7, 17, 11, 51);
+    }
+
+    // Scenarios: BLCU-CREDIT-SEIZURE-D02.
+    function test_whenKeeperEqualsPayout_reverts(uint256 reward_, uint256 seized_) public {
+        reward_ = bound(reward_, 1, type(uint256).max);
+        seized_ = bound(seized_, 0, type(uint256).max - reward_);
+        bytes32 beforeState = _ledgerDigest();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidRecipient.selector,
+                address(_payout)
+            )
+        );
+        vm.prank(address(_core));
+        _payout.creditSeizure(address(_token), address(_payout), reward_, seized_);
+        assertEq(
+            _ledgerDigest(),
+            beforeState,
+            "Self-keeper rejects before accounting or outgoing transfers"
+        );
+    }
+
+    // Scenarios: BLCU-CREDIT-SEIZURE-D02.
+    function test_whenSelfKeeperBoundarySeeds_reverts() public {
+        test_whenKeeperEqualsPayout_reverts(1, 0);
+        test_whenKeeperEqualsPayout_reverts(type(uint256).max, 0);
+        test_whenKeeperEqualsPayout_reverts(1, type(uint256).max - 1);
+    }
+
+    // Scenarios: BLCU-CREDIT-SEIZURE-P03.
+    function test_whenKeeperEqualsPayout_whenRewardZero() public {
+        _creditSeizure(_token, address(_payout), 0, 7);
+        _assertBuckets(address(_token), address(_payout), 0, 0, 0, 0);
+        assertEq(
+            _token.balanceOf(_treasury()),
+            7,
+            "Unused keeper does not block Treasury allocation"
+        );
+    }
+
+    // Scenarios: BLCU-CREDIT-SEIZURE-D03.
+    function test_givenTreasuryEqualsPayout_whenSeizureCredited_reverts() public {
+        _token.mint(address(_payout), 12);
+        _mockTreasuryRecipient(address(_payout));
+        bytes32 beforeState = _ledgerDigest();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidRecipient.selector,
+                address(_payout)
+            )
+        );
+        vm.prank(address(_core));
+        _payout.creditSeizure(address(_token), _keeper, 5, 7);
+        assertEq(
+            _ledgerDigest(),
+            beforeState,
+            "Invalid Treasury route rejects before keeper credit or transfer"
+        );
+    }
+
     // Scenarios: BLCU-CREDIT-SEIZURE-N02.
     function test_whenRewardAndRemainderOverflow_reverts() public {
         vm.expectRevert(
@@ -26,7 +164,7 @@ contract BurnerLoansPayoutCreditSeizureTest is BurnerLoansPayoutTest {
         );
         vm.prank(address(_core));
         _payout.creditSeizure(address(_asset), _recipient, type(uint256).max, 1);
-        (, , uint256 total) = _payout.payoutReserves(address(_asset));
+        (, , , , uint256 total) = _payout.pendingAmounts(address(_asset));
         assertEq(total, 0, "Allocation overflow adds no reserve");
     }
 
@@ -45,7 +183,7 @@ contract BurnerLoansPayoutCreditSeizureTest is BurnerLoansPayoutTest {
         );
         vm.prank(address(_core));
         _payout.creditSeizure(address(_token), _recipient, 4, 3);
-        (uint256 fee, uint256 seized, uint256 total) = _payout.payoutReserves(address(_token));
+        (uint256 fee, , uint256 seized, , uint256 total) = _payout.pendingAmounts(address(_token));
         assertEq(fee, 5, "Original fee preserved");
         assertEq(seized, 0, "No seized credit");
         assertEq(total, 5, "Original aggregate preserved");
@@ -64,7 +202,7 @@ contract BurnerLoansPayoutCreditSeizureTest is BurnerLoansPayoutTest {
         );
         vm.prank(address(_core));
         _payout.creditSeizure(address(_token), _recipient, type(uint256).max - 5, 1);
-        (, , uint256 total) = _payout.payoutReserves(address(_token));
+        (, , , , uint256 total) = _payout.pendingAmounts(address(_token));
         assertEq(total, 5, "Rejected allocation preserves existing reserve");
     }
 

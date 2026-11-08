@@ -246,4 +246,23 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
         assertEq(fresh.EXECUTION_WINDOW(), 3 days, "Window");
         assertEq(fresh.nextActionId(), 1, "First ID");
     }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P06.
+    function test_givenRuntimeReadinessGettersRevert_whenConstructed(address deployer_) public {
+        vm.mockCallRevert(address(_config), abi.encodeWithSignature("isEnabled()"), hex"ff");
+        vm.mockCallRevert(address(_config), abi.encodeWithSignature("configOperator()"), hex"ff");
+        vm.mockCallRevert(
+            address(_kernel),
+            abi.encodeWithSignature("isPolicyActive(address)", address(_config)),
+            hex"ff"
+        );
+        vm.prank(deployer_);
+        BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
+        assertEq(
+            address(fresh.burnerLoans()),
+            address(_config),
+            "Compatible target bound without readiness reads"
+        );
+        assertFalse(fresh.isEnabled(), "Construction leaves queue disabled");
+    }
 }

@@ -231,7 +231,8 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
                 collateralAmount: collateral,
                 ohmAmount: _BORROW,
                 recipient: _borrower,
-                maxFee: maxFee
+                maxFee: maxFee,
+                referrer: address(0)
             });
         token.setCallback(
             address(composites),

@@ -38,8 +38,8 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Inputs / competing fault | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLDEBT-ENABLE-A01 | ADMIN_ROLE holder | data empty; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `Success` | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,data,now) | Covered: [test_givenDisabled_whenAdminEnables_thenExactTransition](enable.t.sol#L58) |
-| BLDEBT-ENABLE-A02 | Fuzz caller excluding every ADMIN_ROLE holder | data empty; hook dependencies ready | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; no hook executed | Covered: [test_givenDisabled_whenUnauthorizedEnables_reverts](enable.t.sol#L48) |
+| BLDEBT-ENABLE-A01 | ADMIN_ROLE holder, newly granted or already held | data empty; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `Success` | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,data,now) | Covered: [test_givenDisabled_whenAdminEnables_thenExactTransition][test_givenDisabled_whenAdminEnables_thenExactTransition], [test_givenExistingAdmin_whenEnables_thenExactTransition][test_givenExistingAdmin_whenEnables_thenExactTransition] |
+| BLDEBT-ENABLE-A02 | Fuzz caller excluding every ADMIN_ROLE holder | data empty; hook dependencies ready | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; no hook executed | Covered: [test_givenDisabled_whenUnauthorizedEnables_reverts][test_givenDisabled_whenUnauthorizedEnables_reverts] |
 
 ## Local transition state
 
@@ -47,7 +47,7 @@ These checks run before authorization and hook dependencies. Fuzz all callers; m
 
 | ID | Caller | Local active | Local enabled | Prior transition L | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-ENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; no dependency reads or committed logs | Covered: [test_givenEnabled_whenAnyCallerEnables_reverts](enable.t.sol#L26) |
+| BLDEBT-ENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; no dependency reads or committed logs | Covered: [test_givenEnabled_whenAnyCallerEnables_reverts][test_givenEnabled_whenAnyCallerEnables_reverts] |
 
 ## Lifecycle
 
@@ -57,11 +57,11 @@ Local action disabled; reported Core Kernel matches; ROLES initialized; data=0x;
 
 | ID | Caller | Local active | Local enabled | Core active | Core enabled | Action settlement role | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-ENABLE-L02 | ADMIN_ROLE holder | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansDebt) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenInactive_whenEnabled_reverts](enable.t.sol#L35) |
-| BLDEBT-ENABLE-D01 | ADMIN_ROLE holder | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreDisabled_whenEnabled_thenRejectAndRetry](enable.t.sol#L105) |
-| BLDEBT-ENABLE-D02 | ADMIN_ROLE holder | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreInactive_whenEnabled_thenRejectAndRetry](enable.t.sol#L133) |
-| BLDEBT-ENABLE-D03 | ADMIN_ROLE holder | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreInactiveAndDisabled_whenEnabled_thenRejectAndRetry](enable.t.sol#L118) |
-| BLDEBT-ENABLE-L03 | ADMIN_ROLE holder | true | false | true | true | false | `ROLES_RequireRole(BL_DEBT_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenSettlementRoleRevoked_whenEnabled_reverts](enable.t.sol#L230) |
+| BLDEBT-ENABLE-L02 | ADMIN_ROLE holder | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansDebt) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenInactive_whenEnabled_reverts][test_givenInactive_whenEnabled_reverts] |
+| BLDEBT-ENABLE-D01 | ADMIN_ROLE holder | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreDisabled_whenEnabled_thenRejectAndRetry][test_givenCoreDisabled_whenEnabled_thenRejectAndRetry] |
+| BLDEBT-ENABLE-D02 | ADMIN_ROLE holder | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreInactive_whenEnabled_thenRejectAndRetry][test_givenCoreInactive_whenEnabled_thenRejectAndRetry] |
+| BLDEBT-ENABLE-D03 | ADMIN_ROLE holder | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreInactiveAndDisabled_whenEnabled_thenRejectAndRetry][test_givenCoreInactiveAndDisabled_whenEnabled_thenRejectAndRetry] |
+| BLDEBT-ENABLE-L03 | ADMIN_ROLE holder | true | false | true | true | false | `ROLES_RequireRole(BL_DEBT_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenSettlementRoleRevoked_whenEnabled_reverts][test_givenSettlementRoleRevoked_whenEnabled_reverts] |
 
 ## Inventory lifecycle
 
@@ -69,10 +69,10 @@ Local active=true, Local enabled=false, Core active=true and Core enabled=true; 
 
 | ID | Caller | Inventory active | Inventory enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-ENABLE-D05 | ADMIN_ROLE holder | false | true | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryInactive_whenEnabled_thenRejectAndRetry](enable.t.sol#L197) |
-| BLDEBT-ENABLE-D06 | ADMIN_ROLE holder | true | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryDisabled_whenEnabled_thenRejectAndRetry](enable.t.sol#L167) |
-| BLDEBT-ENABLE-D07 | ADMIN_ROLE holder | false | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryInactiveAndDisabled_whenEnabled_thenRejectAndRetry](enable.t.sol#L181) |
-| BLDEBT-ENABLE-D08 | ADMIN_ROLE holder | true | true | Success after restoring the failed Inventory state and retrying | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now); positions and balances preserved | Covered: [test_givenInventoryDisabled_whenEnabled_thenRejectAndRetry](enable.t.sol#L167), [test_givenInventoryInactiveAndDisabled_whenEnabled_thenRejectAndRetry](enable.t.sol#L181), [test_givenInventoryInactive_whenEnabled_thenRejectAndRetry](enable.t.sol#L197) |
+| BLDEBT-ENABLE-D05 | ADMIN_ROLE holder | false | true | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryInactive_whenEnabled_thenRejectAndRetry][test_givenInventoryInactive_whenEnabled_thenRejectAndRetry] |
+| BLDEBT-ENABLE-D06 | ADMIN_ROLE holder | true | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryDisabled_whenEnabled_thenRejectAndRetry][test_givenInventoryDisabled_whenEnabled_thenRejectAndRetry] |
+| BLDEBT-ENABLE-D07 | ADMIN_ROLE holder | false | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryInactiveAndDisabled_whenEnabled_thenRejectAndRetry][test_givenInventoryInactiveAndDisabled_whenEnabled_thenRejectAndRetry] |
+| BLDEBT-ENABLE-D08 | ADMIN_ROLE holder | true | true | Success after restoring the failed Inventory state and retrying | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now); positions and balances preserved | Covered: [test_givenInventoryDisabled_whenEnabled_thenRejectAndRetry][test_givenInventoryDisabled_whenEnabled_thenRejectAndRetry], [test_givenInventoryInactiveAndDisabled_whenEnabled_thenRejectAndRetry][test_givenInventoryInactiveAndDisabled_whenEnabled_thenRejectAndRetry], [test_givenInventoryInactive_whenEnabled_thenRejectAndRetry][test_givenInventoryInactive_whenEnabled_thenRejectAndRetry] |
 
 ## Dependency compatibility
 
@@ -80,7 +80,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Dependency / binding condition | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLDEBT-ENABLE-D04 | ADMIN_ROLE holder | Core reports another Kernel | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch](enable.t.sol#L146) |
+| BLDEBT-ENABLE-D04 | ADMIN_ROLE holder | Core reports another Kernel | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch][test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch] |
 
 ## Inputs
 
@@ -88,7 +88,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Payload | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLDEBT-ENABLE-I01 | ADMIN_ROLE holder | data nonempty; fuzz length 1..256; seed 0x00, 0x01, ABI-encoded zero and 256 bytes; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `BurnerLoans_InvalidEnablerData()` | Covered: [test_whenNonemptyEnableData_reverts](enable.t.sol#L75), [test_whenZeroBytePayload_reverts](enable.t.sol#L255), [test_whenNonzeroBytePayload_reverts](enable.t.sol#L260), [test_whenEncodedZeroPayload_reverts](enable.t.sol#L265), [test_whenMaximumPayloadPayload_reverts](enable.t.sol#L270) |
+| BLDEBT-ENABLE-I01 | ADMIN_ROLE holder | data nonempty; fuzz length 1..256; seed 0x00, 0x01, ABI-encoded zero and 256 bytes; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `BurnerLoans_InvalidEnablerData()` | Covered: [test_whenNonemptyEnableData_reverts][test_whenNonemptyEnableData_reverts], [test_whenZeroBytePayload_reverts][test_whenZeroBytePayload_reverts], [test_whenNonzeroBytePayload_reverts][test_whenNonzeroBytePayload_reverts], [test_whenEncodedZeroPayload_reverts][test_whenEncodedZeroPayload_reverts], [test_whenMaximumPayloadPayload_reverts][test_whenMaximumPayloadPayload_reverts] |
 
 ## Payload rejection and error precedence
 
@@ -96,8 +96,8 @@ Local enabled=false; initialized ROLES; dependencies compatible; outside settlem
 
 | ID | Caller | Payload / competing fault | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLDEBT-ENABLE-I02 | Fuzz all callers | Nonempty bytes; local enabled=true | `NotDisabled()` | Unchanged; local state rejects before caller/data | Covered: [test_givenEnabled_whenNonemptyEnableData_thenStateWins](enable.t.sol#L85) |
-| BLDEBT-ENABLE-I03 | Fuzz callers excluding every ADMIN_ROLE holder | Nonempty bytes; local enabled=false | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization rejects before data | Covered: [test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins](enable.t.sol#L93) |
+| BLDEBT-ENABLE-I02 | Fuzz all callers | Nonempty bytes; local enabled=true | `NotDisabled()` | Unchanged; local state rejects before caller/data | Covered: [test_givenEnabled_whenNonemptyEnableData_thenStateWins][test_givenEnabled_whenNonemptyEnableData_thenStateWins] |
+| BLDEBT-ENABLE-I03 | Fuzz callers excluding every ADMIN_ROLE holder | Nonempty bytes; local enabled=false | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization rejects before data | Covered: [test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins][test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins] |
 
 ## Shared assertions
 
@@ -115,4 +115,26 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 | ID | Caller | Local active | Local enabled | Cached ROLES | lastTransitionAt | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-ENABLE-L04 | Fuzz all callers | false | false | 0 | 0 | Empty revert data from the unset ROLES dependency call; no decoded role result | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenEnabled_thenInitializationPrecedence](enable.t.sol#L242) |
+| BLDEBT-ENABLE-L04 | Fuzz all callers | false | false | 0 | 0 | Empty revert data from the unset ROLES dependency call; no decoded role result | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenEnabled_thenInitializationPrecedence][test_givenNeverActivated_whenEnabled_thenInitializationPrecedence] |
+
+[test_givenCoreDisabled_whenEnabled_thenRejectAndRetry]: enable.t.sol#L110
+[test_givenCoreInactiveAndDisabled_whenEnabled_thenRejectAndRetry]: enable.t.sol#L123
+[test_givenCoreInactive_whenEnabled_thenRejectAndRetry]: enable.t.sol#L138
+[test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch]: enable.t.sol#L151
+[test_givenDisabled_whenAdminEnables_thenExactTransition]: enable.t.sol#L58
+[test_givenDisabled_whenUnauthorizedEnables_reverts]: enable.t.sol#L48
+[test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins]: enable.t.sol#L98
+[test_givenEnabled_whenAnyCallerEnables_reverts]: enable.t.sol#L26
+[test_givenEnabled_whenNonemptyEnableData_thenStateWins]: enable.t.sol#L90
+[test_givenInactive_whenEnabled_reverts]: enable.t.sol#L35
+[test_givenInventoryDisabled_whenEnabled_thenRejectAndRetry]: enable.t.sol#L172
+[test_givenInventoryInactiveAndDisabled_whenEnabled_thenRejectAndRetry]: enable.t.sol#L186
+[test_givenInventoryInactive_whenEnabled_thenRejectAndRetry]: enable.t.sol#L202
+[test_givenNeverActivated_whenEnabled_thenInitializationPrecedence]: enable.t.sol#L247
+[test_givenSettlementRoleRevoked_whenEnabled_reverts]: enable.t.sol#L235
+[test_whenEncodedZeroPayload_reverts]: enable.t.sol#L270
+[test_whenMaximumPayloadPayload_reverts]: enable.t.sol#L275
+[test_whenNonemptyEnableData_reverts]: enable.t.sol#L80
+[test_whenNonzeroBytePayload_reverts]: enable.t.sol#L265
+[test_whenZeroBytePayload_reverts]: enable.t.sol#L260
+[test_givenExistingAdmin_whenEnables_thenExactTransition]: enable.t.sol#L75

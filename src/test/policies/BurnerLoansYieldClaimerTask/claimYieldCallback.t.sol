@@ -98,7 +98,7 @@ contract BurnerLoansYieldClaimerTaskClaimYieldCallbackTest is YieldClaimerModula
             IERC20(address(_callbackToken)),
             address(_core)
         );
-        (uint256 fees, uint256 seized, uint256 total) = _payout.payoutReserves(
+        (uint256 fees, , uint256 seized, , uint256 total) = _payout.pendingAmounts(
             address(_callbackToken)
         );
         bytes32 custody = keccak256(

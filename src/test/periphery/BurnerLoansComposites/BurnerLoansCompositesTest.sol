@@ -102,7 +102,8 @@ abstract contract BurnerLoansCompositesTest is BurnerLoansModularTest {
                 _COLLATERAL,
                 _BORROW,
                 recipient_,
-                _MAX_FEE
+                _MAX_FEE,
+                address(0)
             );
     }
 

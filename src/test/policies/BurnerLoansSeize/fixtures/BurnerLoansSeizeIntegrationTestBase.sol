@@ -31,7 +31,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),
-            abi.encode(uint256(0))
+            abi.encode(uint256(0), uint256(0))
         );
         MockERC20(asset_).mint(borrower_, collateral_);
         vm.startPrank(borrower_);
@@ -40,7 +40,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
             "Borrower approves Core"
         );
         _collateral.depositCollateral(asset_, collateral_, borrower_);
-        _debt.borrow(asset_, principal_, borrower_, borrower_, 0);
+        _debt.borrow(asset_, principal_, borrower_, borrower_, 0, address(0));
         vm.stopPrank();
     }
 
@@ -121,7 +121,11 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
             treasuryBefore + treasury + (_keeper == _payout.treasury() ? reward : 0),
             "Exact Treasury payment"
         );
-        assertEq(_payout.pendingPayout(token_, _keeper), 0, "No zero or paid keeper obligation");
+        assertEq(
+            _payout.pendingRecipientAmount(token_, _keeper),
+            0,
+            "No zero or paid keeper obligation"
+        );
         _assertDefaulted(asset_, token_, quote.seizedDebtOhm);
     }
 
@@ -156,7 +160,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
             0,
             "DM liabilities cleared"
         );
-        (uint256 fee, uint256 seized, uint256 total) = _payout.payoutReserves(token_);
+        (uint256 fee, , uint256 seized, , uint256 total) = _payout.pendingAmounts(token_);
         assertEq(fee, 0, "No fee created by default");
         assertEq(seized, 0, "No paid Treasury reserve");
         assertEq(total, 0, "No paid reserve remains");

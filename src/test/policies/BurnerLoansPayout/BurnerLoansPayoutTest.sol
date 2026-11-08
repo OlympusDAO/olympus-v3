@@ -104,12 +104,46 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
     function _creditFee(MockRevertingTransferToken token_, uint256 amount_) internal {
         token_.mint(address(_payout), amount_);
         vm.prank(address(_core));
-        _payout.creditFee(address(token_), amount_);
+        _payout.creditFee(address(token_), amount_, address(0), 0);
     }
 
     function _deferFee(MockRevertingTransferToken token_, uint256 amount_) internal {
         token_.setTransferReverts(_feeRecipient(), true);
         _creditFee(token_, amount_);
+    }
+
+    function _mockTreasuryRecipient(address recipient_) internal {
+        vm.mockCall(
+            address(_kernel),
+            abi.encodeWithSelector(_kernel.getModuleForKeycode.selector, bytes5("TRSRY")),
+            abi.encode(recipient_)
+        );
+    }
+
+    function _creditReferral(
+        MockRevertingTransferToken token_,
+        uint256 protocolFee_,
+        address referrer_,
+        uint256 referralFee_
+    ) internal {
+        token_.mint(address(_payout), protocolFee_ + referralFee_);
+        vm.prank(address(_core));
+        _payout.creditFee(address(token_), protocolFee_, referrer_, referralFee_);
+    }
+
+    function _assertReferral(address token_, address recipient_, uint256 amount_) internal view {
+        assertEq(_payout.pendingReferralFee(token_, recipient_), amount_, "Raw referral reserve");
+        (, uint256 totalReferral, , , ) = _payout.pendingAmounts(token_);
+        uint256 recipientSum;
+        address[] memory referrers = _payout.getPendingReferralRecipients(token_);
+        for (uint256 i; i < referrers.length; ++i)
+            recipientSum += _payout.pendingReferralFee(token_, referrers[i]);
+        assertEq(totalReferral, recipientSum, "Referral reserve equals fixed-recipient bucket sum");
+        assertEq(
+            _subject.hasPendingReferrer(token_, recipient_),
+            amount_ != 0,
+            "Raw referral index"
+        );
     }
 
     function _creditSeizure(
@@ -196,7 +230,11 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
     }
 
     function _bucketDigest(address token_) internal view returns (bytes32) {
-        (uint256 fee, uint256 seized, uint256 total) = _payout.payoutReserves(token_);
+        return keccak256(abi.encode(_protocolAndKeeperDigest(token_), _referralDigest(token_)));
+    }
+
+    function _protocolAndKeeperDigest(address token_) internal view returns (bytes32) {
+        (uint256 fee, , uint256 seized, , uint256 total) = _payout.pendingAmounts(token_);
         return
             keccak256(
                 abi.encode(
@@ -212,6 +250,15 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
                     _subject.hasPendingToken(token_)
                 )
             );
+    }
+
+    function _referralDigest(address token_) internal view returns (bytes32) {
+        address[] memory recipients = _payout.getPendingReferralRecipients(token_);
+        uint256[] memory amounts = new uint256[](recipients.length);
+        for (uint256 i; i < recipients.length; ++i)
+            amounts[i] = _payout.pendingReferralFee(token_, recipients[i]);
+        (, uint256 totalReferral, , , ) = _payout.pendingAmounts(token_);
+        return keccak256(abi.encode(recipients, amounts, totalReferral));
     }
 
     function _balanceDigest() internal view returns (bytes32) {
@@ -232,7 +279,9 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
     }
 
     function _retiredDigest() internal view returns (bytes32) {
-        (uint256 fee, uint256 seized, uint256 total) = _otherPayout.payoutReserves(address(_token));
+        (uint256 fee, , uint256 seized, , uint256 total) = _otherPayout.pendingAmounts(
+            address(_token)
+        );
         return
             keccak256(
                 abi.encode(
@@ -245,6 +294,18 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
             );
     }
 
+    function _assertKeeperReserve(address token_, uint256 expected_) internal view {
+        address[] memory keepers = _payout.getPendingKeepers(token_);
+        uint256 keeperSum;
+        for (uint256 i; i < keepers.length; ++i)
+            keeperSum += _subject.keeperReward(token_, keepers[i]);
+        assertEq(
+            expected_,
+            keeperSum,
+            "Reported keeper reserve equals original-recipient bucket sum"
+        );
+    }
+
     function _assertBuckets(
         address token_,
         address keeper_,
@@ -253,11 +314,28 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
         uint256 reward_,
         uint256 total_
     ) internal view {
-        (uint256 fee, uint256 seized, uint256 total) = _payout.payoutReserves(token_);
+        (
+            uint256 fee,
+            uint256 referral,
+            uint256 seized,
+            uint256 keeperReward,
+            uint256 total
+        ) = _payout.pendingAmounts(token_);
         assertEq(fee, fee_, "Raw fee reserve");
         assertEq(seized, seized_, "Raw seized-collateral reserve");
         assertEq(total, total_, "Aggregate reserve");
+        _assertKeeperReserve(token_, keeperReward);
+        assertEq(
+            total,
+            fee + referral + seized + keeperReward,
+            "All four pending buckets sum to total"
+        );
         assertEq(_subject.keeperReward(token_, keeper_), reward_, "Raw original-keeper reward");
+        assertEq(
+            _payout.pendingKeeperReward(token_, keeper_),
+            reward_,
+            "Public original-keeper reward"
+        );
         assertEq(
             _subject.hasPendingToken(token_),
             total_ != 0,

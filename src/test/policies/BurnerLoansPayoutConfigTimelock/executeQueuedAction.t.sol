@@ -28,6 +28,100 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
 {
     error DispatchFailed();
 
+    // Scenarios: BLCUCT-EXECUTE-P01.
+    function test_givenQueuedReferralRescue_whenExecuted(
+        address executor_,
+        bool payoutPaused_
+    ) public {
+        _fundPendingReferral(40);
+        uint64 id = _payoutTimelock.queueRescuePendingPayout(
+            address(_asset),
+            _recipient,
+            _borrower,
+            40
+        );
+        ITimelockBatchQueue.QueuedAction memory q = _payoutTimelock.getQueuedAction(id);
+        if (payoutPaused_) _payout.disable("");
+        _makeReady(id);
+        uint256 beforeBalance = _asset.balanceOf(_borrower);
+        vm.expectEmit(address(_payout));
+        emit IBurnerLoansPayout.PendingReferralFeeRescued(
+            address(_asset),
+            _recipient,
+            _borrower,
+            40
+        );
+        vm.prank(executor_);
+        _payoutTimelock.executeQueuedAction(id);
+        assertEq(
+            _asset.balanceOf(_borrower),
+            beforeBalance + 40,
+            "Timelock redirects exactly the approved referral fee"
+        );
+        assertEq(
+            _payout.pendingReferralFee(address(_asset), _recipient),
+            0,
+            "Referral bucket cleared"
+        );
+        assertEq(
+            _payout.getPendingReferralRecipients(address(_asset)).length,
+            0,
+            "Referral index cleared"
+        );
+        (, uint256 referral, , , uint256 total) = _payout.pendingAmounts(address(_asset));
+        assertEq(referral, 0, "Aggregate referral reserve cleared");
+        assertEq(total, 0, "Aggregate payout reserve cleared");
+        _assertCleared(id, q.actions);
+        assertTrue(_payoutTimelock.getQueuedAction(id).executed, "Action marked executed");
+    }
+
+    // Scenarios: BLCUCT-EXECUTE-D08.
+    function test_givenReferralPaidDuringNotice_whenQueuedRescueExecuted_reverts(
+        address executor_
+    ) public {
+        _fundPendingReferral(40);
+        uint64 id = _payoutTimelock.queueRescuePendingPayout(
+            address(_asset),
+            _recipient,
+            _borrower,
+            40
+        );
+        assertEq(
+            _payout.transferPendingPayout(address(_asset), _recipient),
+            40,
+            "Normal retry pays the original referrer during notice"
+        );
+        _makeReady(id);
+        _expectExecutionRejected(
+            id,
+            abi.encodeWithSelector(
+                IBurnerLoansPayout.BurnerLoans_InsufficientPendingPayout.selector,
+                address(_asset),
+                uint256(40),
+                uint256(0)
+            ),
+            executor_
+        );
+        assertEq(
+            _payout.pendingReferralFee(address(_asset), _recipient),
+            0,
+            "Failed rescue recreates no paid liability"
+        );
+        _fundPendingReferral(40);
+        uint256 beforeBalance = _asset.balanceOf(_borrower);
+        vm.prank(executor_);
+        _payoutTimelock.executeQueuedAction(id);
+        assertEq(
+            _asset.balanceOf(_borrower),
+            beforeBalance + 40,
+            "Restored live entitlement allows the same queued action to complete"
+        );
+        assertTrue(
+            _payoutTimelock.getQueuedAction(id).executed,
+            "Retained action executes after restoration within its original window"
+        );
+    }
+
     // Scenarios: BLCUCT-EXECUTE-L01, BLCUCT-EXECUTE-N02.
     function test_givenReadyAction_whenExecuted_thenExactDispatchAndCleanup(
         address executor_,
@@ -657,7 +751,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         _payoutTimelock.executeQueuedAction(id);
         assertEq(_asset.balanceOf(_borrower), beforeBalance + 5, "Dispatch original exact amount");
         assertEq(
-            _payout.pendingPayout(address(_asset), _recipient),
+            _payout.pendingRecipientAmount(address(_asset), _recipient),
             uint256(live_) - 5,
             "Debit live entitlement"
         );

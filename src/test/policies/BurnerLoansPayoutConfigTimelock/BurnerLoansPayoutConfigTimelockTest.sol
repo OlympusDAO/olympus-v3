@@ -79,8 +79,22 @@ abstract contract BurnerLoansPayoutConfigTimelockTest is BurnerLoansModularTest 
         vm.clearMockedCalls();
     }
 
+    function _fundPendingReferral(uint256 amount_) internal {
+        _asset.mint(address(_payout), amount_);
+        vm.mockCall(
+            address(_asset),
+            abi.encodePacked(_asset.transfer.selector, abi.encode(_recipient)),
+            abi.encode(false)
+        );
+        vm.prank(address(_core));
+        _payout.creditFee(address(_asset), 0, _recipient, amount_);
+        vm.clearMockedCalls();
+    }
+
     function _payoutDigest() internal view returns (bytes32) {
-        (uint256 fees, uint256 seized, uint256 pending) = _payout.payoutReserves(address(_asset));
+        (uint256 fees, , uint256 seized, , uint256 pending) = _payout.pendingAmounts(
+            address(_asset)
+        );
         return
             keccak256(
                 abi.encode(
@@ -91,7 +105,7 @@ abstract contract BurnerLoansPayoutConfigTimelockTest is BurnerLoansModularTest 
                     fees,
                     seized,
                     pending,
-                    _payout.pendingPayout(address(_asset), _recipient),
+                    _payout.pendingRecipientAmount(address(_asset), _recipient),
                     _asset.balanceOf(address(_payout)),
                     _asset.balanceOf(_borrower),
                     _asset.balanceOf(_recipient),

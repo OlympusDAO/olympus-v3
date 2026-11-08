@@ -15,6 +15,44 @@ import {BurnerLoansPayoutConfigTimelockTest} from "./BurnerLoansPayoutConfigTime
 contract BurnerLoansPayoutConfigTimelockQueueRescuePendingPayoutTest is
     BurnerLoansPayoutConfigTimelockTest
 {
+    // Scenarios: BLCTRP-P02.
+    function test_givenReferralOnly_whenRescueQueued(
+        address caller_,
+        bool bl_,
+        bool overlap_,
+        bool payoutEnabled_
+    ) public {
+        _grantProposer(caller_, bl_, overlap_);
+        _fundPendingReferral(40);
+        _setState(_payout, true, payoutEnabled_);
+        bytes32 beforeFunds = _payoutDigest();
+        ITimelockBatchQueue.BatchAction[] memory actions = _single(
+            _action(
+                IBurnerLoansPayout.rescuePendingPayout.selector,
+                abi.encode(address(_asset), _recipient, _borrower, uint256(40))
+            )
+        );
+        _expectQueueEvents(actions, caller_);
+        vm.prank(caller_);
+        uint64 id = _payoutTimelock.queueRescuePendingPayout(
+            address(_asset),
+            _recipient,
+            _borrower,
+            40
+        );
+        _assertQueued(id, actions, caller_, caller_);
+        assertEq(
+            _payoutDigest(),
+            beforeFunds,
+            "Queue admission does not debit or transfer referral fees"
+        );
+        assertEq(
+            _payout.pendingReferralFee(address(_asset), _recipient),
+            40,
+            "Original referral remains pending until execution"
+        );
+    }
+
     // Scenarios: BLCTRP-A01, BLCTRP-D01, BLCTRP-D02, BLCTRP-D03, BLCTRP-D04, BLCTRP-L01, BLCTRP-P01.
     function test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards(
         address caller_,

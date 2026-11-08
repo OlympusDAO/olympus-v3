@@ -9,6 +9,7 @@ import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Contracts
@@ -127,6 +128,20 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
         assertEq(vm.getRecordedLogs().length, 0, "ERC165 emits no logs");
     }
 
+    // Scenarios: BLCORE-ERC165-P12.
+    function test_whenIConfigOperatorQueried(address caller_, bool active_, bool enabled_) public {
+        _setCoreLifecycle(active_, enabled_);
+        bytes32 before = _state();
+        vm.recordLogs();
+        vm.prank(caller_);
+        assertTrue(
+            _core.supportsInterface(type(IConfigOperator).interfaceId),
+            "Declared interface supported"
+        );
+        assertEq(_state(), before, "ERC165 has no effects");
+        assertEq(vm.getRecordedLogs().length, 0, "ERC165 emits no logs");
+    }
+
     // Scenarios: BLCORE-ERC165-P09.
     function test_whenInvalidInterfaceQueried(address caller_, bool active_, bool enabled_) public {
         _setCoreLifecycle(active_, enabled_);
@@ -150,6 +165,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
     ) public {
         vm.assume(id_ != type(IBurnerLoansCore).interfaceId);
         vm.assume(id_ != type(IOperatorAuth).interfaceId);
+        vm.assume(id_ != type(IConfigOperator).interfaceId);
         vm.assume(id_ != type(IVersioned).interfaceId);
         vm.assume(id_ != type(IERC165).interfaceId);
         vm.assume(id_ != type(IEnabler).interfaceId);

@@ -27,6 +27,7 @@ flowchart LR
     CORE --> DM[DepositManager]
     CORE --> INV[Inventory]
     CORE --> PAYOUT[Payout]
+    CORE -->|Seizure reward| RISK
     RISK --> CACHE[Optional PriceCache]
     RISK --> PRICE[PRICE]
     RISK --> BACKING[Backing oracle]
@@ -42,9 +43,10 @@ flowchart LR
 | `BurnerLoansSeize` | Permissionless batch liquidation and keeper validation |
 | `BurnerLoansRisk` | Prices, health, fees, configuration validation and keeper-reward calculations |
 | `BurnerLoansInventory` | OHM funding, provider claims, active principal and MINTR approval |
-| `BurnerLoansPayout` | Received fees, seized collateral, keeper obligations, payout retries and recovery |
+| `BurnerLoansPayout` | Received protocol fees, referral and keeper obligations, seized collateral, payout retries and recovery |
 | `BurnerLoansConfig` | FLOAN market configuration, Core registry updates, Risk cache-age forwarding and Core surplus recovery |
 | `BurnerLoansConfigTimelock` | Delayed delegated Config changes and Core surplus recovery |
+| `BurnerLoansRiskConfigTimelock` | Delayed referral percentage, referrer membership and cache-age changes on its immutable Risk target |
 | `BurnerLoansPayoutConfigTimelock` | Delayed Payout flags and recovery, independently of the market-configuration queue |
 | `BurnerLoansInventoryConfigTimelock` | Delayed Inventory surplus burning or rescue through Inventory's independent controller |
 | `BurnerLoansLens` | Position views and bounded seizure scans; no independent policy lifecycle |
@@ -120,7 +122,7 @@ Views use a fresh cached snapshot or read PRICE without writing the cache. Price
 
 A full repayment has a debt-free result, but it still applies custody, amount and same-block validation. Repaid positions with remaining debt use current pricing for their resulting health.
 
-Cache age is a `uint48` number of seconds with no additional protocol maximum. Config forwards age changes to the selected Risk. Risk has its own `configOperator`. Config forwarding requires selecting Config there. The queue's cache-age helper instead calls Risk directly and requires selecting ConfigTimelock there. A Core Config rotation does not update Risk's authority automatically.
+Cache age is a `uint48` number of seconds with no additional protocol maximum. Risk has its own `configOperator`, normally RiskConfigTimelock. This queue calls its immutable Risk target directly. Config retains a forwarding method that requires selecting Config as Risk's operator instead. A Core Config rotation does not update Risk's authority automatically.
 
 ### Fees
 
@@ -143,7 +145,17 @@ feeRate = base + preSlope
 
 The rate and utilization are WAD-scaled. A zero-kink configuration requires zero slopes and gives a constant base rate. Final token-denominated fees round up. Borrowing charges the incremental required collateral; extension charges the required collateral for the extended debt and requested terms.
 
-`maxFee` bounds the accepted fee. Neither borrow nor extend accepts a maturity-slippage bound. Clients must quote the current terms and show the resulting maturity before submission.
+`maxFee` bounds the total accepted fee (`protocolFee + referralFee`). Neither borrow nor extend accepts a maturity-slippage bound. Clients must quote the current terms and show the resulting maturity before submission.
+
+### Referral fees
+
+Borrow, extend and their previews accept a referrer address for that operation. Zero selects no referral fee. A nonzero referrer must be whitelisted by Risk, including when the fee or referral percentage is zero. Each operation can name a different referrer; positions do not store attribution. A positive referral allocation cannot name the selected Payout as its destination. Debt and Seize previews call Payout.validatePayoutRecipient for positive referral or keeper allocations; Payout uses the same validator for settlement and retries. Payout also rejects zero or itself for positive keeper and protocol allocations and for direct payout retries. A zero referral allocation does not require destination admission.
+
+Risk splits the existing upfront fee using one shared percentage: `referralFee = floor(totalFee * referralFeeBps / 10_000)` and `protocolFee = totalFee - referralFee`. The percentage ranges from zero to 100%. It does not increase the total fee. Borrow, extend and their previews return only the combined `fee` alongside position data; `maxFee` applies to that sum. Debt keeps the components internal and passes them separately to Core for Payout settlement.
+
+Debt obtains both components from Risk and passes them separately to Core. Core collects their exact sum from the caller into Payout, then credits the two allocations. Payout routes the protocol component and pays the named referrer. A failed optional referral payment remains fully reserved for that original address. Debt emits `Borrowed` or `Extended` with the borrower, referrer, `protocolFee` and `referralFee` for that operation, including when delivery is deferred. The two fee fields sum to the total charged. Payout emits `PayoutTransferred`/`PayoutDeferred`, whose amounts may include earlier pending fees; retries do not emit loan events.
+
+ADMIN or Risk's selected operator can change the percentage and whitelist. RiskConfigTimelock permits ADMIN or `burner_loans_admin` to queue these changes with notice. Percentage, cache age and each referrer's membership have independent conflict keys and state commitments, so they can be pending and executed in any order. Changes affect future operations; earned rewards retain their original token, recipient and amount.
 
 ## Collateral custody
 
@@ -159,9 +171,9 @@ See [Deposit Manager](deposit_manager.md) for custody modes and [Inventory](burn
 
 ## Yield routing
 
-Payout chooses one recipient for fees and one for custody yield. A false send flag selects Treasury. A true flag selects the configured RevenueDistributor. These flags belong to Payout, not Config or Core.
+Payout chooses one recipient for protocol fee allocations and one for custody yield. A false send flag selects Treasury. A true flag selects the configured RevenueDistributor. These flags belong to Payout, not Config or Core. Referral allocations always belong to the named referrer.
 
-Core transfers collected fees and seizure output to its selected Payout. Payout reserves incoming obligations before best-effort delivery. A failed optional transfer remains pending there. Yield is different: DepositManager sends the actual output token directly to Payout's selected yield recipient. A failed yield transfer leaves the yield claimable in DepositManager.
+Core collects fees directly from the payer into its selected Payout and directs DepositManager to redeem seizure proceeds into that Payout. Payout reserves incoming obligations before best-effort delivery. A failed optional transfer remains pending there. Yield is different: DepositManager sends the actual output token directly to Payout's selected yield recipient. A failed yield transfer leaves the yield claimable in DepositManager.
 
 Borrow, extend and yield claims do not depend on a RevenueDistributor token route being configured. Configure the expected underlying and share-token routes before enabling a source flag.
 
@@ -171,17 +183,20 @@ Seizure pays a permitted keeper reward and sends the entire remainder to Treasur
 
 | Pending amount | Destination when retried |
 | --- | --- |
-| Borrow or extension fee | Current Payout fee recipient |
+| Protocol share of borrow or extension fee | Current Payout fee recipient |
+| Referral fee | Original referrer, even after whitelist removal or percentage changes |
 | Keeper reward | Original keeper |
 | Seizure remainder | Current TRSRY module |
 
-Each Payout instance owns its received tokens and pending ledger. Anyone can use `getPendingPayoutTokens()`, `getPendingPayoutRecipients(token)` and `transferPendingPayout(token, recipient)` on that instance. Retries remain available after local pause, replacement or deactivation, outside Core settlement. Failed transfers retain their reserves.
+Each Payout instance owns its received tokens and pending ledger. Anyone can use `getPendingPayoutTokens()`, `getPendingPayoutRecipients(token)` and `transferPendingPayout(token, recipient)` on that instance. Referral fees also have `pendingReferralFee(token, recipient)` and `getPendingReferralRecipients(token)` getters. `pendingKeeperReward(token, keeper)` reports only the original keeper's reward; `pendingRecipientAmount(token, recipient)` combines every eligible bucket for one recipient. Retries require the Payout's Kernel activity and remain available after local pause or replacement, outside Core settlement. Failed transfers retain their reserves. `pendingAmounts(token)` returns pending protocol fees, pending referral fees across all recipients, seized collateral, pending keeper rewards across all recipients and total obligations, in that order. The four component reserves sum to the total. All four categories reject Payout itself as the destination of a positive allocation before recording credit. Actual token delivery failures to valid recipients still defer.
 
 ### Rescue
 
 Core's `rescue` recovers tokens held directly by Core. It does not consume Payout obligations. Config and ConfigTimelock provide a delegated path for Core surplus recovery.
 
-Payout's `rescue` transfers only unreserved surplus. Its `rescuePendingPayout` redirects an exact positive amount from a recipient's live entitlement. The latter debits keeper reward, then fee, then seized collateral when those buckets resolve to the same recipient. A failed mandatory rescue transfer rolls back the accounting changes.
+Payout's `rescue` transfers only unreserved surplus. Its `rescuePendingPayout` redirects an exact positive amount from a recipient's live entitlement. The latter debits keeper rewards, protocol fees, seized collateral, then referral fees when those buckets resolve to the same recipient. A failed mandatory rescue transfer rolls back the accounting changes.
+
+Authorized pending-payout rescue includes referral fees. Its preview and `pendingRecipientAmount` use the same complete entitlement; referral recovery debits the original recipient, aggregate referral reserve and recipient index. Referral fees remain protected from surplus rescue.
 
 Payout recovery accepts ADMIN or its local nonzero config operator. PayoutConfigTimelock delays delegated flag and recovery changes; direct ADMIN repair remains available.
 
@@ -205,7 +220,7 @@ ADMIN selects Core's Risk, Inventory, Payout and config operator. Risk, Inventor
 
 Config manages complete risk and fee structs, asset caps, withdrawal mode and origination state. New assets are ADMIN-only and start with originations enabled. The facility-wide debt cap is an ADMIN-only Inventory setter. Config has no `setGlobalDebtCap`, routing-flag setter or `setFacility` wiring step.
 
-ConfigTimelock targets one Config. PayoutConfigTimelock targets one Payout. InventoryConfigTimelock targets one Inventory and exposes typed burn/rescue proposals. Queued actions commit their destination, configuration domains and pre-state. Drift can invalidate execution. Valid execution is permissionless within the delay/expiry window, subject to the concrete queue's checks. Batches are atomic. The direct Risk-age action can remain usable while Config and Core are paused or inactive; it requires the queue and Risk operational.
+ConfigTimelock targets one Config. RiskConfigTimelock targets one Risk. PayoutConfigTimelock targets one Payout. InventoryConfigTimelock targets one Inventory and exposes typed burn/rescue proposals. Queued actions commit their destination, configuration domains and pre-state. Drift can invalidate execution. Valid execution is permissionless within the delay/expiry window, subject to the concrete queue's checks. Batches are atomic. RiskConfigTimelock remains usable while Config and Core are paused or inactive; it requires the queue and Risk operational.
 
 Distributor pointer replacement is ADMIN-only on Payout and is not a PayoutConfigTimelock action, including in a batch. Disable both routing flags before clearing the pointer. Flags have separate keys, so a delayed batch can turn both off before a later direct ADMIN clear.
 
@@ -219,7 +234,7 @@ A replacement procedure is:
 
 1. Deploy the replacement Config bound to the existing Core and activate it.
 2. Deploy and activate any replacement ConfigTimelock; leave local controller selection until Config is enabled.
-3. Select the intended independent Risk controller: replacement Config for forwarding, or its ConfigTimelock for direct delayed cache-age actions.
+3. Retain or select the independent Risk controller. RiskConfigTimelock is bound to Risk and does not change when Config is replaced. Selecting Config instead enables its cache-age forwarding only.
 4. Call `Core.setConfigOperator(replacement)` in the same governed batch where appropriate.
 5. Enable the replacement Config, select its local config operator, then enable its queue after their binding checks pass.
 6. Verify registered market managers and independent controller assignments. Inspect unregistered markets before retiring the outgoing Config and queue.
@@ -241,6 +256,8 @@ This is a dependency order, not a reviewed production deployment script. Confirm
 9. Enable each required queue and task after its own target/binding checks pass, then configure Heart ordering.
 
 Risk can bind a precomputed Core address at construction; Core checks the returned identity when selecting it. Lens has no Kernel activation or enable step. Payout uses Enabler without a separate re-enable/grace API.
+
+For delayed Risk settings, deploy RiskConfigTimelock with the deployed Risk address. Activate Risk and select this queue as its operator while Risk and the queue are disabled. Enable Risk, then activate and enable the queue. The queue needs no ADMIN role or FLOAN write permission. Referral percentage starts at zero and the whitelist starts empty; configure them through queued actions or direct ADMIN governance.
 
 ## Policy replacement and wind-down
 
@@ -280,7 +297,7 @@ The [launch-parameter proposal](burner_loans_launch_parameters.md) contains the 
 
 ## Gas verification
 
-Commit `58f911187c` contains the latest formatted gas snapshots. The focused deploy-profile run passed 381 tests across 21 suites, including 16 pinned-mainnet fork cases. Seventeen snapshot files changed; four groups reproduced their committed values. The count includes ordinary regression tests in the selected files, not only gas measurements.
+Commit `58f911187c` records a gas-snapshot baseline from before referral fees and shared destination validation. The figures below describe that historical bytecode. The focused deploy-profile run passed 381 tests across 21 suites, including 16 pinned-mainnet fork cases. Seventeen snapshot files changed; four groups reproduced their committed values. The count includes ordinary regression tests in the selected files, not only gas measurements.
 
 The run used solc 0.8.36, optimizer 400, Prague, transaction isolation and snapshot emission. Use `FOUNDRY_PROFILE=deploy` for a gas run and `pnpm run format:snapshots` before committing the output. The tests and snapshot labels define each measurement's scope. This result is not a full repository campaign or deployment approval.
 

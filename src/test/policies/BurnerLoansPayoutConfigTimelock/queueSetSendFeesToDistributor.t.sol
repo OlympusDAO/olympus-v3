@@ -26,12 +26,11 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendFeesToDistributorTest is
         address reader_,
         bool coreActive_,
         bool coreEnabled_,
-        bool payoutActive_,
         bool payoutEnabled_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
         _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, payoutActive_, payoutEnabled_);
+        _setState(_payout, true, payoutEnabled_);
         bytes32 funds = _payoutDigest();
         ITimelockBatchQueue.BatchAction[] memory actions = _single(
             _action(IBurnerLoansPayout.setSendFeesToDistributor.selector, abi.encode(false))
@@ -41,6 +40,60 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendFeesToDistributorTest is
         uint64 id = _payoutTimelock.queueSetSendFeesToDistributor(false);
         _assertQueued(id, actions, caller_, reader_);
         assertEq(_payoutDigest(), funds, "Queue changes no target state or funds");
+    }
+
+    // Scenarios: BLCTF-D06.
+    function test_givenInactivePayout_whenPermittedProposerQueues_reverts(
+        address caller_,
+        bool bl_,
+        bool overlap_,
+        bool coreActive_,
+        bool coreEnabled_,
+        bool payoutEnabled_,
+        bool flag_
+    ) public {
+        _grantProposer(caller_, bl_, overlap_);
+        _distributor();
+        _setState(_core, coreActive_, coreEnabled_);
+        _setState(_payout, false, payoutEnabled_);
+        vm.recordLogs();
+        _expectQueueRejected(
+            abi.encodeCall(_payoutTimelock.queueSetSendFeesToDistributor, (flag_)),
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_payout)
+            ),
+            caller_
+        );
+        assertEq(
+            _payoutTimelock.pendingActionId(
+                _scopedKey(
+                    _action(IBurnerLoansPayout.setSendFeesToDistributor.selector, abi.encode(flag_))
+                )
+            ),
+            0,
+            "Rejected inactive target owns no key"
+        );
+        assertEq(_timelockLogCount(), 0, "Rejected admission commits no queue events");
+    }
+
+    // Scenarios: BLCTF-D06.
+    function test_whenInactivePayoutLifecycleSeedsUsed_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint256 role; role < 3; ++role)
+            for (uint256 enabled; enabled < 2; ++enabled)
+                for (uint256 flag; flag < 2; ++flag) {
+                    test_givenInactivePayout_whenPermittedProposerQueues_reverts(
+                        address(0x111),
+                        role == 1,
+                        role == 2,
+                        true,
+                        true,
+                        enabled != 0,
+                        flag != 0
+                    );
+                    _restore(checkpoint);
+                }
     }
 
     // Scenarios: BLCTF-A02.
@@ -322,41 +375,37 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendFeesToDistributorTest is
         uint256 checkpoint = vm.snapshotState();
         for (uint256 ca; ca < 2; ++ca)
             for (uint256 ce; ce < 2; ++ce)
-                for (uint256 pa; pa < 2; ++pa)
-                    for (uint256 pe; pe < 2; ++pe) {
-                        test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards(
-                            address(0x111),
-                            false,
-                            false,
-                            address(0),
-                            ca != 0,
-                            ce != 0,
-                            pa != 0,
-                            pe != 0
-                        );
-                        _restore(checkpoint);
-                        test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards(
-                            address(0x112),
-                            true,
-                            false,
-                            address(this),
-                            ca != 0,
-                            ce != 0,
-                            pa != 0,
-                            pe != 0
-                        );
-                        _restore(checkpoint);
-                        test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards(
-                            address(0x113),
-                            false,
-                            true,
-                            _recipient,
-                            ca != 0,
-                            ce != 0,
-                            pa != 0,
-                            pe != 0
-                        );
-                        _restore(checkpoint);
-                    }
+                for (uint256 pe; pe < 2; ++pe) {
+                    test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards(
+                        address(0x111),
+                        false,
+                        false,
+                        address(0),
+                        ca != 0,
+                        ce != 0,
+                        pe != 0
+                    );
+                    _restore(checkpoint);
+                    test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards(
+                        address(0x112),
+                        true,
+                        false,
+                        address(this),
+                        ca != 0,
+                        ce != 0,
+                        pe != 0
+                    );
+                    _restore(checkpoint);
+                    test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards(
+                        address(0x113),
+                        false,
+                        true,
+                        _recipient,
+                        ca != 0,
+                        ce != 0,
+                        pe != 0
+                    );
+                    _restore(checkpoint);
+                }
     }
 }

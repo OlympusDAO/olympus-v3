@@ -22,7 +22,7 @@ abstract contract BurnerLoansSeizeTestBase is BurnerLoansDebtTest {
         _depositCollateral(2000e6);
         _mockRisk(0);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
@@ -47,7 +47,7 @@ abstract contract BurnerLoansSeizeTestBase is BurnerLoansDebtTest {
                     _stateDigest(keeper_),
                     _floan.getMarketPrincipalDefaulted(_core.marketId(address(_asset))),
                     _asset.balanceOf(_payout.treasury()),
-                    _payout.pendingPayout(address(_asset), keeper_)
+                    _payout.pendingRecipientAmount(address(_asset), keeper_)
                 )
             );
     }
@@ -166,7 +166,7 @@ abstract contract BurnerLoansSeizeTestBase is BurnerLoansDebtTest {
             0,
             "DM liabilities released"
         );
-        (, , uint256 reserve) = _payout.payoutReserves(address(_asset));
+        (, , , , uint256 reserve) = _payout.pendingAmounts(address(_asset));
         assertEq(reserve, 0, "No paid obligation remains reserved");
     }
 }

@@ -1,6 +1,6 @@
 # BurnerLoansConfigTimelock.constructor coverage plan
 
-Source: [constructor](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L93). Coverage is recorded in the Test column.
+Source: [constructor](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L99). Coverage is recorded in the Test column.
 
 Implementation: 13 scenario functions mapped; 6 Covered, 7 Partial. Partial rows have complete test implementations blocked by the current production behavior.
 
@@ -54,6 +54,12 @@ Co-located API assertions: `burnerLoans`. These must be asserted independently o
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map every row to its scenario test and boundary seeds; retain production-blocked rows as Partial.
 
+## Construction without runtime readiness
+
+| ID | Caller | Target condition | Result | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCT-CONSTRUCTOR-P06 | Fuzz deployer | Consumed interfaces and same-Kernel binding valid; target activity, enabled and selected-operator reads revert | Success | Target bound; queue disabled; no readiness/selection reads | Covered: [test][test_givenRuntimeReadinessGettersRevert_whenConstructed] |
+
 [test_givenMissingIBurnerLoansConfig_whenConstructed_reverts]: constructor.t.sol#L20
 [test_givenMissingIEnabler_whenConstructed_reverts]: constructor.t.sol#L42
 [test_givenForeignConfigKernel_whenConstructed_reverts]: constructor.t.sol#L150
@@ -67,3 +73,4 @@ Co-located API assertions: `burnerLoans`. These must be asserted independently o
 [test_givenConfigActiveTrue_givenConfigEnabledFalse_whenConstructed_thenDisabledDefaults]: constructor.t.sol#L200
 [test_givenConfigActiveFalse_givenConfigEnabledTrue_whenConstructed_thenDisabledDefaults]: constructor.t.sol#L217
 [test_givenConfigActiveFalse_givenConfigEnabledFalse_whenConstructed_thenDisabledDefaults]: constructor.t.sol#L234
+[test_givenRuntimeReadinessGettersRevert_whenConstructed]: ./constructor.t.sol#L251

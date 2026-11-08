@@ -2,7 +2,7 @@
 
 Source: [enable](../../../bases/EnablerV2.sol#L52). Coverage is recorded in the Test column.
 
-Implementation: 13 scenario functions mapped; 10 Covered, 3 Partial. Partial rows have complete test implementations blocked by the current production behavior.
+Coverage records implemented scenario domains and assertions. Execution results are recorded separately from coverage.
 
 ## Domains and notation
 
@@ -22,7 +22,7 @@ ROLES initialized; every dependency not varied by the selected table satisfies i
 
 ## Dependency validation contract
 
-The immutable Config target is a required same-Kernel active/enabled Policy that selects this timelock as its configOperator. Config owns its relationship with Core; the timelock does not revalidate Core’s Config selection. Target authority matching is separate from readiness. Risk is checked only for Risk-targeted proposals; no global Risk-operator equality or recursive Core/Inventory readiness gate is introduced.
+The immutable Config target is a required same-Kernel active Policy (local enablement is not required for activation) that selects this timelock as its configOperator. Config owns its relationship with Core; the timelock does not revalidate Core’s Config selection. Target authority matching is separate from readiness. Risk is checked only for Risk-targeted proposals; no global Risk-operator equality or recursive Core/Inventory readiness gate is introduced.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Invalid metadata uses the consumer-owned InvalidDependency error; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -77,7 +77,7 @@ Local enabled=false; data=0x; ROLES initialized. The immutable Config must be ac
 | ID | Caller | Dependency | Dependency active | Dependency enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BLCT-ENABLE-D01 | ADMIN_ROLE holder | Config | false | true | PolicyDependency_NotActive(Config) | Exact local transition/events on success; revert leaves state unchanged and commits no logs | Covered: [test_givenConfigActiveFalse_givenConfigEnabledTrue_whenEnable_reverts][test_givenConfigActiveFalse_givenConfigEnabledTrue_whenEnable_reverts] |
-| BLCT-ENABLE-D02 | ADMIN_ROLE holder | Config | true | false | PolicyDependency_NotActive(Config) | Exact local transition/events on success; revert leaves state unchanged and commits no logs | Covered: [test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_reverts][test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_reverts] |
+| BLCT-ENABLE-D02 | ADMIN_ROLE holder | Config | true | false | Success | Exact local transition/events on success; revert leaves state unchanged and commits no logs | Covered: [test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_thenEnabled][test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_thenEnabled] |
 | BLCT-ENABLE-D03 | ADMIN_ROLE holder | Config | false | false | PolicyDependency_NotActive(Config) | Exact local transition/events on success; revert leaves state unchanged and commits no logs | Covered: [test_givenConfigActiveFalse_givenConfigEnabledFalse_whenEnable_reverts][test_givenConfigActiveFalse_givenConfigEnabledFalse_whenEnable_reverts] |
 
 ## Dependency compatibility
@@ -114,19 +114,31 @@ This timelock may serve market configuration, direct Risk cache-age configuratio
 | --- | --- | --- | --- | --- | --- |
 | BLCT-ENABLE-D06 | ADMIN_ROLE holder | Zero or controller distinct from Core Config and BLCT; guarantee both | Success with existing local/history/Config prerequisites satisfied | Normal local transition; Risk authority/cache/oracle/age untouched; no equality requirement | Covered: [test_givenRiskOperatorIndependent_whenEnable_thenEnabled][test_givenRiskOperatorIndependent_whenEnable_thenEnabled] |
 
-[test_givenAdmin_whenEnabled_thenExactTransition]: enable.t.sol#L121
-[test_givenNonAdmin_whenEnabled_reverts]: enable.t.sol#L134
-[test_givenAdmin_whenNonemptyData_reverts]: enable.t.sol#L145
-[test_givenEnableI01Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L206
-[test_givenEnabled_whenNonemptyEnableData_thenStateError]: enable.t.sol#L157
-[test_givenEnableI02Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L219
-[test_givenNonAdmin_whenNonemptyData_thenRoleError]: enable.t.sol#L170
-[test_givenEnableI03Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L235
-[test_givenAlreadyEnabled_whenEnableCalled_thenStateError]: enable.t.sol#L185
-[test_givenConfigActiveFalse_givenConfigEnabledTrue_whenEnable_reverts]: enable.t.sol#L20
-[test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_reverts]: enable.t.sol#L37
-[test_givenConfigActiveFalse_givenConfigEnabledFalse_whenEnable_reverts]: enable.t.sol#L54
-[test_givenForeignConfigKernel_whenEnable_reverts]: enable.t.sol#L71
-[test_givenOwnPolicyInactive_whenEnable_reverts]: enable.t.sol#L93
-[test_givenNeverActivated_whenEnabled_thenUnsetRolesCallReverts]: enable.t.sol#L198
-[test_givenRiskOperatorIndependent_whenEnable_thenEnabled]: enable.t.sol#L107
+## Activation compatibility
+
+Activation and reactivation require compatible target, ConfigOperator and Enabler interfaces, same Kernel, target Policy activity and this queue selected as configOperator. They do not read the target's enabled status. This allows queue repair while the target remains paused; each queued operation still enforces its own execution requirements. Other transition/caller/history/grace/payload guards retain their existing order.
+
+Caller is authorized and every prerequisite not varied below is valid. An incompatible target leaves lifecycle history, pending actions, reservations, configuration and custody unchanged.
+
+| ID | Target active | Target enabled | Input fault | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCT-ENABLE-D07 | true | Fuzz false/true | Reject each consumed interface advertisement; seed every interface | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Unchanged | Covered: [test][test_givenMissingConsumedInterface_whenActivated_reverts] |
+
+[test_givenAdmin_whenEnabled_thenExactTransition]: enable.t.sol#L124
+[test_givenNonAdmin_whenEnabled_reverts]: enable.t.sol#L137
+[test_givenAdmin_whenNonemptyData_reverts]: enable.t.sol#L148
+[test_givenEnableI01Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L209
+[test_givenEnabled_whenNonemptyEnableData_thenStateError]: enable.t.sol#L160
+[test_givenEnableI02Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L222
+[test_givenNonAdmin_whenNonemptyData_thenRoleError]: enable.t.sol#L173
+[test_givenEnableI03Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L238
+[test_givenAlreadyEnabled_whenEnableCalled_thenStateError]: enable.t.sol#L188
+[test_givenConfigActiveFalse_givenConfigEnabledTrue_whenEnable_reverts]: enable.t.sol#L24
+[test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_thenEnabled]: enable.t.sol#L41
+[test_givenConfigActiveFalse_givenConfigEnabledFalse_whenEnable_reverts]: enable.t.sol#L57
+[test_givenForeignConfigKernel_whenEnable_reverts]: enable.t.sol#L74
+[test_givenOwnPolicyInactive_whenEnable_reverts]: enable.t.sol#L96
+[test_givenNeverActivated_whenEnabled_thenUnsetRolesCallReverts]: enable.t.sol#L201
+[test_givenRiskOperatorIndependent_whenEnable_thenEnabled]: enable.t.sol#L110
+
+[test_givenMissingConsumedInterface_whenActivated_reverts]: enable.t.sol#L251

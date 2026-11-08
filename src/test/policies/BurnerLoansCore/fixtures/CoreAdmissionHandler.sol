@@ -87,7 +87,17 @@ contract CoreAdmissionHandler is Test {
                 abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
             );
         _core.settleBorrow(
-            IBurnerLoansCore.BorrowRequest(address(0), address(0), address(0), address(0), 0, 0, 0)
+            IBurnerLoansCore.BorrowRequest(
+                address(0),
+                address(0),
+                address(0),
+                address(0),
+                0,
+                0,
+                0,
+                address(0),
+                0
+            )
         );
     }
 }

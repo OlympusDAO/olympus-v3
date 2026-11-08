@@ -101,26 +101,33 @@ TL denotes this timelock. Unchanged includes the queue, lifecycle and custody fi
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BLCTRP-D06 | Fuzz ADMIN-only, BL-admin-only, overlap; seed all | true | true | Payout inactive; fuzz Core active/enabled and Payout enabled independently | BurnerLoans_PolicyNotActive(Payout) | No action/key, target-state or custody changes | Covered: [test][test_givenInactivePayout_whenPermittedProposerQueues_reverts] |
 
-[test_givenControllerReplaced_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L163
-[test_givenActiveDisabled_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L100
-[test_givenInactiveEnabled_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L141
-[test_givenInsufficientEntitlement_whenAmountQueued_reverts]: ./queueRescuePendingPayout.t.sol#L343
-[test_givenKeyAlreadyOwned_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L188
-[test_givenNoEntitlement_whenPositiveAmountQueued_reverts]: ./queueRescuePendingPayout.t.sol#L319
-[test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards]: ./queueRescuePendingPayout.t.sol#L19
-[test_givenUnauthorizedCaller_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L78
-[test_whenAmountZero_reverts]: ./queueRescuePendingPayout.t.sol#L300
-[test_whenDestinationCore_reverts]: ./queueRescuePendingPayout.t.sol#L256
-[test_whenDestinationKernel_reverts]: ./queueRescuePendingPayout.t.sol#L280
-[test_whenDestinationPayout_reverts]: ./queueRescuePendingPayout.t.sol#L262
-[test_whenDestinationTimelock_reverts]: ./queueRescuePendingPayout.t.sol#L274
-[test_whenDestinationToken_reverts]: ./queueRescuePendingPayout.t.sol#L268
-[test_whenDestinationZero_reverts]: ./queueRescuePendingPayout.t.sol#L250
-[test_whenMaximumAmountAcceptedByPreview_thenExactPayload]: ./queueRescuePendingPayout.t.sol#L378
-[test_whenPendingAmountBoundarySeedsUsed_reverts]: ./queueRescuePendingPayout.t.sol#L408
-[test_whenProposerAndLifecycleSeedsUsed_thenExactQueue]: ./queueRescuePendingPayout.t.sol#L443
-[test_whenRecipientZero_reverts]: ./queueRescuePendingPayout.t.sol#L286
-[test_whenTokenHasNoCode_reverts]: ./queueRescuePendingPayout.t.sol#L226
-[test_whenTokenZero_reverts]: ./queueRescuePendingPayout.t.sol#L245
-[test_givenInactiveDisabled_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L119
-[test_givenInactivePayout_whenPermittedProposerQueues_reverts]: ./queueRescuePendingPayout.t.sol#L52
+## Referral fee admission
+
+| ID | Caller and target state | Pending entitlement | Expected queue result | Test |
+| --- | --- | --- | --- | --- |
+| BLCTRP-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap; Payout active, enabled/paused independently | Referral-only40; proposed redirect40 | Queue exact recipient/destination/amount after real Payout preview; no entitlement debit, index change or transfer | Covered: [test_givenReferralOnly_whenRescueQueued][test_givenReferralOnly_whenRescueQueued] |
+
+[test_givenControllerReplaced_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L201
+[test_givenActiveDisabled_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L138
+[test_givenInactiveEnabled_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L179
+[test_givenInsufficientEntitlement_whenAmountQueued_reverts]: ./queueRescuePendingPayout.t.sol#L381
+[test_givenKeyAlreadyOwned_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L226
+[test_givenNoEntitlement_whenPositiveAmountQueued_reverts]: ./queueRescuePendingPayout.t.sol#L357
+[test_givenPermittedProposer_whenQueued_thenExactPayloadAndGuards]: ./queueRescuePendingPayout.t.sol#L57
+[test_givenUnauthorizedCaller_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L116
+[test_whenAmountZero_reverts]: ./queueRescuePendingPayout.t.sol#L338
+[test_whenDestinationCore_reverts]: ./queueRescuePendingPayout.t.sol#L294
+[test_whenDestinationKernel_reverts]: ./queueRescuePendingPayout.t.sol#L318
+[test_whenDestinationPayout_reverts]: ./queueRescuePendingPayout.t.sol#L300
+[test_whenDestinationTimelock_reverts]: ./queueRescuePendingPayout.t.sol#L312
+[test_whenDestinationToken_reverts]: ./queueRescuePendingPayout.t.sol#L306
+[test_whenDestinationZero_reverts]: ./queueRescuePendingPayout.t.sol#L288
+[test_whenMaximumAmountAcceptedByPreview_thenExactPayload]: ./queueRescuePendingPayout.t.sol#L416
+[test_whenPendingAmountBoundarySeedsUsed_reverts]: ./queueRescuePendingPayout.t.sol#L446
+[test_whenProposerAndLifecycleSeedsUsed_thenExactQueue]: ./queueRescuePendingPayout.t.sol#L481
+[test_whenRecipientZero_reverts]: ./queueRescuePendingPayout.t.sol#L324
+[test_whenTokenHasNoCode_reverts]: ./queueRescuePendingPayout.t.sol#L264
+[test_whenTokenZero_reverts]: ./queueRescuePendingPayout.t.sol#L283
+[test_givenInactiveDisabled_whenQueued_reverts]: ./queueRescuePendingPayout.t.sol#L157
+[test_givenInactivePayout_whenPermittedProposerQueues_reverts]: ./queueRescuePendingPayout.t.sol#L90
+[test_givenReferralOnly_whenRescueQueued]: ./queueRescuePendingPayout.t.sol#L19

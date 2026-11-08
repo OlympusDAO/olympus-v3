@@ -43,7 +43,7 @@ abstract contract BurnerLoansCollateralTest is BurnerLoansCollateralActionTest {
         _rolesAdmin.grantRole(EMERGENCY_ROLE, emergency);
         vm.startPrank(_borrower);
         _collateral.depositCollateral(address(_asset), 2000e6, _borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6, address(0));
         vm.stopPrank();
         _depositAsset(_asset, 17, _OTHER_BORROWER);
         _preservedAccounting = _accountingDigest(address(_asset));

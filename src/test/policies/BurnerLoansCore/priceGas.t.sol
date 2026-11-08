@@ -117,13 +117,21 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
             _BORROW_AMOUNT,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         uint256 state = vm.snapshotState();
 
         vm.prank(_borrower);
         uint256 gasBefore = gasleft();
-        _debt.borrow(address(_asset), _BORROW_AMOUNT, _borrower, _borrower, preview.fee);
+        _debt.borrow(
+            address(_asset),
+            _BORROW_AMOUNT,
+            _borrower,
+            _borrower,
+            preview.fee,
+            address(0)
+        );
         uint256 directPriceGas = gasBefore - gasleft();
 
         assertTrue(vm.revertToState(state), "state snapshot should restore direct-price baseline");
@@ -132,7 +140,14 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
 
         vm.prank(_borrower);
         gasBefore = gasleft();
-        _debt.borrow(address(_asset), _BORROW_AMOUNT, _borrower, _borrower, preview.fee);
+        _debt.borrow(
+            address(_asset),
+            _BORROW_AMOUNT,
+            _borrower,
+            _borrower,
+            preview.fee,
+            address(0)
+        );
         uint256 freshCacheGas = gasBefore - gasleft();
 
         emit log_named_uint("direct PRICE borrow gas", directPriceGas);
@@ -366,7 +381,14 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
         MockOlympusBackingOracle(_risk.backingOracle()).setBacking(10e18);
         _depositCollateral(_LIFECYCLE_COLLATERAL);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), _BORROW_AMOUNT, _borrower, _borrower, type(uint256).max);
+        _debt.borrow(
+            address(_asset),
+            _BORROW_AMOUNT,
+            _borrower,
+            _borrower,
+            type(uint256).max,
+            address(0)
+        );
     }
 
     function _configureUsdeMarket() internal returns (MockERC20 token) {

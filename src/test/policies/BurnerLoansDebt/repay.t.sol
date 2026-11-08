@@ -34,7 +34,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         _depositCollateral(2000e6);
         _mockRisk(0);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), _PRINCIPAL, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), _PRINCIPAL, _borrower, _borrower, 0, address(0));
         vm.roll(block.number + 1);
     }
 
@@ -482,7 +482,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         _inventory.setGlobalDebtCap(type(uint128).max);
         _config.setAssetDebtCap(address(_asset), type(uint128).max);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), principal_, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), principal_, _borrower, _borrower, 0, address(0));
         vm.roll(block.number + 1);
     }
 

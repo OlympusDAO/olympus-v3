@@ -1,6 +1,6 @@
 # BurnerLoansCore.supportsInterface coverage plan
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansCore.sol#L873). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansCore.sol). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -26,6 +26,7 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 | BLCORE-ERC165-P08 | Fuzz all callers | type(IGracePeriod).interfaceId | true | No state, token, event or dependency changes | Covered: [test][test_whenIGracePeriodQueried] |
 | BLCORE-ERC165-P09 | Fuzz all callers | 0xffffffff | false | No state, token, event or dependency changes | Covered: [test][test_whenInvalidInterfaceQueried] |
 | BLCORE-ERC165-P10 | Fuzz all callers | 0x00000000 | false | No state, token, event or dependency changes | Covered: [test][test_whenZeroInterfaceQueried] |
+| BLCORE-ERC165-P12 | Fuzz all callers | type(IConfigOperator).interfaceId | true | No state, token, event or dependency changes | Covered: [test][test_whenIConfigOperatorQueried] |
 | BLCORE-ERC165-P11 | Fuzz all callers | Fuzz bytes4 excluding the complete supported set listed above, zero and 0xffffffff | false | No state, token, event or dependency changes | Covered: [test][test_whenOtherInterfaceQueried] |
 
 ## Shared assertions
@@ -36,14 +37,16 @@ Compile the exact IDs listed above. Imported interfaces do not add advertised su
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to implemented tests.
 
-[test_whenIBurnerLoansCoreQueried]: supportsInterface.t.sol#L19
-[test_whenIERC165Queried]: supportsInterface.t.sol#L61
-[test_whenIEnablerQueried]: supportsInterface.t.sol#L75
-[test_whenIEnablerV2Queried]: supportsInterface.t.sol#L89
-[test_whenIGracePeriodQueried]: supportsInterface.t.sol#L117
-[test_whenIOperatorAuthQueried]: supportsInterface.t.sol#L33
-[test_whenIReEnablerQueried]: supportsInterface.t.sol#L103
-[test_whenIVersionedQueried]: supportsInterface.t.sol#L47
-[test_whenInvalidInterfaceQueried]: supportsInterface.t.sol#L131
-[test_whenOtherInterfaceQueried]: supportsInterface.t.sol#L145
-[test_whenZeroInterfaceQueried]: supportsInterface.t.sol#L138
+[test_whenIBurnerLoansCoreQueried]: supportsInterface.t.sol#L20
+[test_whenIERC165Queried]: supportsInterface.t.sol#L62
+[test_whenIEnablerQueried]: supportsInterface.t.sol#L76
+[test_whenIEnablerV2Queried]: supportsInterface.t.sol#L90
+[test_whenIGracePeriodQueried]: supportsInterface.t.sol#L118
+[test_whenIOperatorAuthQueried]: supportsInterface.t.sol#L34
+[test_whenIReEnablerQueried]: supportsInterface.t.sol#L104
+[test_whenIVersionedQueried]: supportsInterface.t.sol#L48
+[test_whenInvalidInterfaceQueried]: supportsInterface.t.sol#L146
+[test_whenOtherInterfaceQueried]: supportsInterface.t.sol#L160
+[test_whenZeroInterfaceQueried]: supportsInterface.t.sol#L153
+
+[test_whenIConfigOperatorQueried]: supportsInterface.t.sol#L132

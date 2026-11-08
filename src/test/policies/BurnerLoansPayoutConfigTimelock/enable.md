@@ -6,13 +6,13 @@ Source: [enable](../../../policies/burnerloans/BurnerLoansPayoutConfigTimelock.s
 
 ## Domains and notation
 
-Scenario scope: `BLCUCT-ENABLE`. Valid default: real same-Kernel Payout, stored controller=this timelock, cached ROLES initialized, Local active=true and Local enabled=false. Payout has IEnabler, but recovery ignores its paused state; Core lifecycle, Payout inactivity and Core selection do not block recovery. Core must be idle for target mutations. Proposers fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap; distributor replacement is direct ADMIN-only and is not admitted by this queue or batches.
+Scenario scope: `BLCUCT-ENABLE`. Valid default: real same-Kernel Payout, stored controller=this timelock, cached ROLES initialized, Local active=true and Local enabled=false. Payout has IEnabler, but recovery ignores its paused state; Core lifecycle and Core selection do not block recovery; the Payout Policy must be active. Core must be idle for target mutations. Proposers fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap; distributor replacement is direct ADMIN-only and is not admitted by this queue or batches.
 
 Unchanged means authoritative state, balances, allowances and committed logs applicable to this function remain unchanged. Faults are isolated with all other prerequisites satisfied. Use [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md); preserve independent lifecycle columns and guaranteed numeric boundary seeds.
 
 ## Dependency validation contract
 
-The immutable Payout target must remain interface/Kernel/controller-compatible; active/enabled target flags do not gate recovery on an old Payout. Validate own timelock readiness. Do not require Core operation or current Core selection, and do not reuse the stricter Core.setPayout operational requirement here.
+The immutable Payout target must remain interface/Kernel/controller-compatible; target activity is required for activation; target enablement and current Core selection are not required. Validate own timelock readiness. Do not require Core operation or current Core selection, and do not reuse the stricter Core.setPayout operational requirement here.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Invalid metadata uses the consumer-owned InvalidDependency error; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -55,21 +55,36 @@ Local active=true, Local enabled=false; Core paused/inactive is permitted. Enabl
 | --- | --- | --- | --- | --- | --- |
 | BLCUCT-ENABLE-D01 | Fuzz ADMIN_ROLE holder | Bound Payout reports another Kernel | PolicyDependency_KernelMismatch(Payout,expectedKernel,reportedKernel) | Unchanged | Covered: [test][test_givenWrongKernel_whenActivated_reverts] |
 | BLCUCT-ENABLE-D02 | Fuzz ADMIN_ROLE holder | Stored controller=another address | BurnerLoansPayoutTimelock_NotController() | Unchanged | Covered: [test][test_givenControllerChanged_whenActivated_reverts] |
-| BLCUCT-ENABLE-D03 | Fuzz ADMIN_ROLE holder | Bound Payout inactive/retired; its Kernel matches and controller selects this timelock | Success | No Core operation/lifecycle or Payout enabled getter required for recovery | Covered: [test][test_givenReadyBinding_whenActivated_thenExactTransition] |
+| BLCUCT-ENABLE-D03 | Fuzz ADMIN_ROLE holder | Bound Payout Policy inactive; fuzz its enabled flag; Kernel and controller remain valid | PolicyDependency_NotActive(Payout) | Unchanged; no activation or accounting change | Covered: [test][test_givenInactivePayout_whenActivated_reverts] |
 | BLCUCT-ENABLE-D04 | Fuzz ADMIN_ROLE holder | Payout Kernel getter raises configured error | PolicyDependency_InvalidDependency(Payout) | Unchanged | Covered: [test][test_givenKernelGetterReverts_whenActivated_reverts] |
 | BLCUCT-ENABLE-D05 | Fuzz ADMIN_ROLE holder | Payout controller getter raises configured error | BurnerLoansPayoutTimelock_InvalidPayout(Payout) | Unchanged | Covered: [test][test_givenControllerGetterReverts_whenActivated_reverts] |
 
 - [x] Derive concrete acceptance criteria from the implemented call path.
 - [x] Implement focused tests and map exact domains/effects; execution results are tracked separately.
 
-[test_givenAlreadyEnabled_whenActivated_reverts]: ./enable.t.sol#L64
-[test_givenControllerChanged_whenActivated_reverts]: ./enable.t.sol#L114
-[test_givenInactivePolicy_whenActivated_reverts]: ./enable.t.sol#L77
-[test_givenKernelGetterReverts_whenActivated_reverts]: ./enable.t.sol#L130
-[test_givenReadyBinding_whenActivated_thenExactTransition]: ./enable.t.sol#L21
-[test_givenUnauthorizedCaller_whenActivated_reverts]: ./enable.t.sol#L51
-[test_givenWrongKernel_whenActivated_reverts]: ./enable.t.sol#L93
-[test_whenNonemptyPayload_reverts]: ./enable.t.sol#L168
-[test_whenPayloadBoundarySeeds_reverts]: ./enable.t.sol#L183
+## Activation compatibility
 
-[test_givenControllerGetterReverts_whenActivated_reverts]: ./enable.t.sol#L147
+Activation and reactivation require compatible target, ConfigOperator and Enabler interfaces, same Kernel, target Policy activity and this queue selected as configOperator. They do not read the target's enabled status. This allows queue repair while the target remains paused; each queued operation still enforces its own execution requirements. Other transition/caller/history/grace/payload guards retain their existing order.
+
+Caller is authorized and every prerequisite not varied below is valid. An incompatible target leaves lifecycle history, pending actions, reservations, configuration and custody unchanged.
+
+| ID | Target active | Target enabled | Input fault | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCUCT-ENABLE-D06 | true | false | None; Core may be inactive/paused or select another Payout | Success | Exact local transition; preserve target and queue | Covered: [test][test_givenReadyBinding_whenActivated_thenExactTransition] |
+| BLCUCT-ENABLE-D07 | true | Fuzz false/true | Reject each consumed interface advertisement; seed every interface | BurnerLoansPayoutTimelock_InvalidPayout(Payout) | Unchanged | Covered: [test][test_givenMissingConsumedInterface_whenActivated_reverts] |
+
+[test_givenAlreadyEnabled_whenActivated_reverts]: ./enable.t.sol#L66
+[test_givenControllerChanged_whenActivated_reverts]: ./enable.t.sol#L116
+[test_givenInactivePolicy_whenActivated_reverts]: ./enable.t.sol#L79
+[test_givenKernelGetterReverts_whenActivated_reverts]: ./enable.t.sol#L132
+[test_givenReadyBinding_whenActivated_thenExactTransition]: ./enable.t.sol#L24
+[test_givenUnauthorizedCaller_whenActivated_reverts]: ./enable.t.sol#L53
+[test_givenWrongKernel_whenActivated_reverts]: ./enable.t.sol#L95
+[test_whenNonemptyPayload_reverts]: ./enable.t.sol#L170
+[test_whenPayloadBoundarySeeds_reverts]: ./enable.t.sol#L185
+
+[test_givenControllerGetterReverts_whenActivated_reverts]: ./enable.t.sol#L149
+
+[test_givenInactivePayout_whenActivated_reverts]: enable.t.sol#L196
+
+[test_givenMissingConsumedInterface_whenActivated_reverts]: enable.t.sol#L212

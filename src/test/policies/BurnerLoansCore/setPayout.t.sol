@@ -2,6 +2,8 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
@@ -66,12 +68,12 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         bytes32 before = _state();
         vm.mockCallRevert(
             current,
-            abi.encodeWithSignature("core()"),
+            abi.encodeWithSelector(IBurnerLoansCoreBound.core.selector),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         vm.mockCallRevert(
             current,
-            abi.encodeWithSignature("kernel()"),
+            abi.encodeWithSelector(_core.kernel.selector),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         vm.expectRevert(
@@ -271,7 +273,11 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-CUSTODY-I05.
     function test_givenMissingCore_whenSelected_reverts(address caller_) public {
         _grantAdmin(caller_);
-        vm.mockCallRevert(address(_next), abi.encodeWithSignature("core()"), bytes(""));
+        vm.mockCallRevert(
+            address(_next),
+            abi.encodeWithSelector(IBurnerLoansCoreBound.core.selector),
+            bytes("")
+        );
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         vm.expectRevert(
@@ -298,7 +304,11 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     ) public {
         _grantAdmin(caller_);
         uint256 length = long_ ? bound(length_, 33, 256) : bound(length_, 0, 31);
-        vm.mockCall(address(_next), abi.encodeWithSignature("core()"), new bytes(length));
+        vm.mockCall(
+            address(_next),
+            abi.encodeWithSelector(IBurnerLoansCoreBound.core.selector),
+            new bytes(length)
+        );
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         vm.expectRevert(
@@ -322,7 +332,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         vm.mockCallRevert(
             address(_next),
-            abi.encodeWithSignature("core()"),
+            abi.encodeWithSelector(IBurnerLoansCoreBound.core.selector),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         bytes32 before = _state();
@@ -348,7 +358,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         vm.mockCallRevert(
             address(_next),
-            abi.encodeWithSignature("supportsInterface(bytes4)"),
+            abi.encodeWithSelector(IERC165.supportsInterface.selector),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         bytes32 before = _state();
@@ -372,7 +382,11 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-CUSTODY-I11.
     function test_givenMalformedERC165_whenSelected_reverts(address caller_) public {
         _grantAdmin(caller_);
-        vm.mockCall(address(_next), abi.encodeWithSignature("supportsInterface(bytes4)"), hex"01");
+        vm.mockCall(
+            address(_next),
+            abi.encodeWithSelector(IERC165.supportsInterface.selector),
+            hex"01"
+        );
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         vm.expectRevert(
@@ -419,7 +433,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         padding_ = uint96(bound(padding_, 1, type(uint96).max));
         vm.mockCall(
             address(_next),
-            abi.encodeWithSignature("core()"),
+            abi.encodeWithSelector(IBurnerLoansCoreBound.core.selector),
             abi.encode((uint256(padding_) << 160) | uint160(address(_core)))
         );
         bytes32 before = _state();
@@ -445,7 +459,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         vm.mockCallRevert(
             address(_next),
-            abi.encodeWithSignature("kernel()"),
+            abi.encodeWithSelector(_core.kernel.selector),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         bytes32 before = _state();
@@ -474,7 +488,11 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     ) public {
         _grantAdmin(caller_);
         uint256 length = long_ ? bound(length_, 33, 256) : bound(length_, 0, 31);
-        vm.mockCall(address(_next), abi.encodeWithSignature("kernel()"), new bytes(length));
+        vm.mockCall(
+            address(_next),
+            abi.encodeWithSelector(_core.kernel.selector),
+            new bytes(length)
+        );
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         vm.expectRevert(
@@ -498,7 +516,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         vm.mockCallRevert(
             address(_next),
-            abi.encodeWithSignature("isEnabled()"),
+            abi.encodeWithSelector(IEnabler.isEnabled.selector),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         bytes32 before = _state();
@@ -522,7 +540,11 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-CUSTODY-D13.
     function test_givenMalformedEnabled_whenSelected_reverts(address caller_) public {
         _grantAdmin(caller_);
-        vm.mockCall(address(_next), abi.encodeWithSignature("isEnabled()"), abi.encode(uint256(2)));
+        vm.mockCall(
+            address(_next),
+            abi.encodeWithSelector(IEnabler.isEnabled.selector),
+            abi.encode(uint256(2))
+        );
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         vm.expectRevert(
@@ -546,8 +568,8 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         vm.mockCall(
             address(_next),
-            abi.encodeWithSignature(
-                "supportsInterface(bytes4)",
+            abi.encodeWithSelector(
+                IERC165.supportsInterface.selector,
                 type(IBurnerLoansPayout).interfaceId
             ),
             abi.encode(uint256(2))
@@ -597,7 +619,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         vm.mockCall(
             address(_next),
-            abi.encodeWithSignature("supportsInterface(bytes4)"),
+            abi.encodeWithSelector(IERC165.supportsInterface.selector),
             abi.encode(true)
         );
         bytes32 before = _state();
@@ -645,7 +667,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-CUSTODY-C01.
     function test_givenBusyCore_whenSelected_reverts() public {
         CoreCallbackToken token = _armRescue(
-            abi.encodeWithSignature("setPayout(address)", address(_next)),
+            abi.encodeWithSelector(IBurnerLoansCore.setPayout.selector, address(_next)),
             false
         );
         address before = _core.payout();
@@ -673,7 +695,11 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     function test_whenCoreReturnLengthSeeds_reverts() public {
         uint256[6] memory lengths = [uint256(0), 1, 31, 33, 64, 256];
         for (uint256 i; i < lengths.length; ++i) {
-            vm.mockCall(address(_next), abi.encodeWithSignature("core()"), new bytes(lengths[i]));
+            vm.mockCall(
+                address(_next),
+                abi.encodeWithSelector(IBurnerLoansCoreBound.core.selector),
+                new bytes(lengths[i])
+            );
             vm.expectRevert(
                 abi.encodeWithSelector(
                     IBurnerLoansCore.BurnerLoansCore_InvalidPayout.selector,
@@ -688,7 +714,11 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     function test_whenKernelReturnLengthSeeds_reverts() public {
         uint256[6] memory lengths = [uint256(0), 1, 31, 33, 64, 256];
         for (uint256 i; i < lengths.length; ++i) {
-            vm.mockCall(address(_next), abi.encodeWithSignature("kernel()"), new bytes(lengths[i]));
+            vm.mockCall(
+                address(_next),
+                abi.encodeWithSelector(_core.kernel.selector),
+                new bytes(lengths[i])
+            );
             vm.expectRevert(
                 abi.encodeWithSelector(
                     PolicyDependency.PolicyDependency_InvalidDependency.selector,
@@ -703,7 +733,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     function test_givenDirtyKernelPadding_whenSelected_reverts() public {
         vm.mockCall(
             address(_next),
-            abi.encodeWithSignature("kernel()"),
+            abi.encodeWithSelector(_core.kernel.selector),
             abi.encode((uint256(1) << 160) | uint160(address(_kernel)))
         );
         vm.expectRevert(
@@ -724,7 +754,11 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
             new bytes(64)
         ];
         for (uint256 i; i < responses.length; ++i) {
-            vm.mockCall(address(_next), abi.encodeWithSignature("isEnabled()"), responses[i]);
+            vm.mockCall(
+                address(_next),
+                abi.encodeWithSelector(IEnabler.isEnabled.selector),
+                responses[i]
+            );
             vm.expectRevert(
                 abi.encodeWithSelector(
                     PolicyDependency.PolicyDependency_InvalidDependency.selector,
@@ -739,7 +773,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     function test_givenSingleDirtyCorePaddingBit_whenSelected_reverts() public {
         vm.mockCall(
             address(_next),
-            abi.encodeWithSignature("core()"),
+            abi.encodeWithSelector(IBurnerLoansCoreBound.core.selector),
             abi.encode((uint256(1) << 160) | uint160(address(_core)))
         );
         vm.expectRevert(
@@ -763,16 +797,16 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _asset.mint(address(_payout), 25);
         vm.mockCallRevert(
             address(_asset),
-            abi.encodeWithSignature("transfer(address,uint256)", treasury),
+            abi.encodeWithSelector(IERC20.transfer.selector, treasury),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         vm.mockCallRevert(
             address(_asset),
-            abi.encodeWithSignature("transfer(address,uint256)", _recipient),
+            abi.encodeWithSelector(IERC20.transfer.selector, _recipient),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         vm.prank(address(_core));
-        _payout.creditFee(address(_asset), 17);
+        _payout.creditFee(address(_asset), 17, address(0), 0);
         vm.prank(address(_core));
         _payout.creditSeizure(address(_asset), _recipient, 3, 5);
         if (!enabled_) _core.disable("");
@@ -783,12 +817,12 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.setPayout(address(_next));
         assertEq(_ledger(), ledger, "Pointer replacement preserves all old custody and loans");
-        (uint256 fee, uint256 seized, uint256 total) = _payout.payoutReserves(address(_asset));
+        (uint256 fee, , uint256 seized, , uint256 total) = _payout.pendingAmounts(address(_asset));
         assertEq(fee, 17, "Old fee bucket retained");
         assertEq(seized, 5, "Old Treasury bucket retained");
         assertEq(total, 25, "Old aggregate includes original keeper reward");
         assertEq(
-            _payout.pendingPayout(address(_asset), _recipient),
+            _payout.pendingRecipientAmount(address(_asset), _recipient),
             3,
             "Original keeper entitlement retained"
         );
@@ -808,7 +842,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
             3,
             "Retired Payout can service original keeper"
         );
-        (, , total) = _payout.payoutReserves(address(_asset));
+        (, , , , total) = _payout.pendingAmounts(address(_asset));
         assertEq(total, 0, "All old obligations settle exactly once");
     }
 }

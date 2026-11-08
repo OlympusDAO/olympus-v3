@@ -32,7 +32,7 @@ abstract contract BurnerLoansSeizeLifecycleTest is BurnerLoansDebtTest {
         super.setUp();
         vm.startPrank(_borrower);
         _collateral.depositCollateral(address(_asset), 2000e6, _borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6, address(0));
         vm.stopPrank();
         IBurnerLoansCore.Position memory position = _lens.getPosition(address(_asset), _borrower);
         assertEq(position.depositedCollateral, 2000e6, "Fixture establishes live collateral");

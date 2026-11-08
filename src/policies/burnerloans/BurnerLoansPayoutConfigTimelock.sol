@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 import {IBurnerLoansPayoutConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansPayoutConfigTimelock.sol";
@@ -57,8 +58,12 @@ contract BurnerLoansPayoutConfigTimelock is
     IBurnerLoansPayout internal immutable _PAYOUT;
 
     /// @notice Binds this queue to one already-deployed same-Kernel Payout.
+    /// @dev Construction does not query target activity, local enablement or operator selection.
     /// @dev Reverts if:
-    ///      - Payout lacks its interface or reports a different Kernel. Local activity is not required yet.
+    ///      - The target lacks a consumed domain, ConfigOperator or Enabler interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///
     /// @param kernel_ Kernel supplying governance roles.
     /// @param payout_ Immutable routing/recovery target.
     constructor(
@@ -69,9 +74,7 @@ contract BurnerLoansPayoutConfigTimelock is
         ReEnablerGracePeriod(LoanParameters._REENABLE_GRACE_PERIOD)
         ConfigTimelockBatchQueue(MIN_TIMELOCK_DELAY)
     {
-        if (
-            !ERC165Checker.supportsInterface(address(payout_), type(IBurnerLoansPayout).interfaceId)
-        ) revert BurnerLoansPayoutTimelock_InvalidPayout(address(payout_));
+        _requireTargetInterfaces(address(payout_));
         PolicyDependency.requireSameKernel(address(payout_), address(kernel_));
         _PAYOUT = payout_;
     }
@@ -195,6 +198,7 @@ contract BurnerLoansPayoutConfigTimelock is
     /// @inheritdoc ConfigTimelockBatchQueue
     /// @dev Reverts if:
     ///      - Locally disabled/inactive, the bound Kernel changed, proposer lacks both accepted roles, or controller selection changed.
+    ///      - Payout is Kernel-inactive. A local Payout pause does not block admission.
     function _validateConfigQueue(address caller_) internal view override {
         _requireOwnActive();
         _requireEnabled();
@@ -202,6 +206,8 @@ contract BurnerLoansPayoutConfigTimelock is
         PolicyDependency.requireSameKernel(address(_PAYOUT), address(kernel));
         if (IConfigOperator(address(_PAYOUT)).configOperator() != address(this))
             revert NotAuthorised();
+        if (!kernel.isPolicyActive(Policy(address(_PAYOUT))))
+            revert IBurnerLoansErrors.BurnerLoans_PolicyNotActive(address(_PAYOUT));
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
@@ -287,7 +293,9 @@ contract BurnerLoansPayoutConfigTimelock is
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    /// @dev Balances/entitlements stay live. Core replacement does not change this immutable target.
+    /// @dev Commits the operator and relevant routing identities; balances and entitlements remain live.
+    /// @dev Reverts if:
+    ///      - A consumed target getter fails or cannot be ABI-decoded.
     function _currentConfigStateHash(
         uint64,
         uint256,
@@ -350,7 +358,12 @@ contract BurnerLoansPayoutConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
-    /// @dev Controller drift is rejected by each stored pre-state commitment before target dispatch.
+    /// @dev The shared base separately checks stored operator commitments.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - Payout's Kernel getter fails or returns malformed data.
+    ///      - Payout reports a different Kernel.
     function _validateExecution(
         address,
         uint64,
@@ -360,26 +373,31 @@ contract BurnerLoansPayoutConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
+    /// @dev Local pause, broken targets and operator selection do not prevent cancellation.
     /// @dev Reverts if:
-    ///      - Local admission fails or caller lacks EMERGENCY. Broken targets do not prevent cancellation.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The caller lacks EMERGENCY.
     function _validateCancellation(
         address caller_,
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
         _requireOwnActive();
-        _requireEnabled();
         _requireRole(caller_, EMERGENCY_ROLE);
     }
 
     /// @notice Validates only this queue's lifecycle and the bound target's Kernel.
+    /// @dev Target actions enforce their operation-specific lifecycle checks.
     /// @dev Reverts if:
-    ///      - Locally disabled/inactive or Payout reports another Kernel. Core pause and Payout deselection are allowed; target actions validate Payout activity.
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - Payout's Kernel getter fails or returns malformed data.
+    ///      - Payout reports a different Kernel.
     function _requireReady() private view {
         _requireOwnActive();
         _requireEnabled();
-        // Queue activation accepts an inactive target; each Payout preview/mutation enforces its own
-        // activity. Active paused or deselected Payouts retain routing and recovery access.
+        // Each Payout preview/mutation enforces target activity. Active paused or deselected
+        // Payouts retain routing and recovery access.
         PolicyDependency.requireSameKernel(address(_PAYOUT), address(kernel));
     }
 
@@ -405,39 +423,78 @@ contract BurnerLoansPayoutConfigTimelock is
     }
 
     /// @inheritdoc EnablerV2
+    /// @dev Target local enablement is neither read nor required.
     /// @dev Reverts if:
-    ///      - Payload is nonempty, own policy inactive, target Kernel changed or controller unselected.
+    ///      - Lifecycle data is nonempty.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _beforeEnable(bytes calldata data_) internal view override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
         _validateActivation();
     }
 
     /// @inheritdoc EnablerV2
+    /// @dev Kernel inactivity does not prevent disable.
     /// @dev Reverts if:
-    ///      - Payload is nonempty. Inactive disable remains available.
+    ///      - Lifecycle data is nonempty.
     function _beforeDisable(bytes calldata data_) internal pure override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
     }
 
     /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Target local enablement is neither read nor required.
     /// @dev Reverts if:
-    ///      - Initialization/grace or the identical enable prerequisites fail.
+    ///      - The inclusive grace deadline exceeds uint48.
+    ///      - The inclusive grace deadline has expired.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
         _validateActivation();
     }
 
-    /// @notice Revalidates target identity and selection without requiring Core operation.
+    /// @dev Construction and activation share this compatibility predicate.
     /// @dev Reverts if:
-    ///      - Own policy inactive, bound Kernel changed or controller unselected.
+    ///      - The target lacks a consumed domain, ConfigOperator or Enabler interface.
+    function _requireTargetInterfaces(address target_) private view {
+        if (
+            !ERC165Checker.supportsInterface(target_, type(IBurnerLoansPayout).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IConfigOperator).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IEnabler).interfaceId)
+        ) revert BurnerLoansPayoutTimelock_InvalidPayout(target_);
+    }
+
+    /// @notice Revalidates target identity and selection without requiring Core operation.
+    /// @dev Target local enablement is neither read nor required.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _validateActivation() private view {
         _requireOwnActive();
-        PolicyDependency.requireSameKernel(address(_PAYOUT), address(kernel));
+        address target = address(_PAYOUT);
+        _requireTargetInterfaces(target);
+        PolicyDependency.requireActive(target, address(kernel));
         if (_payoutAddress(IConfigOperator.configOperator.selector) != address(this))
             revert BurnerLoansPayoutTimelock_NotController();
     }
 
-    /// @dev Activation normalizes failed or malformed target metadata to this consumer's error.
+    /// @dev Reverts if:
+    ///      - The target address getter fails or returns a noncanonical address.
     function _payoutAddress(bytes4 selector_) private view returns (address result) {
         bool success;
         (success, result) = SafeCallDecoder.safeReadAddress(address(_PAYOUT), selector_);

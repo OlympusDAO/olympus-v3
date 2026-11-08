@@ -89,7 +89,7 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
             "Independent initial vault credit"
         );
         vm.prank(_borrower);
-        _debt.borrow(address(token), debt_, _borrower, _borrower, 0);
+        _debt.borrow(address(token), debt_, _borrower, _borrower, 0, address(0));
         _price.setPrice(address(token), price_);
         token.mint(_borrower, 5);
         vm.prank(_borrower);

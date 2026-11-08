@@ -30,14 +30,16 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
             100e9,
             _recipient,
             _recipient,
-            314063
+            314063,
+            address(0)
         );
         IBurnerLoansDebt.BorrowPreview memory result = _debt.borrow(
             address(_asset),
             100e9,
             _recipient,
             _recipient,
-            314063
+            314063,
+            address(0)
         );
         vm.stopPrank();
         // The first borrow leaves market utilization at 0.1%, so rate=25.125 bps.
@@ -144,7 +146,8 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
             100e9,
             _borrower,
             _borrower,
-            312500
+            312500,
+            address(0)
         );
         assertEq(oldQuote.fee, 312500, "Original one-dollar price quote");
         _expireCacheAndHalveCollateralPrice();
@@ -165,7 +168,14 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
         _depositCollateral(2000e6);
         vm.prank(_borrower);
         uint256 originalFee = _debt
-            .previewBorrow(address(_asset), 100e9, _borrower, _borrower, type(uint256).max)
+            .previewBorrow(
+                address(_asset),
+                100e9,
+                _borrower,
+                _borrower,
+                type(uint256).max,
+                address(0)
+            )
             .fee;
         assertEq(originalFee, 312500, "Original fee limit derived before price change");
         _expireCacheAndHalveCollateralPrice();
@@ -265,7 +275,8 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
             amount_,
             _borrower,
             _borrower,
-            fee_
+            fee_,
+            address(0)
         );
         assertEq(_stateDigest(_borrower), beforeQuote, "Real quote makes no writes");
         assertEq(quote.fee, fee_, "Independent real fee quote");
@@ -277,7 +288,9 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
             _borrower,
             _borrower,
             amount_,
-            fee_
+            fee_,
+            address(0),
+            0
         );
         vm.prank(_borrower);
         IBurnerLoansDebt.BorrowPreview memory result = _debt.borrow(
@@ -285,7 +298,8 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
             amount_,
             _borrower,
             _borrower,
-            fee_
+            fee_,
+            address(0)
         );
         assertEq(result.fee, fee_, "Real fee return");
         assertEq(result.resultingHealthFactor, health_, "Real health return");
@@ -311,10 +325,17 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
         bytes32 state = _stateDigest(_borrower);
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         vm.prank(_borrower);
-        _debt.previewBorrow(address(_asset), 1, _borrower, _borrower, type(uint256).max);
+        _debt.previewBorrow(
+            address(_asset),
+            1,
+            _borrower,
+            _borrower,
+            type(uint256).max,
+            address(0)
+        );
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _borrower, type(uint256).max);
+        _debt.borrow(address(_asset), 1, _borrower, _borrower, type(uint256).max, address(0));
         assertEq(
             _stateDigest(_borrower),
             state,
@@ -333,7 +354,8 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
             50e9,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         vm.prank(_borrower);
         IBurnerLoansDebt.BorrowPreview memory result = _debt.borrow(
@@ -341,7 +363,8 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
             50e9,
             _borrower,
             _borrower,
-            type(uint256).max
+            type(uint256).max,
+            address(0)
         );
         assertEq(
             result.resultingHealthFactor,

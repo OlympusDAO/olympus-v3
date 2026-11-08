@@ -51,7 +51,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             amount_,
             _borrower,
             _recipient,
-            0
+            0,
+            address(0)
         );
         assertEq(quote.resultingDebtOhm, amount_, "Independent quoted principal");
         assertEq(quote.resultingHealthFactor, _HEALTH, "Exact Risk-returned health");
@@ -64,6 +65,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             _borrower,
             _recipient,
             amount_,
+            0,
+            address(0),
             0
         );
         vm.prank(_borrower);
@@ -72,7 +75,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             amount_,
             _borrower,
             _recipient,
-            0
+            0,
+            address(0)
         );
         assertEq(result.resultingDebtOhm, amount_, "Actual principal");
         assertEq(result.maturity, quote.maturity, "Preview expiry matches execution");
@@ -151,7 +155,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             address(_risk),
             abi.encodeCall(
                 IBurnerLoansRisk.fee,
-                (snapshot, _core.marketId(address(_asset)), uint256(100e9), uint16(1))
+                (snapshot, _core.marketId(address(_asset)), uint256(100e9), uint16(1), address(0))
             )
         );
         vm.prank(viewer);
@@ -160,7 +164,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             100e9,
             _borrower,
             address(0xcafe),
-            maxFee_
+            maxFee_,
+            address(0)
         );
         assertEq(quote.fee, fee_, "Preview forwards arbitrary mock fee");
         assertEq(_stateDigest(viewer), beforeQuote, "Unfunded viewer quote preserves all state");
@@ -169,7 +174,10 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         uint256 custodyBefore = _asset.balanceOf(address(_payout));
         vm.expectCall(
             address(_payout),
-            abi.encodeCall(IBurnerLoansPayout.creditFee, (address(_asset), uint256(fee_))),
+            abi.encodeCall(
+                IBurnerLoansPayout.creditFee,
+                (address(_asset), uint256(fee_), address(0), uint256(0))
+            ),
             1
         );
         vm.expectEmit(address(_debt));
@@ -179,7 +187,9 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             _borrower,
             address(0xcafe),
             100e9,
-            fee_
+            fee_,
+            address(0),
+            0
         );
         vm.prank(payer_);
         IBurnerLoansDebt.BorrowPreview memory result = _debt.borrow(
@@ -187,7 +197,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             100e9,
             _borrower,
             address(0xcafe),
-            maxFee_
+            maxFee_,
+            address(0)
         );
         assertEq(result.fee, fee_, "Risk fee never recalculated or replaced by maxFee");
         assertEq(_asset.balanceOf(payer_), payerBefore - fee_, "Actual caller pays exact fee");
@@ -252,7 +263,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             1,
             _borrower,
             payer_,
-            0
+            0,
+            address(0)
         );
         assertEq(quote.fee, 0, "Zero fee preview needs neither funds nor allowance");
         vm.prank(payer_);
@@ -261,7 +273,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             1,
             _borrower,
             payer_,
-            0
+            0,
+            address(0)
         );
         assertEq(result.fee, 0, "No fee collection for zero Risk fee");
         assertEq(_asset.balanceOf(payer_), 0, "No collateral funds required");
@@ -460,7 +473,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     // Scenarios: BLDEBT-BORROW-P02.
     function test_givenExpiredDebt_whenBorrowed_reverts(uint256 now_) public {
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0, address(0));
         uint48 expiry = _position().maturity;
         now_ = bound(now_, expiry, type(uint256).max);
         vm.warp(now_);
@@ -477,7 +490,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     function test_givenExistingDebt_whenToppedUp_thenExpiryPreserved(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max - 1));
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0, address(0));
         uint48 expiry = _position().maturity;
         vm.warp(block.timestamp + 1);
         bytes32 beforeQuote = _stateDigest(_borrower);
@@ -487,7 +500,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             amount_,
             _borrower,
             _recipient,
-            0
+            0,
+            address(0)
         );
         assertEq(quote.resultingDebtOhm, uint256(amount_) + 1, "Independent live debt quote");
         assertEq(quote.maturity, expiry, "Top-up preview preserves original episode");
@@ -498,7 +512,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             amount_,
             _borrower,
             _recipient,
-            0
+            0,
+            address(0)
         );
         assertEq(result.resultingDebtOhm, uint256(amount_) + 1, "Top-up adds principal");
         assertEq(result.maturity, expiry, "Top-up never resets expiry");
@@ -537,7 +552,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         bytes32 rollbackBefore = _stateDigest(payer);
         vm.expectRevert(FundingFailed.selector);
         vm.prank(payer);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 7);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 7, address(0));
         assertEq(_asset.balanceOf(payer), payerBefore, "Fee restored after late funding error");
         assertEq(_asset.balanceOf(address(_payout)), 0, "Custody receipt rolled back");
         assertEq(_position().principalDue, 0, "Debt rolled back");
@@ -569,7 +584,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             )
         );
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, fee_);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, fee_, address(0));
         assertEq(_asset.allowance(_borrower, address(_core)), allowance_, "Allowance rollback");
         assertEq(_position().principalDue, 0, "No debt after fee failure");
         assertEq(
@@ -593,7 +608,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             )
         );
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, type(uint256).max);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, type(uint256).max, address(0));
         assertEq(_position().principalDue, 0, "No debt after balance failure");
         assertEq(
             _stateDigest(_borrower),
@@ -647,7 +662,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     // Scenarios: BLDEBT-BORROW-P04.
     function test_givenUnhealthyCurrentPosition_whenBorrowed_reverts(uint256 health_) public {
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0, address(0));
         health_ = bound(health_, 0, 1e18 - 1);
         bytes memory callData = abi.encodeCall(
             IBurnerLoansRisk.validateHealth,
@@ -729,7 +744,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     // Scenarios: BLDEBT-BORROW-N07.
     function test_givenFullyRepaidEpisode_whenBorrowed_thenNewTermStartsNow() public {
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0, address(0));
         vm.roll(block.number + 1);
         vm.prank(_recipient);
         _ohm.approve(address(_core), 1);
@@ -742,7 +757,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             1,
             _borrower,
             _recipient,
-            0
+            0,
+            address(0)
         );
         vm.prank(_borrower);
         IBurnerLoansDebt.BorrowPreview memory result = _debt.borrow(
@@ -750,7 +766,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             1,
             _borrower,
             _recipient,
-            0
+            0,
+            address(0)
         );
         assertEq(
             result.maturity,
@@ -783,7 +800,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(_asset))
         );
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 7);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 7, address(0));
         assertEq(_position().principalDue, 0, "False transfer creates no debt");
         assertEq(
             _stateDigest(_borrower),
@@ -816,7 +833,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             )
         );
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 7);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 7, address(0));
         assertEq(_position().principalDue, 0, "Inexact fee creates no debt");
         assertEq(
             _stateDigest(_borrower),
@@ -1004,10 +1021,10 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         );
         vm.expectRevert(reason);
         vm.prank(caller_);
-        _debt.previewBorrow(address(_asset), 1, address(0), _recipient, 0);
+        _debt.previewBorrow(address(_asset), 1, address(0), _recipient, 0, address(0));
         vm.expectRevert(reason);
         vm.prank(caller_);
-        _debt.borrow(address(_asset), 1, address(0), _recipient, 0);
+        _debt.borrow(address(_asset), 1, address(0), _recipient, 0, address(0));
     }
 
     // Scenarios: BLDEBT-BORROW-L06, BLDEBT-BORROW-L07, BLDEBT-BORROW-L08, BLDEBT-BORROW-L09, BLDEBT-BORROW-L10, BLDEBT-BORROW-L11, BLDEBT-BORROW-L12, BLDEBT-BORROW-L13.
@@ -1182,7 +1199,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         _mockRisk(fee_);
         vm.prank(payer);
         assertEq(
-            _debt.previewBorrow(address(_asset), 1, _borrower, _recipient, fee_).fee,
+            _debt.previewBorrow(address(_asset), 1, _borrower, _recipient, fee_, address(0)).fee,
             fee_,
             "Quote requires no wallet funds"
         );
@@ -1196,7 +1213,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             )
         );
         vm.prank(payer);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, fee_);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, fee_, address(0));
         assertEq(
             _stateDigest(payer),
             beforeState,
@@ -1348,7 +1365,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         _asset.approve(address(_core), allowance_);
         vm.prank(payer);
         assertEq(
-            _debt.previewBorrow(address(_asset), 1, _borrower, _recipient, fee_).fee,
+            _debt.previewBorrow(address(_asset), 1, _borrower, _recipient, fee_, address(0)).fee,
             fee_,
             "Quote does not require fee approval"
         );
@@ -1362,7 +1379,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             )
         );
         vm.prank(payer);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, fee_);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, fee_, address(0));
         assertEq(
             _stateDigest(payer),
             state,
@@ -1396,10 +1413,10 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     // Scenarios: BLDEBT-BORROW-N06.
     function test_givenLaterBlockTopUp_whenRepaidInThatBlock_reverts() public {
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0, address(0));
         vm.roll(vm.getBlockNumber() + 1);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0);
+        _debt.borrow(address(_asset), 1, _borrower, _recipient, 0, address(0));
         assertEq(
             _position().lastBorrowBlock,
             block.number,
@@ -1440,7 +1457,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             amount_,
             _borrower,
             _recipient,
-            0
+            0,
+            address(0)
         );
         assertEq(quote.fee, 0, "independent zero-fee expectation");
         assertEq(quote.resultingDebtOhm, amount_, "quote uses specified borrower and principal");
@@ -1469,7 +1487,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer, 7);
         vm.prank(_recipient);
-        _debt.borrow(address(_asset), 7, _borrower, _recipient, 0);
+        _debt.borrow(address(_asset), 7, _borrower, _recipient, 0, address(0));
     }
 
     // Scenarios: BLDEBT-BORROW-A03, BLDEBT-BORROW-A13.
@@ -1479,7 +1497,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer, 7);
         vm.prank(_recipient);
-        _debt.borrow(address(_asset), 7, _borrower, _recipient, 0);
+        _debt.borrow(address(_asset), 7, _borrower, _recipient, 0, address(0));
     }
 
     // Scenarios: BLDEBT-BORROW-A08, BLDEBT-BORROW-A13.
@@ -1519,7 +1537,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         _assertPermissionlessQuote(viewer, 7);
         vm.expectRevert(IBurnerLoansDebt.BurnerLoans_NoCollateral.selector);
         vm.prank(viewer);
-        _debt.previewBorrow(address(_asset), 7, viewer, _recipient, 0);
+        _debt.previewBorrow(address(_asset), 7, viewer, _recipient, 0, address(0));
     }
 }
 

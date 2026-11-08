@@ -27,7 +27,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
         _depositCollateral(2000e6);
         _mockRisk(0);
         vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         _;
     }
 
@@ -66,7 +66,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
     }
 
     function _payoutDigest(address asset_) internal view returns (bytes32) {
-        (uint256 fees, uint256 seized, uint256 total) = _payout.payoutReserves(asset_);
+        (uint256 fees, , uint256 seized, , uint256 total) = _payout.pendingAmounts(asset_);
         return
             keccak256(
                 abi.encode(
@@ -74,7 +74,8 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
                     seized,
                     total,
                     _payout.getPendingPayoutTokens(),
-                    _payout.getPendingPayoutRecipients(asset_)
+                    _payout.getPendingPayoutRecipients(asset_),
+                    _referralReservesDigest(asset_)
                 )
             );
     }
@@ -185,7 +186,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),
-            abi.encode(fee_)
+            abi.encode(fee_, uint256(0))
         );
         vm.mockCall(
             address(_risk),
@@ -217,7 +218,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
         bytes32 beforeState = _stateDigest(caller_);
         vm.expectRevert(reason_);
         vm.prank(caller_);
-        _debt.previewBorrow(address(_asset), amount_, _borrower, recipient_, maxFee_);
+        _debt.previewBorrow(address(_asset), amount_, _borrower, recipient_, maxFee_, address(0));
         assertEq(
             _stateDigest(caller_),
             beforeState,
@@ -235,7 +236,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
         bytes32 beforeState = _stateDigest(caller_);
         vm.expectRevert(reason_);
         vm.prank(caller_);
-        _debt.previewExtend(address(_asset), _borrower, terms_, maxFee_);
+        _debt.previewExtend(address(_asset), _borrower, terms_, maxFee_, address(0));
         assertEq(_stateDigest(caller_), beforeState, "Rejected preview preserves accounting");
         _expectExtendExecutionRevert(reason_, terms_, maxFee_, caller_);
     }
@@ -275,7 +276,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
         bytes32 beforeState = _stateDigest(caller_);
         vm.expectRevert(reason_);
         vm.prank(caller_);
-        _debt.borrow(address(_asset), amount_, _borrower, recipient_, maxFee_);
+        _debt.borrow(address(_asset), amount_, _borrower, recipient_, maxFee_, address(0));
         assertEq(
             _stateDigest(caller_),
             beforeState,
@@ -293,7 +294,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
         IFLOANv1.Position memory beforePosition = _position();
         vm.expectRevert(reason_);
         vm.prank(caller_);
-        _debt.extend(address(_asset), _borrower, terms_, maxFee_);
+        _debt.extend(address(_asset), _borrower, terms_, maxFee_, address(0));
         assertEq(
             keccak256(abi.encode(_position())),
             keccak256(abi.encode(beforePosition)),

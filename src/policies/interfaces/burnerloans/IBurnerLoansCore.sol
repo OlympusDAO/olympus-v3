@@ -128,6 +128,11 @@ interface IBurnerLoansCore {
     /// @notice A custody receipt, output token or market identity disagrees with the settlement instruction.
     error BurnerLoansCore_InvalidSettlement();
 
+    /// @notice The combined protocol and referral fee exceeds the uint256 maximum.
+    /// @param protocolFee Protocol allocation, in collateral token decimals.
+    /// @param referralFee Referral allocation, in collateral token decimals.
+    error BurnerLoansCore_FeeOverflow(uint256 protocolFee, uint256 referralFee);
+
     // ========== STRUCTS ========== //
 
     /// @notice Complete configuration decoded from a Burner Loans FLOAN market.
@@ -209,14 +214,16 @@ interface IBurnerLoansCore {
         uint256 keeperReward;
     }
 
-    /// @notice A complete borrow instruction, including the actual payer and policy-approved fee.
+    /// @notice A complete borrow instruction, including the actual payer and policy-approved protocol and referral fees.
     /// @param asset Configured underlying collateral token identifying the market.
     /// @param borrower Account whose position incurs debt.
-    /// @param payer Actual action caller paying the fee.
+    /// @param payer Actual action caller paying the total fee (protocolFee + referralFee).
     /// @param recipient Account receiving principal.
     /// @param amount Principal to add, in OHM units.
     /// @param maturity Policy-approved maturity timestamp in seconds.
-    /// @param fee Origination fee in underlying collateral units.
+    /// @param protocolFee Protocol fee allocation in underlying collateral units.
+    /// @param referrer Referral recipient; zero requires a zero referralFee, while a nonzero address may receive zero.
+    /// @param referralFee Referrer allocation in underlying collateral units.
     struct BorrowRequest {
         address asset;
         address borrower;
@@ -224,7 +231,9 @@ interface IBurnerLoansCore {
         address recipient;
         uint128 amount;
         uint48 maturity;
-        uint256 fee;
+        uint256 protocolFee;
+        address referrer;
+        uint256 referralFee;
     }
 
     // ========== FUNCTIONS ========== //
@@ -258,8 +267,8 @@ interface IBurnerLoansCore {
         address recipient
     ) external returns (address token, uint256 output, uint128 remaining);
 
-    /// @notice Increases principal, collects the policy-approved fee and funds the recipient atomically.
-    /// @param request Policy-approved principal, maturity, fee and actual payer/recipient identities.
+    /// @notice Increases principal, collects protocolFee + referralFee and funds the recipient atomically.
+    /// @param request Policy-approved principal, maturity, separate fee allocations and actual payer/recipient identities.
     /// @return principal Outstanding borrower principal in OHM units.
     /// @return maturity Resulting maturity timestamp in seconds.
     function settleBorrow(
@@ -279,19 +288,23 @@ interface IBurnerLoansCore {
         address borrower
     ) external returns (uint128 principal);
 
-    /// @notice Applies the policy-selected maturity and collects a snapshot-priced extension fee.
+    /// @notice Applies the policy-selected maturity and collects the total extension fee (protocolFee + referralFee).
     /// @param asset Configured collateral token identifying the market.
     /// @param borrower Account whose debt maturity is updated.
-    /// @param payer Actual action caller paying the extension fee.
+    /// @param payer Actual action caller paying the total extension fee (protocolFee + referralFee).
     /// @param maturity Policy-approved new maturity timestamp in seconds.
-    /// @param fee Extension fee in underlying collateral units.
+    /// @param protocolFee Protocol fee allocation in underlying collateral units.
+    /// @param referrer Referral recipient; zero requires a zero referralFee, while a nonzero address may receive zero.
+    /// @param referralFee Referrer allocation in underlying collateral units.
     /// @return newMaturity Applied maturity timestamp in seconds.
     function settleExtend(
         address asset,
         address borrower,
         address payer,
         uint48 maturity,
-        uint256 fee
+        uint256 protocolFee,
+        address referrer,
+        uint256 referralFee
     ) external returns (uint48 newMaturity);
 
     /// @notice Defaults and redeems a complete batch, allocating only actual received collateral.

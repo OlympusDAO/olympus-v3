@@ -49,7 +49,7 @@ abstract contract BurnerLoansLensTest is BurnerLoansModularTest {
         vm.startPrank(borrower_);
         _asset.approve(address(_core), type(uint256).max);
         _collateral.depositCollateral(address(_asset), collateral_, borrower_);
-        _debt.borrow(address(_asset), debt_, borrower_, borrower_, type(uint256).max);
+        _debt.borrow(address(_asset), debt_, borrower_, borrower_, type(uint256).max, address(0));
         vm.stopPrank();
     }
 
@@ -248,7 +248,7 @@ abstract contract BurnerLoansLensTest is BurnerLoansModularTest {
         vm.startPrank(borrower_);
         other.approve(address(_core), type(uint256).max);
         _collateral.depositCollateral(address(other), 5000e6, borrower_);
-        _debt.borrow(address(other), debt_, borrower_, borrower_, type(uint256).max);
+        _debt.borrow(address(other), debt_, borrower_, borrower_, type(uint256).max, address(0));
         vm.stopPrank();
     }
 }

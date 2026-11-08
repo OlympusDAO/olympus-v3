@@ -2,7 +2,7 @@
 
 Source: [reEnable](../../../bases/ReEnabler.sol#L46). Coverage is recorded in the Test column.
 
-Implementation: 15 scenario functions mapped; 12 Covered, 3 Partial. Partial rows have complete test implementations blocked by the current production behavior.
+Coverage records implemented scenario domains and assertions. Execution results are recorded separately from coverage.
 
 ## Domains and notation
 
@@ -26,7 +26,7 @@ The immutable Config must be active/enabled and report this Kernel. This Timeloc
 
 ## Dependency validation contract
 
-The immutable Config target is a required same-Kernel active/enabled Policy that selects this timelock as its configOperator. Config owns its relationship with Core; the timelock does not revalidate Core’s Config selection. Target authority matching is separate from readiness. Risk is checked only for Risk-targeted proposals; no global Risk-operator equality or recursive Core/Inventory readiness gate is introduced.
+The immutable Config target is a required same-Kernel active Policy (local enablement is not required for activation) that selects this timelock as its configOperator. Config owns its relationship with Core; the timelock does not revalidate Core’s Config selection. Target authority matching is separate from readiness. Risk is checked only for Risk-targeted proposals; no global Risk-operator equality or recursive Core/Inventory readiness gate is introduced.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Invalid metadata uses the consumer-owned InvalidDependency error; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -85,7 +85,7 @@ Local enabled=false; prior L>0; independently fuzz a representable valid grace i
 | ID | Caller | Dependency | Dependency active | Dependency enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BLCT-REENABLE-D01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Config | false | true | PolicyDependency_NotActive(Config) | Exact local transition/events on Success; otherwise Unchanged | Covered: [test_givenConfigActiveFalse_givenConfigEnabledTrue_whenReenable_reverts][test_givenConfigActiveFalse_givenConfigEnabledTrue_whenReenable_reverts] |
-| BLCT-REENABLE-D02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Config | true | false | PolicyDependency_NotActive(Config) | Exact local transition/events on Success; otherwise Unchanged | Covered: [test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_reverts][test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_reverts] |
+| BLCT-REENABLE-D02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Config | true | false | Success | Exact local transition/events on Success; otherwise Unchanged | Covered: [test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_thenEnabled][test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_thenEnabled] |
 | BLCT-REENABLE-D03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Config | false | false | PolicyDependency_NotActive(Config) | Exact local transition/events on Success; otherwise Unchanged | Covered: [test_givenConfigActiveFalse_givenConfigEnabledFalse_whenReenable_reverts][test_givenConfigActiveFalse_givenConfigEnabledFalse_whenReenable_reverts] |
 
 ## Dependency compatibility
@@ -122,22 +122,34 @@ This timelock may serve market configuration, direct Risk cache-age configuratio
 | --- | --- | --- | --- | --- | --- |
 | BLCT-REENABLE-D06 | Fuzz ADMIN_ROLE-only, BURNER_LOANS_ADMIN_ROLE-only or both | Zero or controller distinct from Core Config and BLCT; guarantee both | Success with existing local/history/Config prerequisites satisfied | Normal local transition; Risk authority/cache/oracle/age untouched; no equality requirement | Covered: [test_givenRiskOperatorIndependent_whenReenable_thenEnabled][test_givenRiskOperatorIndependent_whenReenable_thenEnabled] |
 
-[test_givenUnauthorizedWithinGrace_whenReEnabled_thenAuthorizationFirst]: reEnable.t.sol#L130
-[test_givenUnauthorizedExpiredGraceWithUnavailableConfig_whenReEnabled_thenAuthorizationFirst]: reEnable.t.sol#L143
-[test_givenOverflowDeadline_whenReEnabled_reverts]: reEnable.t.sol#L264
-[test_givenGraceN01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L373
-[test_givenAlreadyEnabled_whenReEnabled_thenStateError]: reEnable.t.sol#L158
-[test_givenNeverEnabledActivated_whenReEnabled_thenNeverEnabledFirst]: reEnable.t.sol#L171
-[test_givenBeforeDeadline_whenReEnabled_thenExactTransition]: reEnable.t.sol#L196
-[test_givenGraceP01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L289
-[test_givenAtDeadline_whenReEnabled_thenExactTransition]: reEnable.t.sol#L219
-[test_givenGraceP02RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L320
-[test_givenAfterDeadline_whenReEnabled_reverts]: reEnable.t.sol#L241
-[test_givenGraceP03RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L342
-[test_givenConfigActiveFalse_givenConfigEnabledTrue_whenReenable_reverts]: reEnable.t.sol#L22
-[test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_reverts]: reEnable.t.sol#L40
-[test_givenConfigActiveFalse_givenConfigEnabledFalse_whenReenable_reverts]: reEnable.t.sol#L58
-[test_givenForeignConfigKernel_whenReenable_reverts]: reEnable.t.sol#L76
-[test_givenOwnPolicyInactive_whenReenable_reverts]: reEnable.t.sol#L101
-[test_givenNeverEnabledUninitialized_whenReEnabled_thenNeverEnabledFirst]: reEnable.t.sol#L184
-[test_givenRiskOperatorIndependent_whenReenable_thenEnabled]: reEnable.t.sol#L115
+## Activation compatibility
+
+Activation and reactivation require compatible target, ConfigOperator and Enabler interfaces, same Kernel, target Policy activity and this queue selected as configOperator. They do not read the target's enabled status. This allows queue repair while the target remains paused; each queued operation still enforces its own execution requirements. Other transition/caller/history/grace/payload guards retain their existing order.
+
+Caller is authorized and every prerequisite not varied below is valid. An incompatible target leaves lifecycle history, pending actions, reservations, configuration and custody unchanged.
+
+| ID | Target active | Target enabled | Input fault | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCT-REENABLE-D07 | true | Fuzz false/true | Reject each consumed interface advertisement; seed every interface | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Unchanged | Covered: [test][test_givenMissingConsumedInterface_whenActivated_reverts] |
+
+[test_givenUnauthorizedWithinGrace_whenReEnabled_thenAuthorizationFirst]: reEnable.t.sol#L133
+[test_givenUnauthorizedExpiredGraceWithUnavailableConfig_whenReEnabled_thenAuthorizationFirst]: reEnable.t.sol#L146
+[test_givenOverflowDeadline_whenReEnabled_reverts]: reEnable.t.sol#L267
+[test_givenGraceN01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L376
+[test_givenAlreadyEnabled_whenReEnabled_thenStateError]: reEnable.t.sol#L161
+[test_givenNeverEnabledActivated_whenReEnabled_thenNeverEnabledFirst]: reEnable.t.sol#L174
+[test_givenBeforeDeadline_whenReEnabled_thenExactTransition]: reEnable.t.sol#L199
+[test_givenGraceP01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L292
+[test_givenAtDeadline_whenReEnabled_thenExactTransition]: reEnable.t.sol#L222
+[test_givenGraceP02RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L323
+[test_givenAfterDeadline_whenReEnabled_reverts]: reEnable.t.sol#L244
+[test_givenGraceP03RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L345
+[test_givenConfigActiveFalse_givenConfigEnabledTrue_whenReenable_reverts]: reEnable.t.sol#L26
+[test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_thenEnabled]: reEnable.t.sol#L44
+[test_givenConfigActiveFalse_givenConfigEnabledFalse_whenReenable_reverts]: reEnable.t.sol#L61
+[test_givenForeignConfigKernel_whenReenable_reverts]: reEnable.t.sol#L79
+[test_givenOwnPolicyInactive_whenReenable_reverts]: reEnable.t.sol#L104
+[test_givenNeverEnabledUninitialized_whenReEnabled_thenNeverEnabledFirst]: reEnable.t.sol#L187
+[test_givenRiskOperatorIndependent_whenReenable_thenEnabled]: reEnable.t.sol#L118
+
+[test_givenMissingConsumedInterface_whenActivated_reverts]: reEnable.t.sol#L398

@@ -1,6 +1,8 @@
 # BurnerLoansCore.settleExtend coverage plan
 
-Source: [settleExtend](../../../policies/burnerloans/BurnerLoansCore.sol#L370). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+> Referral scenarios below supplement the retained baseline. Their mappings identify the additional assertions for the extended API.
+
+Source: [settleExtend](../../../policies/burnerloans/BurnerLoansCore.sol#L381). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -12,7 +14,7 @@ Own-policy admission: require Kernel-active BurnerLoansCore; own inactivity uses
 
 Error ownership: local policy inactivity uses the component’s BurnerLoans_PolicyNotActive(BurnerLoansCore) error. `PolicyDependency_NotActive(component)` identifies an unavailable external dependency; no additional lifecycle gates are implied.
 
-Required caller role: `BL_DEBT_POLICY_ROLE`. Inputs: asset, borrower,payer,maturity:uint48,fee:uint256. Admission is specified in the function-local matrix below. Callers in body rows satisfy every admission condition. Public action numeric/economic restrictions belong to the corresponding action plan.
+Required caller role: `BL_DEBT_POLICY_ROLE`. Inputs: asset, borrower,payer,maturity:uint48,protocolFee:uint256,referrer:address,referralFee:uint256. Admission is specified in the function-local matrix below. Callers in body rows satisfy every admission condition. Public action numeric/economic restrictions belong to the corresponding action plan.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
@@ -102,29 +104,59 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 | BLCORE-SETTLE-EXTEND-C03 | Selected same-Kernel active action with the matching settlement role | Optional Custody→fee recipient payout | Custody retry/recovery reaching Custody local guard; callback catches nested rejection | Nested call rejects ReentrancyGuardReentrantCall(); payout succeeds | Maturity extension commits once; optional delivery cannot revoke it; delivery clears only its bucket once | Covered: [test][test_givenOptionalFeeCallback_whenCaught] |
 | BLCORE-SETTLE-EXTEND-C04 | Selected same-Kernel active action with the matching settlement role | Optional Custody→fee recipient payout | Custody retry/recovery reaching Custody local guard; callback propagates nested rejection | Nested guard error propagates through token; optional payout defers | Maturity extension commits once; optional delivery cannot revoke it; exact unpaid amount stays backed and indexed; later callback-free retry pays once | Covered: [test][test_givenOptionalFeeCallback_whenPropagated] |
 
-[test_givenAdminMutationCallback_whenCaught]: settleExtend.t.sol#L392
-[test_givenAdminMutationCallback_whenPropagated]: settleExtend.t.sol#L427
-[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleExtend.t.sol#L107
-[test_givenCallerInactive_whenSettled]: settleExtend.t.sol#L94
-[test_givenCoreDisabled_whenSettled_reverts]: settleExtend.t.sol#L69
-[test_givenCoreInactive_whenSettled_reverts]: settleExtend.t.sol#L79
-[test_givenExpiredNewMaturity_whenExtended_reverts]: settleExtend.t.sol#L189
-[test_givenHorizonExceeded_whenExtended_reverts]: settleExtend.t.sol#L204
-[test_givenMandatoryFeeFailure_whenExtended_reverts]: settleExtend.t.sol#L238
-[test_givenMissingPosition_whenExtended_reverts]: settleExtend.t.sol#L223
-[test_givenNoDebt_whenExtended_reverts]: settleExtend.t.sol#L158
-[test_givenNotLater_whenExtended_reverts]: settleExtend.t.sol#L174
-[test_givenOnlySiblingRole_whenSettled_reverts]: settleExtend.t.sol#L44
-[test_givenOptionalFeeCallback_whenCaught]: settleExtend.t.sol#L530
-[test_givenOptionalFeeCallback_whenPropagated]: settleExtend.t.sol#L566
-[test_givenOptionalPayoutFailure_whenExtended]: settleExtend.t.sol#L290
-[test_givenOriginationsDisabled_whenExtended_reverts]: settleExtend.t.sol#L135
-[test_givenPayoutRecoveryCallback_whenCaught]: settleExtend.t.sol#L461
-[test_givenPayoutRecoveryCallback_whenPropagated]: settleExtend.t.sol#L496
-[test_givenRoleHoldingEOA_whenSettled]: settleExtend.t.sol#L100
-[test_givenSettlementCallback_whenCaught]: settleExtend.t.sol#L313
-[test_givenSettlementCallback_whenPropagated]: settleExtend.t.sol#L353
-[test_givenValidMaturity_whenExtended]: settleExtend.t.sol#L265
-[test_givenWrongKernelCaller_whenSettled]: settleExtend.t.sol#L55
-[test_whenCallerLacksSettlementRole_reverts]: settleExtend.t.sol#L32
-[test_whenMaturityMaximumSeed_reverts]: settleExtend.t.sol#L608
+## Referral fee sharing
+
+R2,R6,R10-R15,R18. The settleExtend instruction carries protocolFee P, referrer r and referralFee R separately. The total amount collected is C=P+R. There is no gross-fee argument to Payout: Core calls creditFee(asset,P,r,R), with the asset taken unchanged from the settlement inputs and no borrower metadata forwarded. Core neither calls Risk.fee nor checks Risk's whitelist or percentage. The authorized Debt action owns the economic quote and passes its exact components.
+
+Core checks that the funding sum fits uint256, collects C exactly from the instructed payer into selected Payout, and forwards P,r,R unchanged. Payout validates the relationship r=0⇒R=0; nonzero r with R=0 is valid. Payout also checks backing and owns all final routing/deferred obligations. Core does not infer, clamp or recalculate either component. A Payout rejection propagates through settlement and rolls the full transaction back, as in the existing downstream-failure cases.
+
+Retain existing caller, lifecycle, zero-total skipping, receipt, downstream-rejection and callback scenarios. Their call signatures adapt to the two components; no second guard matrix is added. The mappings below identify the additional component forwarding, exact receipt and overflow assertions.
+
+### Component forwarding and exact funding
+
+Caller holds BL_DEBT_POLICY_ROLE. P and R are independent uint256 raw collateral amounts with C=P+R≤MAX256 and C>0. Guarantee P=0,R=1; P=1,R=0; P=76,R=25; P=0,R=MAX256; and P=MAX256,R=0 when fundable. Referrer is either zero with R=0 or nonzero with R≥0. Mock Payout.creditFee to accept without performing distribution. Configure Risk's fee selector to revert if reached, proving that direct settlement uses the supplied components. Check authoritative token deltas and the exact Payout call, not just a returned quote.
+
+| ID | Caller | Protocol fee P | Referrer / referral fee R | Execution | Accounting / calls | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-EXTEND-P05 | Debt-role caller | Fuzz 0..MAX256 within C; seed P=0,1,76,MAX256 | r=0,R=0; or r≠0,R fuzz0..MAX256-P; seed zero/positive/full-referral allocations | Success | Payer debited C and selected Payout credited C; Core fee-token balance delta=0. Exactly creditFee(asset,P,r,R), including creditFee(asset,76,r,25) for C=101. Payout receives no borrower identity; asset is the collateral fee token. No Risk fee call and no Core transfer to the protocol recipient or referrer. | Covered: [test_whenFeeComponentsForwarded][test_whenFeeComponentsForwarded], [test_whenLiteralComponentFunding][test_whenLiteralComponentFunding], [test_whenOnlyReferralFunded][test_whenOnlyReferralFunded], [test_whenOnlyProtocolFunded][test_whenOnlyProtocolFunded], [test_whenMaximumFundableProtocolComponent][test_whenMaximumFundableProtocolComponent], [test_whenMaximumFundableReferralComponent][test_whenMaximumFundableReferralComponent] |
+| BLCORE-SETTLE-EXTEND-N02 | Debt-role caller | P fuzz1..MAX256; seed1,MAX256 | r≠0; R fuzz(MAX256-P+1)..MAX256; seed first overflow and MAX256 | BurnerLoansCore_FeeOverflow(P,R) | No token collection/Payout credit; complete position/accounting rollback. The new sum check does not replace existing settlement authorization. | Covered: [test_whenFeeComponentSumOverflows_reverts][test_whenFeeComponentSumOverflows_reverts], [test_whenMinimumProtocolOverflows_reverts][test_whenMinimumProtocolOverflows_reverts], [test_whenMaximumProtocolOverflows_reverts][test_whenMaximumProtocolOverflows_reverts] |
+
+- [x] Review the referral cases before writing tests.
+
+The owner argument is accrual-event context only. Core already has asset/borrower; no new Risk call, position lookup or stored referral relationship is required to obtain it.
+
+[test_givenAdminMutationCallback_whenCaught]: settleExtend.t.sol#L414
+[test_givenAdminMutationCallback_whenPropagated]: settleExtend.t.sol#L451
+[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleExtend.t.sol#L112
+[test_givenCallerInactive_whenSettled]: settleExtend.t.sol#L99
+[test_givenCoreDisabled_whenSettled_reverts]: settleExtend.t.sol#L74
+[test_givenCoreInactive_whenSettled_reverts]: settleExtend.t.sol#L84
+[test_givenExpiredNewMaturity_whenExtended_reverts]: settleExtend.t.sol#L200
+[test_givenHorizonExceeded_whenExtended_reverts]: settleExtend.t.sol#L215
+[test_givenMandatoryFeeFailure_whenExtended_reverts]: settleExtend.t.sol#L251
+[test_givenMissingPosition_whenExtended_reverts]: settleExtend.t.sol#L234
+[test_givenNoDebt_whenExtended_reverts]: settleExtend.t.sol#L167
+[test_givenNotLater_whenExtended_reverts]: settleExtend.t.sol#L185
+[test_givenOnlySiblingRole_whenSettled_reverts]: settleExtend.t.sol#L49
+[test_givenOptionalFeeCallback_whenCaught]: settleExtend.t.sol#L568
+[test_givenOptionalFeeCallback_whenPropagated]: settleExtend.t.sol#L610
+[test_givenOptionalPayoutFailure_whenExtended]: settleExtend.t.sol#L308
+[test_givenOriginationsDisabled_whenExtended_reverts]: settleExtend.t.sol#L142
+[test_givenPayoutRecoveryCallback_whenCaught]: settleExtend.t.sol#L487
+[test_givenPayoutRecoveryCallback_whenPropagated]: settleExtend.t.sol#L528
+[test_givenRoleHoldingEOA_whenSettled]: settleExtend.t.sol#L105
+[test_givenSettlementCallback_whenCaught]: settleExtend.t.sol#L331
+[test_givenSettlementCallback_whenPropagated]: settleExtend.t.sol#L373
+[test_givenValidMaturity_whenExtended]: settleExtend.t.sol#L275
+[test_givenWrongKernelCaller_whenSettled]: settleExtend.t.sol#L60
+[test_whenCallerLacksSettlementRole_reverts]: settleExtend.t.sol#L37
+[test_whenMaturityMaximumSeed_reverts]: settleExtend.t.sol#L658
+[test_whenFeeComponentsForwarded]: settleExtend.t.sol#L663
+[test_whenLiteralComponentFunding]: settleExtend.t.sol#L760
+[test_whenOnlyReferralFunded]: settleExtend.t.sol#L765
+[test_whenOnlyProtocolFunded]: settleExtend.t.sol#L770
+[test_whenMaximumFundableProtocolComponent]: settleExtend.t.sol#L785
+[test_whenMaximumFundableReferralComponent]: settleExtend.t.sol#L791
+[test_whenFeeComponentSumOverflows_reverts]: settleExtend.t.sol#L716
+[test_whenMinimumProtocolOverflows_reverts]: settleExtend.t.sol#L775
+[test_whenMaximumProtocolOverflows_reverts]: settleExtend.t.sol#L780

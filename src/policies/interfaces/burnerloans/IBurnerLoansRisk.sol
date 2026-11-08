@@ -23,6 +23,15 @@ interface IBurnerLoansRisk {
     /// @param priceCacheMaxAge New maximum cached-price age, in seconds.
     event PriceCacheMaxAgeSet(uint48 priceCacheMaxAge);
 
+    /// @notice Emitted when the shared referral percentage changes.
+    /// @param bps Share of the upfront fee, with 10,000 equal to 100%.
+    event ReferralFeeBpsSet(uint16 bps);
+
+    /// @notice Emitted when a referrer's eligibility changes.
+    /// @param referrer Address receiving the referral allocation.
+    /// @param allowed Whether new operations may name this referrer.
+    event ReferrerAllowedSet(address indexed referrer, bool allowed);
+
     // ========== ERRORS ========== //
 
     /// @notice The OHM token is absent or its decimals are unreadable or unsupported.
@@ -50,6 +59,14 @@ interface IBurnerLoansRisk {
 
     /// @notice A utilization fee configuration violates the required bounds.
     error BurnerLoans_InvalidFeeConfig();
+
+    /// @notice The proposed referral share exceeds 100%.
+    /// @param bps Invalid share, in basis points.
+    error BurnerLoansRisk_InvalidReferralFeeBps(uint16 bps);
+
+    /// @notice A nonzero referrer is not eligible for a new operation.
+    /// @param referrer Rejected referral recipient.
+    error BurnerLoansRisk_ReferrerNotAllowed(address referrer);
 
     /// @notice An operation requires a healthy position but the current or resulting position is unhealthy.
     /// @param healthFactor Current or resulting health factor, scaled by 1e18.
@@ -146,13 +163,34 @@ interface IBurnerLoansRisk {
     /// @param marketId Canonical FLOAN market selected by the caller; must use this Risk's OHM.
     /// @param principal Principal being charged, in OHM units.
     /// @param terms Number of configured terms charged.
-    /// @return amount Fee in underlying collateral units.
+    /// @param referrer Referral recipient, or zero for protocol-only allocation.
+    /// @return protocolFee Protocol remainder of the upfront fee, in underlying collateral units.
+    /// @return referralFee Referral share rounded down, in underlying collateral units.
     function fee(
         IBurnerLoansCore.PriceSnapshot calldata snapshot,
         uint32 marketId,
         uint256 principal,
-        uint16 terms
-    ) external view returns (uint256 amount);
+        uint16 terms,
+        address referrer
+    ) external view returns (uint256 protocolFee, uint256 referralFee);
+
+    /// @notice Returns the shared referral share of upfront fees.
+    /// @return bps Percentage in basis points, where 10,000 is 100%.
+    function referralFeeBps() external view returns (uint16 bps);
+
+    /// @notice Returns eligibility for a supplied referral recipient.
+    /// @param referrer Address whose eligibility is queried.
+    /// @return allowed Whether new operations may name this address.
+    function isReferrerAllowed(address referrer) external view returns (bool allowed);
+
+    /// @notice Updates the shared referral share of future upfront fees.
+    /// @param bps Share in basis points, where 10,000 is 100%.
+    function setReferralFeeBps(uint16 bps) external;
+
+    /// @notice Updates eligibility for future borrow and extension referrals.
+    /// @param referrer Nonzero referral recipient.
+    /// @param allowed Whether new operations may name this address.
+    function setReferrerAllowed(address referrer, bool allowed) external;
 
     /// @notice Returns the keeper allocation from actual redemption output, preserving underlying/share rounding.
     /// @param snapshot Prices and backing captured before batch settlement.
@@ -199,7 +237,7 @@ interface IBurnerLoansRisk {
     /// @param cache Replacement PriceCache policy, or zero to use PRICE directly.
     function setPriceCache(address cache) external;
 
-    /// @notice Selected Config or OCG ADMIN updates the cache age numeric parameter.
+    /// @notice Selected configuration operator or OCG ADMIN updates the cache age.
     /// @param maxAge Maximum accepted cached pair age in seconds.
     function setPriceCacheMaxAge(uint48 maxAge) external;
 

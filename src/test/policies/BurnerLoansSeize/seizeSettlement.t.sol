@@ -94,7 +94,7 @@ contract BurnerLoansSeizeSettlementTest is BurnerLoansSeizeTestBase {
         vm.startPrank(_recipient);
         _asset.approve(address(_core), type(uint256).max);
         _collateral.depositCollateral(address(_asset), 20e6, _recipient);
-        _debt.borrow(address(_asset), 1, _recipient, _recipient, 0);
+        _debt.borrow(address(_asset), 1, _recipient, _recipient, 0, address(0));
         vm.stopPrank();
         address[] memory borrowers = new address[](2);
         borrowers[0] = _borrower;
