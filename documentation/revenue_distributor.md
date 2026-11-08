@@ -122,7 +122,9 @@ transfer success or freeze custody, entitlement, or routing.
 ## Configuration and timelock
 
 Distributor, timelock and task lifecycle payloads must be empty. Enable and reEnable require
-own Kernel activity; task and timelock also require a compatible, active and enabled distributor.
+own Kernel activity. Task activation requires a compatible, active and enabled distributor.
+Timelock activation requires compatible consumed interfaces, matching Kernel, active distributor
+membership and current operator selection, but does not read or require distributor enablement.
 Pause remains available without own activity or downstream readiness. Grace deadlines are inclusive
 and use checked uint48 narrowing. Ordinary grace-period changes require own activity; repeating a
 valid grace value still emits GracePeriodSet.
@@ -139,12 +141,13 @@ three-day window after the configured delay. The shared queue and Revenue Distri
 support delays from 1–30 days. The current `RevenueDistributorConfigTimelock` constructor selects
 one day and exposes no public delay setter; a future implementation may expose the inherited
 internal setter within the same bounds. Emergency can cancel unfinished actions while the timelock
-is enabled and Kernel-active, even if the distributor or operator is unavailable.
+is Kernel-active, including while locally disabled, without distributor or operator reads.
 
 Route changes, retirement, and both rescues share one key per asset; yield-recipient changes use a
 separate global key. Conflicting actions cannot be queued together. Route actions bind the current
-asset state, route, and yield recipient; recipient changes bind the current recipient. Rescue binds
-only asset state, so new receipts do not stale it. Surplus rescue sweeps the balance at execution;
+asset state, route, and yield recipient; recipient changes bind the current recipient. Every domain
+also binds the current config operator. Rescue otherwise binds only asset state, so new receipts do
+not stale it. Surplus rescue sweeps the balance at execution;
 pending rescue rechecks the stored recipient and amount against live entitlement.
 
 Execution also rechecks live dependencies. A yield recipient becoming disabled, inactive, or unable

@@ -24,7 +24,7 @@ no rescue role merely to obtain this quote. A zero quote is valid; the quoted am
 stored as a payout amount nor hashed into the configuration commitment.
 
 The implementation adds typed and batch rescue admission, selector-specific paused-manager
-handling and execution dispatch to the existing queue. Rescue keys commit to token eligibility,
+handling and execution dispatch to the existing queue. Rescue keys commit to token eligibility and the selected config operator,
 independently of live balance and Treasury identity. Ordinary configuration retains its enabled
 manager requirement. Named test links below identify rescue-specific evidence alongside the
 existing generic queue lifecycle tests.
@@ -115,7 +115,7 @@ destination, expected state and scoped pending-key owner.
 Require one conflict domain per `(DM,T,rescue)` shared by typed and generic-batch proposals. The exact
 domain constant is an implementation detail; tests independently derive the selected encoding and
 check observable key ownership. Unrelated T/U keys and existing cap/minimum/mode/period domains must
-remain independent. Commit token rescue eligibility, not token balance, Treasury identity, proposer
+remain independent. Commit token rescue eligibility and selected-operator identity, not token balance, Treasury identity, proposer
 role membership or DM local enablement. New receipts and Treasury upgrades must not stale recovery.
 If T becomes any configured underlying/vault/stored share token, the rescue must stop before transfer.
 Use ConfigStateChanged with the exact stored/current hashes for that eligibility drift.

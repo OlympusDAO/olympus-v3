@@ -16,7 +16,7 @@ target, selector, payload and pre-state hash, reserves its destination-scoped ke
 one uint64 action ID. Target configuration is applied only by later execution.
 Times are uint48 seconds: Q=queuedAt, T=Q+1 day, E=T+3 days. Values use raw asset units.
 Limits key = keccak256(abi.encode(DM, keccak256(abi.encode(keccak256("DEPOSIT_MANAGER_ASSET_LIMITS"), asset)))).
-Pre-state hash = keccak256(abi.encode(isConfigured, depositCap, minimumDeposit)). Cap and minimum
+Pre-state hash = keccak256(abi.encode(isConfigured, depositCap, minimumDeposit, DM.configOperator())). Cap and minimum
 share that key; separate assets and period/withdrawal settings have independent keys.
 
 Unchanged includes action IDs, payloads, destination-scoped key owners, target configuration,
@@ -27,7 +27,7 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 
 | ID | Caller | Cap domain | Execution / effects | Test |
 | --- | --- | --- | --- | --- |
-| DMCT-QUEUE-CAP-A01 | Fuzz ADMIN-only, manager-only and overlapping role holders | 0..MAX256 | Queue exact typed cap action; preserve target | Covered: [test][test_givenAdminOnly_whenCapQueued], [test][test_givenManagerOnly_whenCapQueued], [test][test_givenBothRoles_whenCapQueued] |
+| DMCT-QUEUE-CAP-A01 | Fuzz ADMIN-only, manager-only and overlapping role holders | 0..MAX256 | Queue exact typed cap action; preserve target; independently assert current target operator in stored pre-state | Covered: [test][test_givenAdminOnly_whenCapQueued], [test][test_givenManagerOnly_whenCapQueued], [test][test_givenBothRoles_whenCapQueued] |
 | DMCT-QUEUE-CAP-A02 | Fuzz callers outside both roles | 1 | NotAuthorised(); Unchanged | Covered: [test][test_whenCallerIsUnauthorized_reverts] |
 
 ## Lifecycle and binding
@@ -63,7 +63,7 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 
 | ID | Caller | Existing configuration / queue | Execution / effects | Test |
 | --- | --- | --- | --- | --- |
-| DMCT-QUEUE-CAP-P01 | ADMIN | Fresh limits key | Exact ConfigStateQueued → TimelockSubActionQueued → TimelockActionQueued fields and emitters; exact metadata, destination/key/hash | Covered: [test][test_whenCapQueued_emitsExactEvents] |
+| DMCT-QUEUE-CAP-P01 | ADMIN | Fresh limits key | Exact ConfigStateQueued → TimelockSubActionQueued → TimelockActionQueued fields and emitters; exact metadata, destination/key/hash including current DM configOperator | Covered: [test][test_whenCapQueued_emitsExactEvents] |
 | DMCT-QUEUE-CAP-P02 | ADMIN | Pending cap for same asset | ConfigKeyPending(key,owner); preserve owner/action and next ID | Covered: [test][test_givenPendingCap_whenCapQueuedAgain_reverts] |
 | DMCT-QUEUE-CAP-P03 | ADMIN | Cap equals existing MAX256 | Still queue a delayed no-op; no target mutation at queue time | Covered: [test][test_whenCapUnchanged] |
 

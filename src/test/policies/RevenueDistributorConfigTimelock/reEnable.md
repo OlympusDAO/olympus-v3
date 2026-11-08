@@ -20,7 +20,7 @@ For grace fuzzing, `L=lastTransitionAt>0`, `G=gracePeriod>0`, `D=L+G`. Use compa
 
 `reEnable()` is parameterless; its Transition always carries empty data.
 
-Admin or Revenue Distributor Admin, separately; fuzz unauthorized callers excluding both permitted role classes. RD.kernel must equal RDT.kernel; mismatch gives PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel). RD must also be active in this timelock’s Kernel and locally enabled. `NeverEnabled()` is the upstream `ReEnabler` error for `lastTransitionAt == 0`.
+Admin or Revenue Distributor Admin, separately; fuzz unauthorized callers excluding both permitted role classes. RD.kernel must equal RDT.kernel; mismatch gives PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel). RD must also be active in this timelock’s Kernel and select this timelock as configOperator. RD local enablement is not an activation prerequisite and isEnabled is never read. `NeverEnabled()` is the upstream `ReEnabler` error for `lastTransitionAt == 0`.
 
 Unchanged means lifecycle state, configuration, liabilities and balances retain their pre-call values; a reverted transaction commits no events. Match exact errors and check getters from fuzzed callers, including while disabled/inactive. Success sets isEnabled=true and lastTransitionAt to the uint48 timestamp; emits Enabled plus Transition(caller,true,emptyData,timestamp). Preserve configuration/debt/custody. Grace starts at the prior disable timestamp; its exact deadline is allowed.
 
@@ -34,7 +34,7 @@ Fixed for this table: Effects and events: Unchanged.
 
 ## Lifecycle
 
-ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and enablement are required operational activation gates. No bytes argument; prior transition L>0, G>0 and now<=L+G except explicit timing/history cases.
+ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and selection of this timelock as operator are activation gates; local enablement is irrelevant. No bytes argument; prior transition L>0, G>0 and now<=L+G except explicit timing/history cases.
 
 | ID | Caller | Local active | Local enabled | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -45,9 +45,7 @@ ROLES initialized; retained caller roles after any Kernel deactivation; unrelate
 
 ## Dependency compatibility
 
-The named distributor identity cases below own this check; selection as configOperator is a queue/execution prerequisite, not an activation gate.
-
-[test_whenUnauthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L87
+The named distributor identity cases below own this check. Both activation routes require the consumed interfaces, matching Kernel, active target membership and selection of this timelock as configOperator. Neither activation route reads target isEnabled.
 
 ## Grace deadline overflow
 
@@ -68,7 +66,7 @@ Implemented lifecycle payload rule: the setter accepts a valid uint32 duration; 
 
 ## Grace timing
 
-ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and enablement are required operational activation gates. No bytes argument; prior transition L>0, G>0 and now<=L+G except explicit timing/history cases. Local active=true, local enabled=false. Define MAX48=type(uint48).max and MAX32=type(uint32).max.
+ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and selection of this timelock as operator are activation gates; local enablement is irrelevant. No bytes argument; prior transition L>0, G>0 and now<=L+G except explicit timing/history cases. Local active=true, local enabled=false. Define MAX48=type(uint48).max and MAX32=type(uint32).max.
 
 | ID | Caller | Prior transition / duration | Now | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -78,12 +76,12 @@ ROLES initialized; retained caller roles after any Kernel deactivation; unrelate
 
 ## Dependency identity and lifecycle
 
-ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and enablement are required operational activation gates. No bytes argument; prior transition L>0, G>0 and now<=L+G except explicit timing/history cases. Local enabled=false, own Kernel active=true; reEnable within grace if applicable.
+ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and selection of this timelock as operator are activation gates; local enablement is irrelevant. No bytes argument; prior transition L>0, G>0 and now<=L+G except explicit timing/history cases. Local enabled=false, own Kernel active=true; reEnable within grace if applicable.
 
 | ID | Caller | Distributor active | Distributor enabled | Kernel binding | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | RDCT-REENABLE-D01 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | true | true | Same Kernel | Success | Only local lifecycle transition; RD state and queue preserved | Covered: [test][test_givenRepresentableDeadline_whenAuthorizedCallerReEnables], [test][test_givenReEnableBoundarySeeds] |
-| RDCT-REENABLE-D02 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | true | false | Same Kernel | PolicyDependency_NotActive(RD) | Unchanged; no transition or committed logs; restore target readiness and retry | Covered: [test][test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts], [test][test_givenRestoredDistributor_whenAuthorizedCallerReEnables], [test][test_givenDependencyAndRoleSeeds_whenReEnabled_reverts] |
+| RDCT-REENABLE-D02 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | true | false | Same Kernel | Success; active paused target accepted | Exact lifecycle events; target, queue and accounting preserved | Covered: [test][test_givenActivePausedDistributor_whenAuthorizedCallerReEnables] |
 | RDCT-REENABLE-D03 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | false | true | Same Kernel | PolicyDependency_NotActive(RD) | Unchanged; no transition or committed logs; restore target readiness and retry | Covered: [test][test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts], [test][test_givenRestoredDistributor_whenAuthorizedCallerReEnables], [test][test_givenDependencyAndRoleSeeds_whenReEnabled_reverts] |
 | RDCT-REENABLE-D04 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | false | false | Same Kernel | PolicyDependency_NotActive(RD) | Unchanged; no transition or committed logs; restore target readiness and retry | Covered: [test][test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts], [test][test_givenRestoredDistributor_whenAuthorizedCallerReEnables], [test][test_givenDependencyAndRoleSeeds_whenReEnabled_reverts] |
 | RDCT-REENABLE-D05 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | true | true | Different Kernel | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) | Unchanged; no logs | Covered: [test][test_givenDistributorKernelDrift_whenAuthorizedCallerReEnables_reverts], [test][test_givenKernelDriftRoleSeeds_whenReEnabled_reverts] |
@@ -110,9 +108,7 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 The product hooks now enforce empty lifecycle payloads, inactive-disable availability and active enable/reEnable (where supported). [Function-specific lifecycle tests](reEnable.t.sol) exercise ADMIN transitions and nonempty fuzz inputs against real fixtures. This is partial coverage: emergency/secondary-role transitions, all dependency drifts, exact events and overflow drivers remain independently mapped. Existing inactive-enable success tests are historical regression inputs, not proof of the new expectation.
 
-Dependency classification: RD is a direct operational Policy service. Construction validates compatibility without requiring readiness. Activation requires a canonical Kernel/status response, reported Kernel equal to this consumer's Kernel, authoritative membership in that Kernel and local enablement. Malformed metadata gives `RevenueDistributorConfigTimelock_InvalidDistributor(RD)`; a readable foreign Kernel gives `PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel)` before readiness; a compatible paused/inactive target gives `PolicyDependency_NotActive(RD)`. Enable and reEnable use the same predicate.
-
-[test_givenNeverEnabledPolicy_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L265
+Dependency classification: RD is a direct configuration and recovery target. Construction retains its existing compatibility checks. Activation checks the consumed interfaces, canonical matching Kernel, authoritative target membership and selected operator. Missing interfaces or malformed operator metadata give `RevenueDistributorConfigTimelock_InvalidDistributor(RD)`; malformed Kernel metadata gives `PolicyDependency_InvalidDependency(RD)`; a readable foreign Kernel gives `PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel)`. An inactive target gives `PolicyDependency_NotActive(RD)`. A zero or different selected operator gives `ConfigOperator_Unauthorized(RDT)`. An active paused target succeeds, without reading isEnabled. Enable and reEnable use the same predicate.
 
 ## Kernel drift and restoration
 
@@ -121,41 +117,43 @@ Dependency classification: RD is a direct operational Policy service. Constructi
 | RDCT-REENABLE-D06 | Admin | true | false | Fuzz false/true | true | Different reported Kernel after construction | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) before readiness | No transition | Covered: [test][test_givenDistributorKernelDrift_whenActivation_reverts] |
 | RDCT-REENABLE-P03 | Admin | true | false | Restored false to true | Restored false to true | Same Kernel | Failed activation then successful retry | Pending accounting preserved | Covered: [test][test_givenRestoredDistributor_whenActivation_succeeds] |
 
-[test_givenDistributorKernelDrift_whenActivation_reverts]: ./reEnable.t.sol#L312
-[test_givenRestoredDistributor_whenActivation_succeeds]: ./reEnable.t.sol#L426
+## Activation interface and operator metadata
 
-[test_givenRepresentableDeadline_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L501
+Own policy is active and locally disabled; caller is permitted, payload is empty, and reEnable history/grace pass when applicable. The target reports the intended Kernel and is active. These checks do not depend on target local enablement. Earlier lifecycle, authorization, payload and grace checks retain their order.
 
-[test_givenReEnableBoundarySeeds]: ./reEnable.t.sol#L630
+| ID | Target metadata | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| RDCT-REENABLE-D14 | Each consumed interface missing; isolated deterministic seed for every interface | RevenueDistributorConfigTimelock_InvalidDistributor(RD) | No lifecycle transition | Covered: [test][test_givenMissingConsumedInterface_whenActivation_reverts], [seeds][test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts] |
+| RDCT-REENABLE-D15 | Operator getter reverts, returns noncanonical address, or returns a non-word length | RevenueDistributorConfigTimelock_InvalidDistributor(RD) | No lifecycle transition | Covered: [revert][test_givenOperatorReadReverts_whenActivation_reverts], [canonical word][test_givenNoncanonicalOperator_whenActivation_reverts], [length fuzz][test_givenMalformedOperatorLength_whenActivation_reverts] |
+| RDCT-REENABLE-D16 | Canonical zero or different operator; fuzz every address except this timelock | ConfigOperator_Unauthorized(this timelock) | No lifecycle transition | Covered: [fuzz][test_givenUnselectedOperator_whenActivation_reverts], [zero][test_givenZeroOperator_whenActivation_reverts] |
 
-[test_givenEnabled_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L437
-
-[test_givenInactive_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L464
-
-[test_givenOverflowingDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L542
-
-[test_givenExpiredDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L586
-
-[test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L816
-
-[test_givenRestoredDistributor_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L854
-
-[test_givenDependencyAndRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L884
-
-[test_givenDistributorKernelDrift_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L985
-
-[test_givenKernelDriftRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L1022
-
-[test_givenOwnPolicyInactive_whenPermittedCallerReEnables_reverts]: ./reEnable.t.sol#L132
-
-[test_whenPermittedCallerReEnablesWithinGrace_recordsTransition]: ./reEnable.t.sol#L34
-
-[test_whenNeverEnabled_reverts]: ./reEnable.t.sol#L75
-
-[test_whenExactGraceDeadline_reenables]: ./reEnable.t.sol#L61
-
-[test_whenDistributorKernelMismatches_reverts]: ./reEnable.t.sol#L152
-
-[test_whenAlreadyEnabled_revertsBeforeAuthorization]: ./reEnable.t.sol#L101
-
-[test_whenGracePeriodExpired_reverts]: ./reEnable.t.sol#L112
+[test_whenUnauthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L90
+[test_givenNeverEnabledPolicy_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L268
+[test_givenDistributorKernelDrift_whenActivation_reverts]: ./reEnable.t.sol#L315
+[test_givenRestoredDistributor_whenActivation_succeeds]: ./reEnable.t.sol#L429
+[test_givenRepresentableDeadline_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L504
+[test_givenReEnableBoundarySeeds]: ./reEnable.t.sol#L633
+[test_givenEnabled_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L440
+[test_givenInactive_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L467
+[test_givenOverflowingDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L545
+[test_givenExpiredDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L589
+[test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L819
+[test_givenRestoredDistributor_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L857
+[test_givenDependencyAndRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L887
+[test_givenDistributorKernelDrift_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L970
+[test_givenKernelDriftRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L1007
+[test_givenOwnPolicyInactive_whenPermittedCallerReEnables_reverts]: ./reEnable.t.sol#L135
+[test_whenPermittedCallerReEnablesWithinGrace_recordsTransition]: ./reEnable.t.sol#L37
+[test_whenNeverEnabled_reverts]: ./reEnable.t.sol#L78
+[test_whenExactGraceDeadline_reenables]: ./reEnable.t.sol#L64
+[test_whenDistributorKernelMismatches_reverts]: ./reEnable.t.sol#L155
+[test_whenAlreadyEnabled_revertsBeforeAuthorization]: ./reEnable.t.sol#L104
+[test_whenGracePeriodExpired_reverts]: ./reEnable.t.sol#L115
+[test_givenMissingConsumedInterface_whenActivation_reverts]: ./reEnable.t.sol#L1055
+[test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts]: ./reEnable.t.sol#L1091
+[test_givenOperatorReadReverts_whenActivation_reverts]: ./reEnable.t.sol#L1104
+[test_givenNoncanonicalOperator_whenActivation_reverts]: ./reEnable.t.sol#L1141
+[test_givenMalformedOperatorLength_whenActivation_reverts]: ./reEnable.t.sol#L1124
+[test_givenUnselectedOperator_whenActivation_reverts]: ./reEnable.t.sol#L1161
+[test_givenZeroOperator_whenActivation_reverts]: ./reEnable.t.sol#L1180
+[test_givenActivePausedDistributor_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L1018

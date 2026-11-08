@@ -13,11 +13,11 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 ## Domains and shared assertions
 
 - Queue callers: admin and revenue_distributor_admin, tested separately. Fuzz unauthorized callers excluding all holders of either role; seed operator-only, emergency-only and payout recipient.
-- Fixed default: RDT enabled/Kernel-active and selected as RD's operator; RD active; Active asset; accepting token and destination; originalRecipient owed 10 base units; queued amount=4. RD local enablement does not block pending rescue. A disabled or Kernel-inactive RDT blocks typed/batch queueing, execution and cancellation; admin recovery goes directly through RD.
+- Fixed default: RDT enabled/Kernel-active and selected as RD's operator; RD active; Active asset; accepting token and destination; originalRecipient owed 10 base units; queued amount=4. RD local enablement does not block pending rescue. A disabled RDT blocks typed/batch queueing and execution; cancellation permits local pause while RDT remains Kernel-active. A Kernel-inactive RDT blocks queueing, execution and cancellation; admin recovery goes directly through RD.
 - Use named arguments `asset`, `originalRecipient`, `destination`, `amount` and fixed addresses. No numeric or payout-bucket fuzzing in this queue plan.
 - Queue success returns the pre-call nextActionId and increments once. Store one RD rescue action with exact `abi.encode(asset,originalRecipient,destination,4)`, proposer, timestamps, pending flags, RD destination and scoped asset-key owner. No entitlement or balances move.
 - All route/retirement/surplus-rescue/pending-rescue actions for an asset share its RD-scoped key, regardless of recipient/destination/amount. Different assets and global yield-recipient changes have independent keys.
-- Stored rescue state hash is `keccak256(abi.encode(RD.assetState(asset)))`. Active→Retired changes it. Balances, entitlement, yield recipient, Treasury and route edits preserving listing state do not.
+- Stored rescue state hash is `keccak256(abi.encode(RD.assetState(asset), RD.configOperator()))`. Active→Retired changes it. Balances, entitlement, yield recipient, Treasury and route edits preserving listing state do not.
 - Unchanged = queue counter/actions/keys, configuration, entitlement/reserve and balances unchanged; no committed events.
 
 Queue events, emitted by RDT in order: `ConfigStateQueued` → `TimelockSubActionQueued` → `TimelockActionQueued`. Assert exact action ID, target RD, selector, payload/batch hashes, scoped key, expected state hash, proposer and timestamps.
@@ -97,9 +97,9 @@ Use a fixed role-recipient fixture with no other debt for routing-change rejecti
 [test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts]: ./queueRescuePendingPayout.t.sol#L351
 [test_givenIndependentAssetAndGlobalAction_whenQueued]: ./queueRescuePendingPayout.t.sol#L393
 [test_whenPreviewRejectsBeforeConflict_reverts]: ./queueRescuePendingPayout.t.sol#L323
-[test_givenValidRequest_whenEachRoleQueues_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1506
-[test_givenValidRequest_whenEachRoleQueues_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1511
-[test_givenValidRequest_whenEachRoleQueues_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1516
+[test_givenValidRequest_whenEachRoleQueues_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1518
+[test_givenValidRequest_whenEachRoleQueues_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1523
+[test_givenValidRequest_whenEachRoleQueues_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1528
 [test_givenInactiveTimelock_givenOperatorChanged_whenUnauthorizedQueues_reverts]: ./queueRescuePendingPayout.t.sol#L290
 [test_givenInactiveDisabledTimelock_givenInactiveDistributor_whenUnauthorizedQueues_reverts]: ./queueRescuePendingPayout.t.sol#L280
 [test_givenOperatorChanged_whenUnauthorizedCallerQueues_reverts]: ./queueRescuePendingPayout.t.sol#L299

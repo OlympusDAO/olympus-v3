@@ -16,7 +16,7 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 
 Own-policy admission: require Kernel-active RevenueDistributorConfigTimelock; own inactivity uses `RevenueDistributorConfigTimelock_PolicyNotActive(this policy)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-RDT = Revenue Distributor Config Timelock; RD = RevenueDistributor. Proposers are Admin or Revenue Distributor Admin, separately. Successful queue gates: RDT Kernel-active, RDT enabled, permitted proposer, selected as RD configOperator, RD Kernel-active and locally enabled. Error order follows that list: own RevenueDistributorConfigTimelock_PolicyNotActive(RDT), NotEnabled(), NotAuthorised(), then selected-operator and target checks. Generic timing/cancellation is owned by executeQueuedAction/cancelQueuedAction plans. Key: per-asset; expected hash: assetDistributionHash(asset).
+RDT = Revenue Distributor Config Timelock; RD = RevenueDistributor. Proposers are Admin or Revenue Distributor Admin, separately. Successful queue gates: RDT Kernel-active, RDT enabled, permitted proposer, selected as RD configOperator, RD Kernel-active and locally enabled. Error order follows that list: own RevenueDistributorConfigTimelock_PolicyNotActive(RDT), NotEnabled(), NotAuthorised(), then selected-operator and target checks. Generic timing/cancellation is owned by executeQueuedAction/cancelQueuedAction plans. Key: per-asset; expected hash: keccak256(abi.encode(assetDistributionHash(asset), current configOperator)).
 
 Fuzz permitted proposers across Admin and Revenue Distributor Admin for every non-authorization row. Queueing validates `asset_`, `repurchaseBps_` and `routes_` against the complete downstream input rules in [setAssetRoutes](../RevenueDistributor/setAssetRoutes.md). This wrapper uses valid payloads plus one representative invalid request to prove queue-time rejection, then separately covers live drift after a valid queue.
 
@@ -45,7 +45,7 @@ Fuzz all three queue parameters across the authorization domain above; they do n
 
 | ID | Caller | Prior asset state | `asset_` | `repurchaseBps_` | `routes_` | Execution-time state | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| QSAR-P01 | Fuzz permitted role caller | NeverListed | Valid nonzero contract | 0 | Valid representative nonempty route | Guarded state unchanged | Queue then ready execution succeeds | Exact forwarding; RD becomes Active with requested route | Covered: [test][test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes], [test][test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_AdminOnlySeed], [test][test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_RevenueRoleOnlySeed], [test][test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_RolesOverlapSeed] |
+| QSAR-P01 | Fuzz permitted role caller | NeverListed | Valid nonzero contract | 0 | Valid representative nonempty route | Guarded state unchanged | Queue then ready execution succeeds | Exact forwarding; RD becomes Active with requested route | Covered: [test][test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes], [test][test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_AdminOnlySeed], [test][test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_RevenueRoleOnlySeed], [test][test_whenValidNonemptyRouteQueued_storesExactActionAndExecutes_RolesOverlapSeed], [operator commitment and restoration][test_whenQueuedRoute_commitsCurrentOperator] |
 
 ## Invalid inputs
 
@@ -136,3 +136,5 @@ Fuzz all three queue parameters across the authorization domain above; they do n
 [test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts_AdminOnlySeed]: ./queueSetAssetRoutes.t.sol#L1011
 [test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts_RevenueRoleOnlySeed]: ./queueSetAssetRoutes.t.sol#L1022
 [test_whenAssetKeyAlreadyOwned_secondRouteQueueReverts_RolesOverlapSeed]: ./queueSetAssetRoutes.t.sol#L1033
+
+[test_whenQueuedRoute_commitsCurrentOperator]: ./queueSetAssetRoutes.t.sol#L1322

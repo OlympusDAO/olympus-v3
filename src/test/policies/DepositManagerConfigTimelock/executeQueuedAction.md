@@ -8,6 +8,8 @@ Execution is permissionless. A pending action executes only at T≤now≤E; T an
 Order: action existence → executed → cancelled → not-ready → expired → DMCT enabled
 → DMCT active → DM Kernel binding and membership → DM enabled → selected config operator
 → each destination/key/pre-state guard
+
+Every pre-state includes current DM.configOperator() alongside the existing limits, withdrawal, or route fields. Live authority checks reject a lost selection before hash comparison. Restoration uses current-state matching and retains the original notice and expiry.
 → target dispatch. The executed flag is set before dispatch and rolls back with any failure.
 Successful execution clears payloads, guards, destinations and key owners, while retaining
 proposer/timestamps/terminal metadata. Generic corrupted-storage and changeable-destination
@@ -39,7 +41,7 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 | DMCT-EXECUTE-L04 | Any | true | true | false | true | PolicyDependency_NotActive(DM) | Covered: [test][test_givenDepositManagerPolicyIsInactive_reverts] |
 | DMCT-EXECUTE-L05 | Any | true | true | true | true | After Kernel reactivation, pending action executes | Covered: [test][test_givenPoliciesAreReactivated_executes] |
 | DMCT-EXECUTE-D01 | Any | true | true | true | true | Operator changed away: ConfigOperator_Unauthorized(DMCT) | Covered: [test][test_givenConfigOperatorChanged_executionReverts] |
-| DMCT-EXECUTE-D02 | Any | true | true | true | true | Operator rotated away and restored: original queued action executes | Covered: [test][test_givenConfigOperatorChangedAwayAndBack_executionSucceeds] |
+| DMCT-EXECUTE-D02 | Any | true | true | true | true | Operator rotated away; execution rejected with pending intent retained; restore operator and execute within fuzzed original inclusive window | Covered: [test][test_givenConfigOperatorChangedAwayAndBack_executionSucceeds] |
 
 ## Execution, cleanup and failures
 
@@ -61,34 +63,34 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 - [x] Derive admission, input, timing and state-transition scenarios from the full call path.
 - [x] Validate reciprocal mappings and focused execution.
 
-[test_givenWithinExecutionWindow_executes]: ./execute.t.sol#L237
-[test_whenUnknownExecution_reverts]: ./execute.t.sol#L400
-[test_whenUnknownExecutionBoundaryIds_reverts]: ./execute.t.sol#L412
-[test_givenExecuted_whenExecutedAgain_reverts]: ./execute.t.sol#L430
-[test_givenCancelled_whenExecuted_reverts]: ./execute.t.sol#L445
-[test_givenBeforeDelay_reverts]: ./execute.t.sol#L220
-[test_givenPaused_whenExecutionJustBeforeReady_reverts]: ./execute.t.sol#L479
-[test_whenExecutionAtReady]: ./execute.t.sol#L459
-[test_whenExecutionJustAfterReady]: ./execute.t.sol#L464
-[test_whenExecutionJustBeforeExpiry]: ./execute.t.sol#L469
-[test_whenExecutionAtExpiry]: ./execute.t.sol#L474
-[test_whenExecutionAfterExpiry_reverts]: ./execute.t.sol#L496
-[test_givenTimelockIsDisabled_reverts]: ./execute.t.sol#L285
-[test_givenDepositManagerIsDisabled_reverts]: ./execute.t.sol#L274
-[test_givenTimelockPolicyIsInactive_reverts]: ./execute.t.sol#L296
-[test_givenDepositManagerPolicyIsInactive_reverts]: ./execute.t.sol#L312
-[test_givenPoliciesAreReactivated_executes]: ./execute.t.sol#L328
-[test_givenConfigOperatorChanged_executionReverts]: ./execute.t.sol#L348
-[test_givenConfigOperatorChangedAwayAndBack_executionSucceeds]: ./execute.t.sol#L364
-[test_givenTimelockIsReEnabled_queuesAndExecutes]: ./execute.t.sol#L382
-[test_whenExecuted_emitsExactEventsAndReleasesState]: ./execute.t.sol#L544
-[test_whenCapUnchanged_executesAndReleasesKey]: ./execute.t.sol#L531
-[test_givenBatchWithRouteCreation_whenMatured_permissionlessExecutionIsAtomic]: ./execute.t.sol#L154
+[test_givenWithinExecutionWindow_executes]: ./execute.t.sol#L245
+[test_whenUnknownExecution_reverts]: ./execute.t.sol#L431
+[test_whenUnknownExecutionBoundaryIds_reverts]: ./execute.t.sol#L443
+[test_givenExecuted_whenExecutedAgain_reverts]: ./execute.t.sol#L461
+[test_givenCancelled_whenExecuted_reverts]: ./execute.t.sol#L476
+[test_givenBeforeDelay_reverts]: ./execute.t.sol#L228
+[test_givenPaused_whenExecutionJustBeforeReady_reverts]: ./execute.t.sol#L510
+[test_whenExecutionAtReady]: ./execute.t.sol#L490
+[test_whenExecutionJustAfterReady]: ./execute.t.sol#L495
+[test_whenExecutionJustBeforeExpiry]: ./execute.t.sol#L500
+[test_whenExecutionAtExpiry]: ./execute.t.sol#L505
+[test_whenExecutionAfterExpiry_reverts]: ./execute.t.sol#L527
+[test_givenTimelockIsDisabled_reverts]: ./execute.t.sol#L293
+[test_givenDepositManagerIsDisabled_reverts]: ./execute.t.sol#L282
+[test_givenTimelockPolicyIsInactive_reverts]: ./execute.t.sol#L304
+[test_givenDepositManagerPolicyIsInactive_reverts]: ./execute.t.sol#L320
+[test_givenPoliciesAreReactivated_executes]: ./execute.t.sol#L336
+[test_givenConfigOperatorChanged_executionReverts]: ./execute.t.sol#L356
+[test_givenConfigOperatorChangedAwayAndBack_executionSucceeds]: ./execute.t.sol#L372
+[test_givenTimelockIsReEnabled_queuesAndExecutes]: ./execute.t.sol#L413
+[test_whenExecuted_emitsExactEventsAndReleasesState]: ./execute.t.sol#L575
+[test_whenCapUnchanged_executesAndReleasesKey]: ./execute.t.sol#L562
+[test_givenBatchWithRouteCreation_whenMatured_permissionlessExecutionIsAtomic]: ./execute.t.sol#L162
 [test_givenQueuedRoute_whenOperatorRoleRevoked_revertsAsStale]: ./execute.t.sol#L99
-[test_givenQueuedRoute_whenOperatorRoleRevokedAndRegranted_succeeds]: ./execute.t.sol#L116
-[test_givenQueuedRoute_whenAdminCreatesDirectly_revertsAsStale]: ./execute.t.sol#L133
-[test_whenTargetSetterReverts_revertsAtomically]: ./execute.t.sol#L512
-[test_givenBatchWithRouteCreation_whenLaterActionIsStale_rollsBackCreation]: ./execute.t.sol#L185
+[test_givenQueuedRoute_whenOperatorRoleRevokedAndRegranted_succeeds]: ./execute.t.sol#L120
+[test_givenQueuedRoute_whenAdminCreatesDirectly_revertsAsStale]: ./execute.t.sol#L137
+[test_whenTargetSetterReverts_revertsAtomically]: ./execute.t.sol#L543
+[test_givenBatchWithRouteCreation_whenLaterActionIsStale_rollsBackCreation]: ./execute.t.sol#L193
 [test_givenForeignKernelAndPausedManager_whenExecuted_reverts]: ./execute.t.sol#L24
 [test_givenManagerStatusGetterReverts_whenExecuted_reverts]: ./execute.t.sol#L47
 [test_givenManagerStatusMalformed_whenExecuted_reverts]: ./execute.t.sol#L66

@@ -16,7 +16,7 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 
 Own-policy admission: require Kernel-active RevenueDistributorConfigTimelock; own inactivity uses `RevenueDistributorConfigTimelock_PolicyNotActive(this policy)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-RDT = Revenue Distributor Config Timelock; RD = RevenueDistributor. Proposers are Admin or Revenue Distributor Admin, separately. Successful queue gates: RDT Kernel-active, RDT enabled, permitted proposer, selected as RD configOperator, RD Kernel-active and locally enabled. Error order follows that list: own RevenueDistributorConfigTimelock_PolicyNotActive(RDT), NotEnabled(), NotAuthorised(), then selected-operator and target checks. Generic timing/cancellation is owned by executeQueuedAction/cancelQueuedAction plans. Key: global yield-recipient; expected hash: keccak256(abi.encode(current yieldRecipient)).
+RDT = Revenue Distributor Config Timelock; RD = RevenueDistributor. Proposers are Admin or Revenue Distributor Admin, separately. Successful queue gates: RDT Kernel-active, RDT enabled, permitted proposer, selected as RD configOperator, RD Kernel-active and locally enabled. Error order follows that list: own RevenueDistributorConfigTimelock_PolicyNotActive(RDT), NotEnabled(), NotAuthorised(), then selected-operator and target checks. Generic timing/cancellation is owned by executeQueuedAction/cancelQueuedAction plans. Key: global yield-recipient; expected hash: keccak256(abi.encode(current yieldRecipient, current configOperator)).
 
 Fuzz permitted proposers across Admin and Revenue Distributor Admin for every non-authorization row. Queueing validates `recipient_` against the complete downstream candidate matrix in [setYieldRecipient](../RevenueDistributor/setYieldRecipient.md). This wrapper uses valid, zero and one representative invalid candidate to prove queue-time rejection, then separately covers candidate and route drift after a valid queue.
 
@@ -45,7 +45,7 @@ Fuzz the current pointer and `recipient_` across the authorization domain above;
 
 | ID | Caller | Current pointer | `recipient_` | Candidate state | Active repurchase routes | Pending yield assets | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| QSYR-P01 | Fuzz permitted role caller | Different value | Nonzero policy | Active/enabled, interface-compatible | All supported by candidate | All supported by candidate | Queue then ready execution succeeds | Exact forwarding; getter and role entitlement move to candidate | Covered: [test][test_whenValidNonzeroRecipientQueues_executesAfterDelay], [test][test_whenValidNonzeroRecipientQueues_executesAfterDelay_AdminOnlySeed], [test][test_whenValidNonzeroRecipientQueues_executesAfterDelay_RevenueRoleOnlySeed], [test][test_whenValidNonzeroRecipientQueues_executesAfterDelay_RolesOverlapSeed] |
+| QSYR-P01 | Fuzz permitted role caller | Different value | Nonzero policy | Active/enabled, interface-compatible | All supported by candidate | All supported by candidate | Queue then ready execution succeeds | Exact forwarding; getter and role entitlement move to candidate | Covered: [test][test_whenValidNonzeroRecipientQueues_executesAfterDelay], [test][test_whenValidNonzeroRecipientQueues_executesAfterDelay_AdminOnlySeed], [test][test_whenValidNonzeroRecipientQueues_executesAfterDelay_RevenueRoleOnlySeed], [test][test_whenValidNonzeroRecipientQueues_executesAfterDelay_RolesOverlapSeed], [operator commitment and restoration][test_whenQueuedConfiguration_commitsCurrentOperatorAndRestorationExecutes] |
 | QSYR-P02 | Fuzz permitted role caller | Nonzero | Zero | N/A | None positive | Fuzz none/one/multiple | Queue then ready execution succeeds | Exact forwarding; getter clears and yield entitlement follows Treasury fallback | Covered: [test][test_whenNonzeroPointerCleared_executes], [test][test_whenNonzeroPointerCleared_executes_AdminOnlySeed], [test][test_whenNonzeroPointerCleared_executes_RevenueRoleOnlySeed], [test][test_whenNonzeroPointerCleared_executes_RolesOverlapSeed] |
 | QSYR-P03 | Fuzz permitted role caller | Same nonzero policy | Same nonzero policy | Not probed | All remain supported | All remain supported | Queue reverts with RevenueDistributor_SameAddress(candidate) | No action ID consumed, key acquired or events emitted | Covered: [test][test_whenSameNonzeroRecipientQueues_reverts], [test][test_whenSameNonzeroRecipientQueues_reverts_AdminOnlySeed], [test][test_whenSameNonzeroRecipientQueues_reverts_RevenueRoleOnlySeed], [test][test_whenSameNonzeroRecipientQueues_reverts_RolesOverlapSeed] |
 | QSYR-P04 | Fuzz permitted role caller | Zero | Zero | N/A | None positive | Fuzz none/one/multiple | Queue reverts with RevenueDistributor_SameAddress(address(0)) | No action ID consumed, key acquired or events emitted | Covered: [test][test_whenZeroRecipientQueues_reverts], [test][test_whenZeroRecipientQueues_reverts_AdminOnlySeed], [test][test_whenZeroRecipientQueues_reverts_RevenueRoleOnlySeed], [test][test_whenZeroRecipientQueues_reverts_RolesOverlapSeed] |
@@ -85,44 +85,46 @@ Fuzz the current pointer and `recipient_` across the authorization domain above;
 [test_whenZeroRecipientQueues_reverts]: ./queueSetYieldRecipient.t.sol#L289
 [test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue]: ./queueSetYieldRecipient.t.sol#L62
 [test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey]: ./queueSetYieldRecipient.t.sol#L419
-[test_whenCandidateBecomesUnavailable_executionRevertsThenRetries]: ./queueSetYieldRecipient.t.sol#L484
-[test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries]: ./queueSetYieldRecipient.t.sol#L523
-[test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts]: ./queueSetYieldRecipient.t.sol#L555
-[test_whenUnsupportedRetiredPendingYieldAdded_executionReverts]: ./queueSetYieldRecipient.t.sol#L591
-[test_whenGlobalKeyAlreadyOwned_secondQueueReverts]: ./queueSetYieldRecipient.t.sol#L453
-[test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L633
-[test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L648
-[test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L663
-[test_whenValidNonzeroRecipientQueues_executesAfterDelay_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L963
-[test_whenValidNonzeroRecipientQueues_executesAfterDelay_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L975
-[test_whenValidNonzeroRecipientQueues_executesAfterDelay_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L987
-[test_whenNonzeroPointerCleared_executes_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L786
-[test_whenNonzeroPointerCleared_executes_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L798
-[test_whenNonzeroPointerCleared_executes_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L810
-[test_whenSameNonzeroRecipientQueues_reverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L858
-[test_whenSameNonzeroRecipientQueues_reverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L863
-[test_whenSameNonzeroRecipientQueues_reverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L868
-[test_whenZeroRecipientQueues_reverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L999
-[test_whenZeroRecipientQueues_reverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L1004
-[test_whenZeroRecipientQueues_reverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L1009
-[test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L873
-[test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L883
-[test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L888
-[test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L822
-[test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L834
-[test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L846
-[test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L714
-[test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L727
-[test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L740
-[test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L678
-[test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L690
-[test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L702
-[test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L893
-[test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L905
-[test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L917
-[test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L929
-[test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L939
-[test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L951
-[test_whenGlobalKeyAlreadyOwned_secondQueueReverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L753
-[test_whenGlobalKeyAlreadyOwned_secondQueueReverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L764
-[test_whenGlobalKeyAlreadyOwned_secondQueueReverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L775
+[test_whenCandidateBecomesUnavailable_executionRevertsThenRetries]: ./queueSetYieldRecipient.t.sol#L486
+[test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries]: ./queueSetYieldRecipient.t.sol#L525
+[test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts]: ./queueSetYieldRecipient.t.sol#L557
+[test_whenUnsupportedRetiredPendingYieldAdded_executionReverts]: ./queueSetYieldRecipient.t.sol#L593
+[test_whenGlobalKeyAlreadyOwned_secondQueueReverts]: ./queueSetYieldRecipient.t.sol#L455
+[test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L635
+[test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L650
+[test_givenDistributorInactive_whenQueued_revertsBeforeLocalState_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L665
+[test_whenValidNonzeroRecipientQueues_executesAfterDelay_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L965
+[test_whenValidNonzeroRecipientQueues_executesAfterDelay_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L977
+[test_whenValidNonzeroRecipientQueues_executesAfterDelay_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L989
+[test_whenNonzeroPointerCleared_executes_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L788
+[test_whenNonzeroPointerCleared_executes_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L800
+[test_whenNonzeroPointerCleared_executes_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L812
+[test_whenSameNonzeroRecipientQueues_reverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L860
+[test_whenSameNonzeroRecipientQueues_reverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L865
+[test_whenSameNonzeroRecipientQueues_reverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L870
+[test_whenZeroRecipientQueues_reverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L1001
+[test_whenZeroRecipientQueues_reverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L1006
+[test_whenZeroRecipientQueues_reverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L1011
+[test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L875
+[test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L885
+[test_whenTreasuryQueuedAsYieldRecipient_revertsAtQueue_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L890
+[test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L824
+[test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L836
+[test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L848
+[test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L716
+[test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L729
+[test_whenCandidateBecomesUnavailable_executionRevertsThenRetries_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L742
+[test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L680
+[test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L692
+[test_whenCandidateBecomesRouteRecipient_executionRevertsThenRetries_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L704
+[test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L895
+[test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L907
+[test_whenUnsupportedActiveRepurchaseRouteAdded_executionReverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L919
+[test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L931
+[test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L941
+[test_whenUnsupportedRetiredPendingYieldAdded_executionReverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L953
+[test_whenGlobalKeyAlreadyOwned_secondQueueReverts_AdminOnlySeed]: ./queueSetYieldRecipient.t.sol#L755
+[test_whenGlobalKeyAlreadyOwned_secondQueueReverts_RevenueRoleOnlySeed]: ./queueSetYieldRecipient.t.sol#L766
+[test_whenGlobalKeyAlreadyOwned_secondQueueReverts_RolesOverlapSeed]: ./queueSetYieldRecipient.t.sol#L777
+
+[test_whenQueuedConfiguration_commitsCurrentOperatorAndRestorationExecutes]: ./queueSetYieldRecipient.t.sol#L1016

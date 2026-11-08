@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.reEnable coverage plan
 
-Source: [reEnable](../../../bases/ReEnabler.sol#L46). Concrete behavior: [_beforeReEnable](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L308).
+Source: [reEnable](../../../bases/ReEnabler.sol#L46). Concrete behavior: [_beforeReEnable](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L341).
 
 ## Scope and fixtures
 
@@ -64,26 +64,38 @@ L=`lastTransitionAt`, G=`gracePeriod` in 1..MAX32, D=L+G. Fuzz L in 1..MAX48-G a
 - [x] Review these expectations.
 - [x] Complete passing test mappings.
 
-[test_givenReadyTarget_whenActivated_thenExactTransition]: ./reEnable.t.sol#L31
-[test_givenWithinGrace_whenReEnabled_thenInclusiveTransition]: ./reEnable.t.sol#L210
-[test_givenEachPermittedRole_whenReEnabled_thenExactTransition]: ./reEnable.t.sol#L289
-[test_givenGraceEndpointSeeds_whenReEnabled_thenInclusiveTransition]: ./reEnable.t.sol#L325
-[test_givenUnauthorizedCaller_whenActivated_reverts]: ./reEnable.t.sol#L59
-[test_givenOwnPolicyInactive_whenActivated_reverts]: ./reEnable.t.sol#L74
-[test_givenOwnPolicyInactive_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L421
-[test_givenAlreadyEnabled_whenActivated_reverts]: ./reEnable.t.sol#L91
-[test_givenAlreadyEnabled_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L432
-[test_givenInventoryInactive_whenActivated_reverts]: ./reEnable.t.sol#L103
-[test_givenInventoryInactive_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L449
-[test_givenAnotherController_whenActivated_reverts]: ./reEnable.t.sol#L122
-[test_givenAnotherController_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L466
-[test_givenClearedController_whenActivated_reverts]: ./reEnable.t.sol#L137
-[test_givenClearedController_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L477
-[test_givenTargetKernelDrift_whenActivated_reverts]: ./reEnable.t.sol#L152
-[test_givenTargetKernelDrift_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L488
-[test_givenNeverEnabled_whenReEnabled_reverts]: ./reEnable.t.sol#L190
-[test_givenNeverEnabled_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L499
-[test_givenExpiredGrace_whenReEnabled_reverts]: ./reEnable.t.sol#L239
-[test_givenExpiredGraceEndpointSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L366
-[test_givenGraceOverflow_whenReEnabled_reverts]: ./reEnable.t.sol#L263
-[test_givenGraceOverflowEndpointSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L396
+## Activation compatibility
+
+Activation and reactivation require compatible target, ConfigOperator and Enabler interfaces, same Kernel, target Policy activity and this queue selected as configOperator. They do not read the target's enabled status. This allows queue repair while the target remains paused; each queued operation still enforces its own execution requirements. Other transition/caller/history/grace/payload guards retain their existing order.
+
+Caller is authorized and every prerequisite not varied below is valid. An incompatible target leaves lifecycle history, pending actions, reservations, configuration and custody unchanged.
+
+| ID | Target active | Target enabled | Input fault | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLINCT-REENABLE-D07 | true | Fuzz false/true | Reject each consumed interface advertisement; seed every interface | BurnerLoansInventoryTimelock_InvalidInventory(Inventory) | Unchanged | Covered: [test][test_givenMissingConsumedInterface_whenActivated_reverts] |
+
+[test_givenReadyTarget_whenActivated_thenExactTransition]: ./reEnable.t.sol#L34
+[test_givenWithinGrace_whenReEnabled_thenInclusiveTransition]: ./reEnable.t.sol#L213
+[test_givenEachPermittedRole_whenReEnabled_thenExactTransition]: ./reEnable.t.sol#L292
+[test_givenGraceEndpointSeeds_whenReEnabled_thenInclusiveTransition]: ./reEnable.t.sol#L328
+[test_givenUnauthorizedCaller_whenActivated_reverts]: ./reEnable.t.sol#L62
+[test_givenOwnPolicyInactive_whenActivated_reverts]: ./reEnable.t.sol#L77
+[test_givenOwnPolicyInactive_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L424
+[test_givenAlreadyEnabled_whenActivated_reverts]: ./reEnable.t.sol#L94
+[test_givenAlreadyEnabled_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L435
+[test_givenInventoryInactive_whenActivated_reverts]: ./reEnable.t.sol#L106
+[test_givenInventoryInactive_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L452
+[test_givenAnotherController_whenActivated_reverts]: ./reEnable.t.sol#L125
+[test_givenAnotherController_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L469
+[test_givenClearedController_whenActivated_reverts]: ./reEnable.t.sol#L140
+[test_givenClearedController_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L480
+[test_givenTargetKernelDrift_whenActivated_reverts]: ./reEnable.t.sol#L155
+[test_givenTargetKernelDrift_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L491
+[test_givenNeverEnabled_whenReEnabled_reverts]: ./reEnable.t.sol#L193
+[test_givenNeverEnabled_whenEachPermittedRoleReEnables_reverts]: ./reEnable.t.sol#L502
+[test_givenExpiredGrace_whenReEnabled_reverts]: ./reEnable.t.sol#L242
+[test_givenExpiredGraceEndpointSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L369
+[test_givenGraceOverflow_whenReEnabled_reverts]: ./reEnable.t.sol#L266
+[test_givenGraceOverflowEndpointSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L399
+
+[test_givenMissingConsumedInterface_whenActivated_reverts]: reEnable.t.sol#L519

@@ -53,8 +53,8 @@ abstract contract RevenueDistributorTest is Test {
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
         rolesAdmin.grantRole(EMERGENCY_ROLE, emergency);
         distributor.enable("");
-        configTimelock.enable("");
         distributor.setConfigOperator(address(configTimelock));
+        configTimelock.enable("");
         vm.stopPrank();
 
         token = new MockERC20("Test Revenue", "REV", 18);

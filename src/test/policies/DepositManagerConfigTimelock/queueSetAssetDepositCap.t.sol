@@ -279,7 +279,7 @@ contract DepositManagerConfigTimelockQueueSetAssetDepositCapTest is
             _limitsKey(iAsset),
             0,
             address(depositManager),
-            keccak256(abi.encode(true, type(uint256).max, uint256(0)))
+            keccak256(abi.encode(true, type(uint256).max, uint256(0), address(_configTimelock)))
         );
         vm.expectEmit(true, true, true, true, address(_configTimelock));
         emit ITimelockBatchQueue.TimelockSubActionQueued(
@@ -315,7 +315,9 @@ contract DepositManagerConfigTimelockQueueSetAssetDepositCapTest is
         );
         assertEq(
             stateHash,
-            keccak256(abi.encode(true, config.depositCap, config.minimumDeposit)),
+            keccak256(
+                abi.encode(true, config.depositCap, config.minimumDeposit, address(_configTimelock))
+            ),
             "exact limits prestate"
         );
         assertEq(_configTimelock.getQueuedConfigStateCount(id, 0), 1, "one guard");

@@ -61,10 +61,18 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     }
 
     // Scenarios: BLINCT-CANCEL-L01.
-    function test_givenActiveDisabledTimelock_whenCancelled_reverts() public givenPendingRecovery {
+    function test_givenActiveDisabledTimelock_whenCancelled_thenExactCleanup()
+        public
+        givenPendingRecovery
+    {
         _rolesAdmin.grantRole(EMERGENCY_ROLE, _recipient);
         _setState(_timelock, true, false);
-        _expectCancelRejected(abi.encodeWithSelector(IEnabler.NotEnabled.selector), _recipient);
+        bytes32 funds = _inventoryDigest();
+        vm.prank(_recipient);
+        _timelock.cancelQueuedAction(_pendingId);
+        assertTrue(_timelock.getQueuedAction(_pendingId).cancelled, "Paused cancellation recorded");
+        _assertCleared(_pendingId);
+        assertEq(_inventoryDigest(), funds, "Cancellation preserves Inventory funds");
     }
 
     // Scenarios: BLINCT-CANCEL-L03.
@@ -122,42 +130,38 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     }
 
     // Scenarios: BLINCT-CANCEL-D01.
-    function test_givenInactiveInventory_whenCancelled_thenNoReadinessCalls()
-        public
-        givenProviderSurplus
-        givenPendingRecovery
-    {
+    function test_givenInactiveInventory_whenCancelled_thenNoReadinessCalls(
+        bool enabled_
+    ) public givenProviderSurplus givenPendingRecovery {
         _setState(_inventory, false, true);
+        if (!enabled_) _timelock.disable("");
         _cancelWithoutReadiness();
     }
 
     // Scenarios: BLINCT-CANCEL-D02.
-    function test_givenPausedInventory_whenCancelled_thenNoReadinessCalls()
-        public
-        givenProviderSurplus
-        givenPendingRecovery
-    {
+    function test_givenPausedInventory_whenCancelled_thenNoReadinessCalls(
+        bool enabled_
+    ) public givenProviderSurplus givenPendingRecovery {
         _inventory.disable("");
+        if (!enabled_) _timelock.disable("");
         _cancelWithoutReadiness();
     }
 
     // Scenarios: BLINCT-CANCEL-D03.
-    function test_givenInventoryKernelMismatch_whenCancelled_thenNoReadinessCalls()
-        public
-        givenProviderSurplus
-        givenPendingRecovery
-    {
+    function test_givenInventoryKernelMismatch_whenCancelled_thenNoReadinessCalls(
+        bool enabled_
+    ) public givenProviderSurplus givenPendingRecovery {
         _mockInventoryKernel(address(0xbeef));
+        if (!enabled_) _timelock.disable("");
         _cancelWithoutReadiness();
     }
 
     // Scenarios: BLINCT-CANCEL-D04.
-    function test_givenControllerReplaced_whenCancelled_thenNoReadinessCalls()
-        public
-        givenProviderSurplus
-        givenPendingRecovery
-    {
+    function test_givenControllerReplaced_whenCancelled_thenNoReadinessCalls(
+        bool enabled_
+    ) public givenProviderSurplus givenPendingRecovery {
         _inventory.setConfigOperator(_inventoryConfigurator);
+        if (!enabled_) _timelock.disable("");
         _cancelWithoutReadiness();
     }
 

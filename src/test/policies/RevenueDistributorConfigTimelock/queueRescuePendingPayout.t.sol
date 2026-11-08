@@ -435,7 +435,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
             );
             assertEq(
                 globalHash,
-                keccak256(abi.encode(address(0))),
+                keccak256(abi.encode(address(0), distributor.configOperator())),
                 "global guard captures zero pointer"
             );
             assertEq(
@@ -647,8 +647,18 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
                     id,
                     uint256(0),
                     _key(address(_rescueAsset)),
-                    keccak256(abi.encode(IRevenueDistributor.AssetState.Active)),
-                    keccak256(abi.encode(IRevenueDistributor.AssetState.Retired))
+                    keccak256(
+                        abi.encode(
+                            IRevenueDistributor.AssetState.Active,
+                            distributor.configOperator()
+                        )
+                    ),
+                    keccak256(
+                        abi.encode(
+                            IRevenueDistributor.AssetState.Retired,
+                            distributor.configOperator()
+                        )
+                    )
                 )
             );
             assertTrue(vm.revertToState(snapshot), "restore retirement fixture");
@@ -984,7 +994,9 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
         uint64 next = configTimelock.nextActionId();
         bytes memory payload = abi.encode(asset_, recipient_, destination_, amount_);
         bytes32 key = _key(asset_);
-        bytes32 stateHash = keccak256(abi.encode(distributor.assetState(asset_)));
+        bytes32 stateHash = keccak256(
+            abi.encode(distributor.assetState(asset_), distributor.configOperator())
+        );
         {
             ITimelockBatchQueue.BatchAction[]
                 memory actions = new ITimelockBatchQueue.BatchAction[](1);
@@ -1056,7 +1068,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
         assertEq(configTimelock.getQueuedConfigStateCount(id, 0), 1, "one guard stored");
         (bytes32 storedKey, bytes32 storedHash) = configTimelock.getQueuedConfigState(id, 0, 0);
         assertEq(storedKey, key, "independent scoped key matches");
-        assertEq(storedHash, stateHash, "guard hashes only listing state");
+        assertEq(storedHash, stateHash, "guard hashes listing state and selected operator");
         assertEq(configTimelock.pendingActionId(key), id, "action owns asset key");
         assertEq(
             _requestFundsHash(asset_, recipient_, destination_),
@@ -1132,7 +1144,7 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
                 distributor.configOperator(),
                 distributor.yieldRecipient(),
                 distributor.treasury(),
-                distributor.assetDistributionHash(address(_rescueAsset)),
+                _routeStateHash(address(_rescueAsset)),
                 distributor.assetState(address(_rescueAsset)),
                 distributor.isEnabled(),
                 configTimelock.isEnabled()
@@ -1523,6 +1535,28 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
         // Permissionless execution explicitly includes address(0); this is a prank identity, not a payment destination.
         // forge-lint: disable-next-line(missing-zero-check)
         _executorSeed = executor_;
+    }
+
+    // Scenarios: RDT-E03.
+    function test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes() public {
+        uint64 id = _assertQueued(admin, address(_rescueAsset), alice, bob, _AMOUNT);
+        (, bytes32 queuedHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+        vm.prank(admin);
+        distributor.setConfigOperator(emergency);
+        assertTrue(
+            queuedHash !=
+                keccak256(
+                    abi.encode(
+                        distributor.assetState(address(_rescueAsset)),
+                        distributor.configOperator()
+                    )
+                ),
+            "Operator drift changes pending rescue commitment"
+        );
+        vm.prank(admin);
+        distributor.setConfigOperator(address(configTimelock));
+        vm.warp(configTimelock.getQueuedAction(id).executableAt);
+        _assertExecuted(id, _ENTITLEMENT);
     }
 }
 // forge-lint: disable-end(literal-instead-of-constant,unused-return,calls-loop,unsafe-typecast)

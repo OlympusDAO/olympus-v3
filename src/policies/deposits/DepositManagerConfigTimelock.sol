@@ -17,6 +17,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+import {SafeCallDecoder} from "src/libraries/SafeCallDecoder.sol";
 import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
@@ -72,7 +73,12 @@ contract DepositManagerConfigTimelock is
 
     // ========== INITIALIZATION ========== //
 
-    /// @dev Validates the target's interfaces and Kernel before storing it.
+    /// @dev Construction does not query target activity, local enablement or operator selection.
+    /// @dev Reverts if:
+    ///      - The target is zero.
+    ///      - The target lacks a consumed DepositManager, asset-manager, ConfigOperator or Enabler interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
     constructor(
         Kernel kernel_,
         IDepositManager depositManager_
@@ -83,15 +89,7 @@ contract DepositManagerConfigTimelock is
     {
         address target = address(depositManager_);
         if (target == address(0)) revert DepositManagerConfigTimelock_ZeroAddress();
-        if (
-            !ERC165Checker.supportsInterface(target, type(IDepositManager).interfaceId) ||
-            !ERC165Checker.supportsInterface(target, type(IDepositManagerV1_1).interfaceId) ||
-            !ERC165Checker.supportsInterface(target, type(IAssetManagerV1_1).interfaceId) ||
-            !ERC165Checker.supportsInterface(target, type(IConfigOperator).interfaceId) ||
-            !ERC165Checker.supportsInterface(target, type(IEnabler).interfaceId)
-        ) {
-            revert DepositManagerConfigTimelock_InvalidDepositManager(target);
-        }
+        _requireTargetInterfaces(target);
 
         PolicyDependency.requireSameKernel(target, address(kernel_));
 
@@ -101,6 +99,9 @@ contract DepositManagerConfigTimelock is
     // ========== POLICY SETUP ========== //
 
     /// @inheritdoc Policy
+    /// @dev Reverts if:
+    ///      - ROLES is not installed.
+    ///      - ROLES does not have major version 1.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
         dependencies[0] = toKeycode("ROLES");
@@ -473,15 +474,16 @@ contract DepositManagerConfigTimelock is
         bytes32,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32 stateHash) {
+        address configOperator = _readConfigOperator();
         if (action_.selector == IDepositManagerV1_1.rescue.selector) {
             address token = abi.decode(action_.payload, (address));
             try IDepositManagerV1_1(address(_DEPOSIT_MANAGER)).previewRescue(token) returns (
                 uint256
             ) {
-                return keccak256(abi.encode(true));
+                return keccak256(abi.encode(true, configOperator));
             } catch (bytes memory reason) {
-                // Only eligibility drift changes the commitment. Balance/Treasury failures retain
-                // their exact error, and receipts never stale a queued full-balance rescue.
+                // Commit eligibility and operator identity, never the live balance or Treasury.
+                // Balance/Treasury failures retain their exact error; receipts do not stale rescue.
                 if (
                     keccak256(reason) ==
                     keccak256(
@@ -490,7 +492,7 @@ contract DepositManagerConfigTimelock is
                             token
                         )
                     )
-                ) return keccak256(abi.encode(false));
+                ) return keccak256(abi.encode(false, configOperator));
                 assembly ("memory-safe") {
                     revert(add(reason, 32), mload(reason))
                 }
@@ -515,7 +517,8 @@ contract DepositManagerConfigTimelock is
                     abi.encode(
                         routeStatus.isConfigured,
                         routeStatus.isEnabled,
-                        _hasRole(routeOperator, DEPOSIT_OPERATOR_ROLE)
+                        _hasRole(routeOperator, DEPOSIT_OPERATOR_ROLE),
+                        configOperator
                     )
                 );
         }
@@ -529,7 +532,8 @@ contract DepositManagerConfigTimelock is
                     abi.encode(
                         configuration.isConfigured,
                         configuration.depositCap,
-                        configuration.minimumDeposit
+                        configuration.minimumDeposit,
+                        configOperator
                     )
                 );
         }
@@ -540,7 +544,7 @@ contract DepositManagerConfigTimelock is
                 .getAssetConfiguration(asset);
             bool required = IAssetManagerV1_1(address(_DEPOSIT_MANAGER))
                 .isAssetShareWithdrawalRequired(asset);
-            return keccak256(abi.encode(configuration.isConfigured, required));
+            return keccak256(abi.encode(configuration.isConfigured, required, configOperator));
         }
         (IERC20 periodAsset, uint8 period, address operator) = abi.decode(
             action_.payload,
@@ -551,10 +555,14 @@ contract DepositManagerConfigTimelock is
             period,
             operator
         );
-        return keccak256(abi.encode(status.isConfigured, status.isEnabled));
+        return keccak256(abi.encode(status.isConfigured, status.isEnabled, configOperator));
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
+    /// @dev Reverts if:
+    ///      - The selector is unsupported.
+    ///      - The payload cannot be decoded.
+    ///      - DepositManager rejects the requested configuration against its current state.
     function _executeConfigSubAction(
         uint64,
         uint256,
@@ -600,6 +608,14 @@ contract DepositManagerConfigTimelock is
     // ========== TIMELOCK LIFECYCLE ========== //
 
     /// @inheritdoc TimelockBatchQueue
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - DepositManager's Kernel or enabled-state metadata is invalid.
+    ///      - DepositManager reports a different Kernel.
+    ///      - DepositManager is Kernel-inactive.
+    ///      - DepositManager is locally disabled.
+    ///      - The operator metadata is invalid or this timelock is no longer selected.
     function _validateExecution(
         address,
         uint64,
@@ -621,6 +637,10 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
+    /// @dev Local pause and target/operator state do not gate cancellation.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - The caller lacks EMERGENCY.
     function _validateCancellation(
         address caller_,
         uint64,
@@ -631,6 +651,8 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @notice Authorizes bounded re-enablement by governance or `deposit_manager_admin`.
+    /// @dev Reverts if:
+    ///      - The caller holds neither ADMIN nor DEPOSIT_MANAGER_ADMIN.
     function _authorizeReEnable() internal view override {
         _requireAuthorized(
             !_isAdmin(msg.sender) && !_hasRole(msg.sender, DEPOSIT_MANAGER_ADMIN_ROLE)
@@ -649,9 +671,14 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The caller lacks ADMIN.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
     /// @inheritdoc TimelockBatchQueue
+    /// @dev Reverts if:
+    ///      - The delay is below MIN_TIMELOCK_DELAY.
+    ///      - The delay exceeds MAX_TIMELOCK_DELAY.
     function _validateTimelockDelay(uint48 delay_) internal pure override {
         if (delay_ < MIN_TIMELOCK_DELAY || delay_ > MAX_TIMELOCK_DELAY) {
             revert ITimelockBatchQueue_TimelockDelayInvalid(
@@ -669,8 +696,32 @@ contract DepositManagerConfigTimelock is
 
     // ========== HELPERS ========== //
 
+    /// @dev Reverts if:
+    ///      - The target lacks a consumed DepositManager, asset-manager, ConfigOperator or Enabler interface.
+    function _requireTargetInterfaces(address target_) private view {
+        if (
+            !ERC165Checker.supportsInterface(target_, type(IDepositManager).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IDepositManagerV1_1).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IAssetManagerV1_1).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IConfigOperator).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IEnabler).interfaceId)
+        ) revert DepositManagerConfigTimelock_InvalidDepositManager(target_);
+    }
+
+    /// @dev Reverts if:
+    ///      - DepositManager's operator getter fails or returns a noncanonical address.
+    function _readConfigOperator() private view returns (address operator) {
+        bool success;
+        (success, operator) = SafeCallDecoder.safeReadAddress(
+            address(_DEPOSIT_MANAGER),
+            IConfigOperator.configOperator.selector
+        );
+        if (!success)
+            revert DepositManagerConfigTimelock_InvalidDepositManager(address(_DEPOSIT_MANAGER));
+    }
+
     function _requireAuthorizedConfigOperator() internal view {
-        if (IConfigOperator(address(_DEPOSIT_MANAGER)).configOperator() != address(this)) {
+        if (_readConfigOperator() != address(this)) {
             revert IConfigOperator.ConfigOperator_Unauthorized(address(this));
         }
     }
@@ -705,12 +756,16 @@ contract DepositManagerConfigTimelock is
     /// @notice Validates the target's binding and readiness for either activation route.
     /// @dev Reverts if:
     ///      - This policy is Kernel-inactive (DepositManagerConfigTimelock_PolicyInactive).
-    ///      - Kernel or enabled-state metadata fails or is malformed (PolicyDependency_InvalidDependency).
+    ///      - Required target interfaces or operator metadata are invalid (InvalidDepositManager).
+    ///      - Kernel metadata fails or is malformed (PolicyDependency_InvalidDependency).
     ///      - The target reports another Kernel (PolicyDependency_KernelMismatch).
-    ///      - The target is Kernel-inactive or disabled (PolicyDependency_NotActive).
+    ///      - The target is Kernel-inactive (PolicyDependency_NotActive).
+    ///      - This timelock is not the selected config operator (ConfigOperator_Unauthorized).
     function _requireActivationReady() private view {
         _requireOwnPolicyActive();
-        PolicyDependency.requireActiveAndEnabled(address(_DEPOSIT_MANAGER), address(kernel));
+        _requireTargetInterfaces(address(_DEPOSIT_MANAGER));
+        PolicyDependency.requireActive(address(_DEPOSIT_MANAGER), address(kernel));
+        _requireAuthorizedConfigOperator();
     }
 
     function _requirePayloadLength(
@@ -779,8 +834,9 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc EnablerV2
-    /// @dev Kernel inactivity does not prevent disable. Reverts if:
-    ///      - Lifecycle data is nonempty (DepositManagerConfigTimelock_InvalidData).
+    /// @dev Kernel inactivity does not prevent disable.
+    /// @dev Reverts if:
+    ///      - Lifecycle data is nonempty.
     function _beforeDisable(bytes calldata data_) internal pure override {
         if (data_.length != 0) revert DepositManagerConfigTimelock_InvalidData();
     }

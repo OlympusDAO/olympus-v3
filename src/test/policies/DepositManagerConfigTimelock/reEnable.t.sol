@@ -2,6 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
@@ -337,20 +341,13 @@ contract DepositManagerConfigTimelockReEnableTest is DepositManagerConfigTimeloc
     }
 
     // Scenarios: DMCT-REENABLE-D09.
-    function test_givenManagerActiveTrueEnabledFalse_whenActivation_reverts()
+    function test_givenManagerActiveTrueEnabledFalse_whenActivationSucceeds()
         public
         givenLifecycleDisabled
     {
         vm.prank(ADMIN);
         depositManager.disable("");
-        _lifecycleReverts(
-            _lifecycleAdmin,
-            abi.encodeCall(IReEnabler.reEnable, ()),
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_NotActive.selector,
-                address(depositManager)
-            )
-        );
+        _reEnableSucceeds(_lifecycleAdmin);
     }
 
     // Scenarios: DMCT-REENABLE-D10.
@@ -431,20 +428,13 @@ contract DepositManagerConfigTimelockReEnableTest is DepositManagerConfigTimeloc
     }
 
     // Scenarios: DMCT-REENABLE-D04.
-    function test_givenStatusReadReverts_whenActivation_reverts() public givenLifecycleDisabled {
+    function test_givenStatusReadReverts_whenActivationSucceeds() public givenLifecycleDisabled {
         vm.mockCallRevert(
             address(depositManager),
             abi.encodeWithSignature("isEnabled()"),
             abi.encodeWithSignature("DependencyReadFailed()")
         );
-        _lifecycleReverts(
-            _lifecycleAdmin,
-            abi.encodeCall(IReEnabler.reEnable, ()),
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_InvalidDependency.selector,
-                address(depositManager)
-            )
-        );
+        _reEnableSucceeds(_lifecycleAdmin);
     }
 
     // Scenarios: DMCT-REENABLE-D03.
@@ -481,46 +471,39 @@ contract DepositManagerConfigTimelockReEnableTest is DepositManagerConfigTimeloc
     }
 
     // Scenarios: DMCT-REENABLE-D05.
-    function test_givenNoncanonicalStatus_whenActivation_reverts() public givenLifecycleDisabled {
+    function test_givenNoncanonicalStatus_whenActivationSucceeds() public givenLifecycleDisabled {
         vm.mockCall(
             address(depositManager),
             abi.encodeWithSignature("isEnabled()"),
             abi.encode(uint256(2))
         );
-        _lifecycleReverts(
-            _lifecycleAdmin,
-            abi.encodeCall(IReEnabler.reEnable, ()),
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_InvalidDependency.selector,
-                address(depositManager)
-            )
-        );
+        _reEnableSucceeds(_lifecycleAdmin);
     }
 
     // Scenarios: DMCT-REENABLE-D05.
-    function test_givenMalformedStatusLength_whenActivation_reverts(
+    function test_givenMalformedStatusLength_whenActivationSucceeds(
         bytes memory data_
     ) public givenLifecycleDisabled {
         vm.assume(data_.length <= 256 && data_.length != 32);
         vm.mockCall(address(depositManager), abi.encodeWithSignature("isEnabled()"), data_);
-        _lifecycleReverts(
-            _lifecycleAdmin,
-            abi.encodeCall(IReEnabler.reEnable, ()),
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_InvalidDependency.selector,
-                address(depositManager)
-            )
-        );
+        _reEnableSucceeds(_lifecycleAdmin);
     }
 
     // Scenarios: DMCT-REENABLE-D06.
-    function test_givenDifferentConfigOperator_whenActivationSucceeds()
+    function test_givenDifferentConfigOperator_whenActivation_reverts()
         public
         givenLifecycleDisabled
     {
         vm.prank(ADMIN);
         depositManager.setConfigOperator(CONFIG_OPERATOR);
-        _reEnableSucceeds(_lifecycleAdmin);
+        _lifecycleReverts(
+            _lifecycleAdmin,
+            abi.encodeCall(IReEnabler.reEnable, ()),
+            abi.encodeWithSelector(
+                IConfigOperator.ConfigOperator_Unauthorized.selector,
+                address(_configTimelock)
+            )
+        );
     }
 
     // Scenarios: DMCT-REENABLE-D07.
@@ -653,9 +636,141 @@ contract DepositManagerConfigTimelockReEnableTest is DepositManagerConfigTimeloc
             _lifecycleAdmin,
             abi.encodeCall(IReEnabler.reEnable, ()),
             abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                PolicyDependency.PolicyDependency_NotActive.selector,
                 address(depositManager)
             )
         );
+    }
+
+    // Scenarios: DMCT-REENABLE-D14.
+    function test_givenMissingConsumedInterface_whenActivation_reverts(uint8 index_) public {
+        _pausePolicy(address(_configTimelock));
+        bytes4[5] memory interfaces = [
+            type(IDepositManager).interfaceId,
+            type(IDepositManagerV1_1).interfaceId,
+            type(IAssetManagerV1_1).interfaceId,
+            type(IConfigOperator).interfaceId,
+            type(IEnabler).interfaceId
+        ];
+        uint256 index = bound(index_, 0, interfaces.length - 1);
+        vm.mockCall(
+            address(depositManager),
+            abi.encodeWithSignature("supportsInterface(bytes4)", interfaces[index]),
+            abi.encode(false)
+        );
+        uint48 beforeAt = _configTimelock.lastTransitionAt();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManagerConfigTimelock
+                    .DepositManagerConfigTimelock_InvalidDepositManager
+                    .selector,
+                address(depositManager)
+            )
+        );
+        vm.prank(_lifecycleAdmin);
+        _configTimelock.reEnable();
+
+        assertFalse(_configTimelock.isEnabled(), "Incompatible target prevents activation");
+        assertEq(
+            _configTimelock.lastTransitionAt(),
+            beforeAt,
+            "Rejected activation preserves timestamp"
+        );
+    }
+
+    // Scenarios: DMCT-REENABLE-D14.
+    function test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenMissingConsumedInterface_whenActivation_reverts(0);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+        test_givenMissingConsumedInterface_whenActivation_reverts(1);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+        test_givenMissingConsumedInterface_whenActivation_reverts(2);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+        test_givenMissingConsumedInterface_whenActivation_reverts(3);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+        test_givenMissingConsumedInterface_whenActivation_reverts(4);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+    }
+
+    // Scenarios: DMCT-REENABLE-D15.
+    function test_givenOperatorReadReverts_whenActivation_reverts() public {
+        _pausePolicy(address(_configTimelock));
+        vm.mockCallRevert(
+            address(depositManager),
+            abi.encodeWithSignature("configOperator()"),
+            hex"deadbeef"
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManagerConfigTimelock
+                    .DepositManagerConfigTimelock_InvalidDepositManager
+                    .selector,
+                address(depositManager)
+            )
+        );
+        vm.prank(_lifecycleAdmin);
+        _configTimelock.reEnable();
+    }
+
+    // Scenarios: DMCT-REENABLE-D15.
+    function test_givenMalformedOperatorLength_whenActivation_reverts(bytes memory data_) public {
+        vm.assume(data_.length <= 256 && data_.length != 32);
+        _pausePolicy(address(_configTimelock));
+        vm.mockCall(address(depositManager), abi.encodeWithSignature("configOperator()"), data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManagerConfigTimelock
+                    .DepositManagerConfigTimelock_InvalidDepositManager
+                    .selector,
+                address(depositManager)
+            )
+        );
+        vm.prank(_lifecycleAdmin);
+        _configTimelock.reEnable();
+    }
+
+    // Scenarios: DMCT-REENABLE-D15.
+    function test_givenNoncanonicalOperator_whenActivation_reverts() public {
+        _pausePolicy(address(_configTimelock));
+        vm.mockCall(
+            address(depositManager),
+            abi.encodeWithSignature("configOperator()"),
+            abi.encode(type(uint256).max)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManagerConfigTimelock
+                    .DepositManagerConfigTimelock_InvalidDepositManager
+                    .selector,
+                address(depositManager)
+            )
+        );
+        vm.prank(_lifecycleAdmin);
+        _configTimelock.reEnable();
+    }
+
+    // Scenarios: DMCT-REENABLE-D16.
+    function test_givenUnselectedOperator_whenActivation_reverts(address operator_) public {
+        vm.assume(operator_ != address(_configTimelock));
+        _pausePolicy(address(_configTimelock));
+        vm.mockCall(
+            address(depositManager),
+            abi.encodeWithSignature("configOperator()"),
+            abi.encode(operator_)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigOperator.ConfigOperator_Unauthorized.selector,
+                address(_configTimelock)
+            )
+        );
+        vm.prank(_lifecycleAdmin);
+        _configTimelock.reEnable();
+    }
+
+    // Scenarios: DMCT-REENABLE-D16.
+    function test_givenZeroOperator_whenActivation_reverts() public {
+        test_givenUnselectedOperator_whenActivation_reverts(address(0));
     }
 }

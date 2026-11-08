@@ -19,7 +19,7 @@ Times are uint48 seconds: Q=queuedAt, T=Q+1 day, E=T+3 days. Values use raw asse
 Route creation delegates validation to DM.validateAddAssetPeriod. The asset must be
 configured, period 1..MAX8, operator nonzero, registered by name and holding DEPOSIT_OPERATOR_ROLE,
 and the route absent. Queueing creates no route or receipt token. The period key is shared with
-enable/disable, and pre-state hashes isConfigured,isEnabled,operator role membership.
+enable/disable, and pre-state hashes isConfigured,isEnabled,operator role membership and current DM.configOperator().
 
 Unchanged includes action IDs, payloads, destination-scoped key owners, target configuration,
 receipt-token registration, custody and accounting. Reverts commit no logs. Queueing and
@@ -29,7 +29,7 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 
 | ID | Caller | Execution / effects | Test |
 | --- | --- | --- | --- |
-| DMCT-QUEUE-ADD-PERIOD-A01 | Fuzz ADMIN-only, manager-only and overlapping grants | Queue exact target selector/payload; preserve target state | Covered: [test][test_givenAdminOnly_whenTypedActionQueued], [test][test_givenManagerOnly_whenTypedActionQueued], [test][test_givenBothRoles_whenTypedActionQueued] |
+| DMCT-QUEUE-ADD-PERIOD-A01 | Fuzz ADMIN-only, manager-only and overlapping grants | Queue exact target selector/payload; preserve target state; independently assert current target operator in stored pre-state | Covered: [test][test_givenAdminOnly_whenTypedActionQueued], [test][test_givenManagerOnly_whenTypedActionQueued], [test][test_givenBothRoles_whenTypedActionQueued] |
 | DMCT-QUEUE-ADD-PERIOD-A02 | Fuzz callers outside both permitted roles | NotAuthorised(); Unchanged | Covered: [test][test_whenTypedActionCallerUnauthorized_reverts] |
 
 ## Lifecycle and binding

@@ -102,7 +102,11 @@ contract DepositManagerConfigTimelockExecuteTest is DepositManagerConfigTimelock
         rolesAdmin.revokeRole("deposit_operator", DEPOSIT_OPERATOR);
         _warpReady();
 
-        _expectStale(actionId, 0, keccak256(abi.encode(false, false, false)));
+        _expectStale(
+            actionId,
+            0,
+            keccak256(abi.encode(false, false, false, address(_configTimelock)))
+        );
         _configTimelock.executeQueuedAction(actionId);
 
         assertFalse(
@@ -136,7 +140,11 @@ contract DepositManagerConfigTimelockExecuteTest is DepositManagerConfigTimelock
         depositManager.addAssetPeriod(iAsset, SECOND_PERIOD, DEPOSIT_OPERATOR);
         _warpReady();
 
-        _expectStale(actionId, 0, keccak256(abi.encode(true, true, true)));
+        _expectStale(
+            actionId,
+            0,
+            keccak256(abi.encode(true, true, true, address(_configTimelock)))
+        );
         _configTimelock.executeQueuedAction(actionId);
 
         IDepositManager.AssetPeriodStatus memory status = depositManager.isAssetPeriod(
@@ -201,7 +209,7 @@ contract DepositManagerConfigTimelockExecuteTest is DepositManagerConfigTimelock
         uint256 receiptTokenCount = depositManager.getReceiptTokenIds().length;
         _warpReady();
 
-        _expectStale(actionId, 1, keccak256(abi.encode(true, false)));
+        _expectStale(actionId, 1, keccak256(abi.encode(true, false, address(_configTimelock))));
         _configTimelock.executeQueuedAction(actionId);
 
         assertFalse(
@@ -361,14 +369,37 @@ contract DepositManagerConfigTimelockExecuteTest is DepositManagerConfigTimelock
     }
 
     // Scenarios: DMCT-EXECUTE-D02.
-    function test_givenConfigOperatorChangedAwayAndBack_executionSucceeds() public {
+    function test_givenConfigOperatorChangedAwayAndBack_executionSucceeds(
+        address executor_,
+        uint48 elapsed_
+    ) public {
         uint64 actionId = _queueDepositCap(iAsset, 100e18);
-        vm.startPrank(ADMIN);
+        ITimelockBatchQueue.QueuedAction memory original = _configTimelock.getQueuedAction(
+            actionId
+        );
+        (, bytes32 hashBefore) = _configTimelock.getQueuedConfigState(actionId, 0, 0);
+        vm.prank(ADMIN);
         depositManager.setConfigOperator(CONFIG_OPERATOR);
+        vm.warp(bound(elapsed_, original.executableAt, original.expiresAt));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigOperator.ConfigOperator_Unauthorized.selector,
+                address(_configTimelock)
+            )
+        );
+        vm.prank(executor_);
+        _configTimelock.executeQueuedAction(actionId);
+        _assertPending(actionId);
+        (, bytes32 hashAfter) = _configTimelock.getQueuedConfigState(actionId, 0, 0);
+        assertEq(hashAfter, hashBefore, "lost authority preserves original commitment");
+        assertEq(
+            _configTimelock.getQueuedAction(actionId).expiresAt,
+            original.expiresAt,
+            "lost authority preserves original expiry"
+        );
+        vm.prank(ADMIN);
         depositManager.setConfigOperator(address(_configTimelock));
-        vm.stopPrank();
-        _warpReady();
-
+        vm.prank(executor_);
         _configTimelock.executeQueuedAction(actionId);
 
         assertEq(

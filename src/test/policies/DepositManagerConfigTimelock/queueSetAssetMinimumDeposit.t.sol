@@ -219,7 +219,11 @@ contract DepositManagerConfigTimelockQueueSetAssetMinimumDepositTest is
         vm.prank(ADMIN);
         depositManager.setAssetDepositCap(iAsset, 2);
         _warpReady();
-        _expectStale(id, 0, keccak256(abi.encode(true, uint256(2), uint256(0))));
+        _expectStale(
+            id,
+            0,
+            keccak256(abi.encode(true, uint256(2), uint256(0), address(_configTimelock)))
+        );
         _configTimelock.executeQueuedAction(id);
         _assertPending(id);
     }

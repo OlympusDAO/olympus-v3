@@ -37,17 +37,16 @@ requires the distributor Kernel-active but permits its local disablement.
 | `queueRescue`, `queueRescuePendingPayout` | Admin or revenue distributor admin | Validates the rescue preview and starts the delay. |
 | `queueBatch` | Admin or revenue distributor admin | Applies the same gates and each action's checks; acquires nonconflicting keys. |
 | `executeQueuedAction` | Anyone | Ready, unexpired action; rechecks current state and executes atomically. |
-| `cancelQueuedAction` | Emergency | Unfinished action; this timelock enabled and Kernel-active. Target state and operator selection do not gate cancellation. |
+| `cancelQueuedAction` | Emergency | Unfinished action; this timelock Kernel-active, including while locally disabled. No target/operator reads. |
 
 The shared queue and Revenue Distributor validation support delays from 1–30 days. The current
 `RevenueDistributorConfigTimelock` constructor selects one day and exposes no public delay setter;
 a future implementation may expose the inherited internal setter within the same bounds. The delay
-is followed by a three-day execution window. Local disablement or Kernel deactivation blocks
-queueing, execution, and cancellation. Existing actions remain queued and time continues to pass;
+is followed by a three-day execution window. Local disablement blocks queueing and execution but permits emergency cancellation. Kernel deactivation blocks all three. Existing actions remain queued and time continues to pass;
 restoration allows retry only within the original execution window.
 
 Route changes, retirement, and rescues conflict on the same asset key. Yield-recipient changes use
-a separate global key. State hashes prevent stale configuration; rescue rechecks live availability
+a separate global key. Every state hash includes the current config operator alongside its relevant configuration; rescue rechecks live availability
 without binding balances at queue time. A failed execution retains its action and keys. See
 [configuration and timelock](revenue_distributor.md#configuration-and-timelock).
 
@@ -71,7 +70,6 @@ These functions apply to the distributor, its config timelock, and its task.
 | `reEnable` | Admin or revenue distributor admin | Previously enabled, now disabled, within the grace period; dependency checks pass. |
 | `setGracePeriod` | Admin | Locally enabled; nonzero period. |
 
-The initial grace period is seven days. Timelock enablement and re-enablement check that the bound
-distributor reports the same Kernel; they do not require operator selection. Task enablement and
+The initial grace period is seven days. Timelock enablement and re-enablement require compatible consumed interfaces, the same Kernel, active distributor membership and selection as its config operator. They do not read or require distributor enablement, so the queue can be repaired while the distributor remains paused. Task enablement and
 re-enablement require its distributor enabled and Kernel-active. Local enablement does not activate
 a policy in the Kernel; Kernel membership remains an independent operational gate.

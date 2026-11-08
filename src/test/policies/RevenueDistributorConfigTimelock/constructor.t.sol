@@ -149,36 +149,36 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
     }
 
     // Scenarios: RDCT-CTOR-D02.
-    function test_whenDistributorEnabledReadIsMalformed_reverts(bytes memory output_) public {
-        if (output_.length == 32) vm.assume(abi.decode(output_, (uint256)) > 1);
+    function test_whenDistributorEnabledReadIsMalformed_thenConstructed(
+        bytes memory output_
+    ) public {
         vm.mockCall(address(distributor), abi.encodeWithSignature("isEnabled()"), output_);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                PolicyDependency.PolicyDependency_InvalidDependency.selector,
-                address(distributor)
-            )
+        RevenueDistributorConfigTimelock fresh = new RevenueDistributorConfigTimelock(
+            kernel,
+            distributor
         );
-        new RevenueDistributorConfigTimelock(kernel, distributor);
+        assertEq(
+            fresh.distributor(),
+            address(distributor),
+            "Construction does not read enabled status"
+        );
+        assertFalse(fresh.isEnabled(), "New queue disabled");
     }
 
-    // Scenarios: RDCT-CTOR-D01, RDCT-CTOR-D02.
+    // Scenarios: RDCT-CTOR-D01.
     function test_whenDistributorMetadataBoundaries_reverts() public {
         test_whenDistributorKernelReadIsMalformed_reverts(hex"");
         test_whenDistributorKernelReadIsMalformed_reverts(hex"00");
         test_whenDistributorKernelReadIsMalformed_reverts(abi.encode(type(uint256).max));
         test_whenDistributorKernelReadIsMalformed_reverts(new bytes(64));
         vm.clearMockedCalls();
-        test_whenDistributorEnabledReadIsMalformed_reverts(hex"");
-        test_whenDistributorEnabledReadIsMalformed_reverts(hex"00");
-        test_whenDistributorEnabledReadIsMalformed_reverts(abi.encode(uint256(2)));
-        test_whenDistributorEnabledReadIsMalformed_reverts(new bytes(64));
     }
 
     // Scenarios: RDCT-CTOR-D03.
-    function test_whenDistributorMetadataReverts_reverts(bool kernelRead_) public {
+    function test_whenDistributorMetadataReverts_reverts() public {
         vm.mockCallRevert(
             address(distributor),
-            abi.encodeWithSignature(kernelRead_ ? "kernel()" : "isEnabled()"),
+            abi.encodeWithSignature("kernel()"),
             abi.encodeWithSignature("MetadataFailed()")
         );
         vm.expectRevert(
@@ -188,5 +188,67 @@ contract RevenueDistributorConfigTimelockConstructorTest is RevenueDistributorTe
             )
         );
         new RevenueDistributorConfigTimelock(kernel, distributor);
+    }
+
+    // Scenarios: RDCT-CTOR-D02.
+    function test_whenEnabledMetadataBoundarySeeds_thenConstructed() public {
+        test_whenDistributorEnabledReadIsMalformed_thenConstructed(hex"");
+        test_whenDistributorEnabledReadIsMalformed_thenConstructed(hex"00");
+        test_whenDistributorEnabledReadIsMalformed_thenConstructed(abi.encode(uint256(2)));
+        test_whenDistributorEnabledReadIsMalformed_thenConstructed(new bytes(64));
+    }
+
+    // Scenarios: RDCT-CTOR-P02.
+    function test_givenRuntimeReadinessGettersRevert_whenConstructed(address deployer_) public {
+        vm.mockCallRevert(address(distributor), abi.encodeWithSignature("isEnabled()"), hex"ff");
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature("configOperator()"),
+            hex"ff"
+        );
+        vm.mockCallRevert(
+            address(kernel),
+            abi.encodeWithSignature("isPolicyActive(address)", address(distributor)),
+            hex"ff"
+        );
+        vm.prank(deployer_);
+        RevenueDistributorConfigTimelock fresh = new RevenueDistributorConfigTimelock(
+            kernel,
+            distributor
+        );
+        assertEq(
+            fresh.distributor(),
+            address(distributor),
+            "Compatible target bound without readiness reads"
+        );
+        assertFalse(fresh.isEnabled(), "Construction leaves queue disabled");
+    }
+
+    // Scenarios: RDCT-CTOR-P03.
+    function test_givenAnyTargetLifecycle_whenConstructed(bool active_, bool enabled_) public {
+        if (!enabled_) _disableDistributor();
+        _setPolicyActive(address(distributor), active_);
+        RevenueDistributorConfigTimelock fresh = new RevenueDistributorConfigTimelock(
+            kernel,
+            distributor
+        );
+        assertEq(
+            fresh.distributor(),
+            address(distributor),
+            "Construction permits every target lifecycle pair"
+        );
+        assertFalse(fresh.isEnabled(), "Queue disabled independently of target");
+    }
+
+    // Scenarios: RDCT-CTOR-P03.
+    function test_givenTargetLifecycleSeeds_whenConstructed() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenAnyTargetLifecycle_whenConstructed(true, true);
+        assertTrue(vm.revertToState(checkpoint), "Restore target lifecycle seed");
+        test_givenAnyTargetLifecycle_whenConstructed(true, false);
+        assertTrue(vm.revertToState(checkpoint), "Restore target lifecycle seed");
+        test_givenAnyTargetLifecycle_whenConstructed(false, true);
+        assertTrue(vm.revertToState(checkpoint), "Restore target lifecycle seed");
+        test_givenAnyTargetLifecycle_whenConstructed(false, false);
     }
 }

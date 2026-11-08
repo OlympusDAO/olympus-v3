@@ -142,8 +142,8 @@ abstract contract DepositManagerConfigTimelockRescueTest is DepositManagerConfig
         assertEq(key, _rescueKey(token_), "rescue destination-scoped token key");
         assertEq(
             expectedHash,
-            keccak256(abi.encode(true)),
-            "rescue commits eligibility, not balance"
+            keccak256(abi.encode(true, address(_configTimelock))),
+            "rescue commits eligibility and operator, not balance"
         );
         assertEq(
             _configTimelock.getQueuedConfigDestination(id_, 0),

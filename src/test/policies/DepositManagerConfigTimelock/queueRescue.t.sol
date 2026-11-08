@@ -595,7 +595,7 @@ contract DepositManagerConfigTimelockQueueRescueTest is DepositManagerConfigTime
             _rescueKey(address(_rescueToken)),
             0,
             address(depositManager),
-            keccak256(abi.encode(true))
+            keccak256(abi.encode(true, address(_configTimelock)))
         );
         vm.expectEmit(true, true, true, true, address(_configTimelock));
         emit ITimelockBatchQueue.TimelockSubActionQueued(
@@ -1733,8 +1733,8 @@ contract DepositManagerConfigTimelockQueueRescueTest is DepositManagerConfigTime
                 id_,
                 uint256(0),
                 _rescueKey(token_),
-                keccak256(abi.encode(true)),
-                keccak256(abi.encode(false))
+                keccak256(abi.encode(true, address(_configTimelock))),
+                keccak256(abi.encode(false, address(_configTimelock)))
             )
         );
         assertEq(

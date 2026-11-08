@@ -15,9 +15,9 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 Own-policy admission: require Kernel-active RevenueDistributorConfigTimelock; own inactivity uses `RevenueDistributorConfigTimelock_PolicyNotActive(this policy)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
 - Queue callers: Admin = ADMIN_ROLE holder; Revenue Distributor Admin = REVENUE_DISTRIBUTOR_ADMIN_ROLE holder. Test separately. Fuzz unauthorized callers excluding exactly authorized identities; seed zero, emergency-only and operator-only. No dual-role case.
-- Default: RDT/RD enabled and Kernel-active; RDT is RD's selected operator; NeverListed asset with custody B=7 base units and valid unrelated destination. RDT must be enabled/active/selected. RD may be locally disabled. A disabled or Kernel-inactive RDT blocks typed/batch queueing, execution and cancellation; admin can recover directly through RD. Both rescue previews require RD Kernel activity; inactive RD rejects queueing.
+- Default: RDT/RD enabled and Kernel-active; RDT is RD's selected operator; NeverListed asset with custody B=7 base units and valid unrelated destination. RDT must be enabled/active/selected. RD may be locally disabled. A disabled RDT blocks typed/batch queueing and execution; cancellation permits local pause while RDT remains Kernel-active. A Kernel-inactive RDT blocks queueing, execution and cancellation; admin can recover directly through RD. Both rescue previews require RD Kernel activity; inactive RD rejects queueing.
 - Only NeverListed assets are rescuable; they have no pending debt through supported public flows. Active/Retired are managed even with no debt. Queue stores addresses, not an amount; execution uses full live B. RD's [rescue plan](../RevenueDistributor/rescue.md) owns numeric extremes, transfers and callbacks.
-- Key = scope(RD, hash(REVENUE_DISTRIBUTOR_ASSET, asset)); independent of destination, shared with routes/retirement/pending-rescue actions. The stored rescue hash is listing state; custody changes do not stale it.
+- Key = scope(RD, hash(REVENUE_DISTRIBUTOR_ASSET, asset)); independent of destination, shared with routes/retirement/pending-rescue actions. The stored rescue hash encodes listing state and current configOperator; custody changes do not stale it.
 - Queued: return actionId, increment nextActionId once; store proposer, RD target, rescue selector, exact 64-byte asset/destination payload, ready/expiry, Key owner and listing hash. Assert ConfigStateQueued → TimelockSubActionQueued → TimelockActionQueued with exact fields. No payment/debt/route/configuration mutation.
 - Executed: fuzz permissionless executor without exclusions, at a ready timestamp. Pay live B once if positive, with one RD AssetRescued and token Transfer, then sub-action/action execution events. Mark completed; clear payload/guards/owned Key. Preserve other assets and all RD configuration/debts/indexes. B=0 still completes without token call/rescue event.
 - Unchanged: all balances, RD state, counter, action payload/guards/flags and Key ownership unchanged; no committed events. Failed execution retains the pending action for corrected retry before expiry. RD errors below omit RevenueDistributor_. Invalid destination includes zero under InvalidRescueDestination.
@@ -64,7 +64,7 @@ Competing queue faults follow RDT enablement → activity → operator selection
 
 | ID | Caller | State / input | Queue / effects | Ready rescue execution | Test |
 | --- | --- | --- | --- | --- | --- |
-| RDCT-QUEUE-RESCUE-P01 | Each queue role separately | NeverListed B=7; destination=Treasury, operator or unrelated; existing destination balance=3 | Queued; no payment | Pay 7, destination becomes 10; preserve RD/other assets | Covered: [fuzz][test_givenDistributorLocalStates_whenEachRoleQueuesAndAnyExecutorExecutes], [fixed fixtures][test_givenPermissionlessExecutorIdentities_whenSeeded] |
+| RDCT-QUEUE-RESCUE-P01 | Each queue role separately | NeverListed B=7; destination=Treasury, operator or unrelated; existing destination balance=3 | Queued; no payment | Pay 7, destination becomes 10; preserve RD/other assets | Covered: [fuzz][test_givenDistributorLocalStates_whenEachRoleQueuesAndAnyExecutorExecutes], [fixed fixtures][test_givenPermissionlessExecutorIdentities_whenSeeded], [operator commitment and restoration][test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes] |
 | RDCT-QUEUE-RESCUE-P02 | Each queue role separately | NeverListed B=0; token transfer would reject | Queued | No-op payment; action completes without transfer/error/rescue event | Covered: [executed][test_givenZeroCustodyAtQueue_whenExecuted] |
 | RDCT-QUEUE-RESCUE-I01 | Each queue role separately | asset=0 or nonzero without code | RD InvalidAsset(asset); Unchanged | No new action | Covered: [asset has no code][test_whenAssetHasNoCode_reverts] |
 | RDCT-QUEUE-RESCUE-I02 | Each queue role separately | destination=0 | RD InvalidRescueDestination(destination); Unchanged | No new action | Covered: [test][test_whenDestinationIsForbidden_reverts] |
@@ -129,6 +129,8 @@ RD's transfer/callback matrix owns false-return and guard behavior. Generic call
 [test_givenQueuedRescue_whenCustodyIncreases]: ./queueRescue.t.sol#L578
 [test_givenQueuedRescue_whenAdminAlreadyRescued]: ./queueRescue.t.sol#L585
 [test_givenQueuedNeverListedAsset_whenActivated_reverts]: ./queueRescue.t.sol#L595
-[test_givenQueuedNeverListedAsset_whenActivatedThenRetired_reverts]: ./queueRescue.t.sol#L619
+[test_givenQueuedNeverListedAsset_whenActivatedThenRetired_reverts]: ./queueRescue.t.sol#L621
 [test_givenQueuedSurplusRescue_whenDistributorBecomesInactive_revertsThenRetries]: ./queueRescue.t.sol#L290
-[test_givenQueuedSurplus_whenTransferFailsThenRecovers]: ./queueRescue.t.sol#L646
+[test_givenQueuedSurplus_whenTransferFailsThenRecovers]: ./queueRescue.t.sol#L650
+
+[test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes]: ./queueRescue.t.sol#L925

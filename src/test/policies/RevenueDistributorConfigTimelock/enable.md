@@ -16,7 +16,7 @@ Initialization history matters independently of Kernel membership. Previously Ke
 
 Implemented lifecycle payload rule: this contract does not use lifecycle data. Accept only `data.length == 0`; reject every nonempty payload with `IRevenueDistributorConfigTimelock.RevenueDistributorConfigTimelock_InvalidData()`. Check local transition state and caller authorization first, then any existing settlement guard, then payload length, then enable-hook dependencies. The concrete hook rejects nonempty data. Authorization, lifecycle and dependency rows use `data=0x` unless a payload/competing-fault row explicitly overrides it. Existing nonempty-success tests are regression evidence to revise, not proof of this requirement.
 
-Admin only; fuzz unauthorized callers excluding every Admin identity. RD.kernel must equal RDT.kernel; mismatch gives PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel). RD must also be active in this timelock’s Kernel and locally enabled.
+Admin only; fuzz unauthorized callers excluding every Admin identity. RD.kernel must equal RDT.kernel; mismatch gives PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel). RD must also be active in this timelock’s Kernel and select this timelock as configOperator. RD local enablement is not an activation prerequisite and isEnabled is never read.
 
 Unchanged means lifecycle state, configuration, liabilities and balances retain their pre-call values; a reverted transaction commits no events. Match exact errors and check getters from fuzzed callers, including while disabled/inactive. Success sets isEnabled=true and lastTransitionAt to the uint48 timestamp; emits Enabled plus Transition(caller,true,data,timestamp). Preserve existing configuration/debt/custody. Successful enable uses empty data; nonempty data must revert.
 
@@ -30,7 +30,7 @@ Fixed for this table: Effects and events: Unchanged.
 
 ## Lifecycle
 
-ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and enablement are required operational activation gates. All rows use data=0x except the dedicated payload cases.
+ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and selection of this timelock as operator are activation gates; local enablement is irrelevant. All rows use data=0x except the dedicated payload cases.
 
 | ID | Caller | Local active | Local enabled | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -41,7 +41,7 @@ ROLES initialized; retained caller roles after any Kernel deactivation; unrelate
 
 ## Dependency compatibility
 
-The named distributor identity cases below own this check; selection as configOperator is a queue/execution prerequisite, not an activation gate.
+The named distributor identity cases below own this check. Both activation routes require the consumed interfaces, matching Kernel, active target membership and selection of this timelock as configOperator. Neither activation route reads target isEnabled.
 
 ## Payload rejection and error precedence
 
@@ -55,7 +55,7 @@ Local enabled=false; initialized ROLES; dependencies compatible; outside settlem
 
 ## First activation
 
-ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and enablement are required operational activation gates. All rows use data=0x except the dedicated payload cases.
+ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and selection of this timelock as operator are activation gates; local enablement is irrelevant. All rows use data=0x except the dedicated payload cases.
 
 | ID | Caller | Local active | Local enabled | lastTransitionAt | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -63,12 +63,12 @@ ROLES initialized; retained caller roles after any Kernel deactivation; unrelate
 
 ## Dependency identity and lifecycle
 
-ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and enablement are required operational activation gates. All rows use data=0x except the dedicated payload cases. Local enabled=false, own Kernel active=true; reEnable within grace if applicable.
+ROLES initialized; retained caller roles after any Kernel deactivation; unrelated state and balances unchanged. Bound RevenueDistributor reports the same Kernel; its activity and selection of this timelock as operator are activation gates; local enablement is irrelevant. All rows use data=0x except the dedicated payload cases. Local enabled=false, own Kernel active=true; reEnable within grace if applicable.
 
 | ID | Caller | Distributor active | Distributor enabled | Kernel binding | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | RDCT-ENABLE-D01 | ADMIN_ROLE holder | true | true | Same Kernel | Success | Only local lifecycle transition; RD state and queue preserved | Covered: [test][test_givenPreviouslyEnabled_whenAuthorizedAdminEnables], [test][test_givenEnableBoundarySeeds] |
-| RDCT-ENABLE-D02 | ADMIN_ROLE holder | true | false | Same Kernel | PolicyDependency_NotActive(RD) | Unchanged; no transition or committed logs; restore target readiness and retry | Covered: [test][test_givenUnavailableDistributor_whenActivation_reverts], [test][test_givenDistributorStateSeeds_whenActivation_reverts] |
+| RDCT-ENABLE-D02 | ADMIN_ROLE holder | true | false | Same Kernel | Success; active paused target accepted | Exact lifecycle events; target, queue and accounting preserved | Covered: [test][test_givenActivePausedDistributor_whenEnableSucceeds], [seeds][test_givenDistributorStateSeeds_whenActivation_reverts] |
 | RDCT-ENABLE-D03 | ADMIN_ROLE holder | false | true | Same Kernel | PolicyDependency_NotActive(RD) | Unchanged; no transition or committed logs; restore target readiness and retry | Covered: [test][test_givenUnavailableDistributor_whenActivation_reverts], [test][test_givenDistributorStateSeeds_whenActivation_reverts] |
 | RDCT-ENABLE-D04 | ADMIN_ROLE holder | false | false | Same Kernel | PolicyDependency_NotActive(RD) | Unchanged; no transition or committed logs; restore target readiness and retry | Covered: [test][test_givenUnavailableDistributor_whenActivation_reverts], [test][test_givenDistributorStateSeeds_whenActivation_reverts] |
 | RDCT-ENABLE-D05 | ADMIN_ROLE holder | true | true | Different Kernel | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) | Unchanged; no logs | Covered: [test][test_givenDistributorKernelDrift_whenActivation_reverts] |
@@ -92,10 +92,7 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 The product hooks now enforce empty lifecycle payloads, inactive-disable availability and active enable/reEnable (where supported). [Function-specific lifecycle tests](enable.t.sol) exercise ADMIN transitions and nonempty fuzz inputs against real fixtures. This is partial coverage: emergency/secondary-role transitions, all dependency drifts, exact events and overflow drivers remain independently mapped. Existing inactive-enable success tests are historical regression inputs, not proof of the new expectation.
 
-Dependency classification: RD is a direct operational Policy service. Construction validates compatibility without requiring readiness. Activation requires a canonical Kernel/status response, reported Kernel equal to this consumer's Kernel, authoritative membership in that Kernel and local enablement. Malformed metadata gives `RevenueDistributorConfigTimelock_InvalidDistributor(RD)`; a readable foreign Kernel gives `PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel)` before readiness; a compatible paused/inactive target gives `PolicyDependency_NotActive(RD)`. Enable and reEnable use the same predicate.
-
-[test_givenInactivePolicy_whenEmptyEnable_reverts]: ./enable.t.sol#L149
-[test_givenNeverActivatedPolicy_whenAnyCallerEnables_reverts]: ./enable.t.sol#L174
+Dependency classification: RD is a direct configuration and recovery target. Construction retains its existing compatibility checks. Activation checks the consumed interfaces, canonical matching Kernel, authoritative target membership and selected operator. Missing interfaces or malformed operator metadata give `RevenueDistributorConfigTimelock_InvalidDistributor(RD)`; malformed Kernel metadata gives `PolicyDependency_InvalidDependency(RD)`; a readable foreign Kernel gives `PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel)`. An inactive target gives `PolicyDependency_NotActive(RD)`. A zero or different selected operator gives `ConfigOperator_Unauthorized(RDT)`. An active paused target succeeds, without reading isEnabled. Enable and reEnable use the same predicate.
 
 ## Kernel drift and restoration
 
@@ -104,27 +101,37 @@ Dependency classification: RD is a direct operational Policy service. Constructi
 | RDCT-ENABLE-D06 | Admin | true | false | Fuzz false/true | true | Different reported Kernel after construction | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) before readiness | No transition | Covered: [test][test_givenDistributorKernelDrift_whenActivation_reverts] |
 | RDCT-ENABLE-P02 | Admin | true | false | Restored false to true | Restored false to true | Same Kernel | Failed activation then successful retry | Pending accounting preserved | Covered: [test][test_givenRestoredDistributor_whenActivation_succeeds] |
 
-[test_givenDistributorKernelDrift_whenActivation_reverts]: ./enable.t.sol#L185
-[test_givenRestoredDistributor_whenActivation_succeeds]: ./enable.t.sol#L247
-[test_givenUnavailableDistributor_whenActivation_reverts]: ./enable.t.sol#L205
-[test_givenDistributorStateSeeds_whenActivation_reverts]: ./enable.t.sol#L237
+## Activation interface and operator metadata
 
-[test_givenDisabled_whenCallerLacksAdmin_reverts]: ./enable.t.sol#L287
+Own policy is active and locally disabled; caller is permitted, payload is empty, and reEnable history/grace pass when applicable. The target reports the intended Kernel and is active. These checks do not depend on target local enablement. Earlier lifecycle, authorization, payload and grace checks retain their order.
 
-[test_givenEnableBoundarySeeds]: ./enable.t.sol#L407
+| ID | Target metadata | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| RDCT-ENABLE-D14 | Each consumed interface missing; deterministic seed for every interface | RevenueDistributorConfigTimelock_InvalidDistributor(RD) | No lifecycle transition | Covered: [test][test_givenMissingConsumedInterface_whenActivation_reverts], [seeds][test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts] |
+| RDCT-ENABLE-D15 | Operator getter reverts, returns noncanonical address, or returns a non-word length | RevenueDistributorConfigTimelock_InvalidDistributor(RD) | No lifecycle transition | Covered: [revert][test_givenOperatorReadReverts_whenActivation_reverts], [canonical word][test_givenNoncanonicalOperator_whenActivation_reverts], [length fuzz][test_givenMalformedOperatorLength_whenActivation_reverts] |
+| RDCT-ENABLE-D16 | Canonical zero or different operator; fuzz every address except this timelock | ConfigOperator_Unauthorized(this timelock) | No lifecycle transition | Covered: [fuzz][test_givenUnselectedOperator_whenActivation_reverts], [zero][test_givenZeroOperator_whenActivation_reverts] |
 
-[test_givenPreviouslyEnabled_whenAuthorizedAdminEnables]: ./enable.t.sol#L348
-
-[test_givenNeverEnabled_whenAuthorizedAdminEnables]: ./enable.t.sol#L376
-
-[test_givenEnabled_whenAnyCallerEnables_reverts]: ./enable.t.sol#L259
-
-[test_givenDisabled_whenAuthorizedEnableDataNonempty_reverts]: ./enable.t.sol#L317
-
-[test_whenAdminEnablesDisabledPolicy_recordsTransition]: ./enable.t.sol#L24
-
-[test_whenDistributorKernelMismatches_reverts]: ./enable.t.sol#L71
-
-[test_whenNeverEnabled_adminCanEnable]: ./enable.t.sol#L91
-
-[test_whenAlreadyEnabled_revertsBeforeAuthorization]: ./enable.t.sol#L44
+[test_givenInactivePolicy_whenEmptyEnable_reverts]: ./enable.t.sol#L152
+[test_givenNeverActivatedPolicy_whenAnyCallerEnables_reverts]: ./enable.t.sol#L177
+[test_givenDistributorKernelDrift_whenActivation_reverts]: ./enable.t.sol#L188
+[test_givenRestoredDistributor_whenActivation_succeeds]: ./enable.t.sol#L250
+[test_givenUnavailableDistributor_whenActivation_reverts]: ./enable.t.sol#L208
+[test_givenDistributorStateSeeds_whenActivation_reverts]: ./enable.t.sol#L240
+[test_givenDisabled_whenCallerLacksAdmin_reverts]: ./enable.t.sol#L290
+[test_givenEnableBoundarySeeds]: ./enable.t.sol#L410
+[test_givenPreviouslyEnabled_whenAuthorizedAdminEnables]: ./enable.t.sol#L351
+[test_givenNeverEnabled_whenAuthorizedAdminEnables]: ./enable.t.sol#L379
+[test_givenEnabled_whenAnyCallerEnables_reverts]: ./enable.t.sol#L262
+[test_givenDisabled_whenAuthorizedEnableDataNonempty_reverts]: ./enable.t.sol#L320
+[test_whenAdminEnablesDisabledPolicy_recordsTransition]: ./enable.t.sol#L27
+[test_whenDistributorKernelMismatches_reverts]: ./enable.t.sol#L74
+[test_whenNeverEnabled_adminCanEnable]: ./enable.t.sol#L94
+[test_whenAlreadyEnabled_revertsBeforeAuthorization]: ./enable.t.sol#L47
+[test_givenMissingConsumedInterface_whenActivation_reverts]: ./enable.t.sol#L461
+[test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts]: ./enable.t.sol#L496
+[test_givenOperatorReadReverts_whenActivation_reverts]: ./enable.t.sol#L509
+[test_givenNoncanonicalOperator_whenActivation_reverts]: ./enable.t.sol#L546
+[test_givenMalformedOperatorLength_whenActivation_reverts]: ./enable.t.sol#L529
+[test_givenUnselectedOperator_whenActivation_reverts]: ./enable.t.sol#L566
+[test_givenZeroOperator_whenActivation_reverts]: ./enable.t.sol#L585
+[test_givenActivePausedDistributor_whenEnableSucceeds]: ./enable.t.sol#L447

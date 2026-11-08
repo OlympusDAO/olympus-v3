@@ -16,7 +16,7 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 
 Own-policy admission: require Kernel-active RevenueDistributorConfigTimelock; own inactivity uses `RevenueDistributorConfigTimelock_PolicyNotActive(this policy)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-RDT = Revenue Distributor Config Timelock; RD = RevenueDistributor. Proposers are Admin or Revenue Distributor Admin, separately. Successful queue gates: RDT Kernel-active, RDT enabled, permitted proposer, selected as RD configOperator, RD Kernel-active and locally enabled. Error order follows that list: own RevenueDistributorConfigTimelock_PolicyNotActive(RDT), NotEnabled(), NotAuthorised(), then selected-operator and target checks. Generic timing/cancellation is owned by executeQueuedAction/cancelQueuedAction plans. Key: per-asset; expected hash: assetDistributionHash(asset).
+RDT = Revenue Distributor Config Timelock; RD = RevenueDistributor. Proposers are Admin or Revenue Distributor Admin, separately. Successful queue gates: RDT Kernel-active, RDT enabled, permitted proposer, selected as RD configOperator, RD Kernel-active and locally enabled. Error order follows that list: own RevenueDistributorConfigTimelock_PolicyNotActive(RDT), NotEnabled(), NotAuthorised(), then selected-operator and target checks. Generic timing/cancellation is owned by executeQueuedAction/cancelQueuedAction plans. Key: per-asset; expected hash: keccak256(abi.encode(assetDistributionHash(asset), current configOperator)).
 
 Fuzz permitted proposers across Admin and Revenue Distributor Admin for every non-authorization row. Queueing validates `asset_` activity against the same rule documented in [disableAssetRoutes](../RevenueDistributor/disableAssetRoutes.md). Execution still protects against a once-valid asset changing after queueing.
 
@@ -45,7 +45,7 @@ Fuzz `asset_` across the authorization domain above; it does not affect these gu
 
 | ID | Caller | Asset state at queue | Route state | Pending bucket mask | Asset state at execution | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| QDAR-P01 | Fuzz permitted role caller | Active | Representative nonempty route | Representative nonempty debt | Unchanged | Queue then ready execution succeeds | Exact forwarding; retire route; pending debt preserved | Covered: [test][test_whenActiveAssetDisableQueues_executesAfterDelay], [test][test_whenActiveAssetDisableQueues_executesAfterDelay_AdminOnlySeed], [test][test_whenActiveAssetDisableQueues_executesAfterDelay_RevenueRoleOnlySeed], [test][test_whenActiveAssetDisableQueues_executesAfterDelay_RolesOverlapSeed], [test][test_whenActiveAssetHasRouteAndDebt_retirementPreservesDebt], [test][test_whenActiveAssetHasRouteAndDebt_retirementPreservesDebt_AdminOnlySeed], [test][test_whenActiveAssetHasRouteAndDebt_retirementPreservesDebt_RevenueRoleOnlySeed], [test][test_whenActiveAssetHasRouteAndDebt_retirementPreservesDebt_RolesOverlapSeed] |
+| QDAR-P01 | Fuzz permitted role caller | Active | Representative nonempty route | Representative nonempty debt | Unchanged | Queue then ready execution succeeds | Exact forwarding; retire route; pending debt preserved | Covered: [test][test_whenActiveAssetDisableQueues_executesAfterDelay], [test][test_whenActiveAssetDisableQueues_executesAfterDelay_AdminOnlySeed], [test][test_whenActiveAssetDisableQueues_executesAfterDelay_RevenueRoleOnlySeed], [test][test_whenActiveAssetDisableQueues_executesAfterDelay_RolesOverlapSeed], [test][test_whenActiveAssetHasRouteAndDebt_retirementPreservesDebt], [test][test_whenActiveAssetHasRouteAndDebt_retirementPreservesDebt_AdminOnlySeed], [test][test_whenActiveAssetHasRouteAndDebt_retirementPreservesDebt_RevenueRoleOnlySeed], [test][test_whenActiveAssetHasRouteAndDebt_retirementPreservesDebt_RolesOverlapSeed], [operator commitment and restoration][test_whenQueuedConfiguration_commitsCurrentOperatorAndRestorationExecutes] |
 
 ## Invalid inputs
 
@@ -113,3 +113,5 @@ Fuzz `asset_` across the authorization domain above; it does not affect these gu
 [test_whenAssetKeyAlreadyOwned_secondQueueReverts_AdminOnlySeed]: ./queueDisableAssetRoutes.t.sol#L618
 [test_whenAssetKeyAlreadyOwned_secondQueueReverts_RevenueRoleOnlySeed]: ./queueDisableAssetRoutes.t.sol#L629
 [test_whenAssetKeyAlreadyOwned_secondQueueReverts_RolesOverlapSeed]: ./queueDisableAssetRoutes.t.sol#L640
+
+[test_whenQueuedConfiguration_commitsCurrentOperatorAndRestorationExecutes]: ./queueDisableAssetRoutes.t.sol#L742

@@ -44,7 +44,11 @@ abstract contract DepositManagerConfigTimelockLifecycleTest is
             IDepositManager(address(depositManager))
         );
         _lifecycleTarget = address(_configTimelock);
-        if (activate_) _setMembership(true);
+        if (activate_) {
+            _setMembership(true);
+            vm.prank(ADMIN);
+            depositManager.setConfigOperator(address(_configTimelock));
+        }
     }
 
     function _preservedState() internal view override returns (bytes32) {

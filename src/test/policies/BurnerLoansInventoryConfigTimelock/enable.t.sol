@@ -6,6 +6,9 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant, reentrancy-no-eth)
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
@@ -190,6 +193,39 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
         test_givenNonemptyData_whenEnabled_reverts(abi.encode(uint256(0)));
         _restore(checkpoint);
         test_givenNonemptyData_whenEnabled_reverts(new bytes(256));
+    }
+
+    // Scenarios: BLINCT-ENABLE-D07.
+    function test_givenMissingConsumedInterface_whenActivated_reverts(bool enabled_) public {
+        _timelock.disable("");
+        _setState(_inventory, true, enabled_);
+        bytes4[3] memory ids = [
+            type(IBurnerLoansInventory).interfaceId,
+            type(IConfigOperator).interfaceId,
+            type(IEnabler).interfaceId
+        ];
+        for (uint256 i; i < ids.length; ++i) {
+            vm.mockCall(
+                address(_inventory),
+                abi.encodeCall(IERC165.supportsInterface, (ids[i])),
+                abi.encode(false)
+            );
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IBurnerLoansInventoryConfigTimelock
+                        .BurnerLoansInventoryTimelock_InvalidInventory
+                        .selector,
+                    address(_inventory)
+                )
+            );
+            _timelock.enable("");
+            assertFalse(_timelock.isEnabled(), "Incompatible target cannot activate queue");
+            vm.mockCall(
+                address(_inventory),
+                abi.encodeCall(IERC165.supportsInterface, (ids[i])),
+                abi.encode(true)
+            );
+        }
     }
 }
 

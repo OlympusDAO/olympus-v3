@@ -31,10 +31,7 @@ configuration/data described below. No lifecycle transition moves tokens; revert
 transactions commit no logs. Tests assert exact error data and rollback.
 
 ROLES is a Kernel module; DepositManager is the direct operational Policy dependency.
-Activation checks own membership, canonical matching target Kernel/status, then target
-membership/enablement. Failed or malformed Kernel/status reads give PolicyDependency_InvalidDependency(DM); a readable foreign Kernel
-gives PolicyDependency_KernelMismatch(DM,expectedKernel,reportedKernel); compatible inactive/disabled targets give PolicyDependency_NotActive(DM).
-The target configOperator is an authority identity, not an activation prerequisite.
+Activation requires own membership, the consumed target interfaces, a canonical matching target Kernel, target membership and selection of this timelock as configOperator. Target local enablement is irrelevant: activation never reads isEnabled. Failed or malformed Kernel reads give PolicyDependency_InvalidDependency(DM); a readable foreign Kernel gives PolicyDependency_KernelMismatch(DM,expectedKernel,reportedKernel). Compatible inactive targets give PolicyDependency_NotActive(DM); missing interfaces or malformed operator metadata give DepositManagerConfigTimelock_InvalidDepositManager(DM).
 Fixtures preserve a queued cap action including its destination/pre-state/key slots, plus
 real deposit receipt, custody and accounting state.
 
@@ -92,15 +89,15 @@ Subject active=true and enabled=false; earlier caller/history/grace guards pass.
 | ID | Caller | Dependency active | Dependency enabled | Compatibility or recovery condition | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | DMCT-REENABLE-D08 | ADMIN_ROLE holder | true | true | DepositManager active=true; enabled=true | Success | Exact transition; other state preserved | Covered: [test][test_givenManagerActiveTrueEnabledTrue_whenActivationSucceeds] |
-| DMCT-REENABLE-D09 | ADMIN_ROLE holder | true | false | DepositManager active=true; enabled=false | PolicyDependency_NotActive(DM) | Unchanged | Covered: [test][test_givenManagerActiveTrueEnabledFalse_whenActivation_reverts] |
+| DMCT-REENABLE-D09 | ADMIN_ROLE holder | true | false | DepositManager active=true; enabled=false | Success; active paused target is accepted | Exact lifecycle transition; target and queue preserved | Covered: [test][test_givenManagerActiveTrueEnabledFalse_whenActivationSucceeds] |
 | DMCT-REENABLE-D10 | ADMIN_ROLE holder | false | true | DepositManager active=false; enabled=true | PolicyDependency_NotActive(DM) | Unchanged | Covered: [test][test_givenManagerActiveFalseEnabledTrue_whenActivation_reverts] |
 | DMCT-REENABLE-D11 | ADMIN_ROLE holder | false | false | DepositManager active=false; enabled=false | PolicyDependency_NotActive(DM) | Unchanged | Covered: [test][test_givenManagerActiveFalseEnabledFalse_whenActivation_reverts] |
 | DMCT-REENABLE-D01 | ADMIN_ROLE holder | true | false | Foreign reported Kernel plus paused manager; compatibility before readiness | PolicyDependency_KernelMismatch(DepositManager,expectedKernel,reportedKernel) | Unchanged | Covered: [test][test_givenForeignKernelAndPausedManager_whenActivation_reverts] |
 | DMCT-REENABLE-D02 | ADMIN_ROLE holder | true | true | Kernel getter reverts | PolicyDependency_InvalidDependency(DM) | Unchanged | Covered: [test][test_givenKernelReadReverts_whenActivation_reverts] |
-| DMCT-REENABLE-D04 | ADMIN_ROLE holder | true | true | Status getter reverts | PolicyDependency_InvalidDependency(DM) | Unchanged | Covered: [test][test_givenStatusReadReverts_whenActivation_reverts] |
+| DMCT-REENABLE-D04 | ADMIN_ROLE holder | true | true | Status getter reverts | Success; isEnabled metadata is not consumed | Exact lifecycle transition; other state preserved | Covered: [test][test_givenStatusReadReverts_whenActivationSucceeds] |
 | DMCT-REENABLE-D03 | ADMIN_ROLE holder | true | true | Noncanonical Kernel ABI word | PolicyDependency_InvalidDependency(DM) | Unchanged | Covered: [test][test_givenNoncanonicalKernel_whenActivation_reverts], [test][test_givenMalformedKernelLength_whenActivation_reverts] |
-| DMCT-REENABLE-D05 | ADMIN_ROLE holder | true | true | Noncanonical Status ABI word | PolicyDependency_InvalidDependency(DM) | Unchanged | Covered: [test][test_givenNoncanonicalStatus_whenActivation_reverts], [test][test_givenMalformedStatusLength_whenActivation_reverts] |
-| DMCT-REENABLE-D06 | ADMIN_ROLE holder | true | true | The manager configOperator is an authority identity; does not gate activation | Success | Exact transition; other state preserved | Covered: [test][test_givenDifferentConfigOperator_whenActivationSucceeds] |
+| DMCT-REENABLE-D05 | ADMIN_ROLE holder | true | true | Noncanonical Status ABI word | Success; isEnabled metadata is not consumed | Exact lifecycle transition; other state preserved | Covered: [test][test_givenNoncanonicalStatus_whenActivationSucceeds], [test][test_givenMalformedStatusLength_whenActivationSucceeds] |
+| DMCT-REENABLE-D06 | ADMIN_ROLE holder | true | true | Manager selects a different configOperator | ConfigOperator_Unauthorized(this timelock) | Unchanged | Covered: [test][test_givenDifferentConfigOperator_whenActivation_reverts] |
 | DMCT-REENABLE-D07 | ADMIN_ROLE holder | true | false | Paused manager restored before activation; no stale failure cached | Success | Exact transition; other state preserved | Covered: [test][test_givenManagerReadinessRestored_whenActivationSucceeds] |
 
 - [x] Verify focused execution and reciprocal named mappings.
@@ -115,51 +112,68 @@ Subject active=true and enabled=false; earlier caller/history/grace guards pass.
 
 | ID | Caller | Local active | Local enabled | Dependency active | Dependency enabled getter | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DMCT-REENABLE-D13 | ADMIN | true | false | false | Noncanonical bool=2 | PolicyDependency_InvalidDependency(dependency) | Unchanged | Covered: [test][test_givenInactiveDependencyWithMalformedStatus_whenActivation_reverts] |
+| DMCT-REENABLE-D13 | ADMIN | true | false | false | Noncanonical bool=2 | PolicyDependency_NotActive(dependency) | Unchanged | Covered: [test][test_givenInactiveDependencyWithMalformedStatus_whenActivation_reverts] |
 
-[test_givenPaused_whenAdminReEnables]: reEnable.t.sol#L23
-[test_givenSecondaryOnly_whenReEnabled]: reEnable.t.sol#L31
-[test_givenAdminAndSecondary_whenReEnabled]: reEnable.t.sol#L38
-[test_whenPermittedCallerSeedsReEnable]: reEnable.t.sol#L46
-[test_givenPaused_whenUnauthorizedCallerReEnables_reverts]: reEnable.t.sol#L53
-[test_givenPaused_whenUnauthorizedCallerSeedsReEnable_reverts]: reEnable.t.sol#L65
-[test_givenEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L82
-[test_givenEnabled_whenCallerSeedsReEnable_reverts]: reEnable.t.sol#L599
-[test_givenInactivePaused_whenReEnabled_reverts]: reEnable.t.sol#L91
-[test_givenInactiveEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L107
-[test_givenNeverEnabledConfigured_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L118
-[test_givenNeverEnabledUnconfigured_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L130
-[test_givenExpiredInactive_whenUnauthorizedCallerReEnables_reverts]: reEnable.t.sol#L142
-[test_givenInactive_whenGraceExpired_reverts]: reEnable.t.sol#L298
-[test_givenInactiveAndBrokenDependency_whenActivation_reverts]: reEnable.t.sol#L539
-[test_givenBrokenDependency_whenExpiredGrace_reverts]: reEnable.t.sol#L560
-[test_whenIndependentGraceAndTimeWithinWindow]: reEnable.t.sol#L159
-[test_givenSecondary_whenIndependentGraceAndTimeWithinWindow]: reEnable.t.sol#L175
-[test_whenIndependentGraceAndTimeExpired_reverts]: reEnable.t.sol#L191
-[test_whenMaximumTimestampIsExpired_reverts]: reEnable.t.sol#L587
-[test_whenImmediately]: reEnable.t.sol#L212
-[test_whenOneBeforeDeadline]: reEnable.t.sol#L220
-[test_whenAtDeadline]: reEnable.t.sol#L228
-[test_whenAtMaximumGraceDeadline]: reEnable.t.sol#L236
-[test_whenDeadlineIsMaximumTimestamp]: reEnable.t.sol#L244
-[test_whenFirstTimestampAfterDeadline_reverts]: reEnable.t.sol#L252
-[test_whenDeadlineOverflows_reverts]: reEnable.t.sol#L264
-[test_whenMaximumTimestampMakesDeadlineOverflow_reverts]: reEnable.t.sol#L283
-[test_givenZeroTransitionTimestamp_whenReEnabled_reverts]: reEnable.t.sol#L577
-[test_givenReactivated_whenReEnabled]: reEnable.t.sol#L311
-[test_whenRepeatedCyclesRestartGrace]: reEnable.t.sol#L321
-[test_givenManagerActiveTrueEnabledTrue_whenActivationSucceeds]: reEnable.t.sol#L332
-[test_givenManagerActiveTrueEnabledFalse_whenActivation_reverts]: reEnable.t.sol#L340
-[test_givenManagerActiveFalseEnabledTrue_whenActivation_reverts]: reEnable.t.sol#L357
-[test_givenManagerActiveFalseEnabledFalse_whenActivation_reverts]: reEnable.t.sol#L374
-[test_givenForeignKernelAndPausedManager_whenActivation_reverts]: reEnable.t.sol#L393
-[test_givenKernelReadReverts_whenActivation_reverts]: reEnable.t.sol#L417
-[test_givenStatusReadReverts_whenActivation_reverts]: reEnable.t.sol#L434
-[test_givenNoncanonicalKernel_whenActivation_reverts]: reEnable.t.sol#L451
-[test_givenMalformedKernelLength_whenActivation_reverts]: reEnable.t.sol#L468
-[test_givenNoncanonicalStatus_whenActivation_reverts]: reEnable.t.sol#L484
-[test_givenMalformedStatusLength_whenActivation_reverts]: reEnable.t.sol#L501
-[test_givenDifferentConfigOperator_whenActivationSucceeds]: reEnable.t.sol#L517
-[test_givenManagerReadinessRestored_whenActivationSucceeds]: reEnable.t.sol#L527
-[test_givenDepositManagerBecomesInactive_reEnableReverts]: reEnable.t.sol#L623
-[test_givenInactiveDependencyWithMalformedStatus_whenActivation_reverts]: reEnable.t.sol#L641
+## Activation interface and operator metadata
+
+Own policy is active and locally disabled; caller is permitted, payload is empty, and reEnable history/grace pass when applicable. The target reports the intended Kernel and is active. These checks do not depend on target local enablement. Earlier lifecycle, authorization, payload and grace checks retain their order.
+
+| ID | Target metadata | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| DMCT-REENABLE-D14 | Each consumed interface missing; deterministic seed for every interface | DepositManagerConfigTimelock_InvalidDepositManager(DM) | No lifecycle transition | Covered: [test][test_givenMissingConsumedInterface_whenActivation_reverts], [seeds][test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts] |
+| DMCT-REENABLE-D15 | Operator getter reverts, returns noncanonical address, or returns a non-word length | DepositManagerConfigTimelock_InvalidDepositManager(DM) | No lifecycle transition | Covered: [revert][test_givenOperatorReadReverts_whenActivation_reverts], [canonical word][test_givenNoncanonicalOperator_whenActivation_reverts], [length fuzz][test_givenMalformedOperatorLength_whenActivation_reverts] |
+| DMCT-REENABLE-D16 | Canonical zero or different operator; fuzz every address except this timelock | ConfigOperator_Unauthorized(this timelock) | No lifecycle transition | Covered: [fuzz][test_givenUnselectedOperator_whenActivation_reverts], [zero][test_givenZeroOperator_whenActivation_reverts] |
+
+[test_givenPaused_whenAdminReEnables]: reEnable.t.sol#L27
+[test_givenSecondaryOnly_whenReEnabled]: reEnable.t.sol#L35
+[test_givenAdminAndSecondary_whenReEnabled]: reEnable.t.sol#L42
+[test_whenPermittedCallerSeedsReEnable]: reEnable.t.sol#L50
+[test_givenPaused_whenUnauthorizedCallerReEnables_reverts]: reEnable.t.sol#L57
+[test_givenPaused_whenUnauthorizedCallerSeedsReEnable_reverts]: reEnable.t.sol#L69
+[test_givenEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L86
+[test_givenEnabled_whenCallerSeedsReEnable_reverts]: reEnable.t.sol#L582
+[test_givenInactivePaused_whenReEnabled_reverts]: reEnable.t.sol#L95
+[test_givenInactiveEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L111
+[test_givenNeverEnabledConfigured_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L122
+[test_givenNeverEnabledUnconfigured_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L134
+[test_givenExpiredInactive_whenUnauthorizedCallerReEnables_reverts]: reEnable.t.sol#L146
+[test_givenInactive_whenGraceExpired_reverts]: reEnable.t.sol#L302
+[test_givenInactiveAndBrokenDependency_whenActivation_reverts]: reEnable.t.sol#L522
+[test_givenBrokenDependency_whenExpiredGrace_reverts]: reEnable.t.sol#L543
+[test_whenIndependentGraceAndTimeWithinWindow]: reEnable.t.sol#L163
+[test_givenSecondary_whenIndependentGraceAndTimeWithinWindow]: reEnable.t.sol#L179
+[test_whenIndependentGraceAndTimeExpired_reverts]: reEnable.t.sol#L195
+[test_whenMaximumTimestampIsExpired_reverts]: reEnable.t.sol#L570
+[test_whenImmediately]: reEnable.t.sol#L216
+[test_whenOneBeforeDeadline]: reEnable.t.sol#L224
+[test_whenAtDeadline]: reEnable.t.sol#L232
+[test_whenAtMaximumGraceDeadline]: reEnable.t.sol#L240
+[test_whenDeadlineIsMaximumTimestamp]: reEnable.t.sol#L248
+[test_whenFirstTimestampAfterDeadline_reverts]: reEnable.t.sol#L256
+[test_whenDeadlineOverflows_reverts]: reEnable.t.sol#L268
+[test_whenMaximumTimestampMakesDeadlineOverflow_reverts]: reEnable.t.sol#L287
+[test_givenZeroTransitionTimestamp_whenReEnabled_reverts]: reEnable.t.sol#L560
+[test_givenReactivated_whenReEnabled]: reEnable.t.sol#L315
+[test_whenRepeatedCyclesRestartGrace]: reEnable.t.sol#L325
+[test_givenManagerActiveTrueEnabledTrue_whenActivationSucceeds]: reEnable.t.sol#L336
+[test_givenManagerActiveTrueEnabledFalse_whenActivationSucceeds]: reEnable.t.sol#L344
+[test_givenManagerActiveFalseEnabledTrue_whenActivation_reverts]: reEnable.t.sol#L354
+[test_givenManagerActiveFalseEnabledFalse_whenActivation_reverts]: reEnable.t.sol#L371
+[test_givenForeignKernelAndPausedManager_whenActivation_reverts]: reEnable.t.sol#L390
+[test_givenKernelReadReverts_whenActivation_reverts]: reEnable.t.sol#L414
+[test_givenStatusReadReverts_whenActivationSucceeds]: reEnable.t.sol#L431
+[test_givenNoncanonicalKernel_whenActivation_reverts]: reEnable.t.sol#L441
+[test_givenMalformedKernelLength_whenActivation_reverts]: reEnable.t.sol#L458
+[test_givenNoncanonicalStatus_whenActivationSucceeds]: reEnable.t.sol#L474
+[test_givenMalformedStatusLength_whenActivationSucceeds]: reEnable.t.sol#L484
+[test_givenDifferentConfigOperator_whenActivation_reverts]: reEnable.t.sol#L493
+[test_givenManagerReadinessRestored_whenActivationSucceeds]: reEnable.t.sol#L510
+[test_givenDepositManagerBecomesInactive_reEnableReverts]: reEnable.t.sol#L606
+[test_givenInactiveDependencyWithMalformedStatus_whenActivation_reverts]: reEnable.t.sol#L624
+[test_givenMissingConsumedInterface_whenActivation_reverts]: ./reEnable.t.sol#L646
+[test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts]: ./reEnable.t.sol#L682
+[test_givenOperatorReadReverts_whenActivation_reverts]: ./reEnable.t.sol#L697
+[test_givenNoncanonicalOperator_whenActivation_reverts]: ./reEnable.t.sol#L734
+[test_givenMalformedOperatorLength_whenActivation_reverts]: ./reEnable.t.sol#L717
+[test_givenUnselectedOperator_whenActivation_reverts]: ./reEnable.t.sol#L754
+[test_givenZeroOperator_whenActivation_reverts]: ./reEnable.t.sol#L773

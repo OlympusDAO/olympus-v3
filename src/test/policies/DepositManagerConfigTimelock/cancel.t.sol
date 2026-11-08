@@ -38,9 +38,10 @@ contract DepositManagerConfigTimelockCancelTest is DepositManagerConfigTimelockT
     }
 
     // Scenarios: DMCT-CANCEL-A02.
-    function test_givenCallerIsNotEmergency_reverts(address caller_) public {
+    function test_givenCallerIsNotEmergency_reverts(address caller_, bool paused_) public {
         vm.assume(caller_ != EMERGENCY);
         uint64 actionId = _queueDepositCap(iAsset, 100e18);
+        if (paused_) _pausePolicy(address(_configTimelock));
 
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE));
         vm.prank(caller_);
@@ -172,8 +173,31 @@ contract DepositManagerConfigTimelockCancelTest is DepositManagerConfigTimelockT
         vm.prank(EMERGENCY);
         _configTimelock.disable("");
 
+        bytes32 targetBefore = _targetState();
+        vm.mockCallRevert(
+            address(depositManager),
+            abi.encodeWithSignature("kernel()"),
+            hex"deadbeef"
+        );
+        vm.mockCallRevert(
+            address(depositManager),
+            abi.encodeWithSignature("isEnabled()"),
+            hex"deadbeef"
+        );
+        vm.mockCallRevert(
+            address(depositManager),
+            abi.encodeWithSignature("configOperator()"),
+            hex"deadbeef"
+        );
+        vm.warp(uint256(_configTimelock.getQueuedAction(actionId).expiresAt) + 1);
         vm.prank(EMERGENCY);
         _configTimelock.cancelQueuedAction(actionId);
+        _assertReleased(actionId, 0, _limitsKey(iAsset));
+        assertEq(
+            _targetState(),
+            targetBefore,
+            "Cancellation preserves target accounting and custody"
+        );
 
         assertTrue(
             _configTimelock.getQueuedAction(actionId).cancelled,

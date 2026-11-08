@@ -172,7 +172,11 @@ contract DepositManagerConfigTimelockQueueLimitsTest is DepositManagerConfigTime
         depositManager.setAssetMinimumDeposit(iAsset, 1);
         _warpReady();
 
-        _expectStale(actionId, 0, keccak256(abi.encode(true, type(uint256).max, uint256(1))));
+        _expectStale(
+            actionId,
+            0,
+            keccak256(abi.encode(true, type(uint256).max, uint256(1), address(_configTimelock)))
+        );
         _configTimelock.executeQueuedAction(actionId);
         _assertPending(actionId);
     }

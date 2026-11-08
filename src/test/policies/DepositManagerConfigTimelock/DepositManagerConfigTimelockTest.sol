@@ -2,9 +2,12 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -234,6 +237,64 @@ abstract contract DepositManagerConfigTimelockTest is DepositManagerTest {
         );
     }
 
+    function _expectedHash(
+        bytes4 selector_,
+        bytes memory payload_
+    ) internal view returns (bytes32) {
+        if (
+            selector_ == IDepositManager.setAssetDepositCap.selector ||
+            selector_ == IDepositManager.setAssetMinimumDeposit.selector
+        ) {
+            (IERC20 asset, ) = abi.decode(payload_, (IERC20, uint256));
+            IAssetManager.AssetConfiguration memory configuration = depositManager
+                .getAssetConfiguration(asset);
+            return
+                keccak256(
+                    abi.encode(
+                        configuration.isConfigured,
+                        configuration.depositCap,
+                        configuration.minimumDeposit,
+                        address(_configTimelock)
+                    )
+                );
+        }
+        if (selector_ == IDepositManagerV1_1.setAssetShareWithdrawalRequired.selector) {
+            (IERC20 asset, ) = abi.decode(payload_, (IERC20, bool));
+            return
+                keccak256(
+                    abi.encode(
+                        depositManager.getAssetConfiguration(asset).isConfigured,
+                        IAssetManagerV1_1(address(depositManager)).isAssetShareWithdrawalRequired(
+                            asset
+                        ),
+                        address(_configTimelock)
+                    )
+                );
+        }
+        (IERC20 asset, uint8 period, address operator) = abi.decode(
+            payload_,
+            (IERC20, uint8, address)
+        );
+        IDepositManager.AssetPeriodStatus memory status = depositManager.isAssetPeriod(
+            asset,
+            period,
+            operator
+        );
+        if (selector_ == IDepositManager.addAssetPeriod.selector) {
+            return
+                keccak256(
+                    abi.encode(
+                        status.isConfigured,
+                        status.isEnabled,
+                        roles.hasRole(operator, "deposit_operator"),
+                        address(_configTimelock)
+                    )
+                );
+        }
+        return
+            keccak256(abi.encode(status.isConfigured, status.isEnabled, address(_configTimelock)));
+    }
+
     function _assertTypedQueue(
         address caller_,
         bytes memory call_,
@@ -256,6 +317,12 @@ abstract contract DepositManagerConfigTimelockTest is DepositManagerTest {
         assertEq(action.executableAt, vm.getBlockTimestamp() + 1 days, "typed queue delay");
         assertEq(action.expiresAt, vm.getBlockTimestamp() + 4 days, "typed queue expiry");
         assertEq(_configTimelock.nextActionId(), next + 1, "typed queue consumes exactly one ID");
+        (, bytes32 stateHash) = _configTimelock.getQueuedConfigState(next, 0, 0);
+        assertEq(
+            stateHash,
+            _expectedHash(selector_, payload_),
+            "complete target configuration and selected-operator commitment"
+        );
         _assertPending(next);
         assertEq(_targetState(), targetBefore, "typed queue preserves target and custody");
     }

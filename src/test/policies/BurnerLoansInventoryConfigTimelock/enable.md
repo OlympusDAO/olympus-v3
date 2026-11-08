@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.enable coverage plan
 
-Source: [enable](../../../bases/EnablerV2.sol#L52). Concrete behavior: [_beforeEnable](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L293).
+Source: [enable](../../../bases/EnablerV2.sol#L52). Concrete behavior: [_beforeEnable](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L316).
 
 ## Scope and fixtures
 
@@ -59,14 +59,26 @@ Unused bytes must be empty.
 - [x] Review these expectations.
 - [x] Complete passing test mappings.
 
-[test_givenReadyTarget_whenActivated_thenExactTransition]: ./enable.t.sol#L27
-[test_givenUnauthorizedCaller_whenActivated_reverts]: ./enable.t.sol#L54
-[test_givenOwnPolicyInactive_whenActivated_reverts]: ./enable.t.sol#L66
-[test_givenAlreadyEnabled_whenActivated_reverts]: ./enable.t.sol#L78
-[test_givenInventoryDisabled_whenTimelockEnabled_thenRecoveryRemainsAvailable]: ./enable.t.sol#L155
-[test_givenInventoryInactive_whenActivated_reverts]: ./enable.t.sol#L87
-[test_givenAnotherController_whenActivated_reverts]: ./enable.t.sol#L102
-[test_givenClearedController_whenActivated_reverts]: ./enable.t.sol#L112
-[test_givenTargetKernelDrift_whenActivated_reverts]: ./enable.t.sol#L122
-[test_givenNonemptyData_whenEnabled_reverts]: ./enable.t.sol#L169
-[test_givenNonemptyPayloadBoundaries_whenCalled_reverts]: ./enable.t.sol#L184
+## Activation compatibility
+
+Activation and reactivation require compatible target, ConfigOperator and Enabler interfaces, same Kernel, target Policy activity and this queue selected as configOperator. They do not read the target's enabled status. This allows queue repair while the target remains paused; each queued operation still enforces its own execution requirements. Other transition/caller/history/grace/payload guards retain their existing order.
+
+Caller is authorized and every prerequisite not varied below is valid. An incompatible target leaves lifecycle history, pending actions, reservations, configuration and custody unchanged.
+
+| ID | Target active | Target enabled | Input fault | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLINCT-ENABLE-D07 | true | Fuzz false/true | Reject each consumed interface advertisement; seed every interface | BurnerLoansInventoryTimelock_InvalidInventory(Inventory) | Unchanged | Covered: [test][test_givenMissingConsumedInterface_whenActivated_reverts] |
+
+[test_givenReadyTarget_whenActivated_thenExactTransition]: ./enable.t.sol#L30
+[test_givenUnauthorizedCaller_whenActivated_reverts]: ./enable.t.sol#L57
+[test_givenOwnPolicyInactive_whenActivated_reverts]: ./enable.t.sol#L69
+[test_givenAlreadyEnabled_whenActivated_reverts]: ./enable.t.sol#L81
+[test_givenInventoryDisabled_whenTimelockEnabled_thenRecoveryRemainsAvailable]: ./enable.t.sol#L158
+[test_givenInventoryInactive_whenActivated_reverts]: ./enable.t.sol#L90
+[test_givenAnotherController_whenActivated_reverts]: ./enable.t.sol#L105
+[test_givenClearedController_whenActivated_reverts]: ./enable.t.sol#L115
+[test_givenTargetKernelDrift_whenActivated_reverts]: ./enable.t.sol#L125
+[test_givenNonemptyData_whenEnabled_reverts]: ./enable.t.sol#L172
+[test_givenNonemptyPayloadBoundaries_whenCalled_reverts]: ./enable.t.sol#L187
+
+[test_givenMissingConsumedInterface_whenActivated_reverts]: enable.t.sol#L199

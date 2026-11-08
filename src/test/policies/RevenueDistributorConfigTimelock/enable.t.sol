@@ -2,6 +2,9 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {IRevenueDistributorRescue} from "src/policies/interfaces/IRevenueDistributorRescue.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
@@ -201,12 +204,12 @@ contract RevenueDistributorConfigTimelockEnableTest is RevenueDistributorConfigT
         assertFalse(configTimelock.isEnabled(), "Kernel drift prevents activation");
     }
 
-    // Scenarios: RDCT-ENABLE-D02, RDCT-ENABLE-D03, RDCT-ENABLE-D04.
+    // Scenarios: RDCT-ENABLE-D03, RDCT-ENABLE-D04.
     function test_givenUnavailableDistributor_whenActivation_reverts(
         bool distributorActive_,
         bool distributorEnabled_
     ) public {
-        vm.assume(!distributorActive_ || !distributorEnabled_);
+        vm.assume(!distributorActive_);
         _seedLifecycleRevenue();
         _disablePolicy(address(configTimelock), admin);
         if (!distributorEnabled_) {
@@ -240,7 +243,7 @@ contract RevenueDistributorConfigTimelockEnableTest is RevenueDistributorConfigT
         assertTrue(vm.revertToState(checkpoint), "Restore inactive enabled dependency");
         test_givenUnavailableDistributor_whenActivation_reverts(false, false);
         assertTrue(vm.revertToState(checkpoint), "Restore inactive disabled dependency");
-        test_givenUnavailableDistributor_whenActivation_reverts(true, false);
+        test_givenActivePausedDistributor_whenEnableSucceeds();
     }
 
     // Scenarios: RDCT-ENABLE-P02.
@@ -438,5 +441,148 @@ contract RevenueDistributorConfigTimelockEnableTest is RevenueDistributorConfigT
         assertTrue(vm.revertToState(checkpoint), "Restore independent enable seed");
         test_givenNeverEnabled_whenAuthorizedAdminEnables(bob, type(uint48).max);
         assertTrue(vm.revertToState(checkpoint), "Restore independent enable seed");
+    }
+
+    // Scenarios: RDCT-ENABLE-D02.
+    function test_givenActivePausedDistributor_whenEnableSucceeds() public {
+        _disablePolicy(address(configTimelock), admin);
+        _disablePolicy(address(distributor), admin);
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature("isEnabled()"),
+            hex"deadbeef"
+        );
+        vm.prank(admin);
+        configTimelock.enable("");
+        assertTrue(configTimelock.isEnabled(), "Active paused target permits enable");
+    }
+
+    // Scenarios: RDCT-ENABLE-D14.
+    function test_givenMissingConsumedInterface_whenActivation_reverts(uint8 index_) public {
+        _disablePolicy(address(configTimelock), admin);
+        bytes4[4] memory interfaces = [
+            type(IRevenueDistributor).interfaceId,
+            type(IRevenueDistributorRescue).interfaceId,
+            type(IConfigOperator).interfaceId,
+            type(IEnabler).interfaceId
+        ];
+        uint256 index = bound(index_, 0, interfaces.length - 1);
+        vm.mockCall(
+            address(distributor),
+            abi.encodeWithSignature("supportsInterface(bytes4)", interfaces[index]),
+            abi.encode(false)
+        );
+        uint48 beforeAt = configTimelock.lastTransitionAt();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_InvalidDistributor
+                    .selector,
+                address(distributor)
+            )
+        );
+        vm.prank(admin);
+        configTimelock.enable("");
+
+        assertFalse(configTimelock.isEnabled(), "Incompatible target prevents activation");
+        assertEq(
+            configTimelock.lastTransitionAt(),
+            beforeAt,
+            "Rejected activation preserves timestamp"
+        );
+    }
+
+    // Scenarios: RDCT-ENABLE-D14.
+    function test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenMissingConsumedInterface_whenActivation_reverts(0);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+        test_givenMissingConsumedInterface_whenActivation_reverts(1);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+        test_givenMissingConsumedInterface_whenActivation_reverts(2);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+        test_givenMissingConsumedInterface_whenActivation_reverts(3);
+        assertTrue(vm.revertToState(checkpoint), "Restore interface seed");
+    }
+
+    // Scenarios: RDCT-ENABLE-D15.
+    function test_givenOperatorReadReverts_whenActivation_reverts() public {
+        _disablePolicy(address(configTimelock), admin);
+        vm.mockCallRevert(
+            address(distributor),
+            abi.encodeWithSignature("configOperator()"),
+            hex"deadbeef"
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_InvalidDistributor
+                    .selector,
+                address(distributor)
+            )
+        );
+        vm.prank(admin);
+        configTimelock.enable("");
+    }
+
+    // Scenarios: RDCT-ENABLE-D15.
+    function test_givenMalformedOperatorLength_whenActivation_reverts(bytes memory data_) public {
+        vm.assume(data_.length <= 256 && data_.length != 32);
+        _disablePolicy(address(configTimelock), admin);
+        vm.mockCall(address(distributor), abi.encodeWithSignature("configOperator()"), data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_InvalidDistributor
+                    .selector,
+                address(distributor)
+            )
+        );
+        vm.prank(admin);
+        configTimelock.enable("");
+    }
+
+    // Scenarios: RDCT-ENABLE-D15.
+    function test_givenNoncanonicalOperator_whenActivation_reverts() public {
+        _disablePolicy(address(configTimelock), admin);
+        vm.mockCall(
+            address(distributor),
+            abi.encodeWithSignature("configOperator()"),
+            abi.encode(type(uint256).max)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRevenueDistributorConfigTimelock
+                    .RevenueDistributorConfigTimelock_InvalidDistributor
+                    .selector,
+                address(distributor)
+            )
+        );
+        vm.prank(admin);
+        configTimelock.enable("");
+    }
+
+    // Scenarios: RDCT-ENABLE-D16.
+    function test_givenUnselectedOperator_whenActivation_reverts(address operator_) public {
+        vm.assume(operator_ != address(configTimelock));
+        _disablePolicy(address(configTimelock), admin);
+        vm.mockCall(
+            address(distributor),
+            abi.encodeWithSignature("configOperator()"),
+            abi.encode(operator_)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigOperator.ConfigOperator_Unauthorized.selector,
+                address(configTimelock)
+            )
+        );
+        vm.prank(admin);
+        configTimelock.enable("");
+    }
+
+    // Scenarios: RDCT-ENABLE-D16.
+    function test_givenZeroOperator_whenActivation_reverts() public {
+        test_givenUnselectedOperator_whenActivation_reverts(address(0));
     }
 }

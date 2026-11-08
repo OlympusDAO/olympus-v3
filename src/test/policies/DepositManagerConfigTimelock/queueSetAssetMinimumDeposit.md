@@ -17,7 +17,7 @@ one uint64 action ID. Target configuration is applied only by later execution.
 Times are uint48 seconds: Q=queuedAt, T=Q+1 day, E=T+3 days. Values use raw asset units.
 
 Minimum is uint256 raw asset units. Current cap and minimum share the limits key; its
-pre-state hash includes both values and isConfigured. Accept 0≤minimum≤current cap.
+pre-state hash includes both values, isConfigured and current DM.configOperator(). Accept 0≤minimum≤current cap.
 An unchanged minimum still queues; target no-op semantics do not bypass the delay.
 
 Unchanged includes action IDs, payloads, destination-scoped key owners, target configuration,
@@ -28,7 +28,7 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 
 | ID | Caller | Execution / effects | Test |
 | --- | --- | --- | --- |
-| DMCT-QUEUE-MINIMUM-A01 | Fuzz ADMIN-only, manager-only and overlapping grants | Queue exact target selector/payload; preserve target state | Covered: [test][test_givenAdminOnly_whenTypedActionQueued], [test][test_givenManagerOnly_whenTypedActionQueued], [test][test_givenBothRoles_whenTypedActionQueued] |
+| DMCT-QUEUE-MINIMUM-A01 | Fuzz ADMIN-only, manager-only and overlapping grants | Queue exact target selector/payload; preserve target state; independently assert current target operator in stored pre-state | Covered: [test][test_givenAdminOnly_whenTypedActionQueued], [test][test_givenManagerOnly_whenTypedActionQueued], [test][test_givenBothRoles_whenTypedActionQueued] |
 | DMCT-QUEUE-MINIMUM-A02 | Fuzz callers outside both permitted roles | NotAuthorised(); Unchanged | Covered: [test][test_whenTypedActionCallerUnauthorized_reverts] |
 
 ## Lifecycle and binding

@@ -351,7 +351,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
                 abi.encode(keccak256("REVENUE_DISTRIBUTOR_ASSET"), address(token))
             );
             key = keccak256(abi.encode(address(distributor), localKey));
-            bytes32 expectedHash = distributor.assetDistributionHash(address(token));
+            bytes32 expectedHash = _routeStateHash(address(token));
 
             vm.expectEmit(true, true, true, true, address(configTimelock));
             emit IConfigTimelockBatchQueue.ConfigStateQueued(
@@ -442,7 +442,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         changed[0] = IRevenueDistributor.AssetRoute({recipient: alice, bps: 1});
         vm.prank(admin);
         distributor.setAssetRoutes(address(token), 0, changed);
-        bytes32 actualHash = distributor.assetDistributionHash(address(token));
+        bytes32 actualHash = _routeStateHash(address(token));
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
@@ -475,7 +475,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
         vm.prank(admin);
         distributor.disableAssetRoutes(address(token));
-        bytes32 actualHash = distributor.assetDistributionHash(address(token));
+        bytes32 actualHash = _routeStateHash(address(token));
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
@@ -508,7 +508,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         address recipient = address(_activeYieldRecipient());
         vm.prank(admin);
         distributor.setYieldRecipient(recipient);
-        bytes32 actualHash = distributor.assetDistributionHash(address(token));
+        bytes32 actualHash = _routeStateHash(address(token));
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
@@ -711,7 +711,7 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
         assertEq(configTimelock.pendingActionId(key_), actionId_, "failed execution retains key");
         (, bytes32 queuedHash) = configTimelock.getQueuedConfigState(actionId_, 0, 0);
         assertEq(
-            distributor.assetDistributionHash(address(token)),
+            _routeStateHash(address(token)),
             queuedHash,
             "dependency drift does not stale guard"
         );
@@ -1315,6 +1315,37 @@ contract RevenueDistributorConfigTimelockQueueSetAssetRoutesTest is
             address(0x1234),
             true,
             true
+        );
+    }
+
+    // Scenarios: QSAR-P01.
+    function test_whenQueuedRoute_commitsCurrentOperator() public {
+        uint64 id = _queueRoute(address(token));
+        (, bytes32 stateHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+        assertEq(
+            stateHash,
+            keccak256(
+                abi.encode(
+                    distributor.assetDistributionHash(address(token)),
+                    address(configTimelock)
+                )
+            ),
+            "Route commitment includes selected operator"
+        );
+        vm.prank(admin);
+        distributor.setConfigOperator(bob);
+        assertTrue(
+            stateHash != _routeStateHash(address(token)),
+            "Operator drift changes route commitment"
+        );
+        vm.prank(admin);
+        distributor.setConfigOperator(address(configTimelock));
+        vm.warp(configTimelock.getQueuedAction(id).executableAt);
+        configTimelock.executeQueuedAction(id);
+        assertEq(
+            uint8(distributor.assetState(address(token))),
+            uint8(IRevenueDistributor.AssetState.Active),
+            "Restored operator permits route update"
         );
     }
 }

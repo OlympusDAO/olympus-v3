@@ -1,8 +1,8 @@
 # BurnerLoansInventoryConfigTimelock.cancelQueuedAction coverage plan
 
-Shared action existence and terminal-status checks precede the concrete hook. The hook requires own Kernel activity, then local enablement and EMERGENCY authorization. Cancellation does not probe target readiness or operator selection.
+Shared action existence and terminal-status checks precede the concrete hook. The hook requires own Kernel activity, then EMERGENCY authorization; local pause is permitted. Cancellation does not probe target readiness or operator selection.
 
-Source: [cancelQueuedAction](../../../policies/utils/TimelockBatchQueue.sol#L165). Concrete behavior: [_validateCancellation](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L248).
+Source: [cancelQueuedAction](../../../policies/utils/TimelockBatchQueue.sol#L167). Concrete behavior: [_validateCancellation](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L260).
 
 ## Scope and fixtures
 
@@ -27,9 +27,11 @@ Use EMERGENCY caller with cached ROLES.
 
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLINCT-CANCEL-L01 | EMERGENCY | true | false | NotEnabled() | Unchanged | Covered: [test][test_givenActiveDisabledTimelock_whenCancelled_reverts] |
+| BLINCT-CANCEL-L01 | EMERGENCY | true | false | Success | Cancel intent and release every key; preserve target funds | Covered: [test][test_givenActiveDisabledTimelock_whenCancelled_thenExactCleanup] |
 | BLINCT-CANCEL-L02 | EMERGENCY | false | true | BurnerLoans_PolicyNotActive(TL) | Unchanged | Covered: [test][test_givenInactiveTimelock_whenCancelled_reverts] |
 | BLINCT-CANCEL-L03 | EMERGENCY | false | false | BurnerLoans_PolicyNotActive(TL) | Unchanged | Covered: [test][test_givenInactiveDisabledTimelock_whenCancelled_reverts] |
+
+The [invariant_queueOwnershipAndProviderBacking](recovery.invariants.t.sol#L42) model also varies queue and Inventory local enablement, queueing, time, execution and cancellation. Its handler permits cancellation while the queue is locally paused, and reconciles pending-key ownership, terminal cleanup, provider backing, OHM supply and Treasury receipts. Kernel membership and operator selection remain fixed in that model; the unit scenarios below cover their drift.
 
 ## Target independence
 
@@ -66,21 +68,25 @@ A pending action is cancellable without waiting for notice or meeting the execut
 - [x] Review these expectations.
 - [x] Complete passing test mappings.
 
+## Cancellation lifecycle
+
+EMERGENCY cancellation requires this timelock Kernel-active, regardless of local enablement. Target activity, enablement, Kernel/status metadata and operator selection are not read. The notice period and expiry do not block cancellation of a still-pending action. Successful cancellation clears all payloads, commitments and reservations without target calls or custody/accounting changes; own Policy inactivity still rejects before role checks.
+
 [test_givenPendingAction_whenEmergencyCancels_thenExactCleanup]: ./cancelQueuedAction.t.sol#L27
-[test_givenNoticePeriod_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L224
-[test_givenExpiredWindow_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L235
-[test_givenCancellationTimeEndpointSeeds_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L246
+[test_givenNoticePeriod_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L228
+[test_givenExpiredWindow_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L239
+[test_givenCancellationTimeEndpointSeeds_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L250
 [test_whenCallerLacksEmergency_reverts]: ./cancelQueuedAction.t.sol#L55
-[test_givenOtherAdministrativeRoles_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L283
-[test_givenActiveDisabledTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L64
-[test_givenInactiveTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L87
-[test_givenInactiveInventory_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L125
-[test_givenPausedInventory_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L135
-[test_givenInventoryKernelMismatch_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L145
-[test_givenControllerReplaced_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L155
-[test_whenActionUnknown_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L165
-[test_whenUnknownIdAtTypeBounds_reverts]: ./cancelQueuedAction.t.sol#L275
-[test_givenExecutedAction_whenCalled_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L186
-[test_givenCancelledAction_whenCalled_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L205
-[test_givenCancelledAction_whenRecoveryRequeued_thenFreshIdOwnsKey]: ./cancelQueuedAction.t.sol#L100
-[test_givenInactiveDisabledTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L71
+[test_givenOtherAdministrativeRoles_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L287
+[test_givenActiveDisabledTimelock_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L64
+[test_givenInactiveTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L95
+[test_givenInactiveInventory_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L133
+[test_givenPausedInventory_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L142
+[test_givenInventoryKernelMismatch_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L151
+[test_givenControllerReplaced_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L160
+[test_whenActionUnknown_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L169
+[test_whenUnknownIdAtTypeBounds_reverts]: ./cancelQueuedAction.t.sol#L279
+[test_givenExecutedAction_whenCalled_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L190
+[test_givenCancelledAction_whenCalled_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L209
+[test_givenCancelledAction_whenRecoveryRequeued_thenFreshIdOwnsKey]: ./cancelQueuedAction.t.sol#L108
+[test_givenInactiveDisabledTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L79

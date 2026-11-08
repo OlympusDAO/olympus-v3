@@ -53,7 +53,7 @@ contract InventoryTimelockHandler is Test {
     }
 
     function cancel() external {
-        if (pendingId == 0 || !_TIMELOCK.isEnabled()) return;
+        if (pendingId == 0) return;
         _TIMELOCK.cancelQueuedAction(pendingId);
         lastTerminalId = pendingId;
         pendingId = 0;

@@ -5,9 +5,10 @@ Shared action existence and terminal-status checks precede the concrete hook. Th
 Source: [DepositManagerConfigTimelock](../../../policies/deposits/DepositManagerConfigTimelock.sol), [queue](../../../policies/utils/TimelockBatchQueue.sol) and [configuration guards](../../../policies/utils/ConfigTimelockBatchQueue.sol). Scope: `DMCT-CANCEL`.
 
 Only EMERGENCY_ROLE holders may cancel; ADMIN alone is insufficient. Accessibility checks
-(existence, executed, cancelled) precede authorization. There are no timing, enablement,
-Kernel-membership, target-readiness, pre-state or config-operator gates. Cancellation must
-remain available for an unready, stale or expired pending action. It retains audit metadata
+(existence, executed, cancelled) precede own Kernel activity and EMERGENCY authorization.
+The timelock must remain Kernel-active; local disablement is permitted. There are no timing,
+target-readiness, pre-state or config-operator gates. Cancellation remains available for an
+unready, stale or expired pending action while the queue is active. It retains audit metadata
 but deletes every sub-action and releases every destination-scoped guard/key.
 
 Unchanged includes action IDs, payloads, destination-scoped key owners, target configuration,
@@ -47,20 +48,20 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 - [x] Derive admission, input, timing and state-transition scenarios from the full call path.
 - [x] Validate reciprocal mappings and focused execution.
 
-[test_givenEmergencyOnly_whenCancelled]: ./cancel.t.sol#L185
-[test_givenAdminAndEmergency_whenCancelled]: ./cancel.t.sol#L192
+[test_givenEmergencyOnly_whenCancelled]: ./cancel.t.sol#L209
+[test_givenAdminAndEmergency_whenCancelled]: ./cancel.t.sol#L216
 [test_givenCallerIsNotEmergency_reverts]: ./cancel.t.sol#L41
-[test_givenEmergencyRoleRevoked_whenCancelled_reverts]: ./cancel.t.sol#L270
-[test_whenUnknownActionCancelled_reverts]: ./cancel.t.sol#L199
-[test_whenUnknownActionBoundaryIds_reverts]: ./cancel.t.sol#L211
-[test_givenActionAlreadyExecuted_reverts]: ./cancel.t.sol#L123
-[test_givenActionAlreadyCancelled_reverts]: ./cancel.t.sol#L139
-[test_givenQueuedAction_emergencyCancelsWhileDisabled]: ./cancel.t.sol#L170
-[test_givenBothPoliciesPausedInactive_whenCancelled_reverts]: ./cancel.t.sol#L229
-[test_givenPoliciesAreInactive_whenEmergencyCancels_reverts]: ./cancel.t.sol#L66
-[test_givenActionIsExpired_cancelsAndReleasesConfigurationKey]: ./cancel.t.sol#L155
-[test_whenCancellationTimeVaries]: ./cancel.t.sol#L261
-[test_givenOperatorRotatedAndStale_whenCancelled]: ./cancel.t.sol#L247
-[test_givenEmergency_cancelsAndReleasesConfigurationKey]: ./cancel.t.sol#L51
-[test_givenEmergency_cancelsBatchAndReleasesEveryConfigurationKey]: ./cancel.t.sol#L86
+[test_givenEmergencyRoleRevoked_whenCancelled_reverts]: ./cancel.t.sol#L294
+[test_whenUnknownActionCancelled_reverts]: ./cancel.t.sol#L223
+[test_whenUnknownActionBoundaryIds_reverts]: ./cancel.t.sol#L235
+[test_givenActionAlreadyExecuted_reverts]: ./cancel.t.sol#L124
+[test_givenActionAlreadyCancelled_reverts]: ./cancel.t.sol#L140
+[test_givenQueuedAction_emergencyCancelsWhileDisabled]: ./cancel.t.sol#L171
+[test_givenBothPoliciesPausedInactive_whenCancelled_reverts]: ./cancel.t.sol#L253
+[test_givenPoliciesAreInactive_whenEmergencyCancels_reverts]: ./cancel.t.sol#L67
+[test_givenActionIsExpired_cancelsAndReleasesConfigurationKey]: ./cancel.t.sol#L156
+[test_whenCancellationTimeVaries]: ./cancel.t.sol#L285
+[test_givenOperatorRotatedAndStale_whenCancelled]: ./cancel.t.sol#L271
+[test_givenEmergency_cancelsAndReleasesConfigurationKey]: ./cancel.t.sol#L52
+[test_givenEmergency_cancelsBatchAndReleasesEveryConfigurationKey]: ./cancel.t.sol#L87
 [test_givenQueuedRoute_whenEmergencyCancels_routeIsNotCreated]: ./cancel.t.sol#L22

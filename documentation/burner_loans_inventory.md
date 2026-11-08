@@ -104,4 +104,4 @@ Claim-free surplus can be burned or rescued separately. A zero raw token balance
 
 `BurnerLoansInventoryConfigTimelock` can be selected as Inventory's independent config operator. ADMIN or `burner_loans_admin` can propose `queueBurnSurplus` or `queueRescueSurplus`. The queue must be active/enabled and Inventory active in the same Kernel. Core settlement must be idle when the Inventory operation runs.
 
-Burning requires Inventory locally enabled. Rescue permits a local Inventory pause. Emergency cancellation requires the queue active/enabled but does not depend on Inventory readiness. Pointer/controller drift and stale commitments prevent unintended execution. See the [queue authority matrix](burner_loans_access_control.md#config-timelock-matrix).
+Burning requires Inventory locally enabled. Rescue permits a local Inventory pause. Emergency cancellation requires the queue Kernel-active, permits a local queue pause and does not depend on Inventory readiness. Pointer/controller drift and stale commitments prevent unintended execution. See the [queue authority matrix](burner_loans_access_control.md#config-timelock-matrix).

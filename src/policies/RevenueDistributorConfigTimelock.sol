@@ -14,6 +14,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+import {SafeCallDecoder} from "src/libraries/SafeCallDecoder.sol";
 
 // Contracts
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -72,16 +73,9 @@ contract RevenueDistributorConfigTimelock is
         if (target == address(0)) {
             revert RevenueDistributorConfigTimelock_InvalidDistributor(target);
         }
-        if (
-            !ERC165Checker.supportsInterface(target, type(IRevenueDistributor).interfaceId) ||
-            !ERC165Checker.supportsInterface(target, type(IRevenueDistributorRescue).interfaceId) ||
-            !ERC165Checker.supportsInterface(target, type(IConfigOperator).interfaceId) ||
-            !ERC165Checker.supportsInterface(target, type(IEnabler).interfaceId)
-        ) revert RevenueDistributorConfigTimelock_InvalidDistributor(target);
+        _requireTargetInterfaces(target);
         // Construction permits deployment before the distributor is active or enabled.
         PolicyDependency.requireSameKernel(target, address(kernel_));
-        // forge-lint: disable-next-line(unused-return)
-        PolicyDependency.readEnabled(target);
         _DISTRIBUTOR = distributor_;
         _DISTRIBUTOR_RESCUE = IRevenueDistributorRescue(target);
     }
@@ -207,13 +201,22 @@ contract RevenueDistributorConfigTimelock is
     }
 
     /// @inheritdoc IRevenueDistributorConfigTimelock
-    /// @dev Validates the current combined entitlement; execution rechecks current routing.
-    ///      Reverts if:
-    ///      - The caller lacks admin or revenue_distributor_admin authority.
-    ///      - The timelock is disabled, Kernel-inactive, or no longer the selected operator.
-    ///      - The asset has no code, or the recipient or destination is zero.
-    ///      - The amount is zero or exceeds the recipient's current combined entitlement.
-    ///      - A conflicting action is pending, the payload is malformed, or queue bounds fail.
+    /// @dev Admission validates current entitlement; execution rechecks current routing.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - The caller holds neither ADMIN nor REVENUE_DISTRIBUTOR_ADMIN.
+    ///      - The operator metadata is invalid or this timelock is not selected.
+    ///      - The distributor is Kernel-inactive or reports a different Kernel.
+    ///      - The asset has no deployed code.
+    ///      - The recipient is zero.
+    ///      - The destination is invalid.
+    ///      - The amount is zero.
+    ///      - The amount exceeds the current combined entitlement.
+    ///      - The target preview rejects the requested rescue.
+    ///      - A conflicting key is reserved.
+    ///      - The shared queue action-ID or deadline bounds are exceeded.
+    ///
     /// @param asset_ Token owed.
     /// @param recipient_ Recipient currently owed the pending payout.
     /// @param destination_ Recipient of the rescued tokens.
@@ -342,8 +345,8 @@ contract RevenueDistributorConfigTimelock is
         }
     }
 
-    /// @dev Stales route changes on distribution changes, and rescue only when the asset's
-    ///      listing state changes. New token receipts do not stale rescue.
+    /// @dev Stales route changes on distribution or selected-operator changes, and rescue on
+    ///      listing-state or selected-operator changes. New token receipts do not stale rescue.
     function _currentConfigStateHash(
         uint64,
         uint256,
@@ -351,7 +354,7 @@ contract RevenueDistributorConfigTimelock is
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32) {
         if (action_.selector == IRevenueDistributor.setYieldRecipient.selector) {
-            return keccak256(abi.encode(_DISTRIBUTOR.yieldRecipient()));
+            return keccak256(abi.encode(_DISTRIBUTOR.yieldRecipient(), _readConfigOperator()));
         }
         address asset = abi.decode(action_.payload, (address));
         if (
@@ -360,9 +363,10 @@ contract RevenueDistributorConfigTimelock is
         ) {
             // Rescue stays queued across balance or payout changes. A listing-state change
             // invalidates it; the distributor checks the requested amount again at execution.
-            return keccak256(abi.encode(_DISTRIBUTOR.assetState(asset)));
+            return keccak256(abi.encode(_DISTRIBUTOR.assetState(asset), _readConfigOperator()));
         }
-        return _DISTRIBUTOR.assetDistributionHash(asset);
+        return
+            keccak256(abi.encode(_DISTRIBUTOR.assetDistributionHash(asset), _readConfigOperator()));
     }
 
     /// @dev Reverts if:
@@ -410,7 +414,6 @@ contract RevenueDistributorConfigTimelock is
 
     /// @dev Reverts if:
     ///      - This timelock is Kernel-inactive.
-    ///      - This timelock is locally disabled.
     ///      - The caller lacks the emergency role.
     ///
     /// @dev Target lifecycle and operator selection do not gate cancellation.
@@ -420,7 +423,6 @@ contract RevenueDistributorConfigTimelock is
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
         _requireOwnPolicyActive();
-        _requireEnabled();
         _requireRole(caller_, EMERGENCY_ROLE);
     }
 
@@ -465,9 +467,36 @@ contract RevenueDistributorConfigTimelock is
     }
 
     /// @dev Reverts if:
-    ///      - This timelock is no longer the distributor's selected operator.
+    ///      - The target lacks a consumed distributor, rescue, ConfigOperator or Enabler interface.
+    function _requireTargetInterfaces(address target_) private view {
+        if (
+            !ERC165Checker.supportsInterface(target_, type(IRevenueDistributor).interfaceId) ||
+            !ERC165Checker.supportsInterface(
+                target_,
+                type(IRevenueDistributorRescue).interfaceId
+            ) ||
+            !ERC165Checker.supportsInterface(target_, type(IConfigOperator).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IEnabler).interfaceId)
+        ) revert RevenueDistributorConfigTimelock_InvalidDistributor(target_);
+    }
+
+    /// @dev Reverts if:
+    ///      - The distributor's operator getter fails or returns a noncanonical address.
+    function _readConfigOperator() private view returns (address operator) {
+        bool success;
+        (success, operator) = SafeCallDecoder.safeReadAddress(
+            address(_DISTRIBUTOR),
+            IConfigOperator.configOperator.selector
+        );
+        if (!success)
+            revert RevenueDistributorConfigTimelock_InvalidDistributor(address(_DISTRIBUTOR));
+    }
+
+    /// @dev Reverts if:
+    ///      - The distributor's operator getter fails or returns a noncanonical address.
+    ///      - This timelock is not the selected operator.
     function _requireSelectedOperator() internal view {
-        if (IConfigOperator(address(_DISTRIBUTOR)).configOperator() != address(this)) {
+        if (_readConfigOperator() != address(this)) {
             revert IConfigOperator.ConfigOperator_Unauthorized(address(this));
         }
     }
@@ -488,10 +517,24 @@ contract RevenueDistributorConfigTimelock is
         PolicyDependency.requireActiveAndEnabled(address(_DISTRIBUTOR), address(kernel));
     }
 
-    /// @dev Reverts unconditionally:
-    ///      - This helper is called, regardless of the supplied target or selector.
-    ///
-    /// @dev The error includes the action's target and selector.
+    /// @dev Target local enablement is neither read nor required.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
+    function _requireActivationReady() private view {
+        _requireOwnPolicyActive();
+        _requireTargetInterfaces(address(_DISTRIBUTOR));
+        PolicyDependency.requireActive(address(_DISTRIBUTOR), address(kernel));
+        _requireSelectedOperator();
+    }
+
+    /// @dev Reverts if:
+    ///      - This helper is called; it always raises InvalidAction with the target and selector.
     function _revertUnsupportedAction(
         ITimelockBatchQueue.BatchAction memory action_
     ) internal pure {
@@ -519,8 +562,7 @@ contract RevenueDistributorConfigTimelock is
     ///      - This policy is inactive or a required operational dependency is unavailable.
     function _beforeEnable(bytes calldata data_) internal view override {
         if (data_.length != 0) revert RevenueDistributorConfigTimelock_InvalidData();
-        _requireOwnPolicyActive();
-        _requireTargetActiveAndEnabled();
+        _requireActivationReady();
     }
 
     /// @inheritdoc EnablerV2
@@ -538,8 +580,7 @@ contract RevenueDistributorConfigTimelock is
     ///      - The enable prerequisites fail.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
-        _requireOwnPolicyActive();
-        _requireTargetActiveAndEnabled();
+        _requireActivationReady();
     }
 
     /// @inheritdoc ReEnablerGracePeriod

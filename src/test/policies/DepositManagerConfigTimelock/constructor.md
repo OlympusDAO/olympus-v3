@@ -30,6 +30,12 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 - [x] Derive admission, input, timing and state-transition scenarios from the full call path.
 - [x] Validate reciprocal mappings and focused execution.
 
+## Construction without runtime readiness
+
+| ID | Caller | Target condition | Result | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| DMCT-CONSTRUCTOR-L02 | Fuzz deployer | Consumed interfaces and same-Kernel binding valid; target activity, enabled and selected-operator reads revert | Success | Target bound; queue disabled; no readiness/selection reads | Covered: [test][test_givenRuntimeReadinessGettersRevert_whenConstructed] |
+
 [test_whenDepositManagerIsZero_reverts]: constructor.t.sol#L27
 [test_whenDepositManagerDoesNotSupportRequiredInterfaces_reverts]: constructor.t.sol#L35
 [test_whenDepositManagerOnlySupportsV1_reverts]: constructor.t.sol#L50
@@ -42,3 +48,4 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 [test_whenAnyDeployerConstructs]: constructor.t.sol#L89
 [test_givenValidParameters_setsImmutableConfiguration]: constructor.t.sol#L75
 [test_givenTargetPausedInactive_whenConstructed]: constructor.t.sol#L111
+[test_givenRuntimeReadinessGettersRevert_whenConstructed]: ./constructor.t.sol#L169

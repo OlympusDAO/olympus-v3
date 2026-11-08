@@ -599,7 +599,9 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         vm.prank(admin);
         distributor.setAssetRoutes(address(token), 0, routes);
 
-        bytes32 currentHash = keccak256(abi.encode(distributor.assetState(address(token))));
+        bytes32 currentHash = keccak256(
+            abi.encode(distributor.assetState(address(token)), distributor.configOperator())
+        );
         _assertSurplusExecutionFailure(
             id,
             token,
@@ -626,7 +628,9 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         vm.prank(admin);
         distributor.disableAssetRoutes(address(token));
 
-        bytes32 currentHash = keccak256(abi.encode(distributor.assetState(address(token))));
+        bytes32 currentHash = keccak256(
+            abi.encode(distributor.assetState(address(token)), distributor.configOperator())
+        );
         _assertSurplusExecutionFailure(
             id,
             token,
@@ -694,7 +698,9 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         uint64 next = configTimelock.nextActionId();
         bytes memory payload = abi.encode(address(asset_), destination_);
         bytes32 key = _surplusKey(address(asset_));
-        bytes32 configHash = keccak256(abi.encode(distributor.assetState(address(asset_))));
+        bytes32 configHash = keccak256(
+            abi.encode(distributor.assetState(address(asset_)), distributor.configOperator())
+        );
         ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](1);
         batch[0] = ITimelockBatchQueue.BatchAction({
             target: address(distributor),
@@ -913,6 +919,34 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         );
         vm.expectEmit(true, true, false, true, address(configTimelock));
         emit ITimelockBatchQueue.TimelockActionExecuted(_surplusActionId, caller_);
+    }
+
+    // Scenarios: RDCT-QUEUE-RESCUE-P01.
+    function test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes() public {
+        token.mint(address(distributor), _QUEUED_PAYOUT);
+        uint256 custodyBefore = token.balanceOf(address(distributor));
+        uint256 destinationBefore = token.balanceOf(bob);
+        uint64 id = _assertSurplusQueued(token, bob, admin);
+        (, bytes32 queuedHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+        vm.prank(admin);
+        distributor.setConfigOperator(alice);
+        assertTrue(
+            queuedHash !=
+                keccak256(
+                    abi.encode(distributor.assetState(address(token)), distributor.configOperator())
+                ),
+            "Operator drift changes surplus rescue commitment"
+        );
+        vm.prank(admin);
+        distributor.setConfigOperator(address(configTimelock));
+        vm.warp(configTimelock.getQueuedAction(id).executableAt);
+        configTimelock.executeQueuedAction(id);
+        assertEq(
+            token.balanceOf(bob),
+            destinationBefore + custodyBefore,
+            "Restored operator permits live-balance rescue"
+        );
+        assertEq(token.balanceOf(address(distributor)), 0, "Rescue transfers all current custody");
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unused-return,unsafe-typecast)

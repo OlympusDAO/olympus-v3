@@ -244,7 +244,7 @@ contract RevenueDistributorConfigTimelockQueueDisableAssetRoutesTest is
         routes[0] = IRevenueDistributor.AssetRoute({recipient: alice, bps: 1});
         vm.prank(admin);
         distributor.setAssetRoutes(address(token), 0, routes);
-        bytes32 actualHash = distributor.assetDistributionHash(address(token));
+        bytes32 actualHash = _routeStateHash(address(token));
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
@@ -334,7 +334,7 @@ contract RevenueDistributorConfigTimelockQueueDisableAssetRoutesTest is
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
         vm.prank(admin);
         distributor.disableAssetRoutes(address(token));
-        bytes32 actualHash = distributor.assetDistributionHash(address(token));
+        bytes32 actualHash = _routeStateHash(address(token));
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
@@ -372,7 +372,7 @@ contract RevenueDistributorConfigTimelockQueueDisableAssetRoutesTest is
         address recipient = address(_activeYieldRecipient());
         vm.prank(admin);
         distributor.setYieldRecipient(recipient);
-        bytes32 actualHash = distributor.assetDistributionHash(address(token));
+        bytes32 actualHash = _routeStateHash(address(token));
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
@@ -735,6 +735,39 @@ contract RevenueDistributorConfigTimelockQueueDisableAssetRoutesTest is
             address(0x1234),
             true,
             true
+        );
+    }
+
+    // Scenarios: QDAR-P01.
+    function test_whenQueuedConfiguration_commitsCurrentOperatorAndRestorationExecutes() public {
+        _activateAsset(address(token));
+        vm.prank(admin);
+        uint64 id = configTimelock.queueDisableAssetRoutes(address(token));
+        (, bytes32 stateHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+        assertEq(
+            stateHash,
+            keccak256(
+                abi.encode(
+                    distributor.assetDistributionHash(address(token)),
+                    address(configTimelock)
+                )
+            ),
+            "Retirement commitment includes selected operator"
+        );
+        vm.prank(admin);
+        distributor.setConfigOperator(bob);
+        assertTrue(
+            stateHash != _routeStateHash(address(token)),
+            "Operator drift changes retirement commitment"
+        );
+        vm.prank(admin);
+        distributor.setConfigOperator(address(configTimelock));
+        vm.warp(configTimelock.getQueuedAction(id).executableAt);
+        configTimelock.executeQueuedAction(id);
+        assertEq(
+            uint8(distributor.assetState(address(token))),
+            uint8(IRevenueDistributor.AssetState.Retired),
+            "Restored operator permits retirement"
         );
     }
 }

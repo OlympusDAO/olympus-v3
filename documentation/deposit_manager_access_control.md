@@ -46,6 +46,8 @@ a disabled DepositManager; mixed batches retain every configuration action's ena
 The timelock must remain the selected config operator. Execution is permissionless after the delay. Emergency cancellation requires the
 timelock active, permits its local disablement, and does not inspect DepositManager's lifecycle.
 
+Timelock enable/reEnable require compatible consumed interfaces, the same Kernel, active DepositManager membership and selection as its config operator. They do not read or require DepositManager enablement. This allows repairing the queue during a target pause without enabling ordinary configuration actions, which still require the target operational. Operator installation follows DepositManager's own setter prerequisites.
+
 Kernel deactivation pauses, rather than destroys, queued actions. After both policies are
 reactivated, an unexpired action may execute if its config operator and expected configuration
 pre-state still match. An active timelock can cancel an action while DepositManager remains inactive.
@@ -62,7 +64,7 @@ different token.
 
 Holding `deposit_manager_admin` alone does not permit direct rescue. ADMIN or a manager can propose
 `queueRescue(token)` through the selected timelock. The queue uses `previewRescue(token)` for admission.
-It commits eligibility rather than a balance. Execution rechecks eligibility and transfers the full
+It commits eligibility and selected-operator identity rather than a balance. Execution rechecks eligibility and transfers the full
 live balance to the current Treasury. New receipts and Treasury upgrades do not stale the action.
 Onboarding the token as an asset, vault, or stored share token makes the rescue commitment stale.
 ADMIN retains direct recovery if the timelock is unavailable.

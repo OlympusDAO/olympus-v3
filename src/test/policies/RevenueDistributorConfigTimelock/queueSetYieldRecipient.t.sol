@@ -429,7 +429,9 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
         vm.prank(admin);
         distributor.setYieldRecipient(address(liveRecipient));
-        bytes32 actualHash = keccak256(abi.encode(address(liveRecipient)));
+        bytes32 actualHash = keccak256(
+            abi.encode(address(liveRecipient), distributor.configOperator())
+        );
         vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
 
         vm.expectRevert(
@@ -1008,6 +1010,31 @@ contract RevenueDistributorConfigTimelockQueueSetYieldRecipientTest is
     // Scenarios: QSYR-P04.
     function test_whenZeroRecipientQueues_reverts_RolesOverlapSeed() public {
         test_whenZeroRecipientQueues_reverts(false, 1, address(0x1234), true, true);
+    }
+
+    // Scenarios: QSYR-P01.
+    function test_whenQueuedConfiguration_commitsCurrentOperatorAndRestorationExecutes() public {
+        address candidate = address(_activeYieldRecipient());
+        vm.prank(admin);
+        uint64 id = configTimelock.queueSetYieldRecipient(candidate);
+        (, bytes32 stateHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+        assertEq(
+            stateHash,
+            keccak256(abi.encode(distributor.yieldRecipient(), address(configTimelock))),
+            "Yield commitment includes selected operator"
+        );
+        vm.prank(admin);
+        distributor.setConfigOperator(bob);
+        assertTrue(
+            stateHash !=
+                keccak256(abi.encode(distributor.yieldRecipient(), distributor.configOperator())),
+            "Operator drift changes yield commitment"
+        );
+        vm.prank(admin);
+        distributor.setConfigOperator(address(configTimelock));
+        vm.warp(configTimelock.getQueuedAction(id).executableAt);
+        configTimelock.executeQueuedAction(id);
+        assertEq(distributor.yieldRecipient(), candidate, "Restored operator permits yield update");
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast,unused-return)

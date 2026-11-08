@@ -18,7 +18,7 @@ Times are uint48 seconds: Q=queuedAt, T=Q+1 day, E=T+3 days. Values use raw asse
 
 Asset-period keys hash the asset, uint8 period and operator under the period domain.
 The tuple must already exist. Zero/unregistered tuples fail InvalidAssetPeriod rather than
-the route-creation validators. Pre-state hashes isConfigured and isEnabled. Enable and disable
+the route-creation validators. Pre-state hashes isConfigured, isEnabled and current DM.configOperator(). Enable and disable
 share the same key. Periods span 1..MAX8 when the tuple is configured.
 
 Unchanged includes action IDs, payloads, destination-scoped key owners, target configuration,
@@ -29,7 +29,7 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 
 | ID | Caller | Execution / effects | Test |
 | --- | --- | --- | --- |
-| DMCT-QUEUE-ENABLE-PERIOD-A01 | Fuzz ADMIN-only, manager-only and overlapping grants | Queue exact target selector/payload; preserve target state | Covered: [test][test_givenAdminOnly_whenTypedActionQueued], [test][test_givenManagerOnly_whenTypedActionQueued], [test][test_givenBothRoles_whenTypedActionQueued] |
+| DMCT-QUEUE-ENABLE-PERIOD-A01 | Fuzz ADMIN-only, manager-only and overlapping grants | Queue exact target selector/payload; preserve target state; independently assert current target operator in stored pre-state | Covered: [test][test_givenAdminOnly_whenTypedActionQueued], [test][test_givenManagerOnly_whenTypedActionQueued], [test][test_givenBothRoles_whenTypedActionQueued] |
 | DMCT-QUEUE-ENABLE-PERIOD-A02 | Fuzz callers outside both permitted roles | NotAuthorised(); Unchanged | Covered: [test][test_whenTypedActionCallerUnauthorized_reverts] |
 
 ## Lifecycle and binding

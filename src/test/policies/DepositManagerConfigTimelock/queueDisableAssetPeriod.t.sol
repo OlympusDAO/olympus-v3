@@ -213,7 +213,7 @@ contract DepositManagerConfigTimelockQueueDisableAssetPeriodTest is
         depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
         _warpReady();
 
-        _expectStale(actionId, 0, keccak256(abi.encode(true, false)));
+        _expectStale(actionId, 0, keccak256(abi.encode(true, false, address(_configTimelock))));
         _configTimelock.executeQueuedAction(actionId);
         _assertPending(actionId);
     }

@@ -966,7 +966,12 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
             assertEq(storedKey, key, "stored guard key matches asset");
             assertEq(
                 stateHash,
-                keccak256(abi.encode(IRevenueDistributor.AssetState.NeverListed)),
+                keccak256(
+                    abi.encode(
+                        IRevenueDistributor.AssetState.NeverListed,
+                        distributor.configOperator()
+                    )
+                ),
                 "guard hash matches"
             );
             assertEq(configTimelock.pendingActionId(key), actionId, "asset key belongs to batch");
@@ -1140,6 +1145,7 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
                 address(recipient)
             )
         );
+        changedHash = keccak256(abi.encode(changedHash, distributor.configOperator()));
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(
@@ -1211,6 +1217,7 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
                     address(recipient)
                 )
             );
+            changedHash = keccak256(abi.encode(changedHash, distributor.configOperator()));
             vm.expectRevert(
                 abi.encodeWithSelector(
                     IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
@@ -1249,11 +1256,7 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         vm.prank(admin);
         uint64 actionId = configTimelock.queueSetAssetRoutes(address(token), 0, shares);
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
-        assertEq(
-            expectedHash,
-            distributor.assetDistributionHash(address(token)),
-            "route state was captured"
-        );
+        assertEq(expectedHash, _routeStateHash(address(token)), "route state was captured");
 
         vm.expectRevert(
             abi.encodeWithSelector(

@@ -19,7 +19,7 @@ Times are uint48 seconds: Q=queuedAt, T=Q+1 day, E=T+3 days. Values use raw asse
 Required is boolean. The wrapper delegates custody-route validation to DM. A synchronous
 vault accepts either value; an idle asset cannot require shares; an asynchronous redeem vault
 cannot disable the shares requirement. The key hashes the withdrawal domain and asset,
-independently of limits and asset-period keys. Pre-state = hash(isConfigured,current required).
+independently of limits and asset-period keys. Pre-state = keccak256(abi.encode(isConfigured,current required,DM.configOperator())).
 
 Unchanged includes action IDs, payloads, destination-scoped key owners, target configuration,
 receipt-token registration, custody and accounting. Reverts commit no logs. Queueing and
@@ -29,7 +29,7 @@ cancellation transfer no tokens; execution dispatches only the accepted configur
 
 | ID | Caller | Execution / effects | Test |
 | --- | --- | --- | --- |
-| DMCT-QUEUE-WITHDRAWAL-A01 | Fuzz ADMIN-only, manager-only and overlapping grants | Queue exact target selector/payload; preserve target state | Covered: [test][test_givenAdminOnly_whenTypedActionQueued], [test][test_givenManagerOnly_whenTypedActionQueued], [test][test_givenBothRoles_whenTypedActionQueued] |
+| DMCT-QUEUE-WITHDRAWAL-A01 | Fuzz ADMIN-only, manager-only and overlapping grants | Queue exact target selector/payload; preserve target state; independently assert current target operator in stored pre-state | Covered: [test][test_givenAdminOnly_whenTypedActionQueued], [test][test_givenManagerOnly_whenTypedActionQueued], [test][test_givenBothRoles_whenTypedActionQueued] |
 | DMCT-QUEUE-WITHDRAWAL-A02 | Fuzz callers outside both permitted roles | NotAuthorised(); Unchanged | Covered: [test][test_whenCallerIsUnauthorized_reverts] |
 
 ## Lifecycle and binding

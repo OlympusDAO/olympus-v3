@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.constructor coverage plan
 
-Source: [constructor](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L57).
+Source: [constructor](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L61).
 
 ## Scope and fixtures
 
@@ -16,13 +16,14 @@ Failed deployment commits no contract/logs.
 | --- | --- | --- | --- | --- | --- |
 | BLINCT-CONSTRUCTOR-I01 | Fuzz deployer | I=0 | InvalidInventory(0) | No deployment | Covered: [test][test_whenInventoryZero_reverts] |
 | BLINCT-CONSTRUCTOR-I02 | Fuzz deployer | I=EOA | InvalidInventory(I) | No deployment | Covered: [test][test_whenInventoryEOA_reverts] |
-| BLINCT-CONSTRUCTOR-I03 | Fuzz deployer | Missing Inventory interface | InvalidInventory(I) | No deployment | Covered: [test][test_givenRequiredInterfaceMissing_whenDeployed_reverts] |
-| BLINCT-CONSTRUCTOR-I04 | Fuzz deployer | Missing IEnabler interface | InvalidInventory(I) | No deployment | Covered: [test][test_givenRequiredInterfaceMissing_whenDeployed_reverts] |
+| BLINCT-CONSTRUCTOR-I03 | Fuzz deployer | Missing Inventory interface | InvalidInventory(I) | No deployment | Covered: [test][test_givenRequiredInterfaceMissing_whenDeployed_reverts], [seeds][test_givenEachRequiredInterfaceMissing_whenDeployed_reverts] |
+| BLINCT-CONSTRUCTOR-I04 | Fuzz deployer | Missing IEnabler interface | InvalidInventory(I) | No deployment | Covered: [test][test_givenRequiredInterfaceMissing_whenDeployed_reverts], [seeds][test_givenEachRequiredInterfaceMissing_whenDeployed_reverts] |
 | BLINCT-CONSTRUCTOR-I05 | Fuzz deployer | Other Kernel | PolicyDependency_KernelMismatch(Inventory,expectedKernel,reportedKernel) | No deployment | Covered: [test][test_givenInventoryOnOtherKernel_whenDeployed_reverts] |
 | BLINCT-CONSTRUCTOR-I06 | Fuzz deployer | ERC165 supportsInterface reverts | InvalidInventory(I) | No deployment | Covered: [test][test_givenERC165Reverts_whenDeployed_reverts] |
 | BLINCT-CONSTRUCTOR-I07 | Fuzz deployer | ERC165 returns malformed short data | InvalidInventory(I) | No deployment | Covered: [test][test_givenERC165Malformed_whenDeployed_reverts] |
-| BLINCT-CONSTRUCTOR-I08 | Fuzz deployer | Both required interfaces supported; kernel() reverts with typed error | PolicyDependency_InvalidDependency(Inventory) | No deployment | Covered: [test][test_givenKernelViewReverts_whenDeployed_reverts] |
-| BLINCT-CONSTRUCTOR-I09 | Fuzz deployer | Both required interfaces supported; kernel() returns empty data | PolicyDependency_InvalidDependency(Inventory) | No deployment | Covered: [test][test_givenKernelViewEmpty_whenDeployed_reverts] |
+| BLINCT-CONSTRUCTOR-I08 | Fuzz deployer | All three consumed interfaces supported; kernel() reverts with typed error | PolicyDependency_InvalidDependency(Inventory) | No deployment | Covered: [test][test_givenKernelViewReverts_whenDeployed_reverts] |
+| BLINCT-CONSTRUCTOR-I09 | Fuzz deployer | All three consumed interfaces supported; kernel() returns empty data | PolicyDependency_InvalidDependency(Inventory) | No deployment | Covered: [test][test_givenKernelViewEmpty_whenDeployed_reverts] |
+| BLINCT-CONSTRUCTOR-I10 | Fuzz deployer | Missing IConfigOperator interface | InvalidInventory(I) | No deployment | Covered: [test][test_givenRequiredInterfaceMissing_whenDeployed_reverts], [test][test_givenEachRequiredInterfaceMissing_whenDeployed_reverts] |
 
 ## Successful construction
 
@@ -38,13 +39,23 @@ Binding is verified without requiring target lifecycle or reverse selection. Def
 - [x] Review these expectations.
 - [x] Complete passing test mappings.
 
-[test_whenInventoryZero_reverts]: ./constructor.t.sol#L30
-[test_whenInventoryEOA_reverts]: ./constructor.t.sol#L35
-[test_givenRequiredInterfaceMissing_whenDeployed_reverts]: ./constructor.t.sol#L41
-[test_givenInventoryOnOtherKernel_whenDeployed_reverts]: ./constructor.t.sol#L55
-[test_givenERC165Reverts_whenDeployed_reverts]: ./constructor.t.sol#L71
-[test_givenERC165Malformed_whenDeployed_reverts]: ./constructor.t.sol#L84
-[test_givenKernelViewReverts_whenDeployed_reverts]: ./constructor.t.sol#L97
-[test_givenKernelViewEmpty_whenDeployed_reverts]: ./constructor.t.sol#L114
-[test_givenAnyInventoryLifecycle_whenDeployed_thenExactDefaults]: ./constructor.t.sol#L127
-[test_givenEachInventoryLifecyclePair_whenDeployed_thenExactDefaults]: ./constructor.t.sol#L175
+## Construction without runtime readiness
+
+The constructor validates the same consumed interface set as enable/reEnable and the same-Kernel binding. It does not read target activity, enabled state or selected configOperator.
+
+| ID | Caller | Target condition | Result | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLINCT-CONSTRUCTOR-P05 | Fuzz deployer | Target activity, isEnabled and configOperator reads revert; consumed interfaces and Kernel binding valid | Success | No readiness/selection reads; target bound; queue disabled | Covered: [test][test_givenRuntimeReadinessGettersRevert_whenConstructed] |
+
+[test_whenInventoryZero_reverts]: ./constructor.t.sol#L31
+[test_whenInventoryEOA_reverts]: ./constructor.t.sol#L36
+[test_givenRequiredInterfaceMissing_whenDeployed_reverts]: ./constructor.t.sol#L42
+[test_givenInventoryOnOtherKernel_whenDeployed_reverts]: ./constructor.t.sol#L61
+[test_givenERC165Reverts_whenDeployed_reverts]: ./constructor.t.sol#L77
+[test_givenERC165Malformed_whenDeployed_reverts]: ./constructor.t.sol#L90
+[test_givenKernelViewReverts_whenDeployed_reverts]: ./constructor.t.sol#L103
+[test_givenKernelViewEmpty_whenDeployed_reverts]: ./constructor.t.sol#L120
+[test_givenAnyInventoryLifecycle_whenDeployed_thenExactDefaults]: ./constructor.t.sol#L133
+[test_givenEachInventoryLifecyclePair_whenDeployed_thenExactDefaults]: ./constructor.t.sol#L216
+[test_givenEachRequiredInterfaceMissing_whenDeployed_reverts]: ./constructor.t.sol#L168
+[test_givenRuntimeReadinessGettersRevert_whenConstructed]: ./constructor.t.sol#L177

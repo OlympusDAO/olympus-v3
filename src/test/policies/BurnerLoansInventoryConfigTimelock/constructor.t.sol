@@ -10,6 +10,7 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
 import {IBurnerLoansInventoryConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansInventoryConfigTimelock.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
@@ -37,12 +38,17 @@ contract BurnerLoansInventoryConfigTimelockConstructorTest is
         _expectInvalidInventory(candidate_, deployer_);
     }
 
-    // Scenarios: BLINCT-CONSTRUCTOR-I03, BLINCT-CONSTRUCTOR-I04.
+    // Scenarios: BLINCT-CONSTRUCTOR-I03, BLINCT-CONSTRUCTOR-I04, BLINCT-CONSTRUCTOR-I10.
     function test_givenRequiredInterfaceMissing_whenDeployed_reverts(
-        bool enabler_,
+        uint8 index_,
         address deployer_
     ) public {
-        bytes4 id = enabler_ ? type(IEnabler).interfaceId : type(IBurnerLoansInventory).interfaceId;
+        bytes4[3] memory ids = [
+            type(IBurnerLoansInventory).interfaceId,
+            type(IEnabler).interfaceId,
+            type(IConfigOperator).interfaceId
+        ];
+        bytes4 id = ids[bound(index_, 0, 2)];
         vm.mockCall(
             address(_inventory),
             abi.encodeWithSignature("supportsInterface(bytes4)", id),
@@ -156,6 +162,41 @@ contract BurnerLoansInventoryConfigTimelockConstructorTest is
         assertFalse(_roles.hasRole(address(fresh), ADMIN_ROLE), "No implicit ADMIN grant");
         assertEq(_ohm.balanceOf(address(fresh)), 0, "No funds delivered");
         assertEq(_inventoryDigest(), funds, "Construction preserves live Inventory accounting");
+    }
+
+    // Scenarios: BLINCT-CONSTRUCTOR-I03, BLINCT-CONSTRUCTOR-I04, BLINCT-CONSTRUCTOR-I10.
+    function test_givenEachRequiredInterfaceMissing_whenDeployed_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 i; i < 3; ++i) {
+            test_givenRequiredInterfaceMissing_whenDeployed_reverts(i, address(this));
+            _restore(checkpoint);
+        }
+    }
+
+    // Scenarios: BLINCT-CONSTRUCTOR-P05.
+    function test_givenRuntimeReadinessGettersRevert_whenConstructed(address deployer_) public {
+        vm.mockCallRevert(address(_inventory), abi.encodeWithSignature("isEnabled()"), hex"ff");
+        vm.mockCallRevert(
+            address(_inventory),
+            abi.encodeWithSignature("configOperator()"),
+            hex"ff"
+        );
+        vm.mockCallRevert(
+            address(_kernel),
+            abi.encodeWithSignature("isPolicyActive(address)", address(_inventory)),
+            hex"ff"
+        );
+        vm.prank(deployer_);
+        BurnerLoansInventoryConfigTimelock fresh = new BurnerLoansInventoryConfigTimelock(
+            _kernel,
+            _inventory
+        );
+        assertEq(
+            address(fresh.inventory()),
+            address(_inventory),
+            "Compatible target bound without readiness reads"
+        );
+        assertFalse(fresh.isEnabled(), "Construction leaves queue disabled");
     }
 
     function _expectInvalidInventory(address inventory_, address deployer_) internal {

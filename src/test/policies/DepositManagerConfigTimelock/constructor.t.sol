@@ -164,6 +164,32 @@ contract DepositManagerConfigTimelockConstructorTest is DepositManagerConfigTime
         );
         new DepositManagerConfigTimelock(kernel, IDepositManager(address(depositManager)));
     }
+
+    // Scenarios: DMCT-CONSTRUCTOR-L02.
+    function test_givenRuntimeReadinessGettersRevert_whenConstructed(address deployer_) public {
+        vm.mockCallRevert(address(depositManager), abi.encodeWithSignature("isEnabled()"), hex"ff");
+        vm.mockCallRevert(
+            address(depositManager),
+            abi.encodeWithSignature("configOperator()"),
+            hex"ff"
+        );
+        vm.mockCallRevert(
+            address(kernel),
+            abi.encodeWithSignature("isPolicyActive(address)", address(depositManager)),
+            hex"ff"
+        );
+        vm.prank(deployer_);
+        DepositManagerConfigTimelock fresh = new DepositManagerConfigTimelock(
+            kernel,
+            IDepositManager(address(depositManager))
+        );
+        assertEq(
+            address(fresh.depositManager()),
+            address(depositManager),
+            "Compatible target bound without readiness reads"
+        );
+        assertFalse(fresh.isEnabled(), "Construction leaves queue disabled");
+    }
 }
 
 // forge-lint: disable-end(literal-instead-of-constant)

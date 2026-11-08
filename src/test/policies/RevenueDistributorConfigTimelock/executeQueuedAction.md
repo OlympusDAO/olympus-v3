@@ -82,7 +82,7 @@ Execute the stored amount=4 at a valid ready timestamp. Expect one unchanged RD 
 
 | ID | Caller | Change after queue | Execution outcome / effects | Test |
 | --- | --- | --- | --- | --- |
-| RDT-E03 | Fuzz executor | Entitlement increases from 10 to 12; stored amount=4 | Hash unchanged; pay exactly 4, leave entitlement=8; complete action and release key | Covered: [test][test_givenQueuedRequest_whenEntitlementIncreases] |
+| RDT-E03 | Fuzz executor | Entitlement increases from 10 to 12; stored amount=4 | Hash unchanged; pay exactly 4, leave entitlement=8; complete action and release key | Covered: [test][test_givenQueuedRequest_whenEntitlementIncreases], [operator commitment and restoration][test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes] |
 | RDT-E04 | Fuzz executor | Entitlement decreases to 3; stored amount=4 | RevenueDistributor_InsufficientPendingDistribution(asset,4,3); no transfer; retain action/key | Covered: [test][test_givenQueuedRequest_whenEntitlementIsInsufficient_reverts] |
 | RDT-E06 | Fuzz executor | Token rejects the stored recovery transfer | Exact configured token failure; balances/entitlement and whole action/key state roll back | Covered: [test][test_givenQueuedRequest_whenTokenRejectsTransfer_reverts] |
 | RDT-E09 | Fuzz executor | Routes change while asset stays Active and original recipient remains entitled to at least 4 | Hash unchanged; pay stored 4 using current entitlement; no duplicated RD allocation calculation | Covered: [test][test_givenQueuedFixedRecipient_whenRouteChanges] |
@@ -100,12 +100,12 @@ Execute the stored amount=4 at a valid ready timestamp. Expect one unchanged RD 
 [test_givenOperatorRotatedAfterQueue_whenConfigurationExecuted_reverts]: ./executeQueuedAction.t.sol#L374
 [test_givenTargetDisabledAfterQueue_whenConfigurationExecuted_revertsThenRetries]: ./executeQueuedAction.t.sol#L247
 [test_givenTargetInactiveAfterQueue_whenExecuted_revertsThenRetries]: ./executeQueuedAction.t.sol#L279
-[test_givenQueuedRequest_givenTimelockDisabled_whenExecuted_reverts]: ./queueRescuePendingPayout.t.sol#L860
-[test_givenQueuedRequest_givenTimelockInactive_whenExecuted_reverts]: ./queueRescuePendingPayout.t.sol#L869
+[test_givenQueuedRequest_givenTimelockDisabled_whenExecuted_reverts]: ./queueRescuePendingPayout.t.sol#L870
+[test_givenQueuedRequest_givenTimelockInactive_whenExecuted_reverts]: ./queueRescuePendingPayout.t.sol#L879
 [test_givenQueuedActiveAsset_whenRetired_reverts]: ./queueRescuePendingPayout.t.sol#L632
-[test_givenTwoDifferentAssetRoutes_whenBatchExecutes]: ./queueBatch.t.sol#L1340
-[test_givenConflictingRouteAndYield_whenRouteFirstBatchExecutes_revertsAtomically]: ./queueBatch.t.sol#L1087
-[test_givenConflictingRouteAndYield_whenYieldFirstBatchExecutes_revertsAtomically]: ./queueBatch.t.sol#L1123
+[test_givenTwoDifferentAssetRoutes_whenBatchExecutes]: ./queueBatch.t.sol#L1343
+[test_givenConflictingRouteAndYield_whenRouteFirstBatchExecutes_revertsAtomically]: ./queueBatch.t.sol#L1092
+[test_givenConflictingRouteAndYield_whenYieldFirstBatchExecutes_revertsAtomically]: ./queueBatch.t.sol#L1128
 [test_givenQueuedRescueBatch_whenLaterBucketPaidBeforeExecution_reverts]: ./queueBatch.t.sol#L74
 [test_givenTimelockDisabled_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L314
 [test_givenTimelockInactive_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L329
@@ -118,49 +118,51 @@ Execute the stored amount=4 at a valid ready timestamp. Expect one unchanged RD 
 [test_whenExecutedOrUnknownActionRead_returnsTerminalStateAndDefaults]: ./executeQueuedAction.t.sol#L176
 [test_whenRouteChanges_executionRevertsAndRetainsKey]: ./queueSetAssetRoutes.t.sol#L431
 [test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey]: ./queueSetYieldRecipient.t.sol#L419
-[test_givenCompatibleRouteAndYield_whenBatchExecutesInSuppliedOrder]: ./queueBatch.t.sol#L1167
+[test_givenCompatibleRouteAndYield_whenBatchExecutesInSuppliedOrder]: ./queueBatch.t.sol#L1173
 [test_givenQueuedRequest_whenEntitlementIncreases]: ./queueRescuePendingPayout.t.sol#L458
 [test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient]: ./queueRescuePendingPayout.t.sol#L480
 [test_givenQueuedRequest_whenEntitlementEqualsAmount]: ./queueRescuePendingPayout.t.sol#L508
 [test_givenQueuedRequest_whenCustodyIncreases]: ./queueRescuePendingPayout.t.sol#L536
-[test_givenQueuedFixedRecipient_whenTreasuryUpgraded]: ./queueRescuePendingPayout.t.sol#L702
-[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts]: ./queueRescuePendingPayout.t.sol#L727
-[test_givenQueuedRequest_whenDistributorBecomesInactive_reverts]: ./queueRescuePendingPayout.t.sol#L842
-[test_givenQueuedFixedRecipient_whenRouteChanges]: ./queueRescuePendingPayout.t.sol#L660
+[test_givenQueuedFixedRecipient_whenTreasuryUpgraded]: ./queueRescuePendingPayout.t.sol#L712
+[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts]: ./queueRescuePendingPayout.t.sol#L737
+[test_givenQueuedRequest_whenDistributorBecomesInactive_reverts]: ./queueRescuePendingPayout.t.sol#L852
+[test_givenQueuedFixedRecipient_whenRouteChanges]: ./queueRescuePendingPayout.t.sol#L670
 [test_givenQueuedRequest_whenEntitlementIsInsufficient_reverts]: ./queueRescuePendingPayout.t.sol#L561
-[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts]: ./queueRescuePendingPayout.t.sol#L765
-[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts]: ./queueRescuePendingPayout.t.sol#L817
-[test_givenQueuedRequest_whenTokenRejectsTransfer_reverts]: ./queueRescuePendingPayout.t.sol#L800
-[test_givenQueuedFixedRecipient_whenYieldRecipientChanges]: ./queueRescuePendingPayout.t.sol#L677
+[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts]: ./queueRescuePendingPayout.t.sol#L775
+[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts]: ./queueRescuePendingPayout.t.sol#L827
+[test_givenQueuedRequest_whenTokenRejectsTransfer_reverts]: ./queueRescuePendingPayout.t.sol#L810
+[test_givenQueuedFixedRecipient_whenYieldRecipientChanges]: ./queueRescuePendingPayout.t.sol#L687
 [test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts]: ./queueRescuePendingPayout.t.sol#L593
 [test_givenSameActionCallback_whenNestedFailureCaught]: ./executeQueuedActionCallback.t.sol#L13
 [test_givenIndependentActionCallback_whenNestedFailureCaught]: ./executeQueuedActionCallback.t.sol#L26
 [test_givenSameActionCallback_whenNestedFailurePropagated_reverts]: ./executeQueuedActionCallback.t.sol#L40
 [test_givenIndependentActionCallback_whenNestedFailurePropagated_reverts]: ./executeQueuedActionCallback.t.sol#L51
-[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1406
-[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1418
-[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1430
-[test_givenQueuedRequest_whenEntitlementEqualsAmount_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1442
-[test_givenQueuedRequest_whenEntitlementEqualsAmount_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1452
-[test_givenQueuedRequest_whenEntitlementEqualsAmount_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1462
-[test_givenQueuedRequest_whenCustodyIncreases_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1327
-[test_givenQueuedRequest_whenCustodyIncreases_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1332
-[test_givenQueuedRequest_whenCustodyIncreases_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1337
-[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1374
-[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1384
-[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1396
-[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1291
-[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1303
-[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1315
-[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1472
-[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1482
-[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1494
-[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1342
-[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1352
-[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1364
-[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1261
-[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1271
-[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1281
-[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1231
-[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1241
-[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1251
+[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1418
+[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1430
+[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1442
+[test_givenQueuedRequest_whenEntitlementEqualsAmount_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1454
+[test_givenQueuedRequest_whenEntitlementEqualsAmount_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1464
+[test_givenQueuedRequest_whenEntitlementEqualsAmount_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1474
+[test_givenQueuedRequest_whenCustodyIncreases_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1339
+[test_givenQueuedRequest_whenCustodyIncreases_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1344
+[test_givenQueuedRequest_whenCustodyIncreases_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1349
+[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1386
+[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1396
+[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1408
+[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1303
+[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1315
+[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1327
+[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1484
+[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1494
+[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1506
+[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1354
+[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1364
+[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1376
+[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1273
+[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1283
+[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1293
+[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1243
+[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1253
+[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1263
+
+[test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes]: ./queueRescuePendingPayout.t.sol#L1541

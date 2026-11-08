@@ -170,7 +170,7 @@ contract DepositManagerConfigTimelockQueueSetAssetShareWithdrawalRequiredTest is
         depositManager.setAssetShareWithdrawalRequired(iAsset, true);
         _warpReady();
 
-        _expectStale(actionId, 0, keccak256(abi.encode(true, true)));
+        _expectStale(actionId, 0, keccak256(abi.encode(true, true, address(_configTimelock))));
         _configTimelock.executeQueuedAction(actionId);
         _assertPending(actionId);
     }

@@ -50,8 +50,12 @@ contract BurnerLoansInventoryConfigTimelock is
     IBurnerLoansInventory internal immutable _INVENTORY;
 
     /// @notice Binds this queue to one already-deployed same-Kernel Inventory.
+    /// @dev Construction does not query target activity, local enablement or operator selection.
     /// @dev Reverts if:
-    ///      - Inventory lacks its interface or reports a different Kernel. Local activity is not required yet.
+    ///      - The target lacks a consumed domain, ConfigOperator or Enabler interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///
     /// @param kernel_ Kernel supplying governance roles.
     /// @param inventory_ Immutable routing/recovery target.
     constructor(
@@ -62,12 +66,7 @@ contract BurnerLoansInventoryConfigTimelock is
         ReEnablerGracePeriod(LoanParameters._REENABLE_GRACE_PERIOD)
         ConfigTimelockBatchQueue(MIN_TIMELOCK_DELAY)
     {
-        if (
-            !ERC165Checker.supportsInterface(
-                address(inventory_),
-                type(IBurnerLoansInventory).interfaceId
-            ) || !ERC165Checker.supportsInterface(address(inventory_), type(IEnabler).interfaceId)
-        ) revert BurnerLoansInventoryTimelock_InvalidInventory(address(inventory_));
+        _requireTargetInterfaces(address(inventory_));
         PolicyDependency.requireSameKernel(address(inventory_), address(kernel_));
         _INVENTORY = inventory_;
     }
@@ -162,8 +161,11 @@ contract BurnerLoansInventoryConfigTimelock is
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    /// @dev Typed, argument-free queue functions construct the immutable target, selector and empty payload.
-    ///      Only burn consumes an enabled-only service; paused rescue is intentionally supported.
+    /// @dev Typed helpers construct the immutable target, selector and empty payload.
+    /// @dev Rescue permits a local Inventory pause.
+    /// @dev Reverts if:
+    ///      - A burn action targets locally disabled Inventory.
+    ///      - The burn action's Inventory enabled-state getter fails or cannot be ABI-decoded.
     function _validateConfigSubAction(
         address,
         uint64,
@@ -195,7 +197,9 @@ contract BurnerLoansInventoryConfigTimelock is
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    /// @dev Controller changes invalidate queued recovery; surplus and Treasury remain live.
+    /// @dev Commits the operator; surplus and Treasury balances remain live.
+    /// @dev Reverts if:
+    ///      - A consumed target getter fails or cannot be ABI-decoded.
     function _currentConfigStateHash(
         uint64,
         uint256,
@@ -233,7 +237,13 @@ contract BurnerLoansInventoryConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
-    /// @dev Controller drift is rejected by each stored pre-state commitment before target dispatch.
+    /// @dev The shared base separately checks stored operator commitments.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - Inventory's Kernel getter fails or returns malformed data.
+    ///      - Inventory reports a different Kernel.
+    ///      - Inventory is Kernel-inactive.
     function _validateExecution(
         address,
         uint64,
@@ -243,21 +253,26 @@ contract BurnerLoansInventoryConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
+    /// @dev Local pause, broken targets and operator selection do not prevent cancellation.
     /// @dev Reverts if:
-    ///      - Local admission fails or caller lacks EMERGENCY. Broken targets do not prevent cancellation.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The caller lacks EMERGENCY.
     function _validateCancellation(
         address caller_,
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
         _requireOwnActive();
-        _requireEnabled();
         _requireRole(caller_, EMERGENCY_ROLE);
     }
 
     /// @notice Validates this queue and its Inventory service, independent of Core lifecycle.
     /// @dev Reverts if:
-    ///      - Locally disabled/inactive or Inventory is inactive or reports another Kernel.
+    ///      - This timelock is Kernel-inactive.
+    ///      - This timelock is locally disabled.
+    ///      - Inventory's Kernel getter fails or returns malformed data.
+    ///      - Inventory reports a different Kernel.
+    ///      - Inventory is Kernel-inactive.
     function _requireReady() private view {
         _requireOwnActive();
         _requireEnabled();
@@ -288,33 +303,71 @@ contract BurnerLoansInventoryConfigTimelock is
     }
 
     /// @inheritdoc EnablerV2
+    /// @dev Target local enablement is neither read nor required.
     /// @dev Reverts if:
-    ///      - Payload is nonempty, own policy inactive, target Kernel changed or controller unselected.
+    ///      - Lifecycle data is nonempty.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _beforeEnable(bytes calldata data_) internal view override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
         _validateActivation();
     }
 
     /// @inheritdoc EnablerV2
+    /// @dev Kernel inactivity does not prevent disable.
     /// @dev Reverts if:
-    ///      - Payload is nonempty. Inactive disable remains available.
+    ///      - Lifecycle data is nonempty.
     function _beforeDisable(bytes calldata data_) internal pure override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
     }
 
     /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Target local enablement is neither read nor required.
     /// @dev Reverts if:
-    ///      - Initialization/grace or the identical enable prerequisites fail.
+    ///      - The inclusive grace deadline exceeds uint48.
+    ///      - The inclusive grace deadline has expired.
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
         _validateActivation();
     }
 
-    /// @notice Revalidates target identity and selection without requiring Core operation.
+    /// @dev Construction and activation share this compatibility predicate.
     /// @dev Reverts if:
-    ///      - Own policy inactive, bound Kernel changed or controller unselected.
+    ///      - The target lacks a consumed domain, ConfigOperator or Enabler interface.
+    function _requireTargetInterfaces(address target_) private view {
+        if (
+            !ERC165Checker.supportsInterface(target_, type(IBurnerLoansInventory).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IConfigOperator).interfaceId) ||
+            !ERC165Checker.supportsInterface(target_, type(IEnabler).interfaceId)
+        ) revert BurnerLoansInventoryTimelock_InvalidInventory(target_);
+    }
+
+    /// @notice Revalidates target identity and selection without requiring Core operation.
+    /// @dev Target local enablement is neither read nor required.
+    /// @dev Reverts if:
+    ///      - This timelock is Kernel-inactive.
+    ///      - The target lacks a consumed interface.
+    ///      - The target Kernel getter fails or returns malformed data.
+    ///      - The target reports a different Kernel.
+    ///      - The target is Kernel-inactive.
+    ///      - The target operator getter fails or returns malformed data.
+    ///      - This timelock is not the target's selected config operator.
     function _validateActivation() private view {
         _requireOwnActive();
+        address target = address(_INVENTORY);
+        _requireTargetInterfaces(target);
         _requireInventoryActive();
         if (IConfigOperator(address(_INVENTORY)).configOperator() != address(this))
             revert NotAuthorised();

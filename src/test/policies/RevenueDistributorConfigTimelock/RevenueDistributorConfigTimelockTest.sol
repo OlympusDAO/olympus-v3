@@ -55,6 +55,13 @@ abstract contract RevenueDistributorConfigTimelockTest is RevenueDistributorTest
         actionId = configTimelock.queueSetAssetRoutes(asset_, 0, _emptyRoutes());
     }
 
+    function _routeStateHash(address asset_) internal view returns (bytes32) {
+        return
+            keccak256(
+                abi.encode(distributor.assetDistributionHash(asset_), distributor.configOperator())
+            );
+    }
+
     function _queuedKey(uint64 actionId_, uint256 index_) internal view returns (bytes32 key) {
         // Callers only need the key; the expected configuration hash is intentionally omitted.
         // forge-lint: disable-next-line(unused-return)
@@ -68,6 +75,8 @@ abstract contract RevenueDistributorConfigTimelockTest is RevenueDistributorTest
     function _newActivatedTimelock() internal returns (RevenueDistributorConfigTimelock fresh_) {
         fresh_ = _newTimelock();
         _setPolicyActive(address(fresh_), true);
+        vm.prank(admin);
+        distributor.setConfigOperator(address(fresh_));
     }
 
     function _newTimelockWithoutModules()
