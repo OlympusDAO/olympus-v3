@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.disable coverage plan
 
-Source: [disable](../../../bases/EnablerV2.sol#L72). Concrete behavior: [_beforeDisable](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L301).
+Source: [disable](../../../bases/EnablerV2.sol#L72). Concrete behavior: [_beforeDisable](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L325).
 
 ## Scope and fixtures
 

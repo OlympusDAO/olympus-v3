@@ -42,8 +42,8 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Inputs / competing fault | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-A01 | Fuzz caller excluding all ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holders | lastTransitionAt nonzero; within grace | `NotAuthorised()` | Unchanged | Covered: [test_givenDisabled_whenUnauthorizedReEnables_reverts](reEnable.t.sol#L124) |
-| BLLIQ-REENABLE-A02 | Fuzz caller excluding all ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holders | lastTransitionAt nonzero; expired grace; one failed dependency | `NotAuthorised()` | Unchanged; authorization before grace/dependency | Covered: [test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins](reEnable.t.sol#L152) |
+| BLLIQ-REENABLE-A01 | Fuzz caller excluding all ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holders | lastTransitionAt nonzero; within grace | `NotAuthorised()` | Unchanged | Covered: [test_givenDisabled_whenUnauthorizedReEnables_reverts][test_givenDisabled_whenUnauthorizedReEnables_reverts] |
+| BLLIQ-REENABLE-A02 | Fuzz caller excluding all ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holders | lastTransitionAt nonzero; expired grace; one failed dependency | `NotAuthorised()` | Unchanged; authorization before grace/dependency | Covered: [test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins][test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins] |
 
 ## Local transition state
 
@@ -51,8 +51,8 @@ These checks run before authorization and hook dependencies. Fuzz all callers; m
 
 | ID | Caller | Local active | Local enabled | Prior transition L | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; before caller, grace and dependencies | Covered: [test_givenEnabled_whenAnyCallerReEnables_reverts](reEnable.t.sol#L137), [test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins](reEnable.t.sol#L328) |
-| BLLIQ-REENABLE-L02 | Fuzz all callers | Fuzz false/true | false | 0 | `NeverEnabled()` | Unchanged; before caller, grace and dependencies | Covered: [test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence](reEnable.t.sol#L239), [test_givenActivatedButNeverEnabled_whenReEnabled_thenHistoryWins](reEnable.t.sol#L455) |
+| BLLIQ-REENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; before caller, grace and dependencies | Covered: [test_givenEnabled_whenAnyCallerReEnables_reverts][test_givenEnabled_whenAnyCallerReEnables_reverts], [test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins][test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins] |
+| BLLIQ-REENABLE-L02 | Fuzz all callers | Fuzz false/true | false | 0 | `NeverEnabled()` | Unchanged; before caller, grace and dependencies | Covered: [test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence][test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence], [test_givenActivatedButNeverEnabled_whenReEnabled_thenHistoryWins][test_givenActivatedButNeverEnabled_whenReEnabled_thenHistoryWins] |
 
 ## Lifecycle
 
@@ -62,11 +62,11 @@ Local action disabled; reported Core Kernel matches; ROLES initialized; previous
 
 | ID | Caller | Local active | Local enabled | Core active | Core enabled | Action settlement role | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-L03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansSeize) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenInactive_whenReEnabled_reverts](reEnable.t.sol#L30), [test_givenEachPermittedRole_givenInactive_whenReEnabled_reverts](reEnable.t.sol#L333) |
-| BLLIQ-REENABLE-D01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L496), [test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L523) |
-| BLLIQ-REENABLE-D02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L496), [test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L523) |
-| BLLIQ-REENABLE-D03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L496), [test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L523) |
-| BLLIQ-REENABLE-L04 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | true | true | false | `ROLES_RequireRole(BL_LIQUIDATION_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenSettlementRoleRevoked_whenReEnabled_reverts](reEnable.t.sol#L217), [test_givenEachPermittedRole_givenSettlementRoleRevoked_whenReEnabled_reverts](reEnable.t.sol#L373) |
+| BLLIQ-REENABLE-L03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansSeize) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenInactive_whenReEnabled_reverts][test_givenInactive_whenReEnabled_reverts], [test_givenEachPermittedRole_givenInactive_whenReEnabled_reverts][test_givenEachPermittedRole_givenInactive_whenReEnabled_reverts] |
+| BLLIQ-REENABLE-D01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-D02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-D03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-L04 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | true | true | false | `ROLES_RequireRole(BL_LIQUIDATION_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenSettlementRoleRevoked_whenReEnabled_reverts][test_givenSettlementRoleRevoked_whenReEnabled_reverts], [test_givenEachPermittedRole_givenSettlementRoleRevoked_whenReEnabled_reverts][test_givenEachPermittedRole_givenSettlementRoleRevoked_whenReEnabled_reverts] |
 
 ## Inventory lifecycle
 
@@ -74,10 +74,10 @@ Local active=true, Local enabled=false, Core active=true and Core enabled=true; 
 
 | ID | Caller | Inventory active | Inventory enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-D05 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | false | true | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L550), [test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L577) |
-| BLLIQ-REENABLE-D06 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L550), [test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L577) |
-| BLLIQ-REENABLE-D07 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | false | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L550), [test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L577) |
-| BLLIQ-REENABLE-D08 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | true | Success after restoring the failed Inventory state and retrying | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now); positions and balances preserved | Covered: [test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L550), [test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L577) |
+| BLLIQ-REENABLE-D05 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | false | true | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry][test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-D06 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry][test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-D07 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | false | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry][test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-D08 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | true | Success after restoring the failed Inventory state and retrying | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now); positions and balances preserved | Covered: [test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry][test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry] |
 
 ## Timing and transition history
 
@@ -85,9 +85,9 @@ Action locally disabled and Kernel-active; same-Kernel Core active+enabled; sett
 
 | ID | Caller | Now / fuzz interval / seeds | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-P01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz now in L..D-1; seed L,D-1; seed L=MAX48-G to reach maximum representable D | Success | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now) | Covered: [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition](reEnable.t.sol#L52), [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition](reEnable.t.sol#L251) |
-| BLLIQ-REENABLE-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | now=D; fuzz compatible L,G; seed D=MAX48 | Success | Same exact transition; inclusive deadline | Covered: [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition](reEnable.t.sol#L52), [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition](reEnable.t.sol#L251) |
-| BLLIQ-REENABLE-P03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | D<MAX48; fuzz now in D+1..MAX48; seed D+1,MAX48 | `GracePeriod_Expired(D)` | Unchanged; no committed logs | Covered: [test_givenExpiredGrace_whenReEnabled_reverts](reEnable.t.sol#L69), [test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError](reEnable.t.sol#L286) |
+| BLLIQ-REENABLE-P01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz now in L..D-1; seed L,D-1; seed L=MAX48-G to reach maximum representable D | Success | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now) | Covered: [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition], [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition] |
+| BLLIQ-REENABLE-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | now=D; fuzz compatible L,G; seed D=MAX48 | Success | Same exact transition; inclusive deadline | Covered: [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition], [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition] |
+| BLLIQ-REENABLE-P03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | D<MAX48; fuzz now in D+1..MAX48; seed D+1,MAX48 | `GracePeriod_Expired(D)` | Unchanged; no committed logs | Covered: [test_givenExpiredGrace_whenReEnabled_reverts][test_givenExpiredGrace_whenReEnabled_reverts], [test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError][test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError] |
 
 ## Dependency compatibility
 
@@ -95,7 +95,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Dependency / binding condition | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-D04 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Core reports another Kernel; lastTransitionAt nonzero; within grace | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch](reEnable.t.sol#L169), [test_givenEachPermittedRole_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch](reEnable.t.sol#L352) |
+| BLLIQ-REENABLE-D04 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Core reports another Kernel; lastTransitionAt nonzero; within grace | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch][test_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch], [test_givenEachPermittedRole_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch][test_givenEachPermittedRole_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch] |
 
 ## Grace deadline overflow
 
@@ -103,7 +103,7 @@ Initialized, locally disabled; otherwise compatible dependencies. Configure G wh
 
 | ID | Caller | Prior transition L | Grace G | Now | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-N01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz MAX48-G+1..MAX48 | Configured G in 1..MAX32; seed1,MAX32 | L | `SafeCastOverflowedUintDowncast(48, uint256(L)+uint256(G))` | Unchanged; no committed transition logs | Covered: [test_givenGraceDeadlineOverflow_whenReEnabled_reverts](reEnable.t.sol#L97), [test_givenEachPermittedRole_whenGraceOverflows_thenExactTypedError](reEnable.t.sol#L305) |
+| BLLIQ-REENABLE-N01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz MAX48-G+1..MAX48 | Configured G in 1..MAX32; seed1,MAX32 | L | `SafeCastOverflowedUintDowncast(48, uint256(L)+uint256(G))` | Unchanged; no committed transition logs | Covered: [test_givenGraceDeadlineOverflow_whenReEnabled_reverts][test_givenGraceDeadlineOverflow_whenReEnabled_reverts], [test_givenEachPermittedRole_whenGraceOverflows_thenExactTypedError][test_givenEachPermittedRole_whenGraceOverflows_thenExactTypedError] |
 
 Implemented lifecycle payload rule: calculate D=uint256(L)+uint256(G), then use checked SafeCast narrowing to uint48. If D exceeds MAX48, revert with SafeCastOverflowedUintDowncast(48,D). The product-local _requireGrace override uses widened addition and checked uint48 narrowing; it leaves shared ReEnabler behavior unchanged. Preserve local enabled state, transition timestamp, configuration and balances; commit no lifecycle events. The duration setter cannot validate an unknown future disable timestamp.
 
@@ -123,7 +123,7 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 | ID | Caller | Local active | Local enabled | Cached ROLES | lastTransitionAt | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-L05 | Fuzz all callers | false | false | 0 | 0 | `NeverEnabled()` before authorization; no ROLES call | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence](reEnable.t.sol#L239) |
+| BLLIQ-REENABLE-L05 | Fuzz all callers | false | false | 0 | 0 | `NeverEnabled()` before authorization; no ROLES call | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence][test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence] |
 
 ## Payout activation readiness
 
@@ -133,7 +133,33 @@ recovery callers and independently valid grace windows.
 
 | ID | Payout active | Payout enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQ-REENABLE-D09 | true | false | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L392), [test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L418), [test_givenEachPermittedRole_givenPayoutPaused_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L473) |
-| BLLIQ-REENABLE-D10 | false | true | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L392), [test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L418) |
-| BLLIQ-REENABLE-D11 | false | false | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L392), [test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L418) |
-| BLLIQ-REENABLE-D12 | true | true | Success after restoring failed Payout state and retrying reEnable | Exact Enabled/Transition events and timestamp; accounting preserved | Covered: [test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L392), [test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L418), [test_givenEachPermittedRole_givenPayoutPaused_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L473) |
+| BLLIQ-REENABLE-D09 | true | false | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry][test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry], [test_givenEachPermittedRole_givenPayoutPaused_whenReEnabled_thenRejectAndRetry][test_givenEachPermittedRole_givenPayoutPaused_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-D10 | false | true | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry][test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-D11 | false | false | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry][test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry] |
+| BLLIQ-REENABLE-D12 | true | true | Success after restoring failed Payout state and retrying reEnable | Exact Enabled/Transition events and timestamp; accounting preserved | Covered: [test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry][test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry][test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry], [test_givenEachPermittedRole_givenPayoutPaused_whenReEnabled_thenRejectAndRetry][test_givenEachPermittedRole_givenPayoutPaused_whenReEnabled_thenRejectAndRetry] |
+
+[test_givenActivatedButNeverEnabled_whenReEnabled_thenHistoryWins]: reEnable.t.sol#L455
+[test_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L169
+[test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L496
+[test_givenDisabled_whenUnauthorizedReEnables_reverts]: reEnable.t.sol#L124
+[test_givenEachPermittedRole_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L352
+[test_givenEachPermittedRole_givenInactive_whenReEnabled_reverts]: reEnable.t.sol#L333
+[test_givenEachPermittedRole_givenPayoutPaused_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L473
+[test_givenEachPermittedRole_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L373
+[test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError]: reEnable.t.sol#L286
+[test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition]: reEnable.t.sol#L251
+[test_givenEachPermittedRole_whenGraceOverflows_thenExactTypedError]: reEnable.t.sol#L305
+[test_givenEachUnavailableCoreStateAndPermittedRole_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L523
+[test_givenEachUnavailableInventoryStateAndPermittedRole_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L577
+[test_givenEachUnavailablePayoutState_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L418
+[test_givenEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L137
+[test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins]: reEnable.t.sol#L152
+[test_givenExpiredGrace_whenReEnabled_reverts]: reEnable.t.sol#L69
+[test_givenGraceDeadlineOverflow_whenReEnabled_reverts]: reEnable.t.sol#L97
+[test_givenInactive_whenReEnabled_reverts]: reEnable.t.sol#L30
+[test_givenInventoryUnavailable_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L550
+[test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence]: reEnable.t.sol#L239
+[test_givenPayoutUnavailable_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L392
+[test_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L217
+[test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition]: reEnable.t.sol#L52
+[test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins]: reEnable.t.sol#L328

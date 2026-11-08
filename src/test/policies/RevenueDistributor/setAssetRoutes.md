@@ -69,6 +69,8 @@ For these rows RD is active/enabled and every unspecified input is valid. Prior 
 | SAR-I18 | Selected config operator | Contract | Positive | Valid or empty | Valid total | Active/enabled, interface-compatible | Vault address is neither shares nor underlying; noncanonical share/underlying words; return length other than 128 bytes, including legacy 96 bytes | RevenueDistributor_YieldRecipientUnavailable(recipient, asset) in validator and execution | Route hash and active set unchanged | Covered: [wrong token][test_givenVaultIsNotShareToken_whenRepurchaseRouteSet_reverts], [address words][test_givenFourWordVaultConfig_whenAddressWordMalformed_reverts], [maximum words][test_givenFourWordVaultConfig_whenAddressWordsAtMaximum_reverts], [lengths][test_givenVaultConfig_whenReturnLengthIsNotFourWords_reverts], [length seeds][test_givenVaultConfig_whenReturnLengthBoundaries_reverts] |
 | SAR-I07 | Fuzz ADMIN-only, selected configOperator-only and overlapping authority; seed each | Contract | Positive | Valid or empty | Valid total | Fuzz locally disabled/Kernel-inactive after selection | Any | PolicyDependency_NotActive(recipient) | Unchanged; checked before route BPS or vault lookup | Covered: [test][test_givenSelectedYieldRecipientDisabled_whenPositiveRouteSet_reverts], [test][test_givenSelectedYieldRecipientBecomesUnavailable_whenPositiveRouteSet_revertsBeforeInputs], [test][test_givenSelectedYieldRecipientDisabled_whenPositiveRouteSet_reverts_AdminOnlySeed], [test][test_givenSelectedYieldRecipientDisabled_whenPositiveRouteSet_reverts_OperatorOnlySeed], [test][test_givenSelectedYieldRecipientDisabled_whenPositiveRouteSet_reverts_RolesOverlapSeed], [test][test_givenSelectedYieldRecipientBecomesUnavailable_whenPositiveRouteSet_revertsBeforeInputs_AdminOnlySeed], [test][test_givenSelectedYieldRecipientBecomesUnavailable_whenPositiveRouteSet_revertsBeforeInputs_OperatorOnlySeed], [test][test_givenSelectedYieldRecipientBecomesUnavailable_whenPositiveRouteSet_revertsBeforeInputs_RolesOverlapSeed] |
 
+Retired duplicate caller IDs: SAR-A02, SAR-I08, SAR-I09, SAR-I10, SAR-I11, SAR-I12, SAR-I18, SAR-I19, SAR-I20, SAR-I21, SAR-I22, SAR-I23, SAR-I24. Retained caller families include explicit exclusive-role and overlapping-role seeds.
+
 [test_givenAdmin]: ./setAssetRoutes.t.sol#L190
 [test_updatesActiveSetAndHash]: ./setAssetRoutes.t.sol#L388
 [test_whenUnauthorizedCallerConfiguresRoute_reverts]: ./setAssetRoutes.t.sol#L168
@@ -118,192 +120,98 @@ For these rows RD is active/enabled and every unspecified input is valid. Prior 
 [test_givenRetiredAssetWithAnyPendingBuckets_whenNonemptyRouteSet_reactivatesAndPreservesDebt]: ./setAssetRoutes.t.sol#L1115
 [test_givenSeededUnauthorizedIdentities_whenRouteSet_reverts]: ./setAssetRoutes.t.sol#L144
 [test_givenSelectedYieldRecipientBecomesUnavailable_whenPositiveRouteSet_revertsBeforeInputs]: ./setAssetRoutes.t.sol#L1476
-Retired duplicate caller IDs: SAR-A02, SAR-I08, SAR-I09, SAR-I10, SAR-I11, SAR-I12, SAR-I18, SAR-I19, SAR-I20, SAR-I21, SAR-I22, SAR-I23, SAR-I24. Retained caller families include explicit exclusive-role and overlapping-role seeds.
-
 [test_givenAdmin_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1651
-
 [test_givenAdmin_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1656
-
 [test_givenAdmin_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1661
-
 [test_givenNeverListedAsset_whenTreasuryOnlyRouteSet_storesExactRoute_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1915
-
 [test_givenNeverListedAsset_whenTreasuryOnlyRouteSet_storesExactRoute_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1926
-
 [test_givenNeverListedAsset_whenTreasuryOnlyRouteSet_storesExactRoute_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1937
-
 [test_updatesActiveSetAndHash_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2170
-
 [test_updatesActiveSetAndHash_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2175
-
 [test_updatesActiveSetAndHash_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2180
-
 [test_givenNeverListedAsset_whenValidRecipientSetConfigured_storesExactRoute_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1948
-
 [test_givenNeverListedAsset_whenValidRecipientSetConfigured_storesExactRoute_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1961
-
 [test_givenNeverListedAsset_whenValidRecipientSetConfigured_storesExactRoute_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1974
-
 [test_givenActiveAssetWithAnyPendingBuckets_whenRouteChanges_preservesDebt_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1609
-
 [test_givenActiveAssetWithAnyPendingBuckets_whenRouteChanges_preservesDebt_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1623
-
 [test_givenActiveAssetWithAnyPendingBuckets_whenRouteChanges_preservesDebt_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1637
-
 [test_whenZeroAssetConfigured_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2320
-
 [test_whenZeroAssetConfigured_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2325
-
 [test_whenZeroAssetConfigured_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2330
-
 [test_whenEOAAssetConfigured_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2200
-
 [test_whenEOAAssetConfigured_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2205
-
 [test_whenEOAAssetConfigured_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2210
-
 [test_givenExistingConfiguration_whenInvalidAssetSet_revertsAndPreservesState_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1681
-
 [test_givenExistingConfiguration_whenInvalidAssetSet_revertsAndPreservesState_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1693
-
 [test_givenExistingConfiguration_whenInvalidAssetSet_revertsAndPreservesState_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1705
-
 [test_whenZeroRecipientConfigured_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2335
-
 [test_whenZeroRecipientConfigured_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2340
-
 [test_whenZeroRecipientConfigured_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2345
-
 [test_givenSelfRecipient_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2056
-
 [test_givenSelfRecipient_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2061
-
 [test_givenSelfRecipient_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2066
-
 [test_givenKernelRecipient_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1900
-
 [test_givenKernelRecipient_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1905
-
 [test_givenKernelRecipient_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1910
-
 [test_whenNamedRecipientIsTreasury_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2230
-
 [test_whenNamedRecipientIsTreasury_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2235
-
 [test_whenNamedRecipientIsTreasury_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2240
-
 [test_whenNamedRecipientIsYieldRecipient_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2245
-
 [test_whenNamedRecipientIsYieldRecipient_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2250
-
 [test_whenNamedRecipientIsYieldRecipient_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2255
-
 [test_givenExistingRoute_whenAnyForbiddenRecipientSet_revertsAndRollsBack_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1789
-
 [test_givenExistingRoute_whenAnyForbiddenRecipientSet_revertsAndRollsBack_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1802
-
 [test_givenExistingRoute_whenAnyForbiddenRecipientSet_revertsAndRollsBack_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1815
-
 [test_whenRecipientBasisPointsAreZero_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2260
-
 [test_whenRecipientBasisPointsAreZero_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2265
-
 [test_whenRecipientBasisPointsAreZero_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2270
-
 [test_givenExistingRoute_whenAnyRecipientBpsIsZero_revertsAndRollsBack_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1828
-
 [test_givenExistingRoute_whenAnyRecipientBpsIsZero_revertsAndRollsBack_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1840
-
 [test_givenExistingRoute_whenAnyRecipientBpsIsZero_revertsAndRollsBack_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1852
-
 [test_givenDuplicateConfiguredRecipients_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1666
-
 [test_givenDuplicateConfiguredRecipients_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1671
-
 [test_givenDuplicateConfiguredRecipients_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1676
-
 [test_givenExistingRoute_whenAdjacentOrNonAdjacentRecipientDuplicates_revertsAndRollsBack_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1717
-
 [test_givenExistingRoute_whenAdjacentOrNonAdjacentRecipientDuplicates_revertsAndRollsBack_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1729
-
 [test_givenExistingRoute_whenAdjacentOrNonAdjacentRecipientDuplicates_revertsAndRollsBack_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1741
-
 [test_whenAssetRouteBasisPointsExceedMaximum_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2185
-
 [test_whenAssetRouteBasisPointsExceedMaximum_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2190
-
 [test_whenAssetRouteBasisPointsExceedMaximum_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2195
-
 [test_givenExistingRoute_whenAnyBasisPointTotalIsInvalid_revertsAndRollsBack_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1753
-
 [test_givenExistingRoute_whenAnyBasisPointTotalIsInvalid_revertsAndRollsBack_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1765
-
 [test_givenExistingRoute_whenAnyBasisPointTotalIsInvalid_revertsAndRollsBack_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1777
-
 [test_whenMaximumUint16BasisPointsConfigured_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2215
-
 [test_whenMaximumUint16BasisPointsConfigured_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2220
-
 [test_whenMaximumUint16BasisPointsConfigured_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2225
-
 [test_whenRepurchaseBasisPointsExceedMaximum_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2290
-
 [test_whenRepurchaseBasisPointsExceedMaximum_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2295
-
 [test_whenRepurchaseBasisPointsExceedMaximum_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2300
-
 [test_whenRepurchaseAndRouteBasisPointsExceedMaximum_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2275
-
 [test_whenRepurchaseAndRouteBasisPointsExceedMaximum_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2280
-
 [test_whenRepurchaseAndRouteBasisPointsExceedMaximum_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2285
-
 [test_whenTwoMaximumRouteSharesSet_revertsWithWideTotal_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2305
-
 [test_whenTwoMaximumRouteSharesSet_revertsWithWideTotal_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2310
-
 [test_whenTwoMaximumRouteSharesSet_revertsWithWideTotal_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2315
-
 [test_givenZeroYieldRecipient_whenPositiveRepurchaseRouteSet_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2137
-
 [test_givenZeroYieldRecipient_whenPositiveRepurchaseRouteSet_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2148
-
 [test_givenZeroYieldRecipient_whenPositiveRepurchaseRouteSet_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2159
-
 [test_givenYieldRecipientVaultDisabled_whenRepurchaseRouteSet_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2104
-
 [test_givenYieldRecipientVaultDisabled_whenRepurchaseRouteSet_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2115
-
 [test_givenYieldRecipientVaultDisabled_whenRepurchaseRouteSet_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2126
-
 [test_givenYieldRecipientUnderlyingDisabled_whenRepurchaseRouteSet_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2071
-
 [test_givenYieldRecipientUnderlyingDisabled_whenRepurchaseRouteSet_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2082
-
 [test_givenYieldRecipientUnderlyingDisabled_whenRepurchaseRouteSet_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2093
-
 [test_givenExistingRoute_whenYieldRecipientCannotAcceptAsset_revertsAndRollsBack_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1864
-
 [test_givenExistingRoute_whenYieldRecipientCannotAcceptAsset_revertsAndRollsBack_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1876
-
 [test_givenExistingRoute_whenYieldRecipientCannotAcceptAsset_revertsAndRollsBack_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L1888
-
 [test_givenSelectedYieldRecipientDisabled_whenPositiveRouteSet_reverts_AdminOnlySeed]: ./setAssetRoutes.t.sol#L2023
-
 [test_givenSelectedYieldRecipientDisabled_whenPositiveRouteSet_reverts_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L2034
-
 [test_givenSelectedYieldRecipientDisabled_whenPositiveRouteSet_reverts_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2045
-
 [test_givenSelectedYieldRecipientBecomesUnavailable_whenPositiveRouteSet_revertsBeforeInputs_AdminOnlySeed]: ./setAssetRoutes.t.sol#L1987
-
 [test_givenSelectedYieldRecipientBecomesUnavailable_whenPositiveRouteSet_revertsBeforeInputs_OperatorOnlySeed]: ./setAssetRoutes.t.sol#L1999
-
 [test_givenSelectedYieldRecipientBecomesUnavailable_whenPositiveRouteSet_revertsBeforeInputs_RolesOverlapSeed]: ./setAssetRoutes.t.sol#L2011
-
 [test_givenPolicyActiveDisabledAndInputState_whenUnauthorizedCallerSetsRoute_reverts]: ./setAssetRoutes.t.sol#L65
-
 [test_givenPolicyInactiveAndInputState_whenUnauthorizedCallerSetsRoute_reverts]: ./setAssetRoutes.t.sol#L103
-
 [test_givenERC7575ShareToken_whenRepurchaseRouteSet]: ./setAssetRoutes.t.sol#L2350
 [test_givenVaultIsNotShareToken_whenRepurchaseRouteSet_reverts]: ./setAssetRoutes.t.sol#L2377
 [test_givenFourWordVaultConfig_whenAddressWordMalformed_reverts]: ./setAssetRoutes.t.sol#L2392

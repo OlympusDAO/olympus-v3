@@ -1,6 +1,6 @@
 # BurnerLoansCore.setConfigOperator coverage plan
 
-Desired API: `setConfigOperator(address)` with the corresponding `configOperator()` getter. Source references: [shared operator rotation](../../../policies/utils/ConfigOperatorSingleStep.sol#L27) and [current Core market handoff](../../../policies/burnerloans/BurnerLoansCore.sol#L677). Production now uses the shared operator API and the product-specific handoff rules below.
+Desired API: `setConfigOperator(address)` with the corresponding `configOperator()` getter. Source references: [shared operator rotation](../../../policies/utils/ConfigOperatorSingleStep.sol#L27) and [current Core market handoff](../../../policies/burnerloans/BurnerLoansCore.sol#L679). Production now uses the shared operator API and the product-specific handoff rules below.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 

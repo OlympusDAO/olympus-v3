@@ -1,6 +1,6 @@
 # BurnerLoansCore.settleSeize coverage plan
 
-Source: [settleSeize](../../../policies/burnerloans/BurnerLoansCore.sol#L390). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleSeize](../../../policies/burnerloans/BurnerLoansCore.sol#L403). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -72,7 +72,7 @@ Fixed for this table: Accounting / events: Unchanged; no committed logs.
 | ID | Caller | Operation / pre-state | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLCORE-SETTLE-SEIZE-P01 | BL_LIQUIDATION_POLICY_ROLE holder | Later borrower position absent | BurnerLoansCore_NoDebt() | Earlier defaults and all receipt/payout state roll back | Covered: [test][test_givenLaterBorrowerMissing_whenSeized_reverts] |
-| BLCORE-SETTLE-SEIZE-P02 | BL_LIQUIDATION_POLICY_ROLE holder | Ordinary keeper; positive eligible reward | Seizure succeeds | Debt defaults, actual output split; Seized per borrower then SeizureBatchSettled | Covered: [test][test_givenOrdinaryKeeper_whenSeized], [invariant_canonicalDebtAndCustodyMatchIndependentModel](settleSeize.t.sol#L963) |
+| BLCORE-SETTLE-SEIZE-P02 | BL_LIQUIDATION_POLICY_ROLE holder | Ordinary keeper; positive eligible reward | Seizure succeeds | Debt defaults, actual output split; Seized per borrower then SeizureBatchSettled | Covered: [test][test_givenOrdinaryKeeper_whenSeized], [invariant_canonicalDebtAndCustodyMatchIndependentModel][invariant_canonicalDebtAndCustodyMatchIndependentModel] |
 | BLCORE-SETTLE-SEIZE-P03 | BL_LIQUIDATION_POLICY_ROLE holder | Protocol-role keeper | Reward=0 | All actual proceeds Treasury-bound | Covered: [test][test_givenProtocolKeeper_whenSeized] |
 
 ## Transfers and dependency failures
@@ -133,3 +133,5 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 [test_givenUnexpectedOutputToken_whenSeized_reverts]: settleSeize.t.sol#L218
 [test_givenWrongKernelCaller_whenSettled]: settleSeize.t.sol#L92
 [test_whenCallerLacksSettlementRole_reverts]: settleSeize.t.sol#L59
+
+[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L963

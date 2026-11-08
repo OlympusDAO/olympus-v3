@@ -18,7 +18,7 @@ Fixed for this table: Accounting / events: ROLES getter current; no enable/grant
 
 | ID | Caller | Prior configuration / update | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLCOL-DEPENDENCIES-P01 | Fuzz all callers | Installed compatible modules, first/repeated call, module replacement | Ordered keycodes and pointers refreshed | Covered: [test_givenReplacementRoles_whenConfigured_thenCachedPointerRefreshes](configureDependencies.t.sol#L19), [test_givenUnvalidatedModuleMajor_whenFirstAndRepeatedConfiguration_thenNoVersionRead](configureDependencies.t.sol#L41), [test_whenDependenciesConfigured_thenRolesIsResolved](configureDependencies.t.sol#L92) |
+| BLCOL-DEPENDENCIES-P01 | Fuzz all callers | Installed compatible modules, first/repeated call, module replacement | Ordered keycodes and pointers refreshed | Covered: [test_givenReplacementRoles_whenConfigured_thenCachedPointerRefreshes][test_givenReplacementRoles_whenConfigured_thenCachedPointerRefreshes], [test_givenUnvalidatedModuleMajor_whenFirstAndRepeatedConfiguration_thenNoVersionRead][test_givenUnvalidatedModuleMajor_whenFirstAndRepeatedConfiguration_thenNoVersionRead], [test_whenDependenciesConfigured_thenRolesIsResolved][test_whenDependenciesConfigured_thenRolesIsResolved] |
 
 ## Missing module
 
@@ -26,7 +26,7 @@ Fixed for this table: Accounting / events: Entire call rollback, previous pointe
 
 | ID | Caller | Operation / pre-state | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLCOL-DEPENDENCIES-P02 | Fuzz all callers | Required ROLES module absent | Policy_ModuleDoesNotExist(ROLES) | Covered: [test_givenMissingRoles_whenConfigured_thenPreviousCachePreserved](configureDependencies.t.sol#L69) |
+| BLCOL-DEPENDENCIES-P02 | Fuzz all callers | Required ROLES module absent | Policy_ModuleDoesNotExist(ROLES) | Covered: [test_givenMissingRoles_whenConfigured_thenPreviousCachePreserved][test_givenMissingRoles_whenConfigured_thenPreviousCachePreserved] |
 
 ## Module-version independence
 
@@ -34,7 +34,7 @@ BaseBurnerLoansAction does not validate or read the ROLES major version. This is
 
 | ID | Caller | Module state | Execution / return | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOL-DEPENDENCIES-P03 | Fuzz all callers | Installed ROLES reports major/minor 255; fresh and repeated configuration | Success; ROLES keycode and current pointer | No VERSION call; lifecycle and loan accounting preserved | Covered: [test_givenUnvalidatedModuleMajor_whenFirstAndRepeatedConfiguration_thenNoVersionRead](configureDependencies.t.sol#L41) |
+| BLCOL-DEPENDENCIES-P03 | Fuzz all callers | Installed ROLES reports major/minor 255; fresh and repeated configuration | Success; ROLES keycode and current pointer | No VERSION call; lifecycle and loan accounting preserved | Covered: [test_givenUnvalidatedModuleMajor_whenFirstAndRepeatedConfiguration_thenNoVersionRead][test_givenUnvalidatedModuleMajor_whenFirstAndRepeatedConfiguration_thenNoVersionRead] |
 
 ## Shared assertions
 
@@ -45,3 +45,8 @@ Co-located API assertions: `ROLES`. These must be asserted independently of the 
 - [x] Review these expectations.
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to passing tests.
+
+[test_givenMissingRoles_whenConfigured_thenPreviousCachePreserved]: configureDependencies.t.sol#L69
+[test_givenReplacementRoles_whenConfigured_thenCachedPointerRefreshes]: configureDependencies.t.sol#L19
+[test_givenUnvalidatedModuleMajor_whenFirstAndRepeatedConfiguration_thenNoVersionRead]: configureDependencies.t.sol#L41
+[test_whenDependenciesConfigured_thenRolesIsResolved]: configureDependencies.t.sol#L92

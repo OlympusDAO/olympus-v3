@@ -15,7 +15,7 @@ Scope: the shared admin-or-deposit_manager_admin authorization check, reached by
 | --- | --- | --- | --- | --- |
 | DMCT-A01 | Admin; Deposit Manager Admin separately | Default; deposit-cap batch | Store exact proposer, target, selector and payload; one action ID consumed; no DM configuration change at queue | Covered: [test][test_whenAdminQueues], [test][test_whenDepositManagerAdminQueues] |
 | DMCT-A02 | Fuzz unauthorized caller; fixed unauthorized identities | Default; valid deposit-cap batch or invalid asset | NotAuthorised(); Unchanged | Covered: [test][test_whenCallerIsUnauthorized_reverts], [test][test_whenCallerIsUnauthorized_whenAssetIsZero_reverts], [test][test_whenUnauthorizedIdentitiesAreSeeded_reverts] |
-| DMCT-A03 | Fuzz unauthorized caller | Default; typed cap/share-withdrawal/period-creation queue | NotAuthorised(); input validation is not reached | Covered: [cap](./queueLimits.t.sol#L21), [withdrawal](./queueSetAssetShareWithdrawalRequired.t.sol#L34), [period][test_whenCallerIsNotAuthorized_reverts], [emergency][test_givenEmergency_whenQueueingRouteCreation_reverts] |
+| DMCT-A03 | Fuzz unauthorized caller | Default; typed cap/share-withdrawal/period-creation queue | NotAuthorised(); input validation is not reached | Covered: [cap][test_whenCallerIsUnauthorized_reverts--queueLimits], [withdrawal][test_whenCallerIsUnauthorized_reverts--queueSetAssetShareWithdrawalRequired], [period][test_whenCallerIsNotAuthorized_reverts], [emergency][test_givenEmergency_whenQueueingRouteCreation_reverts] |
 
 Lifecycle checks still precede authorization: DMCT active → DMCT enabled → caller role → DM active → selected operator → DM enabled → sub-action validation. Lifecycle behavior is covered by [enable](./enable.md), [disable](./disable.md), [reEnable](./reEnable.md) and the typed queue plans. Execution and cancellation have dedicated function plans.
 
@@ -84,3 +84,6 @@ TL denotes this timelock. Unchanged includes the queue, lifecycle and custody fi
 [test_givenPolicyInactive_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L435
 [test_givenActiveDisabled_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L462
 [test_givenUnauthorizedCaller_givenBrokenTarget_whenQueueRequested_reverts]: ./queueBatch.t.sol#L482
+
+[test_whenCallerIsUnauthorized_reverts--queueLimits]: ./queueLimits.t.sol#L21
+[test_whenCallerIsUnauthorized_reverts--queueSetAssetShareWithdrawalRequired]: ./queueSetAssetShareWithdrawalRequired.t.sol#L34

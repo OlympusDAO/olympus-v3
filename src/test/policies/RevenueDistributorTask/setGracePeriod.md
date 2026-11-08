@@ -27,21 +27,6 @@ Unchanged means lifecycle state, configuration, liabilities and balances retain 
 | RDTASK-GRACE-A04 | Any non-admin, fuzz | true | true | Fuzz 0..`type(uint32).max`; seed 0, 1 and MAX | ROLES_RequireRole(ADMIN_ROLE) before numeric validation | Unchanged | Covered: [test][test_givenEnabled_whenNonAdminSetsGracePeriod_reverts] |
 | RDTASK-GRACE-L02 | ADMIN_ROLE holder | false | true | Fuzz 1..`type(uint32).max` excluding current; seed 1 and MAX | RevenueDistributorTask_PolicyNotActive(Task) | Unchanged; no input validation, module/token calls, setter events or committed logs | Covered: [test][test_givenInactivePolicy_whenAdminChangesGrace_reverts] |
 
-[test_whenAdminSetsPositiveGracePeriod_updatesValue]: ./setGracePeriod.t.sol#L23
-
-[test_whenAdminSetsZeroGracePeriod_reverts]: ./setGracePeriod.t.sol#L41
-
-[test_givenEnabled_whenNonAdminSetsGracePeriod_reverts]: ./setGracePeriod.t.sol#L101
-[test_givenInactivePolicy_whenAdminChangesGrace_reverts]: ./setGracePeriod.t.sol#L116
-
-[test_givenCurrentGrace_whenAdminSetsSameValue]: ./setGracePeriod.t.sol#L135
-
-[test_givenGraceSetterBoundarySeeds]: ./setGracePeriod.t.sol#L225
-
-[test_givenDisabled_whenAnyCallerSetsGrace_reverts]: ./setGracePeriod.t.sol#L162
-
-[test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_revertsActivityFirst]: ./setGracePeriod.t.sol#L191
-
 ## Guard-precedence regression
 
 The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
@@ -50,4 +35,12 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | RDTASK-GRACE-L04 | Any address, fuzz, without authorization exclusions | false | false | Task locally disabled, then Kernel-deactivated; Fuzz full `uint32` input type without bounds/exclusions | `RevenueDistributorTask_PolicyNotActive(task)` before local enablement (where required), caller and input checks | Revert; no effects of the attempted action commit. Grace period is explicitly asserted unchanged. | Covered: [test][test_givenInactiveAndDisabled_whenGracePeriodSet_revertsBeforeOtherChecks] |
 
+[test_whenAdminSetsPositiveGracePeriod_updatesValue]: ./setGracePeriod.t.sol#L23
+[test_whenAdminSetsZeroGracePeriod_reverts]: ./setGracePeriod.t.sol#L41
+[test_givenEnabled_whenNonAdminSetsGracePeriod_reverts]: ./setGracePeriod.t.sol#L101
+[test_givenInactivePolicy_whenAdminChangesGrace_reverts]: ./setGracePeriod.t.sol#L116
+[test_givenCurrentGrace_whenAdminSetsSameValue]: ./setGracePeriod.t.sol#L135
+[test_givenGraceSetterBoundarySeeds]: ./setGracePeriod.t.sol#L225
+[test_givenDisabled_whenAnyCallerSetsGrace_reverts]: ./setGracePeriod.t.sol#L162
+[test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_revertsActivityFirst]: ./setGracePeriod.t.sol#L191
 [test_givenInactiveAndDisabled_whenGracePeriodSet_revertsBeforeOtherChecks]: ./setGracePeriod.t.sol#L80

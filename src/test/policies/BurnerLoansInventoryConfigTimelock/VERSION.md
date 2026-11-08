@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.VERSION coverage plan
 
-Source: [VERSION](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L375).
+Source: [VERSION](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L428).
 
 ## Scope and fixtures
 

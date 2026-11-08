@@ -1,6 +1,6 @@
 # BurnerLoansCore.setPayout coverage plan
 
-Source: [setPayout](../../../policies/burnerloans/BurnerLoansCore.sol#L895). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setPayout](../../../policies/burnerloans/BurnerLoansCore.sol#L944). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -121,38 +121,38 @@ Core active; fuzz Core enabled true/false with both seeds. Required interfaces a
 
 Retire BLCORE-CUSTODY-D02: selecting a disabled replacement is no longer permitted. Candidate-validation rows keep the earlier guard/interface/membership checks satisfied; missing, malformed or reverting validation responses use BurnerLoansCore_InvalidPayout(candidate); no dependency revert data is bubbled.
 
-[test_givenBadBindingAndUnavailable_whenSelected_reverts]: setPayout.t.sol#L622
-[test_givenBoundInterface_whenSelected_reverts]: setPayout.t.sol#L395
-[test_givenBusyCore_whenSelected_reverts]: setPayout.t.sol#L646
-[test_givenCompatibleReadyService_whenSelected]: setPayout.t.sol#L89
-[test_givenCoreInactive_whenSelected_reverts]: setPayout.t.sol#L43
-[test_givenDirtyCore_whenSelected_reverts]: setPayout.t.sol#L417
-[test_givenDirtyKernelPadding_whenSelected_reverts]: setPayout.t.sol#L703
-[test_givenEOA_whenSelected_reverts]: setPayout.t.sol#L148
-[test_givenEnabledInterface_whenSelected_reverts]: setPayout.t.sol#L205
-[test_givenLyingERC165_whenSelected_reverts]: setPayout.t.sol#L596
-[test_givenMalformedCore_whenSelected_reverts]: setPayout.t.sol#L294
-[test_givenMalformedERC165_whenSelected_reverts]: setPayout.t.sol#L373
-[test_givenMalformedEnabled_whenSelected_reverts]: setPayout.t.sol#L523
-[test_givenMalformedKernel_whenSelected_reverts]: setPayout.t.sol#L470
-[test_givenMissingCore_whenSelected_reverts]: setPayout.t.sol#L272
-[test_givenNoncanonicalERC165_whenSelected_reverts]: setPayout.t.sol#L545
-[test_givenOldPendingObligations_whenPayoutSelected]: setPayout.t.sol#L755
-[test_givenOtherCore_whenSelected_reverts]: setPayout.t.sol#L249
-[test_givenRevertingCore_whenSelected_reverts]: setPayout.t.sol#L321
-[test_givenRevertingERC165_whenSelected_reverts]: setPayout.t.sol#L347
-[test_givenRevertingEnabled_whenSelected_reverts]: setPayout.t.sol#L497
-[test_givenRevertingKernel_whenSelected_reverts]: setPayout.t.sol#L444
-[test_givenServiceInterface_whenSelected_reverts]: setPayout.t.sol#L183
-[test_givenServiceUnavailable_whenSelected_reverts]: setPayout.t.sol#L111
-[test_givenSingleDirtyCorePaddingBit_whenSelected_reverts]: setPayout.t.sol#L739
-[test_givenVersionInterface_whenSelected_reverts]: setPayout.t.sol#L227
-[test_givenWritingCore_whenSelected_reverts]: setPayout.t.sol#L574
-[test_givenWrongKernel_whenSelected_reverts]: setPayout.t.sol#L164
-[test_givenZero_whenSelected_reverts]: setPayout.t.sol#L133
-[test_whenCallerIsNotAdmin_reverts]: setPayout.t.sol#L33
-[test_whenCoreReturnLengthSeeds_reverts]: setPayout.t.sol#L673
-[test_whenCurrentAddressIsSelected_reverts]: setPayout.t.sol#L63
-[test_whenEnabledReturnShapeSeeds_reverts]: setPayout.t.sol#L719
-[test_whenKernelReturnLengthSeeds_reverts]: setPayout.t.sol#L688
-[test_whenUnavailableServiceStatesSeeded_reverts]: setPayout.t.sol#L662
+[test_givenBadBindingAndUnavailable_whenSelected_reverts]: setPayout.t.sol#L644
+[test_givenBoundInterface_whenSelected_reverts]: setPayout.t.sol#L409
+[test_givenBusyCore_whenSelected_reverts]: setPayout.t.sol#L668
+[test_givenCompatibleReadyService_whenSelected]: setPayout.t.sol#L91
+[test_givenCoreInactive_whenSelected_reverts]: setPayout.t.sol#L45
+[test_givenDirtyCore_whenSelected_reverts]: setPayout.t.sol#L431
+[test_givenDirtyKernelPadding_whenSelected_reverts]: setPayout.t.sol#L733
+[test_givenEOA_whenSelected_reverts]: setPayout.t.sol#L150
+[test_givenEnabledInterface_whenSelected_reverts]: setPayout.t.sol#L207
+[test_givenLyingERC165_whenSelected_reverts]: setPayout.t.sol#L618
+[test_givenMalformedCore_whenSelected_reverts]: setPayout.t.sol#L300
+[test_givenMalformedERC165_whenSelected_reverts]: setPayout.t.sol#L383
+[test_givenMalformedEnabled_whenSelected_reverts]: setPayout.t.sol#L541
+[test_givenMalformedKernel_whenSelected_reverts]: setPayout.t.sol#L484
+[test_givenMissingCore_whenSelected_reverts]: setPayout.t.sol#L274
+[test_givenNoncanonicalERC165_whenSelected_reverts]: setPayout.t.sol#L567
+[test_givenOldPendingObligations_whenPayoutSelected]: setPayout.t.sol#L789
+[test_givenOtherCore_whenSelected_reverts]: setPayout.t.sol#L251
+[test_givenRevertingCore_whenSelected_reverts]: setPayout.t.sol#L331
+[test_givenRevertingERC165_whenSelected_reverts]: setPayout.t.sol#L357
+[test_givenRevertingEnabled_whenSelected_reverts]: setPayout.t.sol#L515
+[test_givenRevertingKernel_whenSelected_reverts]: setPayout.t.sol#L458
+[test_givenServiceInterface_whenSelected_reverts]: setPayout.t.sol#L185
+[test_givenServiceUnavailable_whenSelected_reverts]: setPayout.t.sol#L113
+[test_givenSingleDirtyCorePaddingBit_whenSelected_reverts]: setPayout.t.sol#L773
+[test_givenVersionInterface_whenSelected_reverts]: setPayout.t.sol#L229
+[test_givenWritingCore_whenSelected_reverts]: setPayout.t.sol#L596
+[test_givenWrongKernel_whenSelected_reverts]: setPayout.t.sol#L166
+[test_givenZero_whenSelected_reverts]: setPayout.t.sol#L135
+[test_whenCallerIsNotAdmin_reverts]: setPayout.t.sol#L35
+[test_whenCoreReturnLengthSeeds_reverts]: setPayout.t.sol#L695
+[test_whenCurrentAddressIsSelected_reverts]: setPayout.t.sol#L65
+[test_whenEnabledReturnShapeSeeds_reverts]: setPayout.t.sol#L749
+[test_whenKernelReturnLengthSeeds_reverts]: setPayout.t.sol#L714
+[test_whenUnavailableServiceStatesSeeded_reverts]: setPayout.t.sol#L684

@@ -1,6 +1,6 @@
 # BurnerLoansRisk.health coverage plan
 
-Sources: [health](../../../policies/burnerloans/BurnerLoansRisk.sol#L321), [validateHealth](../../../policies/burnerloans/BurnerLoansRisk.sol#L336).
+Sources: [health](../../../policies/burnerloans/BurnerLoansRisk.sol#L326), [validateHealth](../../../policies/burnerloans/BurnerLoansRisk.sol#L341).
 
 ## Domains and notation
 

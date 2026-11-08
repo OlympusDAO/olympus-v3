@@ -24,19 +24,19 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: true
 
 | ID | Caller | Inputs / competing fault | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOLGR-A01 | Fuzz caller excluding all ADMIN_ROLE holders | period=1 | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged | Covered: [test_whenUnauthorizedCallerSetsValidPeriod_reverts](setGracePeriod.t.sol#L81) |
-| BLCOLGR-A02 | Fuzz caller excluding all ADMIN_ROLE holders | period=0 | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization before numeric input | Covered: [test_whenUnauthorizedCallerSetsZero_reverts](setGracePeriod.t.sol#L88) |
+| BLCOLGR-A01 | Fuzz caller excluding all ADMIN_ROLE holders | period=1 | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged | Covered: [test_whenUnauthorizedCallerSetsValidPeriod_reverts][test_whenUnauthorizedCallerSetsValidPeriod_reverts] |
+| BLCOLGR-A02 | Fuzz caller excluding all ADMIN_ROLE holders | period=0 | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization before numeric input | Covered: [test_whenUnauthorizedCallerSetsZero_reverts][test_whenUnauthorizedCallerSetsZero_reverts] |
 
 ## Lifecycle
 
 | ID | Caller | Core active | Core enabled | Local enabled | Lifecycle state / history | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOLGR-L01 | Fuzz all callers | true | true | false | period=1 | `NotEnabled()` | Unchanged; before caller/input | Covered: [test_givenDisabled_whenValidPeriod_reverts](setGracePeriod.t.sol#L95), [test_givenDisabledAfterEnable_whenGraceSet_thenPauseWins](setGracePeriod.t.sol#L144) |
-| BLCOLGR-L02 | Fuzz all callers | true | true | false | period=0 | `NotEnabled()` | Unchanged; before caller/input | Covered: [test_givenDisabled_whenZeroPeriod_reverts](setGracePeriod.t.sol#L103), [test_givenDisabledAfterEnable_whenGraceSet_thenPauseWins](setGracePeriod.t.sol#L144) |
-| BLCOLGR-L03 | ADMIN_ROLE holder | true | true | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges](setGracePeriod.t.sol#L23), [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored](setGracePeriod.t.sol#L59) |
-| BLCOLGR-L04 | ADMIN_ROLE holder | true | false | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges](setGracePeriod.t.sol#L23), [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored](setGracePeriod.t.sol#L59) |
-| BLCOLGR-L05 | ADMIN_ROLE holder | false | true | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges](setGracePeriod.t.sol#L23), [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored](setGracePeriod.t.sol#L59) |
-| BLCOLGR-L06 | ADMIN_ROLE holder | false | false | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges](setGracePeriod.t.sol#L23), [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored](setGracePeriod.t.sol#L59) |
+| BLCOLGR-L01 | Fuzz all callers | true | true | false | period=1 | `NotEnabled()` | Unchanged; before caller/input | Covered: [test_givenDisabled_whenValidPeriod_reverts][test_givenDisabled_whenValidPeriod_reverts], [test_givenDisabledAfterEnable_whenGraceSet_thenPauseWins][test_givenDisabledAfterEnable_whenGraceSet_thenPauseWins] |
+| BLCOLGR-L02 | Fuzz all callers | true | true | false | period=0 | `NotEnabled()` | Unchanged; before caller/input | Covered: [test_givenDisabled_whenZeroPeriod_reverts][test_givenDisabled_whenZeroPeriod_reverts], [test_givenDisabledAfterEnable_whenGraceSet_thenPauseWins][test_givenDisabledAfterEnable_whenGraceSet_thenPauseWins] |
+| BLCOLGR-L03 | ADMIN_ROLE holder | true | true | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges][test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges], [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored][test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored] |
+| BLCOLGR-L04 | ADMIN_ROLE holder | true | false | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges][test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges], [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored][test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored] |
+| BLCOLGR-L05 | ADMIN_ROLE holder | false | true | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges][test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges], [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored][test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored] |
+| BLCOLGR-L06 | ADMIN_ROLE holder | false | false | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges][test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges], [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored][test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored] |
 
 ## Numeric boundaries and arithmetic
 
@@ -46,8 +46,8 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: true
 
 | ID | Caller | Numeric input / arithmetic condition | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOLGR-N01 | ADMIN_ROLE holder | period fuzz 1..MAX32; seed 1, currentPeriod, MAX32 | `Success` | gracePeriod=input; GracePeriodSet(input); lastTransitionAt unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges](setGracePeriod.t.sol#L23), [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored](setGracePeriod.t.sol#L59) |
-| BLCOLGR-I01 | ADMIN_ROLE holder | period=0 | `GracePeriod_ZeroPeriod()` | Unchanged | Covered: [test_whenAdminSetsZero_reverts](setGracePeriod.t.sol#L111) |
+| BLCOLGR-N01 | ADMIN_ROLE holder | period fuzz 1..MAX32; seed 1, currentPeriod, MAX32 | `Success` | gracePeriod=input; GracePeriodSet(input); lastTransitionAt unchanged | Covered: [test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges][test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges], [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored][test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored] |
+| BLCOLGR-I01 | ADMIN_ROLE holder | period=0 | `GracePeriod_ZeroPeriod()` | Unchanged | Covered: [test_whenAdminSetsZero_reverts][test_whenAdminSetsZero_reverts] |
 
 ## Own policy activity
 
@@ -55,7 +55,7 @@ Previously activated then Kernel-deactivated, retaining ROLES and valid caller a
 
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCOLGR-L07 | Fuzz all callers | false | Fuzz true/false | BurnerLoans_PolicyNotActive(BurnerLoansCollateral) | Unchanged; no body/token/module calls or committed logs | Covered: [test_givenInactive_whenAdminSetsPeriod_reverts](setGracePeriod.t.sol#L120) ; [test][test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts] |
+| BLCOLGR-L07 | Fuzz all callers | false | Fuzz true/false | BurnerLoans_PolicyNotActive(BurnerLoansCollateral) | Unchanged; no body/token/module calls or committed logs | Covered: [test_givenInactive_whenAdminSetsPeriod_reverts][test_givenInactive_whenAdminSetsPeriod_reverts] ; [test][test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts] |
 
 ## Shared assertions
 
@@ -71,6 +71,17 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 
 | ID | Caller | Proposed value | Execution | Effects | Test |
 | --- | --- | --- | --- | --- |--- |
-| BLCOLGR-P01 | Fuzz ADMIN_ROLE holder | period equals stored gracePeriod; fuzz 1..MAX32; seed 1,MAX32 | Success | GracePeriodSet(period) once; stored period unchanged; isEnabled and lastTransitionAt unchanged; positions/obligations/balances unchanged | Covered: [test_whenGraceEqualsCurrentValue_thenEventStillEmitted](setGracePeriod.t.sol#L42), [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored](setGracePeriod.t.sol#L59) |
+| BLCOLGR-P01 | Fuzz ADMIN_ROLE holder | period equals stored gracePeriod; fuzz 1..MAX32; seed 1,MAX32 | Success | GracePeriodSet(period) once; stored period unchanged; isEnabled and lastTransitionAt unchanged; positions/obligations/balances unchanged | Covered: [test_whenGraceEqualsCurrentValue_thenEventStillEmitted][test_whenGraceEqualsCurrentValue_thenEventStillEmitted], [test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored][test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored] |
 
 [test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts]: setGracePeriod.t.sol#L155
+
+[test_givenDisabledAfterEnable_whenGraceSet_thenPauseWins]: setGracePeriod.t.sol#L144
+[test_givenDisabled_whenValidPeriod_reverts]: setGracePeriod.t.sol#L95
+[test_givenDisabled_whenZeroPeriod_reverts]: setGracePeriod.t.sol#L103
+[test_givenInactive_whenAdminSetsPeriod_reverts]: setGracePeriod.t.sol#L120
+[test_givenIndependentCoreState_whenGraceSet_thenOnlyPeriodChanges]: setGracePeriod.t.sol#L23
+[test_whenAdminSetsZero_reverts]: setGracePeriod.t.sol#L111
+[test_whenBoundaryAndCoreStateSeedsUsed_thenPeriodStored]: setGracePeriod.t.sol#L59
+[test_whenGraceEqualsCurrentValue_thenEventStillEmitted]: setGracePeriod.t.sol#L42
+[test_whenUnauthorizedCallerSetsValidPeriod_reverts]: setGracePeriod.t.sol#L81
+[test_whenUnauthorizedCallerSetsZero_reverts]: setGracePeriod.t.sol#L88

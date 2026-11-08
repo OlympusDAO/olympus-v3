@@ -16,19 +16,19 @@ On rejection: no deployment, state or committed logs.
 
 | ID | Caller | Invalid parameter | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLCU-CONSTRUCTOR-I01 | Fuzz all deployers | core=0 | BurnerLoansAction_InvalidCore(0); no deployment/logs | Covered: [test_whenCoreIsZero_reverts](./constructor.t.sol#L18) |
-| BLCU-CONSTRUCTOR-I02 | Fuzz all deployers | Nonzero Core EOA | BurnerLoansAction_InvalidCore(candidate) | Covered: [test_whenCoreIsEoa_reverts](./constructor.t.sol#L30) |
-| BLCU-CONSTRUCTOR-D01 | Fuzz all deployers | Deployed candidate lacks IBurnerLoansCore | BurnerLoansAction_InvalidCore(candidate) | Covered: [test_givenMissingCoreInterface_whenDeployed_reverts](./constructor.t.sol#L67) |
-| BLCU-CONSTRUCTOR-D02 | Fuzz all deployers | Core ERC165 reverts | BurnerLoansAction_InvalidCore(candidate) | Covered: [test_givenRevertingCoreInterface_whenDeployed_reverts](./constructor.t.sol#L87) |
-| BLCU-CONSTRUCTOR-D03 | Fuzz all deployers | Core ERC165 malformed | BurnerLoansAction_InvalidCore(candidate) | Covered: [test_givenMalformedCoreInterface_whenDeployed_reverts](./constructor.t.sol#L107) |
-| BLCU-CONSTRUCTOR-D04 | Fuzz all deployers | Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Covered: [test_givenDifferentCoreKernel_whenDeployed_reverts](./constructor.t.sol#L127) |
+| BLCU-CONSTRUCTOR-I01 | Fuzz all deployers | core=0 | BurnerLoansAction_InvalidCore(0); no deployment/logs | Covered: [test_whenCoreIsZero_reverts][test_whenCoreIsZero_reverts] |
+| BLCU-CONSTRUCTOR-I02 | Fuzz all deployers | Nonzero Core EOA | BurnerLoansAction_InvalidCore(candidate) | Covered: [test_whenCoreIsEoa_reverts][test_whenCoreIsEoa_reverts] |
+| BLCU-CONSTRUCTOR-D01 | Fuzz all deployers | Deployed candidate lacks IBurnerLoansCore | BurnerLoansAction_InvalidCore(candidate) | Covered: [test_givenMissingCoreInterface_whenDeployed_reverts][test_givenMissingCoreInterface_whenDeployed_reverts] |
+| BLCU-CONSTRUCTOR-D02 | Fuzz all deployers | Core ERC165 reverts | BurnerLoansAction_InvalidCore(candidate) | Covered: [test_givenRevertingCoreInterface_whenDeployed_reverts][test_givenRevertingCoreInterface_whenDeployed_reverts] |
+| BLCU-CONSTRUCTOR-D03 | Fuzz all deployers | Core ERC165 malformed | BurnerLoansAction_InvalidCore(candidate) | Covered: [test_givenMalformedCoreInterface_whenDeployed_reverts][test_givenMalformedCoreInterface_whenDeployed_reverts] |
+| BLCU-CONSTRUCTOR-D04 | Fuzz all deployers | Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Covered: [test_givenDifferentCoreKernel_whenDeployed_reverts][test_givenDifferentCoreKernel_whenDeployed_reverts] |
 
 ## Successful execution
 
 | ID | Caller | Operation / pre-state | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCU-CONSTRUCTOR-P02 | Fuzz all deployers | Deployed Core | Success | Kernel/core exact; empty obligations; configOperator=0; locally disabled; flags false; no token movement | Covered: [test_whenPayoutDeployed_thenDisabledWithEmptyObligations](./constructor.t.sol#L42) |
-| BLCU-CONSTRUCTOR-V03 | Fuzz all callers | Initial isEnabled() and configOperator() getters | false, address(0) | No dependency reads or state changes | Covered: [test_whenPayoutDeployed_thenDisabledWithEmptyObligations](./constructor.t.sol#L42) |
+| BLCU-CONSTRUCTOR-P02 | Fuzz all deployers | Deployed Core | Success | Kernel/core exact; empty obligations; configOperator=0; locally disabled; flags false; no token movement | Covered: [test_whenPayoutDeployed_thenDisabledWithEmptyObligations][test_whenPayoutDeployed_thenDisabledWithEmptyObligations] |
+| BLCU-CONSTRUCTOR-V03 | Fuzz all callers | Initial isEnabled() and configOperator() getters | false, address(0) | No dependency reads or state changes | Covered: [test_whenPayoutDeployed_thenDisabledWithEmptyObligations][test_whenPayoutDeployed_thenDisabledWithEmptyObligations] |
 
 ## Shared assertions
 
@@ -39,3 +39,11 @@ Co-located API assertions: `core`. These must be asserted independently of the a
 - [x] Review these expectations.
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to passing tests.
+
+[test_givenDifferentCoreKernel_whenDeployed_reverts]: ./constructor.t.sol#L127
+[test_givenMalformedCoreInterface_whenDeployed_reverts]: ./constructor.t.sol#L107
+[test_givenMissingCoreInterface_whenDeployed_reverts]: ./constructor.t.sol#L67
+[test_givenRevertingCoreInterface_whenDeployed_reverts]: ./constructor.t.sol#L87
+[test_whenCoreIsEoa_reverts]: ./constructor.t.sol#L30
+[test_whenCoreIsZero_reverts]: ./constructor.t.sol#L18
+[test_whenPayoutDeployed_thenDisabledWithEmptyObligations]: ./constructor.t.sol#L42

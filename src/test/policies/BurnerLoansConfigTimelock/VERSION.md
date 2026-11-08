@@ -1,6 +1,6 @@
 # BurnerLoansConfigTimelock.VERSION coverage plan
 
-Source: [VERSION](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L735). Coverage is recorded in the Test column.
+Source: [VERSION](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L788). Coverage is recorded in the Test column.
 
 Implementation: 1 scenario functions mapped; 1 Covered, 0 Partial. Partial rows have complete test implementations blocked by the current production behavior.
 

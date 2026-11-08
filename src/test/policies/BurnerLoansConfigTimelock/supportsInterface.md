@@ -1,6 +1,6 @@
 # BurnerLoansConfigTimelock.supportsInterface coverage plan
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L745). Coverage is recorded in the Test column.
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L798). Coverage is recorded in the Test column.
 
 Implementation: 12 scenario functions mapped; 12 Covered, 0 Partial. Partial rows have complete test implementations blocked by the current production behavior.
 

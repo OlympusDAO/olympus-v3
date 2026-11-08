@@ -1,6 +1,6 @@
 # BurnerLoansCore.setRisk coverage plan
 
-Source: [setRisk](../../../policies/burnerloans/BurnerLoansCore.sol#L620). Acceptance plan; coverage and execution results are recorded separately.
+Source: [setRisk](../../../policies/burnerloans/BurnerLoansCore.sol#L653). Acceptance plan; coverage and execution results are recorded separately.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 

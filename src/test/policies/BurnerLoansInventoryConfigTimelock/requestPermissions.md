@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.requestPermissions coverage plan
 
-Source: [requestPermissions](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L96).
+Source: [requestPermissions](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L95).
 
 ## Scope and fixtures
 

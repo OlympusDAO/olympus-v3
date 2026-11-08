@@ -45,8 +45,6 @@ ROLES initialized; retained caller roles after any Kernel deactivation; unrelate
 | RD-REENABLE-L03 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | false | false | RevenueDistributor_PolicyNotActive(RD) | Unchanged; no activation, timestamp change or committed logs | Covered: [test][test_givenInactive_whenAuthorizedCallerReEnables_reverts], [test][test_givenReEnableBoundarySeeds] |
 | RD-REENABLE-L04 | Fuzz all callers | false | true | NotDisabled() before authorization | Unchanged; no committed logs | Covered: [test][test_givenEnabled_whenAnyCallerReEnables_reverts], [test][test_givenReEnableBoundarySeeds] |
 
-[test_givenDistributorDisabled_whenUnauthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L43
-
 ## Grace deadline overflow
 
 Initialized, locally disabled; otherwise compatible dependencies. Configure G while enabled, disable at L and assert the stored transition timestamp before attempting reEnable. This is an inherited numeric boundary, separate from an ordinary expired deadline.
@@ -98,30 +96,18 @@ The product hooks now enforce empty lifecycle payloads, inactive-disable availab
 
 Dependency classification: ROLES and TRSRY are Kernel modules. The config operator is an authority identity. Settlement delivers ERC-20 tokens directly; activation does not recursively inspect optional recipient or vault lifecycle. Candidate selection and route validation own their compatibility checks.
 
+[test_givenDistributorDisabled_whenUnauthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L43
 [test_givenNeverEnabledPolicy_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L229
-
 [test_givenRepresentableDeadline_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L390
-
 [test_givenReEnableBoundarySeeds]: ./reEnable.t.sol#L519
-
 [test_givenEnabled_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L327
-
 [test_givenInactive_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L354
-
 [test_givenOverflowingDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L429
-
 [test_givenExpiredDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L474
-
 [test_givenNeverEnabled_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L76
-
 [test_givenGraceExpired_whenAdminReEnables_reverts]: ./reEnable.t.sol#L108
-
 [test_givenDistributorDisabled_whenRevenueAdminReEnables_thenDistributionResumes]: ./reEnable.t.sol#L26
-
 [test_givenEnabled_whenReEnabled_reverts]: ./reEnable.t.sol#L89
-
 [test_givenPolicyInactiveAndDisabled_whenPermittedCallerReEnables_reverts]: ./reEnable.t.sol#L123
-
 [test_givenGraceDeadline_whenAdminReEnables_succeeds]: ./reEnable.t.sol#L95
-
 [test_givenDisabled_whenReEnabled_thenStoredBalanceDistributes]: ./reEnable.t.sol#L60

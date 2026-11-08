@@ -96,6 +96,12 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 | --- | --- | --- | --- | --- |
 | BLYC-CLAIM-YIELD-D04 | Fuzz caller | Positive yield; DepositManager Kernel-inactive | PolicyDependency_NotActive(DepositManager) on preview and execution; no settlement | Covered: [test][test_givenPositiveYieldAndDepositManagerInactive_whenClaimed_reverts] |
 
+## Zero-request dependency independence
+
+| ID | Caller | Pre-state | Preview / execution | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLYC-CLAIM-YIELD-P09 | Fuzz all callers | Zero yield; Payout paused or Kernel-inactive; claimer settlement role revoked | Quote and claim return the same valid withdrawal token and zero amount; quote recipient=0 and executable=true | No Payout call, Core settlement, transfer or logs; liabilities unchanged | Covered: [test][test_givenZeroYieldAndUnavailablePayout_whenClaimed] |
+
 [test_givenAuthoritativeSettlementOutput_whenClaimed]: claimYieldForwarding.t.sol#L12
 [test_givenCaughtTokenCallback_whenClaimed]: claimYieldCallback.t.sol#L39
 [test_givenDisabledTask_whenClaimed_reverts]: claimYield.t.sol#L163
@@ -114,17 +120,7 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 [test_givenZeroYieldAndRevokedRole_whenClaimed]: claimYield.t.sol#L109
 [test_givenZeroYieldAndUnsupportedMode_whenClaimed_reverts]: claimYieldSharesIntegration.t.sol#L138
 [test_whenPermissionlessCallerSeeds]: claimYield.t.sol#L251
-
 [test_givenDirectCustodyDonation_whenYieldClaimed_thenOperatorSharesBoundOutput]: claimYield.t.sol#L277
-
-## Zero-request dependency independence
-
-| ID | Caller | Pre-state | Preview / execution | Effects | Test |
-| --- | --- | --- | --- | --- | --- |
-| BLYC-CLAIM-YIELD-P09 | Fuzz all callers | Zero yield; Payout paused or Kernel-inactive; claimer settlement role revoked | Quote and claim return the same valid withdrawal token and zero amount; quote recipient=0 and executable=true | No Payout call, Core settlement, transfer or logs; liabilities unchanged | Covered: [test][test_givenZeroYieldAndUnavailablePayout_whenClaimed] |
-
 [test_givenZeroYieldAndUnavailablePayout_whenClaimed]: claimYield.t.sol#L47
-
 [test_givenInactiveDisabledTask_whenClaimed_reverts]: claimYield.t.sol#L179
-
 [test_givenPositiveYieldAndDepositManagerInactive_whenClaimed_reverts]: claimYield.t.sol#L22

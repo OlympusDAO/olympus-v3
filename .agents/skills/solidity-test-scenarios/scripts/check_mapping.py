@@ -6,12 +6,15 @@ import re
 from pathlib import Path
 
 
+TEST_REFERENCE = r"(?:test|invariant)_[A-Za-z0-9_]+(?:--[A-Za-z0-9_-]+)?"
 REFERENCE = re.compile(
-    r"^\[((?:test|invariant)_[A-Za-z0-9_]+)\]:[ \t]+(\S+\.t\.sol)#L([0-9]+)[ \t]*$",
+    r"^\[(" + TEST_REFERENCE + r")\]:[ \t]+(\S+\.t\.sol)#L([0-9]+)[ \t]*$",
     re.MULTILINE,
 )
 FUNCTION = re.compile(r"^[ \t]*function[ \t]+((?:test|invariant)_[A-Za-z0-9_]+)[ \t]*\(", re.MULTILINE)
-USE = re.compile(r"\[[^\]\n]*\]\[((?:test|invariant)_[A-Za-z0-9_]+)\]")
+USE = re.compile(r"\[[^\]\n]*\]\[(" + TEST_REFERENCE + r")\]")
+INLINE_TEST_LINK = re.compile(r"\[[^\]\n]*\]\([^\)\n]*\.t\.sol(?:#[^\)\n]*)?\)")
+REFERENCE_DEFINITION = re.compile(r"^\[[^\]]+\]:[ \t]+\S+")
 ROW = re.compile(r"^\|[ \t]*([A-Z][A-Z0-9]*-[A-Z0-9-]+)[ \t]*\|")
 
 
@@ -49,6 +52,16 @@ def check(document, update=False):
     definitions = {}
     replacements = []
     cached = {}
+    reference_footer = False
+    invalid_footer = False
+    for number, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith("|") and INLINE_TEST_LINK.search(line):
+            errors.append(f"line {number}: inline test links must use named references")
+        if REFERENCE_DEFINITION.match(line):
+            reference_footer = True
+        elif reference_footer and line.strip() and not invalid_footer:
+            errors.append(f"line {number}: reference definitions must be at the end of the file")
+            invalid_footer = True
     for match in REFERENCE.finditer(text):
         name, relative_path, old_line = match.groups()
         if name in definitions:
@@ -59,7 +72,7 @@ def check(document, update=False):
         try:
             if path not in cached:
                 cached[path] = functions(path)
-            candidates = cached[path].get(name, [])
+            candidates = cached[path].get(name.partition("--")[0], [])
         except OSError as error:
             errors.append(f"{relative_path}: {error.strerror}")
             continue
@@ -96,13 +109,26 @@ def check(document, update=False):
         for name in mapped:
             if name in definitions and scenario not in definitions[name]:
                 errors.append(f"{scenario}: missing reciprocal Scenarios comment on {name}")
-    # Shared tests can name scenarios from other functions in the same suite.
+    # Shared tests can name scenarios from other functions or suites.
     known_ids = {
         match[1]
         for path in document.parent.glob("*.md")
         for line in path.read_text().splitlines()
         if (match := ROW.match(line))
     }
+    referenced_ids = {scenario for ids in definitions.values() for scenario in ids}
+    if referenced_ids - known_ids:
+        test_root = next(
+            (parent for parent in document.parents if parent.name == "test" and parent.parent.name == "src"),
+            None,
+        )
+        if test_root is not None:
+            known_ids.update(
+                match[1]
+                for path in test_root.rglob("*.md")
+                for line in path.read_text().splitlines()
+                if (match := ROW.match(line))
+            )
     for name, ids in definitions.items():
         for scenario in sorted(ids - known_ids):
             errors.append(f"{name}: unknown scenario ID in Scenarios comment: {scenario}")
@@ -110,7 +136,7 @@ def check(document, update=False):
             if name not in row_tests[scenario]:
                 errors.append(f"{scenario}: missing reciprocal test reference for {name}")
     if not definitions:
-        errors.append("no named test references; legacy inline links require manual validation")
+        errors.append("no named test references")
 
     # Never partially rewrite a document if a missing/renamed test or invalid mapping remains.
     if errors:

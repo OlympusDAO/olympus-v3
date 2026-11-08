@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.changeKernel coverage plan
 
-Source: [changeKernel](../../../Kernel.sol#L91), [isActive](../../../Kernel.sol#L139), [configureDependencies](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L84).
+Source: [changeKernel](../../../Kernel.sol#L91), [isActive](../../../Kernel.sol#L139), [configureDependencies](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L83).
 
 The inherited hook accepts only the policy's current Kernel, independently of local activity/enablement. It changes the Kernel pointer, not cached ROLES, Inventory, queue state or token balances. `configureDependencies` separately refreshes ROLES through the new Kernel. These are framework semantics, not a public component replacement API.
 

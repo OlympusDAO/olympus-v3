@@ -16,7 +16,7 @@ Fixed for this table: Accounting / events: No extras, duplicates or mutation.
 
 | ID | Caller | Operation / pre-state | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLDEBT-PERMISSIONS-P01 | Fuzz all callers | Before/after activation,disable,migration | Exact ordered keycode/selector pairs and length | Covered: [test_whenPermissionsRequested_thenEmpty](requestPermissions.t.sol#L14), [test_whenReadAcrossAllLifecycleStates_thenStable](requestPermissions.t.sol#L27) |
+| BLDEBT-PERMISSIONS-P01 | Fuzz all callers | Before/after activation,disable,migration | Exact ordered keycode/selector pairs and length | Covered: [test_whenPermissionsRequested_thenEmpty][test_whenPermissionsRequested_thenEmpty], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
 
 ## Shared assertions
 
@@ -25,3 +25,6 @@ No pricing/custody/configuration permissions added to public actions.
 - [ ] Review these expectations.
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to passing tests.
+
+[test_whenPermissionsRequested_thenEmpty]: requestPermissions.t.sol#L14
+[test_whenReadAcrossAllLifecycleStates_thenStable]: requestPermissions.t.sol#L27

@@ -22,19 +22,19 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: true
 
 | ID | Caller | Inputs / competing fault | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQGR-A01 | Fuzz caller excluding all ADMIN_ROLE holders | period=1 | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged | Covered: [test_whenUnauthorizedGraceSetter_revertsBeforeInput](setGracePeriod.t.sol#L48) |
-| BLLIQGR-A02 | Fuzz caller excluding all ADMIN_ROLE holders | period=0 | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization before numeric input | Covered: [test_whenUnauthorizedGraceSetter_revertsBeforeInput](setGracePeriod.t.sol#L48) |
+| BLLIQGR-A01 | Fuzz caller excluding all ADMIN_ROLE holders | period=1 | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged | Covered: [test_whenUnauthorizedGraceSetter_revertsBeforeInput][test_whenUnauthorizedGraceSetter_revertsBeforeInput] |
+| BLLIQGR-A02 | Fuzz caller excluding all ADMIN_ROLE holders | period=0 | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization before numeric input | Covered: [test_whenUnauthorizedGraceSetter_revertsBeforeInput][test_whenUnauthorizedGraceSetter_revertsBeforeInput] |
 
 ## Lifecycle
 
 | ID | Caller | Core active | Core enabled | Local enabled | Lifecycle state / history | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQGR-L01 | Fuzz all callers | true | true | false | period=1 | `NotEnabled()` | Unchanged; before caller/input | Covered: [test_givenDisabled_whenGraceSet_thenPauseWins](setGracePeriod.t.sol#L60) |
-| BLLIQGR-L02 | Fuzz all callers | true | true | false | period=0 | `NotEnabled()` | Unchanged; before caller/input | Covered: [test_givenDisabled_whenGraceSet_thenPauseWins](setGracePeriod.t.sol#L60) |
-| BLLIQGR-L03 | ADMIN_ROLE holder | true | true | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent](setGracePeriod.t.sol#L69), [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent](setGracePeriod.t.sol#L116) |
-| BLLIQGR-L04 | ADMIN_ROLE holder | true | false | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent](setGracePeriod.t.sol#L69), [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent](setGracePeriod.t.sol#L116) |
-| BLLIQGR-L05 | ADMIN_ROLE holder | false | true | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent](setGracePeriod.t.sol#L69), [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent](setGracePeriod.t.sol#L116) |
-| BLLIQGR-L06 | ADMIN_ROLE holder | false | false | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent](setGracePeriod.t.sol#L69), [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent](setGracePeriod.t.sol#L116) |
+| BLLIQGR-L01 | Fuzz all callers | true | true | false | period=1 | `NotEnabled()` | Unchanged; before caller/input | Covered: [test_givenDisabled_whenGraceSet_thenPauseWins][test_givenDisabled_whenGraceSet_thenPauseWins] |
+| BLLIQGR-L02 | Fuzz all callers | true | true | false | period=0 | `NotEnabled()` | Unchanged; before caller/input | Covered: [test_givenDisabled_whenGraceSet_thenPauseWins][test_givenDisabled_whenGraceSet_thenPauseWins] |
+| BLLIQGR-L03 | ADMIN_ROLE holder | true | true | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent][test_givenCoreState_whenGraceSet_thenControllerIndependent], [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent][test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent] |
+| BLLIQGR-L04 | ADMIN_ROLE holder | true | false | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent][test_givenCoreState_whenGraceSet_thenControllerIndependent], [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent][test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent] |
+| BLLIQGR-L05 | ADMIN_ROLE holder | false | true | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent][test_givenCoreState_whenGraceSet_thenControllerIndependent], [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent][test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent] |
+| BLLIQGR-L06 | ADMIN_ROLE holder | false | false | true | other dependencies ready; period=1 | `Success` | gracePeriod=input; GracePeriodSet(input); transition timestamp unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent][test_givenCoreState_whenGraceSet_thenControllerIndependent], [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent][test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent] |
 
 ## Numeric boundaries and arithmetic
 
@@ -44,8 +44,8 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: true
 
 | ID | Caller | Numeric input / arithmetic condition | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQGR-N01 | ADMIN_ROLE holder | period fuzz 1..MAX32; seed 1, currentPeriod, MAX32 | `Success` | gracePeriod=input; GracePeriodSet(input); lastTransitionAt unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent](setGracePeriod.t.sol#L69), [test_whenPeriodIsOne_thenStoredAndEmitted](setGracePeriod.t.sol#L106), [test_whenPeriodIsMaximum_thenStoredAndEmitted](setGracePeriod.t.sol#L111), [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent](setGracePeriod.t.sol#L116), [test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted](setGracePeriod.t.sol#L131) |
-| BLLIQGR-I01 | ADMIN_ROLE holder | period=0 | `GracePeriod_ZeroPeriod()` | Unchanged | Covered: [test_whenGraceIsZero_reverts](setGracePeriod.t.sol#L41) |
+| BLLIQGR-N01 | ADMIN_ROLE holder | period fuzz 1..MAX32; seed 1, currentPeriod, MAX32 | `Success` | gracePeriod=input; GracePeriodSet(input); lastTransitionAt unchanged | Covered: [test_givenCoreState_whenGraceSet_thenControllerIndependent][test_givenCoreState_whenGraceSet_thenControllerIndependent], [test_whenPeriodIsOne_thenStoredAndEmitted][test_whenPeriodIsOne_thenStoredAndEmitted], [test_whenPeriodIsMaximum_thenStoredAndEmitted][test_whenPeriodIsMaximum_thenStoredAndEmitted], [test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent][test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent], [test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted][test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted] |
+| BLLIQGR-I01 | ADMIN_ROLE holder | period=0 | `GracePeriod_ZeroPeriod()` | Unchanged | Covered: [test_whenGraceIsZero_reverts][test_whenGraceIsZero_reverts] |
 
 ## Own policy activity
 
@@ -53,7 +53,7 @@ Previously activated then Kernel-deactivated, retaining ROLES and valid caller a
 
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQGR-L07 | Fuzz all callers | false | Fuzz true/false | BurnerLoans_PolicyNotActive(BurnerLoansSeize) | Unchanged; no body/token/module calls or committed logs | Covered: [test_givenInactiveSubject_whenGraceSet_reverts](setGracePeriod.t.sol#L90) ; [test][test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts] |
+| BLLIQGR-L07 | Fuzz all callers | false | Fuzz true/false | BurnerLoans_PolicyNotActive(BurnerLoansSeize) | Unchanged; no body/token/module calls or committed logs | Covered: [test_givenInactiveSubject_whenGraceSet_reverts][test_givenInactiveSubject_whenGraceSet_reverts] ; [test][test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts] |
 
 ## Shared assertions
 
@@ -69,6 +69,17 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 
 | ID | Caller | Proposed value | Execution | Effects | Test |
 | --- | --- | --- | --- | --- |--- |
-| BLLIQGR-P01 | Fuzz ADMIN_ROLE holder | period equals stored gracePeriod; fuzz 1..MAX32; seed 1,MAX32 | Success | GracePeriodSet(period) once; stored period unchanged; isEnabled and lastTransitionAt unchanged; positions/obligations/balances unchanged | Covered: [test_whenGraceSetToSameValue_thenStillEmits](setGracePeriod.t.sol#L23), [test_whenPeriodIsOne_thenStoredAndEmitted](setGracePeriod.t.sol#L106), [test_whenPeriodIsMaximum_thenStoredAndEmitted](setGracePeriod.t.sol#L111), [test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted](setGracePeriod.t.sol#L131) |
+| BLLIQGR-P01 | Fuzz ADMIN_ROLE holder | period equals stored gracePeriod; fuzz 1..MAX32; seed 1,MAX32 | Success | GracePeriodSet(period) once; stored period unchanged; isEnabled and lastTransitionAt unchanged; positions/obligations/balances unchanged | Covered: [test_whenGraceSetToSameValue_thenStillEmits][test_whenGraceSetToSameValue_thenStillEmits], [test_whenPeriodIsOne_thenStoredAndEmitted][test_whenPeriodIsOne_thenStoredAndEmitted], [test_whenPeriodIsMaximum_thenStoredAndEmitted][test_whenPeriodIsMaximum_thenStoredAndEmitted], [test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted][test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted] |
 
 [test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts]: setGracePeriod.t.sol#L136
+
+[test_givenCoreState_whenGraceSet_thenControllerIndependent]: setGracePeriod.t.sol#L69
+[test_givenDisabled_whenGraceSet_thenPauseWins]: setGracePeriod.t.sol#L60
+[test_givenEveryCoreState_whenGraceSetToOne_thenControllerIndependent]: setGracePeriod.t.sol#L116
+[test_givenInactiveSubject_whenGraceSet_reverts]: setGracePeriod.t.sol#L90
+[test_whenGraceIsZero_reverts]: setGracePeriod.t.sol#L41
+[test_whenGraceSetToSameValue_thenStillEmits]: setGracePeriod.t.sol#L23
+[test_whenPeriodIsMaximum_thenStoredAndEmitted]: setGracePeriod.t.sol#L111
+[test_whenPeriodIsOne_thenStoredAndEmitted]: setGracePeriod.t.sol#L106
+[test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted]: setGracePeriod.t.sol#L131
+[test_whenUnauthorizedGraceSetter_revertsBeforeInput]: setGracePeriod.t.sol#L48

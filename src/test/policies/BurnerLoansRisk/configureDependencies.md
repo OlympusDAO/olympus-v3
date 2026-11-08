@@ -1,6 +1,6 @@
 # BurnerLoansRisk.configureDependencies coverage plan
 
-Source: [configureDependencies](../../../policies/burnerloans/BurnerLoansRisk.sol#L137).
+Source: [configureDependencies](../../../policies/burnerloans/BurnerLoansRisk.sol#L142).
 
 ## Domains and notation
 

@@ -87,9 +87,6 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 Dependency classification: RD is a direct operational Policy service. Construction validates compatibility without requiring readiness. Activation requires a canonical Kernel/status response, reported Kernel equal to this consumer's Kernel, authoritative membership in that Kernel and local enablement. Malformed metadata gives `RevenueDistributorTask_InvalidDistributor(RD)`; a readable foreign Kernel gives `PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel)` before readiness; a compatible paused/inactive target gives `PolicyDependency_NotActive(RD)`. Enable and reEnable use the same predicate.
 
-[test_givenInactivePolicy_whenEmptyEnable_reverts]: ./enable.t.sol#L161
-[test_givenNeverActivatedPolicy_whenAnyCallerEnables_reverts]: ./enable.t.sol#L181
-
 ## Kernel drift and restoration
 
 | ID | Caller | Local active | Local enabled | Distributor active | Distributor enabled | Kernel binding | Execution | Effects | Test |
@@ -97,29 +94,20 @@ Dependency classification: RD is a direct operational Policy service. Constructi
 | RDTASK-ENABLE-D06 | Admin | true | false | Fuzz false/true | true | Different reported Kernel after construction | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) before readiness | No transition | Covered: [test][test_givenDistributorKernelDrift_whenActivation_reverts] |
 | RDTASK-ENABLE-P02 | Admin | true | false | Restored false to true | Restored false to true | Same Kernel | Failed activation then successful retry | Pending accounting preserved | Covered: [test][test_givenRestoredDistributor_whenActivation_succeeds] |
 
+[test_givenInactivePolicy_whenEmptyEnable_reverts]: ./enable.t.sol#L161
+[test_givenNeverActivatedPolicy_whenAnyCallerEnables_reverts]: ./enable.t.sol#L181
 [test_givenDistributorKernelDrift_whenActivation_reverts]: ./enable.t.sol#L196
 [test_givenRestoredDistributor_whenActivation_succeeds]: ./enable.t.sol#L259
 [test_givenUnavailableDistributor_whenActivation_reverts]: ./enable.t.sol#L219
 [test_givenDistributorStateSeeds_whenActivation_reverts]: ./enable.t.sol#L249
-
 [test_givenDisabled_whenCallerLacksAdmin_reverts]: ./enable.t.sol#L295
-
 [test_givenEnableBoundarySeeds]: ./enable.t.sol#L414
-
 [test_givenPreviouslyEnabled_whenAuthorizedAdminEnables]: ./enable.t.sol#L348
-
 [test_givenNeverEnabled_whenAuthorizedAdminEnables]: ./enable.t.sol#L377
-
 [test_givenEnabled_whenAnyCallerEnables_reverts]: ./enable.t.sol#L271
-
 [test_givenDisabled_whenAuthorizedEnableDataNonempty_reverts]: ./enable.t.sol#L322
-
 [test_givenDisabled_whenAdminEnables_preservesConfiguration]: ./enable.t.sol#L24
-
 [test_givenDistributorInactive_whenAdminEnables_reverts]: ./enable.t.sol#L91
-
 [test_givenEnabled_whenEnableCalled_revertsBeforeOtherChecks]: ./enable.t.sol#L56
-
 [test_givenDistributorDisabled_whenAdminEnables_reverts]: ./enable.t.sol#L104
-
 [test_givenNeverEnabled_whenAdminEnables]: ./enable.t.sol#L46

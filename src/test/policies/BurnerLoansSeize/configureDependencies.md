@@ -16,7 +16,7 @@ Fixed for this table: Accounting / events: ROLES getter current; no enable/grant
 
 | ID | Caller | Prior configuration / update | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLLIQ-DEPENDENCIES-P01 | Fuzz all callers | Installed compatible modules, first/repeated call, module replacement | Ordered keycodes and pointers refreshed | Covered: [test_whenDependenciesConfigured_thenRolesIsResolved](configureDependencies.t.sol#L16), [test_givenFreshAction_whenConfigured_thenInitialCacheResolved](configureDependencies.t.sol#L57), [test_givenReplacementRoles_whenConfigured_thenCacheRefreshed](configureDependencies.t.sol#L71) |
+| BLLIQ-DEPENDENCIES-P01 | Fuzz all callers | Installed compatible modules, first/repeated call, module replacement | Ordered keycodes and pointers refreshed | Covered: [test_whenDependenciesConfigured_thenRolesIsResolved][test_whenDependenciesConfigured_thenRolesIsResolved], [test_givenFreshAction_whenConfigured_thenInitialCacheResolved][test_givenFreshAction_whenConfigured_thenInitialCacheResolved], [test_givenReplacementRoles_whenConfigured_thenCacheRefreshed][test_givenReplacementRoles_whenConfigured_thenCacheRefreshed] |
 
 ## Successful execution
 
@@ -24,7 +24,7 @@ Fixed for this table: Accounting / events: Entire call rollback, previous pointe
 
 | ID | Caller | Operation / pre-state | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLLIQ-DEPENDENCIES-P02 | Fuzz all callers | Required module absent; unsupported major where checked | Policy_ModuleDoesNotExist(keycode); No version rejection implemented | Covered: [test_givenRolesMissing_whenConfigured_reverts](configureDependencies.t.sol#L39) |
+| BLLIQ-DEPENDENCIES-P02 | Fuzz all callers | Required module absent; unsupported major where checked | Policy_ModuleDoesNotExist(keycode); No version rejection implemented | Covered: [test_givenRolesMissing_whenConfigured_reverts][test_givenRolesMissing_whenConfigured_reverts] |
 
 ## Shared assertions
 
@@ -35,3 +35,8 @@ Co-located API assertions: `ROLES`. These must be asserted independently of the 
 - [x] Review these expectations.
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to passing tests.
+
+[test_givenFreshAction_whenConfigured_thenInitialCacheResolved]: configureDependencies.t.sol#L57
+[test_givenReplacementRoles_whenConfigured_thenCacheRefreshed]: configureDependencies.t.sol#L71
+[test_givenRolesMissing_whenConfigured_reverts]: configureDependencies.t.sol#L39
+[test_whenDependenciesConfigured_thenRolesIsResolved]: configureDependencies.t.sol#L16

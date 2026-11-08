@@ -1,6 +1,6 @@
 # BurnerLoansConfigTimelock.configureDependencies coverage plan
 
-Source: [configureDependencies](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L126). Coverage is recorded in the Test column.
+Source: [configureDependencies](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L122). Coverage is recorded in the Test column.
 
 Implementation: 2 scenario functions mapped; 2 Covered, 0 Partial. Partial rows have complete test implementations blocked by the current production behavior.
 

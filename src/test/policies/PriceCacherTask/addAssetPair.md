@@ -65,6 +65,14 @@ are recorded explicitly and are not converted into passing expectations.
 - [x] Derive scenarios from concrete entry points and inherited guards.
 - [x] Verify named mappings after focused execution.
 
+## Guard-precedence regression
+
+The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
+
+| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| PCACHER-ADD-PAIR-L06 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; Asset and quote both `address(0)` | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
+
 [test_givenDisabled_whenAdminAddsPair]: addAssetPair.t.sol#L165
 [test_givenEnabled_whenAdminAddsMultiplePairs]: addAssetPair.t.sol#L137
 [test_givenInactive_whenPairAdded_reverts]: addAssetPair.t.sol#L237
@@ -79,19 +87,7 @@ are recorded explicitly and are not converted into passing expectations.
 [test_whenPairGetterHasArbitraryCallerAndLifecycle]: addAssetPair.t.sol#L251
 [test_whenPairIsNotSupportedByPriceCache_reverts]: addAssetPair.t.sol#L123
 [test_whenQuoteIsZero_reverts]: addAssetPair.t.sol#L73
-
 [test_whenPriceAdminAddsPair]: addAssetPair.t.sol#L31
-
 [test_whenBothRolesAddPair]: addAssetPair.t.sol#L39
-
 [test_givenInactive_whenPriceAdminAddsPair_reverts]: addAssetPair.t.sol#L46
-
-## Guard-precedence regression
-
-The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
-
-| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| PCACHER-ADD-PAIR-L06 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; Asset and quote both `address(0)` | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
-
 [test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst]: ./addAssetPair.t.sol#L291

@@ -83,6 +83,14 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 | DIST-P07 | Fuzz all callers | Receipts arrive, then compatible upgrade | One 3,333 BPS recipient remains distinct from new Treasury | None | 10 | Success; configured share=3, new Treasury residual=7 | treasury() equals replacement; old Treasury receives zero; independent route hash/membership unchanged; pending buckets clear | Covered: [seed][test_givenBalanceReceivedBeforeTreasuryUpgrade_paysNewTreasury], [full result][test_givenReceiptsBeforeTreasuryUpgrade_whenAnyCallerDistributes_usesCurrentTreasury] |
 | DIST-P06 | Fuzz all callers | Upgraded so configured recipient equals Treasury | Configured and Treasury buckets overlap | Both positive | 0 | Success; combined entitlement attempted once | No new route-validation failure; deduplicate and clear paid debts | Covered: [full matrix][test_givenConfiguredRecipientBecomesTreasury_givenNoNewReceipts_paysPendingOnce] |
 
+## Guard-precedence regression
+
+The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
+
+| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| DIST-L03 | Any address, fuzz, without exclusions | false | false | Distributor locally disabled, then Kernel-deactivated; Asset=`address(0)` | `RevenueDistributor_PolicyNotActive(RD)` before local enablement and asset validation | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenAnyCallerDistributes_revertsActivityFirst] |
+
 [test_givenDisabled_whenManagedBalanceArrives_reverts]: ./distribute.t.sol#L409
 [test_givenKernelInactive_whenManagedBalanceArrives_reverts]: ./distribute.t.sol#L427
 [test_givenZeroBalance_succeedsWithoutTransfer]: ./distribute.t.sol#L512
@@ -125,13 +133,4 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 [test_givenOneConfiguredRecipient_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1484
 [test_givenTwoConfiguredRecipients_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1496
 [test_givenMixedRecipients_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1508
-
-## Guard-precedence regression
-
-The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
-
-| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| DIST-L03 | Any address, fuzz, without exclusions | false | false | Distributor locally disabled, then Kernel-deactivated; Asset=`address(0)` | `RevenueDistributor_PolicyNotActive(RD)` before local enablement and asset validation | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenAnyCallerDistributes_revertsActivityFirst] |
-
 [test_givenInactiveAndDisabled_whenAnyCallerDistributes_revertsActivityFirst]: ./distribute.t.sol#L1541

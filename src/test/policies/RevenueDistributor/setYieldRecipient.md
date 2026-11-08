@@ -101,6 +101,24 @@ Exercise admin and the current config operator separately. Pending assets refer 
 | SYR-P03 | ADMIN_ROLE holder | Same nonzero recipient -> same recipient | Still Kernel-active, locally enabled and interface-compatible | Fuzz none/one/multiple Active assets with zero/positive routes | Direct and underlying lookups separately | Every applicable registration remains enabled and matching | Fuzz none/one/multiple Active and Retired assets; all supported | RevenueDistributor_SameAddress(recipient) before candidate probes | Pointer, hashes, liabilities and indexes unchanged; no YieldRecipientSet | Covered: [test][test_givenSelectedCompatibleRecipient_whenSetAgain_reverts], [test][test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts], [test][test_givenSamePointer_whenDependencyProbesWouldFail_reverts], [test][test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_AdminOnlySeed], [test][test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_OperatorOnlySeed], [test][test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_RolesOverlapSeed], [test][test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts_AdminOnlySeed], [test][test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts_OperatorOnlySeed], [test][test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts_RolesOverlapSeed], [test][test_givenSamePointer_whenDependencyProbesWouldFail_reverts_AdminOnlySeed], [test][test_givenSamePointer_whenDependencyProbesWouldFail_reverts_OperatorOnlySeed], [test][test_givenSamePointer_whenDependencyProbesWouldFail_reverts_RolesOverlapSeed] |
 | SYR-P04 | ADMIN_ROLE holder | Zero -> `address(0)` candidate recipient | Treasury fallback; no policy lookup | No positive Active route | Not applicable | Not applicable | Fuzz none/one/multiple Active and Retired assets | RevenueDistributor_SameAddress(address(0)) before asset probes | Pointer, hashes, liabilities and indexes unchanged; no YieldRecipientSet; pending yield keeps Treasury fallback | Covered: [test][test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts], [test][test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts], [test][test_givenSamePointer_whenDependencyProbesWouldFail_reverts], [test][test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_AdminOnlySeed], [test][test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_OperatorOnlySeed], [test][test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_RolesOverlapSeed], [test][test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts_AdminOnlySeed], [test][test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts_OperatorOnlySeed], [test][test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts_RolesOverlapSeed], [test][test_givenSamePointer_whenDependencyProbesWouldFail_reverts_AdminOnlySeed], [test][test_givenSamePointer_whenDependencyProbesWouldFail_reverts_OperatorOnlySeed], [test][test_givenSamePointer_whenDependencyProbesWouldFail_reverts_RolesOverlapSeed] |
 
+Retired duplicate caller IDs: SYR-A02, SYR-I08, SYR-I15, SYR-I16, SYR-I17, SYR-I18, SYR-I19, SYR-I20, SYR-I21, SYR-I22, SYR-I23, SYR-I24, SYR-I25, SYR-I26. Retained caller families include explicit exclusive-role and overlapping-role seeds.
+
+## Canonical candidate metadata
+
+| ID | Caller | Candidate membership | Required metadata | Validator and execution | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| SYR-D01 | Admin | Active in intended Kernel | Fuzz malformed kernel() response; seed empty,short,oversized,noncanonical | PolicyDependency_InvalidDependency(candidate) | Unchanged | Covered: [test][test_whenCandidateKernelReadIsMalformed_reverts], [test][test_whenCandidateMetadataBoundaries_reverts], [test][test_whenCandidateKernelReadIsMalformed_reverts_AdminOnlySeed], [test][test_whenCandidateKernelReadIsMalformed_reverts_OperatorOnlySeed], [test][test_whenCandidateKernelReadIsMalformed_reverts_RolesOverlapSeed], [test][test_whenCandidateMetadataBoundaries_reverts_AdminOnlySeed], [test][test_whenCandidateMetadataBoundaries_reverts_OperatorOnlySeed], [test][test_whenCandidateMetadataBoundaries_reverts_RolesOverlapSeed] |
+| SYR-D02 | Admin | Active in intended Kernel | Fuzz malformed isEnabled() response; seed empty,short,oversized,noncanonical | PolicyDependency_InvalidDependency(candidate) | Unchanged | Covered: [test][test_whenCandidateEnabledReadIsMalformed_reverts], [test][test_whenCandidateMetadataBoundaries_reverts], [test][test_whenCandidateEnabledReadIsMalformed_reverts_AdminOnlySeed], [test][test_whenCandidateEnabledReadIsMalformed_reverts_OperatorOnlySeed], [test][test_whenCandidateEnabledReadIsMalformed_reverts_RolesOverlapSeed], [test][test_whenCandidateMetadataBoundaries_reverts_AdminOnlySeed], [test][test_whenCandidateMetadataBoundaries_reverts_OperatorOnlySeed], [test][test_whenCandidateMetadataBoundaries_reverts_RolesOverlapSeed] |
+| SYR-D03 | Admin | Active in intended Kernel | Reports another Kernel | RevenueDistributor_PolicyDependency_KernelMismatch(recipient,expectedKernel,reportedKernel) before readiness | Unchanged | Covered: [test][test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts], [test][test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_AdminOnlySeed], [test][test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_OperatorOnlySeed], [test][test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_RolesOverlapSeed] |
+
+## Failed candidate probes
+
+| ID | Caller | Required getter / fault | Validator and write outcome | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| SYR-D04 | Admin | Kernel or enabled getter reverts | PolicyDependency_InvalidDependency(candidate) | Pointer unchanged; candidate error does not escape | Covered: [test][test_whenCandidateMetadataReverts_reverts], [test][test_whenCandidateMetadataReverts_reverts_AdminOnlySeed], [test][test_whenCandidateMetadataReverts_reverts_OperatorOnlySeed], [test][test_whenCandidateMetadataReverts_reverts_RolesOverlapSeed] |
+| SYR-D05 | Admin | Active positive repurchase route; candidate VaultConfig returns noncanonical bool | RevenueDistributor_YieldRecipientUnavailable(candidate,asset) | Old pointer retained; no decode panic | Covered: [test][test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts], [test][test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_AdminOnlySeed], [test][test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_OperatorOnlySeed], [test][test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_RolesOverlapSeed] |
+| SYR-D06 | Admin | Active positive repurchase route; getVaults returns noncanonical address word | RevenueDistributor_YieldRecipientUnavailable(candidate,asset) | Old pointer retained; no decode panic | Covered: [test][test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts], [test][test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_AdminOnlySeed], [test][test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_OperatorOnlySeed], [test][test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_RolesOverlapSeed] |
+
 [test_givenAdmin_whenYieldRecipientSet]: ./setYieldRecipient.t.sol#L25
 [test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient]: ./setYieldRecipient.t.sol#L549
 [test_whenUnauthorizedCallerSetsYieldRecipient_reverts]: ./setYieldRecipient.t.sol#L173
@@ -143,257 +161,124 @@ Exercise admin and the current config operator separately. Pending assets refer 
 [test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts]: ./setYieldRecipient.t.sol#L1520
 [test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState]: ./setYieldRecipient.t.sol#L1303
 [test_whenCandidatePolicyIsInactiveOrDisabled_reverts]: ./setYieldRecipient.t.sol#L394
-Retired duplicate caller IDs: SYR-A02, SYR-I08, SYR-I15, SYR-I16, SYR-I17, SYR-I18, SYR-I19, SYR-I20, SYR-I21, SYR-I22, SYR-I23, SYR-I24, SYR-I25, SYR-I26. Retained caller families include explicit exclusive-role and overlapping-role seeds.
-
 [test_givenSamePointer_whenDependencyProbesWouldFail_reverts]: ./setYieldRecipient.t.sol#L1781
-
-## Canonical candidate metadata
-
-| ID | Caller | Candidate membership | Required metadata | Validator and execution | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- |
-| SYR-D01 | Admin | Active in intended Kernel | Fuzz malformed kernel() response; seed empty,short,oversized,noncanonical | PolicyDependency_InvalidDependency(candidate) | Unchanged | Covered: [test][test_whenCandidateKernelReadIsMalformed_reverts], [test][test_whenCandidateMetadataBoundaries_reverts], [test][test_whenCandidateKernelReadIsMalformed_reverts_AdminOnlySeed], [test][test_whenCandidateKernelReadIsMalformed_reverts_OperatorOnlySeed], [test][test_whenCandidateKernelReadIsMalformed_reverts_RolesOverlapSeed], [test][test_whenCandidateMetadataBoundaries_reverts_AdminOnlySeed], [test][test_whenCandidateMetadataBoundaries_reverts_OperatorOnlySeed], [test][test_whenCandidateMetadataBoundaries_reverts_RolesOverlapSeed] |
-| SYR-D02 | Admin | Active in intended Kernel | Fuzz malformed isEnabled() response; seed empty,short,oversized,noncanonical | PolicyDependency_InvalidDependency(candidate) | Unchanged | Covered: [test][test_whenCandidateEnabledReadIsMalformed_reverts], [test][test_whenCandidateMetadataBoundaries_reverts], [test][test_whenCandidateEnabledReadIsMalformed_reverts_AdminOnlySeed], [test][test_whenCandidateEnabledReadIsMalformed_reverts_OperatorOnlySeed], [test][test_whenCandidateEnabledReadIsMalformed_reverts_RolesOverlapSeed], [test][test_whenCandidateMetadataBoundaries_reverts_AdminOnlySeed], [test][test_whenCandidateMetadataBoundaries_reverts_OperatorOnlySeed], [test][test_whenCandidateMetadataBoundaries_reverts_RolesOverlapSeed] |
-| SYR-D03 | Admin | Active in intended Kernel | Reports another Kernel | RevenueDistributor_PolicyDependency_KernelMismatch(recipient,expectedKernel,reportedKernel) before readiness | Unchanged | Covered: [test][test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts], [test][test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_AdminOnlySeed], [test][test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_OperatorOnlySeed], [test][test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_RolesOverlapSeed] |
-
 [test_whenCandidateKernelReadIsMalformed_reverts]: ./setYieldRecipient.t.sol#L1642
 [test_whenCandidateMetadataBoundaries_reverts]: ./setYieldRecipient.t.sol#L1698
 [test_whenCandidateEnabledReadIsMalformed_reverts]: ./setYieldRecipient.t.sol#L1670
 [test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts]: ./setYieldRecipient.t.sol#L1751
-
-## Failed candidate probes
-
-| ID | Caller | Required getter / fault | Validator and write outcome | Effects | Test |
-| --- | --- | --- | --- | --- | --- |
-| SYR-D04 | Admin | Kernel or enabled getter reverts | PolicyDependency_InvalidDependency(candidate) | Pointer unchanged; candidate error does not escape | Covered: [test][test_whenCandidateMetadataReverts_reverts], [test][test_whenCandidateMetadataReverts_reverts_AdminOnlySeed], [test][test_whenCandidateMetadataReverts_reverts_OperatorOnlySeed], [test][test_whenCandidateMetadataReverts_reverts_RolesOverlapSeed] |
-| SYR-D05 | Admin | Active positive repurchase route; candidate VaultConfig returns noncanonical bool | RevenueDistributor_YieldRecipientUnavailable(candidate,asset) | Old pointer retained; no decode panic | Covered: [test][test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts], [test][test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_AdminOnlySeed], [test][test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_OperatorOnlySeed], [test][test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_RolesOverlapSeed] |
-| SYR-D06 | Admin | Active positive repurchase route; getVaults returns noncanonical address word | RevenueDistributor_YieldRecipientUnavailable(candidate,asset) | Old pointer retained; no decode panic | Covered: [test][test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts], [test][test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_AdminOnlySeed], [test][test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_OperatorOnlySeed], [test][test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_RolesOverlapSeed] |
-
 [test_whenCandidateMetadataReverts_reverts]: ./setYieldRecipient.t.sol#L1824
 [test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts]: ./setYieldRecipient.t.sol#L1855
 [test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts]: ./setYieldRecipient.t.sol#L1892
-
 [test_givenAdmin_whenYieldRecipientSet_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2135
-
 [test_givenAdmin_whenYieldRecipientSet_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2140
-
 [test_givenAdmin_whenYieldRecipientSet_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2145
-
 [test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2840
-
 [test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2851
-
 [test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2862
-
 [test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2768
-
 [test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2779
-
 [test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2790
-
 [test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2363
-
 [test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2375
-
 [test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2387
-
 [test_givenTreasuryAddress_whenYieldRecipientSet_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2720
-
 [test_givenTreasuryAddress_whenYieldRecipientSet_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2725
-
 [test_givenTreasuryAddress_whenYieldRecipientSet_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2730
-
 [test_givenAnyPointerAndAssetState_whenExcludedAddressSelected_revertsAndRollsBack_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2150
-
 [test_givenAnyPointerAndAssetState_whenExcludedAddressSelected_revertsAndRollsBack_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2165
-
 [test_givenAnyPointerAndAssetState_whenExcludedAddressSelected_revertsAndRollsBack_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2180
-
 [test_whenEOASelectedAsYieldRecipient_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2978
-
 [test_whenEOASelectedAsYieldRecipient_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2988
-
 [test_whenEOASelectedAsYieldRecipient_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2993
-
 [test_whenCandidateLacksRequiredInterface_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2918
-
 [test_whenCandidateLacksRequiredInterface_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2923
-
 [test_whenCandidateLacksRequiredInterface_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2928
-
 [test_whenCandidatePolicyIsInactiveOrDisabled_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2963
-
 [test_whenCandidatePolicyIsInactiveOrDisabled_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2968
-
 [test_whenCandidatePolicyIsInactiveOrDisabled_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2973
-
 [test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2294
-
 [test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2306
-
 [test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2318
-
 [test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L1970
-
 [test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L1981
-
 [test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L1992
-
 [test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2330
-
 [test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2341
-
 [test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2352
-
 [test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2102
-
 [test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2113
-
 [test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2124
-
 [test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack_AdminOnlySeed]: ./setYieldRecipient.t.sol#L1931
-
 [test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L1944
-
 [test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L1957
-
 [test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2069
-
 [test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2080
-
 [test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2091
-
 [test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2672
-
 [test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2683
-
 [test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2694
-
 [test_givenSamePointer_whenDependencyProbesWouldFail_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2642
-
 [test_givenSamePointer_whenDependencyProbesWouldFail_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2652
-
 [test_givenSamePointer_whenDependencyProbesWouldFail_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2662
-
 [test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2498
-
 [test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2509
-
 [test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2520
-
 [test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2531
-
 [test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2544
-
 [test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2557
-
 [test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2570
-
 [test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2581
-
 [test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2592
-
 [test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2399
-
 [test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2410
-
 [test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2421
-
 [test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2432
-
 [test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2443
-
 [test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2454
-
 [test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2735
-
 [test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2746
-
 [test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2757
-
 [test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2465
-
 [test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2476
-
 [test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2487
-
 [test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2261
-
 [test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2272
-
 [test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2283
-
 [test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2228
-
 [test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2239
-
 [test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2250
-
 [test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2705
-
 [test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2710
-
 [test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2715
-
 [test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2603
-
 [test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2616
-
 [test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2629
-
 [test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2873
-
 [test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2878
-
 [test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2883
-
 [test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2801
-
 [test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2814
-
 [test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2827
-
 [test_whenCandidateKernelReadIsMalformed_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2903
-
 [test_whenCandidateKernelReadIsMalformed_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2908
-
 [test_whenCandidateKernelReadIsMalformed_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2913
-
 [test_whenCandidateMetadataBoundaries_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2933
-
 [test_whenCandidateMetadataBoundaries_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2938
-
 [test_whenCandidateMetadataBoundaries_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2943
-
 [test_whenCandidateEnabledReadIsMalformed_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2888
-
 [test_whenCandidateEnabledReadIsMalformed_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2893
-
 [test_whenCandidateEnabledReadIsMalformed_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2898
-
 [test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2195
-
 [test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2206
-
 [test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2217
-
 [test_whenCandidateMetadataReverts_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2948
-
 [test_whenCandidateMetadataReverts_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2953
-
 [test_whenCandidateMetadataReverts_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2958
-
 [test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2003
-
 [test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2014
-
 [test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2025
-
 [test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_AdminOnlySeed]: ./setYieldRecipient.t.sol#L2036
-
 [test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_OperatorOnlySeed]: ./setYieldRecipient.t.sol#L2047
-
 [test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_RolesOverlapSeed]: ./setYieldRecipient.t.sol#L2058
-
 [test_givenPolicyActiveDisabledAndCandidate_whenUnauthorizedCallerSetsYieldRecipient_reverts]: ./setYieldRecipient.t.sol#L837
-
 [test_givenPolicyInactiveAndCandidate_whenUnauthorizedCallerSetsYieldRecipient_reverts]: ./setYieldRecipient.t.sol#L866

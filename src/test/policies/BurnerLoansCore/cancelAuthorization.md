@@ -1,6 +1,6 @@
 # BurnerLoansCore.cancelAuthorization coverage plan
 
-Source: [cancelAuthorization](../../../policies/utils/OperatorAuth.sol#L146). Acceptance plan; coverage and execution results are recorded separately.
+Source: [cancelAuthorization](../../../policies/utils/OperatorAuth.sol#L147). Acceptance plan; coverage and execution results are recorded separately.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -37,10 +37,10 @@ Co-located API assertions: `authorizationDeadlines`, `authorizationNonces`, `isS
 
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCORE-CANCEL-AUTH-P03 | Fuzz account | true | true | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenAnyLifecycle_whenCancelled], [invariant_lifecycleAuthorizationAndCustodyStayIndependent](setAuthorization.t.sol#L193) |
-| BLCORE-CANCEL-AUTH-P04 | Fuzz account | true | false | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenAnyLifecycle_whenCancelled], [invariant_lifecycleAuthorizationAndCustodyStayIndependent](setAuthorization.t.sol#L193) |
-| BLCORE-CANCEL-AUTH-P05 | Fuzz account | false | true | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenAnyLifecycle_whenCancelled], [invariant_lifecycleAuthorizationAndCustodyStayIndependent](setAuthorization.t.sol#L193) |
-| BLCORE-CANCEL-AUTH-P06 | Fuzz account | false | false | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenAnyLifecycle_whenCancelled], [invariant_lifecycleAuthorizationAndCustodyStayIndependent](setAuthorization.t.sol#L193) |
+| BLCORE-CANCEL-AUTH-P03 | Fuzz account | true | true | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenAnyLifecycle_whenCancelled], [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent] |
+| BLCORE-CANCEL-AUTH-P04 | Fuzz account | true | false | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenAnyLifecycle_whenCancelled], [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent] |
+| BLCORE-CANCEL-AUTH-P05 | Fuzz account | false | true | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenAnyLifecycle_whenCancelled], [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent] |
+| BLCORE-CANCEL-AUTH-P06 | Fuzz account | false | false | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenAnyLifecycle_whenCancelled], [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent] |
 
 ## Existing tests informing this plan
 
@@ -63,3 +63,5 @@ Implemented shared OperatorAuth behavior: reject incrementing MAX256 with Operat
 [test_givenExhaustedNonce_whenCancelled_reverts]: cancelAuthorization.t.sol#L57
 [test_givenMultipleGrants_whenOneCancelled]: cancelAuthorization.t.sol#L72
 [test_whenCancellationBoundarySeeds]: cancelAuthorization.t.sol#L44
+
+[invariant_lifecycleAuthorizationAndCustodyStayIndependent]: setAuthorization.t.sol#L193

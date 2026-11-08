@@ -10,8 +10,8 @@ Valid distinct distributor. The public validator is permissionless and ignores s
 
 | ID | Caller | Execution | Validator | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCRD-A01 | ADMIN_ROLE holder | Success | Success | Pointer and RevenueDistributorSet | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges](./setRevenueDistributor.t.sol#L24) |
-| BLCRD-A03 | Fuzz caller excluding every ADMIN holder; seed current config operator, timelock and former operator | ROLES_RequireRole(ADMIN_ROLE) | Same validation as ADMIN | Unchanged | Covered: [test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits](./setRevenueDistributor.t.sol#L81); [test_givenCurrentAndFormerOperators_whenSelectingDistributor_reverts](./setRevenueDistributor.t.sol#L97) |
+| BLCRD-A01 | ADMIN_ROLE holder | Success | Success | Pointer and RevenueDistributorSet | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] |
+| BLCRD-A03 | Fuzz caller excluding every ADMIN holder; seed current config operator, timelock and former operator | ROLES_RequireRole(ADMIN_ROLE) | Same validation as ADMIN | Unchanged | Covered: [test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits][test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits]; [test_givenCurrentAndFormerOperators_whenSelectingDistributor_reverts][test_givenCurrentAndFormerOperators_whenSelectingDistributor_reverts] |
 
 ## Lifecycle and repair
 
@@ -19,10 +19,10 @@ Cached ROLES initialized; caller ADMIN; candidate is valid and distinct. Fuzz Co
 
 | ID | Caller | Local active | Local enabled | Execution | Validator | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCRD-L01 | ADMIN_ROLE holder | true | true | Success | Success | Pointer/event only | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges](./setRevenueDistributor.t.sol#L24) |
-| BLCRD-L02 | ADMIN_ROLE holder | true | false | Success | Success | Pointer/event only | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges](./setRevenueDistributor.t.sol#L24) |
-| BLCRD-L03 | ADMIN_ROLE holder | false | true | BurnerLoans_PolicyNotActive(Payout) | Success | Unchanged; no committed logs | Covered: [test_givenPayoutInactive_whenCalled_reverts](./setRevenueDistributor.t.sol#L338) |
-| BLCRD-L04 | ADMIN_ROLE holder | false | false | BurnerLoans_PolicyNotActive(Payout) | Success | Unchanged; no committed logs | Covered: [test_givenPayoutInactive_whenCalled_reverts](./setRevenueDistributor.t.sol#L338) |
+| BLCRD-L01 | ADMIN_ROLE holder | true | true | Success | Success | Pointer/event only | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] |
+| BLCRD-L02 | ADMIN_ROLE holder | true | false | Success | Success | Pointer/event only | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] |
+| BLCRD-L03 | ADMIN_ROLE holder | false | true | BurnerLoans_PolicyNotActive(Payout) | Success | Unchanged; no committed logs | Covered: [test_givenPayoutInactive_whenCalled_reverts][test_givenPayoutInactive_whenCalled_reverts] |
+| BLCRD-L04 | ADMIN_ROLE holder | false | false | BurnerLoans_PolicyNotActive(Payout) | Success | Unchanged; no committed logs | Covered: [test_givenPayoutInactive_whenCalled_reverts][test_givenPayoutInactive_whenCalled_reverts] |
 
 ## Candidate validation
 
@@ -30,14 +30,14 @@ Caller ADMIN, candidate distinct; all independent requirements not varied are sa
 
 | ID | Caller | Candidate | Execution | Validator | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCRD-I01 | ADMIN_ROLE holder | Nonzero EOA | BurnerLoans_InvalidRevenueDistributor(candidate) | Same error | Unchanged | Covered: [test_whenDistributorEoa_reverts](./setRevenueDistributor.t.sol#L109) |
-| BLCRD-I02 | ADMIN_ROLE holder | Deployed; lacks IRevenueDistributor | BurnerLoans_InvalidRevenueDistributor(candidate) | Same error | Unchanged | Covered: [test_givenMissingInterface_whenValidatedAndSelected_reverts](./setRevenueDistributor.t.sol#L225) |
-| BLCRD-I03 | ADMIN_ROLE holder | ERC165 reverts | BurnerLoans_InvalidRevenueDistributor(candidate) | Same error | Unchanged | Covered: [test_givenRevertingInterface_whenValidatedAndSelected_reverts](./setRevenueDistributor.t.sol#L242) |
-| BLCRD-I04 | ADMIN_ROLE holder | ERC165 malformed | BurnerLoans_InvalidRevenueDistributor(candidate) | Same error | Unchanged | Covered: [test_givenMalformedInterface_whenValidatedAndSelected_reverts](./setRevenueDistributor.t.sol#L259) |
-| BLCRD-D01 | ADMIN_ROLE holder | Reports another Kernel | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) | Same error | Unchanged | Covered: [test_givenWrongKernel_whenValidatedAndSelected_reverts](./setRevenueDistributor.t.sol#L276) |
-| BLCRD-D02 | ADMIN_ROLE holder | Same Kernel; inactive and enabled | PolicyDependency_NotActive(candidate) | Same error | Unchanged | Covered: [test_givenInactiveEnabled_whenValidatedAndSelected_reverts](./setRevenueDistributor.t.sol#L293) |
-| BLCRD-D03 | ADMIN_ROLE holder | Same Kernel; active and disabled | PolicyDependency_NotActive(candidate) | Same error | Unchanged | Covered: [test_givenActivePaused_whenValidatedAndSelected_reverts](./setRevenueDistributor.t.sol#L309) |
-| BLCRD-D04 | ADMIN_ROLE holder | Same Kernel; inactive and disabled | PolicyDependency_NotActive(candidate) | Same error | Unchanged | Covered: [test_givenInactivePaused_whenValidatedAndSelected_reverts](./setRevenueDistributor.t.sol#L322) |
+| BLCRD-I01 | ADMIN_ROLE holder | Nonzero EOA | BurnerLoans_InvalidRevenueDistributor(candidate) | Same error | Unchanged | Covered: [test_whenDistributorEoa_reverts][test_whenDistributorEoa_reverts] |
+| BLCRD-I02 | ADMIN_ROLE holder | Deployed; lacks IRevenueDistributor | BurnerLoans_InvalidRevenueDistributor(candidate) | Same error | Unchanged | Covered: [test_givenMissingInterface_whenValidatedAndSelected_reverts][test_givenMissingInterface_whenValidatedAndSelected_reverts] |
+| BLCRD-I03 | ADMIN_ROLE holder | ERC165 reverts | BurnerLoans_InvalidRevenueDistributor(candidate) | Same error | Unchanged | Covered: [test_givenRevertingInterface_whenValidatedAndSelected_reverts][test_givenRevertingInterface_whenValidatedAndSelected_reverts] |
+| BLCRD-I04 | ADMIN_ROLE holder | ERC165 malformed | BurnerLoans_InvalidRevenueDistributor(candidate) | Same error | Unchanged | Covered: [test_givenMalformedInterface_whenValidatedAndSelected_reverts][test_givenMalformedInterface_whenValidatedAndSelected_reverts] |
+| BLCRD-D01 | ADMIN_ROLE holder | Reports another Kernel | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) | Same error | Unchanged | Covered: [test_givenWrongKernel_whenValidatedAndSelected_reverts][test_givenWrongKernel_whenValidatedAndSelected_reverts] |
+| BLCRD-D02 | ADMIN_ROLE holder | Same Kernel; inactive and enabled | PolicyDependency_NotActive(candidate) | Same error | Unchanged | Covered: [test_givenInactiveEnabled_whenValidatedAndSelected_reverts][test_givenInactiveEnabled_whenValidatedAndSelected_reverts] |
+| BLCRD-D03 | ADMIN_ROLE holder | Same Kernel; active and disabled | PolicyDependency_NotActive(candidate) | Same error | Unchanged | Covered: [test_givenActivePaused_whenValidatedAndSelected_reverts][test_givenActivePaused_whenValidatedAndSelected_reverts] |
+| BLCRD-D04 | ADMIN_ROLE holder | Same Kernel; inactive and disabled | PolicyDependency_NotActive(candidate) | Same error | Unchanged | Covered: [test_givenInactivePaused_whenValidatedAndSelected_reverts][test_givenInactivePaused_whenValidatedAndSelected_reverts] |
 
 ## Address and routing transitions
 
@@ -45,16 +45,37 @@ ADMIN caller, idle guards; positive pending obligations may already exist. Routi
 
 | ID | Caller | Proposed address | Fee flag | Yield flag | Execution | Validator | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCRD-P01 | ADMIN_ROLE holder | Distinct active/enabled same-Kernel distributor | Fuzz false/true | Fuzz false/true | Success | Success | New pointer/event; pending fees follow new current route on retry | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges](./setRevenueDistributor.t.sol#L24) ; [test_givenFeeRouting_whenDistributorReplaced](./setRevenueDistributor.t.sol#L54) |
-| BLCRD-P02 | ADMIN_ROLE holder | Current nonzero valid distributor | Fuzz false/true | Fuzz false/true | BurnerLoans_UnchangedAddress(candidate) before dependency reads | Success | Unchanged | Covered: [test_givenCurrentDistributor_whenSelected_revertsBeforeReadiness](./setRevenueDistributor.t.sol#L115) |
-| BLCRD-P03 | ADMIN_ROLE holder | 0, previously nonzero | false | false | Success | BurnerLoans_RevenueDistributorRequired() | Pointer cleared/event; pending buckets preserved | Covered: [test_givenBothFlagsFalse_whenDistributorCleared_thenOnlyPointerChanges](./setRevenueDistributor.t.sol#L138) |
-| BLCRD-I05 | ADMIN_ROLE holder | 0, previously nonzero | true | false | BurnerLoans_RevenueDistributorRequired() | Same error | Unchanged | Covered: [test_givenFeeRouting_whenDistributorCleared_reverts](./setRevenueDistributor.t.sol#L154) |
-| BLCRD-I06 | ADMIN_ROLE holder | 0, previously nonzero | false | true | BurnerLoans_RevenueDistributorRequired() | Same error | Unchanged | Covered: [test_givenYieldRouting_whenDistributorCleared_reverts](./setRevenueDistributor.t.sol#L160) |
-| BLCRD-I07 | ADMIN_ROLE holder | 0, previously nonzero | true | true | BurnerLoans_RevenueDistributorRequired() | Same error | Unchanged | Covered: [test_givenBothRoutes_whenDistributorCleared_reverts](./setRevenueDistributor.t.sol#L167) |
-| BLCRD-I08 | ADMIN_ROLE holder | 0, already unset | false | false | BurnerLoans_UnchangedAddress(0) | BurnerLoans_RevenueDistributorRequired() | Unchanged | Covered: [test_givenUnsetDistributor_whenZeroSelected_revertsAsUnchanged](./setRevenueDistributor.t.sol#L174) |
+| BLCRD-P01 | ADMIN_ROLE holder | Distinct active/enabled same-Kernel distributor | Fuzz false/true | Fuzz false/true | Success | Success | New pointer/event; pending fees follow new current route on retry | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] ; [test_givenFeeRouting_whenDistributorReplaced][test_givenFeeRouting_whenDistributorReplaced] |
+| BLCRD-P02 | ADMIN_ROLE holder | Current nonzero valid distributor | Fuzz false/true | Fuzz false/true | BurnerLoans_UnchangedAddress(candidate) before dependency reads | Success | Unchanged | Covered: [test_givenCurrentDistributor_whenSelected_revertsBeforeReadiness][test_givenCurrentDistributor_whenSelected_revertsBeforeReadiness] |
+| BLCRD-P03 | ADMIN_ROLE holder | 0, previously nonzero | false | false | Success | BurnerLoans_RevenueDistributorRequired() | Pointer cleared/event; pending buckets preserved | Covered: [test_givenBothFlagsFalse_whenDistributorCleared_thenOnlyPointerChanges][test_givenBothFlagsFalse_whenDistributorCleared_thenOnlyPointerChanges] |
+| BLCRD-I05 | ADMIN_ROLE holder | 0, previously nonzero | true | false | BurnerLoans_RevenueDistributorRequired() | Same error | Unchanged | Covered: [test_givenFeeRouting_whenDistributorCleared_reverts][test_givenFeeRouting_whenDistributorCleared_reverts] |
+| BLCRD-I06 | ADMIN_ROLE holder | 0, previously nonzero | false | true | BurnerLoans_RevenueDistributorRequired() | Same error | Unchanged | Covered: [test_givenYieldRouting_whenDistributorCleared_reverts][test_givenYieldRouting_whenDistributorCleared_reverts] |
+| BLCRD-I07 | ADMIN_ROLE holder | 0, previously nonzero | true | true | BurnerLoans_RevenueDistributorRequired() | Same error | Unchanged | Covered: [test_givenBothRoutes_whenDistributorCleared_reverts][test_givenBothRoutes_whenDistributorCleared_reverts] |
+| BLCRD-I08 | ADMIN_ROLE holder | 0, already unset | false | false | BurnerLoans_UnchangedAddress(0) | BurnerLoans_RevenueDistributorRequired() | Unchanged | Covered: [test_givenUnsetDistributor_whenZeroSelected_revertsAsUnchanged][test_givenUnsetDistributor_whenZeroSelected_revertsAsUnchanged] |
 
 ## Own activity precedence
 
 | ID | Caller | Local active | Local enabled | Competing fault | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCRD-L05 | Fuzz unauthorized callers; excludes stored operator and ADMIN identities | false | Fuzz true/false | ROLES calls revert; otherwise valid action | BurnerLoans_PolicyNotActive(Payout) before caller/role reads | Unchanged; no committed logs | Covered: [test_givenPayoutInactiveAndBrokenRoles_whenUnauthorizedCallerActs_thenActivityWins](./setRevenueDistributor.t.sol#L352) |
+| BLCRD-L05 | Fuzz unauthorized callers; excludes stored operator and ADMIN identities | false | Fuzz true/false | ROLES calls revert; otherwise valid action | BurnerLoans_PolicyNotActive(Payout) before caller/role reads | Unchanged; no committed logs | Covered: [test_givenPayoutInactiveAndBrokenRoles_whenUnauthorizedCallerActs_thenActivityWins][test_givenPayoutInactiveAndBrokenRoles_whenUnauthorizedCallerActs_thenActivityWins] |
+
+[test_givenActivePaused_whenValidatedAndSelected_reverts]: ./setRevenueDistributor.t.sol#L309
+[test_givenBothFlagsFalse_whenDistributorCleared_thenOnlyPointerChanges]: ./setRevenueDistributor.t.sol#L138
+[test_givenBothRoutes_whenDistributorCleared_reverts]: ./setRevenueDistributor.t.sol#L167
+[test_givenCurrentAndFormerOperators_whenSelectingDistributor_reverts]: ./setRevenueDistributor.t.sol#L97
+[test_givenCurrentDistributor_whenSelected_revertsBeforeReadiness]: ./setRevenueDistributor.t.sol#L115
+[test_givenFeeRouting_whenDistributorCleared_reverts]: ./setRevenueDistributor.t.sol#L154
+[test_givenFeeRouting_whenDistributorReplaced]: ./setRevenueDistributor.t.sol#L54
+[test_givenInactiveEnabled_whenValidatedAndSelected_reverts]: ./setRevenueDistributor.t.sol#L293
+[test_givenInactivePaused_whenValidatedAndSelected_reverts]: ./setRevenueDistributor.t.sol#L322
+[test_givenMalformedInterface_whenValidatedAndSelected_reverts]: ./setRevenueDistributor.t.sol#L259
+[test_givenMissingInterface_whenValidatedAndSelected_reverts]: ./setRevenueDistributor.t.sol#L225
+[test_givenPayoutInactiveAndBrokenRoles_whenUnauthorizedCallerActs_thenActivityWins]: ./setRevenueDistributor.t.sol#L352
+[test_givenPayoutInactive_whenCalled_reverts]: ./setRevenueDistributor.t.sol#L338
+[test_givenRevertingInterface_whenValidatedAndSelected_reverts]: ./setRevenueDistributor.t.sol#L242
+[test_givenUnsetDistributor_whenZeroSelected_revertsAsUnchanged]: ./setRevenueDistributor.t.sol#L174
+[test_givenValidDistributor_whenSelected_thenOnlyPointerChanges]: ./setRevenueDistributor.t.sol#L24
+[test_givenWrongKernel_whenValidatedAndSelected_reverts]: ./setRevenueDistributor.t.sol#L276
+[test_givenYieldRouting_whenDistributorCleared_reverts]: ./setRevenueDistributor.t.sol#L160
+[test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits]: ./setRevenueDistributor.t.sol#L81
+[test_whenDistributorEoa_reverts]: ./setRevenueDistributor.t.sol#L109

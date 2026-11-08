@@ -1,6 +1,6 @@
 # BurnerLoansRisk.setPriceCacheMaxAge coverage plan
 
-Source: [setPriceCacheMaxAge](../../../policies/burnerloans/BurnerLoansRisk.sol#L572). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setPriceCacheMaxAge](../../../policies/burnerloans/BurnerLoansRisk.sol#L597). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 

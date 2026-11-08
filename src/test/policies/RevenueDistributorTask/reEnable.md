@@ -57,8 +57,6 @@ ROLES initialized; retained caller roles after any Kernel deactivation; unrelate
 | RDTASK-REENABLE-D02 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | false | false | PolicyDependency_NotActive(RD) | Unchanged; no lifecycle logs | Covered: [test][test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts], [test][test_givenRestoredDistributor_whenAuthorizedCallerReEnables], [test][test_givenDependencyAndRoleSeeds_whenReEnabled_reverts] |
 | RDTASK-REENABLE-D03 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | true | false | PolicyDependency_NotActive(RD) | Unchanged; no lifecycle logs | Covered: [test][test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts], [test][test_givenRestoredDistributor_whenAuthorizedCallerReEnables], [test][test_givenDependencyAndRoleSeeds_whenReEnabled_reverts] |
 
-[test_givenDisabled_whenUnauthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L66
-
 ## Grace deadline overflow
 
 Initialized, locally disabled; otherwise compatible dependencies. Configure G while enabled, disable at L and assert the stored transition timestamp before attempting reEnable. This is an inherited numeric boundary, separate from an ordinary expired deadline.
@@ -107,8 +105,6 @@ The tests require own-policy activity, empty lifecycle payloads and checked grac
 
 Dependency classification: RD is a direct operational Policy service. Construction validates compatibility without requiring readiness. Activation requires a canonical Kernel/status response, reported Kernel equal to this consumer's Kernel, authoritative membership in that Kernel and local enablement. Malformed metadata gives `RevenueDistributorTask_InvalidDistributor(RD)`; a readable foreign Kernel gives `PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel)` before readiness; a compatible paused/inactive target gives `PolicyDependency_NotActive(RD)`. Enable and reEnable use the same predicate.
 
-[test_givenNeverEnabledPolicy_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L219
-
 ## Kernel drift and restoration
 
 | ID | Caller | Local active | Local enabled | Distributor active | Distributor enabled | Kernel binding | Execution | Effects | Test |
@@ -116,35 +112,22 @@ Dependency classification: RD is a direct operational Policy service. Constructi
 | RDTASK-REENABLE-D06 | Admin | true | false | Fuzz false/true | true | Different reported Kernel after construction | PolicyDependency_KernelMismatch(RD,expectedKernel,reportedKernel) before readiness | No transition | Covered: [test][test_givenDistributorKernelDrift_whenActivation_reverts] |
 | RDTASK-REENABLE-P03 | Admin | true | false | Restored false to true | Restored false to true | Same Kernel | Failed activation then successful retry | Pending accounting preserved | Covered: [test][test_givenRestoredDistributor_whenActivation_succeeds] |
 
+[test_givenDisabled_whenUnauthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L66
+[test_givenNeverEnabledPolicy_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L219
 [test_givenDistributorKernelDrift_whenActivation_reverts]: ./reEnable.t.sol#L267
 [test_givenRestoredDistributor_whenActivation_succeeds]: ./reEnable.t.sol#L382
-
 [test_givenRepresentableDeadline_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L457
-
 [test_givenReEnableBoundarySeeds]: ./reEnable.t.sol#L586
-
 [test_givenEnabled_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L394
-
 [test_givenInactive_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L421
-
 [test_givenOverflowingDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L496
-
 [test_givenExpiredDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L541
-
 [test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L772
-
 [test_givenRestoredDistributor_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L811
-
 [test_givenDependencyAndRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L842
-
 [test_givenGraceExpired_whenAdminReEnables_reverts]: ./reEnable.t.sol#L87
-
 [test_givenNeverEnabled_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L54
-
 [test_givenDisabledWithinGrace_whenPermittedCallerReEnables]: ./reEnable.t.sol#L26
-
 [test_givenDistributorInactive_whenPermittedCallerReEnables_reverts]: ./reEnable.t.sol#L104
-
 [test_givenEnabled_whenReEnabled_reverts]: ./reEnable.t.sol#L81
-
 [test_givenDistributorDisabled_whenPermittedCallerReEnables_reverts]: ./reEnable.t.sol#L119

@@ -38,8 +38,8 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Inputs / competing fault | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-A01 | ADMIN_ROLE holder | data empty; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `Success` | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,data,now) | Covered: [test_givenDisabled_whenAdminEnables_thenExactTransition](enable.t.sol#L64) |
-| BLLIQ-ENABLE-A02 | Fuzz caller excluding every ADMIN_ROLE holder | data empty; hook dependencies ready | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; no hook executed | Covered: [test_givenDisabled_whenUnauthorizedEnables_reverts](enable.t.sol#L54) |
+| BLLIQ-ENABLE-A01 | ADMIN_ROLE holder | data empty; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `Success` | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,data,now) | Covered: [test_givenDisabled_whenAdminEnables_thenExactTransition][test_givenDisabled_whenAdminEnables_thenExactTransition] |
+| BLLIQ-ENABLE-A02 | Fuzz caller excluding every ADMIN_ROLE holder | data empty; hook dependencies ready | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; no hook executed | Covered: [test_givenDisabled_whenUnauthorizedEnables_reverts][test_givenDisabled_whenUnauthorizedEnables_reverts] |
 
 ## Local transition state
 
@@ -47,7 +47,7 @@ These checks run before authorization and hook dependencies. Fuzz all callers; m
 
 | ID | Caller | Local active | Local enabled | Prior transition L | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; no dependency reads or committed logs | Covered: [test_givenEnabled_whenAnyCallerEnables_reverts](enable.t.sol#L26), [test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins](enable.t.sol#L175) |
+| BLLIQ-ENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; no dependency reads or committed logs | Covered: [test_givenEnabled_whenAnyCallerEnables_reverts][test_givenEnabled_whenAnyCallerEnables_reverts], [test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins][test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins] |
 
 ## Lifecycle
 
@@ -57,11 +57,11 @@ Local action disabled; reported Core Kernel matches; ROLES initialized; data=0x;
 
 | ID | Caller | Local active | Local enabled | Core active | Core enabled | Action settlement role | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-L02 | ADMIN_ROLE holder | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansSeize) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenInactive_whenEnabled_reverts](enable.t.sol#L41) |
-| BLLIQ-ENABLE-D01 | ADMIN_ROLE holder | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L210), [test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry](enable.t.sol#L231) |
-| BLLIQ-ENABLE-D02 | ADMIN_ROLE holder | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L210), [test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry](enable.t.sol#L231) |
-| BLLIQ-ENABLE-D03 | ADMIN_ROLE holder | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L210), [test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry](enable.t.sol#L231) |
-| BLLIQ-ENABLE-L03 | ADMIN_ROLE holder | true | false | true | true | false | `ROLES_RequireRole(BL_LIQUIDATION_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenSettlementRoleRevoked_whenEnabled_reverts](enable.t.sol#L148) |
+| BLLIQ-ENABLE-L02 | ADMIN_ROLE holder | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansSeize) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenInactive_whenEnabled_reverts][test_givenInactive_whenEnabled_reverts] |
+| BLLIQ-ENABLE-D01 | ADMIN_ROLE holder | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-D02 | ADMIN_ROLE holder | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-D03 | ADMIN_ROLE holder | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-L03 | ADMIN_ROLE holder | true | false | true | true | false | `ROLES_RequireRole(BL_LIQUIDATION_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenSettlementRoleRevoked_whenEnabled_reverts][test_givenSettlementRoleRevoked_whenEnabled_reverts] |
 
 ## Inventory lifecycle
 
@@ -69,10 +69,10 @@ Local active=true, Local enabled=false, Core active=true and Core enabled=true; 
 
 | ID | Caller | Inventory active | Inventory enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-D05 | ADMIN_ROLE holder | false | true | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L242), [test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry](enable.t.sol#L263) |
-| BLLIQ-ENABLE-D06 | ADMIN_ROLE holder | true | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L242), [test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry](enable.t.sol#L263) |
-| BLLIQ-ENABLE-D07 | ADMIN_ROLE holder | false | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L242), [test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry](enable.t.sol#L263) |
-| BLLIQ-ENABLE-D08 | ADMIN_ROLE holder | true | true | Success after restoring the failed Inventory state and retrying | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now); positions and balances preserved | Covered: [test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L242), [test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry](enable.t.sol#L263) |
+| BLLIQ-ENABLE-D05 | ADMIN_ROLE holder | false | true | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry][test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-D06 | ADMIN_ROLE holder | true | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry][test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-D07 | ADMIN_ROLE holder | false | false | `PolicyDependency_NotActive(Inventory)` | Unchanged; no local transition, timestamp update or committed logs | Covered: [test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry][test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-D08 | ADMIN_ROLE holder | true | true | Success after restoring the failed Inventory state and retrying | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now); positions and balances preserved | Covered: [test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry][test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry] |
 
 ## Dependency compatibility
 
@@ -80,7 +80,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Dependency / binding condition | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-D04 | ADMIN_ROLE holder | Core reports another Kernel | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch](enable.t.sol#L108) |
+| BLLIQ-ENABLE-D04 | ADMIN_ROLE holder | Core reports another Kernel | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch][test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch] |
 
 ## Inputs
 
@@ -88,7 +88,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Payload | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-I01 | ADMIN_ROLE holder | data nonempty; fuzz length 1..256; seed 0x00, 0x01, ABI-encoded zero and 256 bytes; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `BurnerLoans_InvalidEnablerData()` | Covered: [test_whenNonemptyEnableData_reverts](enable.t.sol#L78), [test_whenPayloadBoundarySeedsProvided_reverts](enable.t.sol#L277) |
+| BLLIQ-ENABLE-I01 | ADMIN_ROLE holder | data nonempty; fuzz length 1..256; seed 0x00, 0x01, ABI-encoded zero and 256 bytes; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `BurnerLoans_InvalidEnablerData()` | Covered: [test_whenNonemptyEnableData_reverts][test_whenNonemptyEnableData_reverts], [test_whenPayloadBoundarySeedsProvided_reverts][test_whenPayloadBoundarySeedsProvided_reverts] |
 
 ## Payload rejection and error precedence
 
@@ -96,8 +96,8 @@ Local enabled=false; initialized ROLES; dependencies compatible; outside settlem
 
 | ID | Caller | Payload / competing fault | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-I02 | Fuzz all callers | Nonempty bytes; local enabled=true | `NotDisabled()` | Unchanged; local state rejects before caller/data | Covered: [test_givenEnabled_whenNonemptyEnableData_thenStateWins](enable.t.sol#L88) |
-| BLLIQ-ENABLE-I03 | Fuzz callers excluding every ADMIN_ROLE holder | Nonempty bytes; local enabled=false | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization rejects before data | Covered: [test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins](enable.t.sol#L96) |
+| BLLIQ-ENABLE-I02 | Fuzz all callers | Nonempty bytes; local enabled=true | `NotDisabled()` | Unchanged; local state rejects before caller/data | Covered: [test_givenEnabled_whenNonemptyEnableData_thenStateWins][test_givenEnabled_whenNonemptyEnableData_thenStateWins] |
+| BLLIQ-ENABLE-I03 | Fuzz callers excluding every ADMIN_ROLE holder | Nonempty bytes; local enabled=false | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization rejects before data | Covered: [test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins][test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins] |
 
 ## Shared assertions
 
@@ -115,7 +115,7 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 | ID | Caller | Local active | Local enabled | Cached ROLES | lastTransitionAt | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-L04 | Fuzz all callers | false | false | 0 | 0 | Empty revert data from the unset ROLES dependency call; no decoded role result | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenEnabled_thenInitializationPrecedence](enable.t.sol#L162) |
+| BLLIQ-ENABLE-L04 | Fuzz all callers | false | false | 0 | 0 | Empty revert data from the unset ROLES dependency call; no decoded role result | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenEnabled_thenInitializationPrecedence][test_givenNeverActivated_whenEnabled_thenInitializationPrecedence] |
 
 ## Payout activation readiness
 
@@ -125,7 +125,26 @@ recovery callers and independently valid grace windows.
 
 | ID | Payout active | Payout enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-D09 | true | false | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L180), [test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry](enable.t.sol#L200) |
-| BLLIQ-ENABLE-D10 | false | true | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L180), [test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry](enable.t.sol#L200) |
-| BLLIQ-ENABLE-D11 | false | false | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L180), [test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry](enable.t.sol#L200) |
-| BLLIQ-ENABLE-D12 | true | true | Success after restoring failed Payout state and retrying enable | Exact Enabled/Transition events and timestamp; accounting preserved | Covered: [test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L180), [test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry](enable.t.sol#L200) |
+| BLLIQ-ENABLE-D09 | true | false | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry][test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-D10 | false | true | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry][test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-D11 | false | false | PolicyDependency_NotActive(Payout) | Local state/history and accounting preserved | Covered: [test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry][test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry] |
+| BLLIQ-ENABLE-D12 | true | true | Success after restoring failed Payout state and retrying enable | Exact Enabled/Transition events and timestamp; accounting preserved | Covered: [test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry][test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry][test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry] |
+
+[test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch]: enable.t.sol#L108
+[test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry]: enable.t.sol#L210
+[test_givenDisabled_whenAdminEnables_thenExactTransition]: enable.t.sol#L64
+[test_givenDisabled_whenUnauthorizedEnables_reverts]: enable.t.sol#L54
+[test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins]: enable.t.sol#L96
+[test_givenEachUnavailableCoreState_whenEnabled_thenRejectAndRetry]: enable.t.sol#L231
+[test_givenEachUnavailableInventoryState_whenEnabled_thenRejectAndRetry]: enable.t.sol#L263
+[test_givenEachUnavailablePayoutState_whenEnabled_thenRejectAndRetry]: enable.t.sol#L200
+[test_givenEnabled_whenAnyCallerEnables_reverts]: enable.t.sol#L26
+[test_givenEnabled_whenNonemptyEnableData_thenStateWins]: enable.t.sol#L88
+[test_givenInactive_whenEnabled_reverts]: enable.t.sol#L41
+[test_givenInventoryUnavailable_whenEnabled_thenRejectAndRetry]: enable.t.sol#L242
+[test_givenNeverActivated_whenEnabled_thenInitializationPrecedence]: enable.t.sol#L162
+[test_givenPayoutUnavailable_whenEnabled_thenRejectAndRetry]: enable.t.sol#L180
+[test_givenSettlementRoleRevoked_whenEnabled_reverts]: enable.t.sol#L148
+[test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins]: enable.t.sol#L175
+[test_whenNonemptyEnableData_reverts]: enable.t.sol#L78
+[test_whenPayloadBoundarySeedsProvided_reverts]: enable.t.sol#L277

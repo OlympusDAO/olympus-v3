@@ -8,6 +8,8 @@ Scenario scope: `BLCOMP-VERSION`. Version reporting is permissionless and indepe
 
 | ID | Caller | Contract context | Expected returns | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOMP-VERSION-P01 | Fuzz all callers | Bound Core inactive and disabled | VERSION=(major=1,minor=0); supportsInterface(IVersioned)=true | No writes or logs | Covered: [test_whenVersionQueried_thenVersionIsDiscoverable](VERSION.t.sol#L14) |
+| BLCOMP-VERSION-P01 | Fuzz all callers | Bound Core inactive and disabled | VERSION=(major=1,minor=0); supportsInterface(IVersioned)=true | No writes or logs | Covered: [test_whenVersionQueried_thenVersionIsDiscoverable][test_whenVersionQueried_thenVersionIsDiscoverable] |
 
 - [x] Run focused tests and update mappings.
+
+[test_whenVersionQueried_thenVersionIsDiscoverable]: VERSION.t.sol#L14

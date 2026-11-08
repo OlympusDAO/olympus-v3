@@ -1,6 +1,6 @@
 # BurnerLoansCore.settleDeposit coverage plan
 
-Source: [settleDeposit](../../../policies/burnerloans/BurnerLoansCore.sol#L251). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleDeposit](../../../policies/burnerloans/BurnerLoansCore.sol#L254). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -68,7 +68,7 @@ First deposits and existing-position top-ups are permitted with originations ena
 
 | ID | Caller | Prior position / operation | Originations enabled | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCORE-SETTLE-DEPOSIT-P01 | BL_COLLATERAL_POLICY_ROLE holder | Registered market; canonical position absent; positive exact receipt/nonzero representable DM credit | true | Create then credit position; return actual credit and collateral | Core receipt/DM operator/FLOAN collateral deltas consistent | Covered: [test][test_whenCreditedDepositIsPositive], [test][test_whenDepositAmountSeeds], [invariant_canonicalDebtAndCustodyMatchIndependentModel](settleSeize.t.sol#L963) |
+| BLCORE-SETTLE-DEPOSIT-P01 | BL_COLLATERAL_POLICY_ROLE holder | Registered market; canonical position absent; positive exact receipt/nonzero representable DM credit | true | Create then credit position; return actual credit and collateral | Core receipt/DM operator/FLOAN collateral deltas consistent | Covered: [test][test_whenCreditedDepositIsPositive], [test][test_whenDepositAmountSeeds], [invariant_canonicalDebtAndCustodyMatchIndependentModel][invariant_canonicalDebtAndCustodyMatchIndependentModel] |
 | BLCORE-SETTLE-DEPOSIT-P02 | BL_COLLATERAL_POLICY_ROLE holder | Registered market; existing collateral-only position; positive actual credit | Fuzz false/true; seed both | Credit existing position | No duplicate position creation | Covered: [test][test_givenCollateralOnlyPosition_whenOriginationsArePaused], [test][test_whenCollateralOnlyTopUpOriginationStatesSeeded] |
 | BLCORE-SETTLE-DEPOSIT-P07 | BL_COLLATERAL_POLICY_ROLE holder | Registered market; existing debt-bearing position; positive actual credit | Fuzz false/true; seed both | Credit existing position | Collateral increases by actual credit; principal/expiry unchanged; no debt origination or extension | Covered: [test][test_givenDebtBearingPosition_whenOriginationsArePaused], [test][test_whenDebtBearingTopUpOriginationStatesSeeded] |
 | BLCORE-SETTLE-DEPOSIT-I03 | BL_COLLATERAL_POLICY_ROLE holder | Registered market; no canonical position; valid positive deposit | false | Create and credit a collateral-only position | Exact DM custody/credit and canonical collateral; one new position; zero debt/maturity | Covered: [test][test_givenOriginationsDisabledAndNoPosition_whenDeposited] |
@@ -135,3 +135,5 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 [test_whenCreditedDepositIsPositive]: settleDeposit.t.sol#L124
 [test_whenDebtBearingTopUpOriginationStatesSeeded]: settleDeposit.t.sol#L208
 [test_whenDepositAmountSeeds]: settleDeposit.t.sol#L151
+
+[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L963

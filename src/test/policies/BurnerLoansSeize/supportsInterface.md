@@ -1,6 +1,6 @@
 # BurnerLoansSeize.supportsInterface coverage plan
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansSeize.sol#L71). Coverage mappings below identify the implemented Foundry proofs.
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansSeize.sol#L73). Coverage mappings below identify the implemented Foundry proofs.
 
 ## Domains and notation
 
@@ -16,17 +16,17 @@ The planned standalone IBurnerLoansCoreBound generalizes the existing core-only 
 
 | ID | Caller | interfaceId input | Return | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ERC165-P01 | Fuzz all callers | type(IBurnerLoansSeize).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P02 | Fuzz all callers | type(IBurnerLoansCoreBound).interfaceId | true | No state, token, event or dependency changes | Partial: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57); identical core() selector-ID support proved under the former interface name; concrete shared-interface declaration remains to be updated |
-| BLLIQ-ERC165-P03 | Fuzz all callers | type(IVersioned).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P04 | Fuzz all callers | type(IERC165).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P05 | Fuzz all callers | type(IEnabler).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P06 | Fuzz all callers | type(IEnablerV2).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P07 | Fuzz all callers | type(IReEnabler).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P08 | Fuzz all callers | type(IGracePeriod).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P09 | Fuzz all callers | 0xffffffff | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P10 | Fuzz all callers | 0x00000000 | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
-| BLLIQ-ERC165-P11 | Fuzz all callers | Fuzz bytes4 excluding the complete supported set listed above, zero and 0xffffffff | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet](supportsInterface.t.sol#L22), [test_whenReadAcrossAllLifecycleStates_thenStable](supportsInterface.t.sol#L57) |
+| BLLIQ-ERC165-P01 | Fuzz all callers | type(IBurnerLoansSeize).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P02 | Fuzz all callers | type(IBurnerLoansCoreBound).interfaceId | true | No state, token, event or dependency changes | Partial: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable]; identical core() selector-ID support proved under the former interface name; concrete shared-interface declaration remains to be updated |
+| BLLIQ-ERC165-P03 | Fuzz all callers | type(IVersioned).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P04 | Fuzz all callers | type(IERC165).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P05 | Fuzz all callers | type(IEnabler).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P06 | Fuzz all callers | type(IEnablerV2).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P07 | Fuzz all callers | type(IReEnabler).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P08 | Fuzz all callers | type(IGracePeriod).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P09 | Fuzz all callers | 0xffffffff | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P10 | Fuzz all callers | 0x00000000 | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
+| BLLIQ-ERC165-P11 | Fuzz all callers | Fuzz bytes4 excluding the complete supported set listed above, zero and 0xffffffff | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesQueried_thenOnlyAdvertisedSet][test_whenInterfacesQueried_thenOnlyAdvertisedSet], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable] |
 
 ## Shared assertions
 
@@ -35,3 +35,6 @@ Compile the exact IDs listed above. Imported interfaces do not add advertised su
 - [x] Review these expectations.
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to passing tests.
+
+[test_whenInterfacesQueried_thenOnlyAdvertisedSet]: supportsInterface.t.sol#L22
+[test_whenReadAcrossAllLifecycleStates_thenStable]: supportsInterface.t.sol#L57

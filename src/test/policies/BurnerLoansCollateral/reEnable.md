@@ -44,8 +44,8 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Inputs / competing fault | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOL-REENABLE-A01 | Fuzz caller excluding all ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holders | lastTransitionAt nonzero; within grace | `NotAuthorised()` | Unchanged | Covered: [test_givenDisabled_whenUnauthorizedCaller_reverts](reEnable.t.sol#L52) |
-| BLCOL-REENABLE-A02 | Fuzz caller excluding all ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holders | lastTransitionAt nonzero; expired grace; one failed dependency | `NotAuthorised()` | Unchanged; authorization before grace/dependency | Covered: [test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins](reEnable.t.sol#L338) |
+| BLCOL-REENABLE-A01 | Fuzz caller excluding all ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holders | lastTransitionAt nonzero; within grace | `NotAuthorised()` | Unchanged | Covered: [test_givenDisabled_whenUnauthorizedCaller_reverts][test_givenDisabled_whenUnauthorizedCaller_reverts] |
+| BLCOL-REENABLE-A02 | Fuzz caller excluding all ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE holders | lastTransitionAt nonzero; expired grace; one failed dependency | `NotAuthorised()` | Unchanged; authorization before grace/dependency | Covered: [test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins][test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins] |
 
 ## Local transition state
 
@@ -53,8 +53,8 @@ These checks run before authorization and hook dependencies. Fuzz all callers; m
 
 | ID | Caller | Local active | Local enabled | Prior transition L | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-REENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; before caller, grace and dependencies | Covered: [test_givenEnabled_whenAnyCaller_reverts](reEnable.t.sol#L40) |
-| BLCOL-REENABLE-L02 | Fuzz all callers | Fuzz false/true | false | 0 | `NeverEnabled()` | Unchanged; before caller, grace and dependencies | Covered: [test_givenNeverEnabled_whenAnyCaller_reverts](reEnable.t.sol#L31) |
+| BLCOL-REENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; before caller, grace and dependencies | Covered: [test_givenEnabled_whenAnyCaller_reverts][test_givenEnabled_whenAnyCaller_reverts] |
+| BLCOL-REENABLE-L02 | Fuzz all callers | Fuzz false/true | false | 0 | `NeverEnabled()` | Unchanged; before caller, grace and dependencies | Covered: [test_givenNeverEnabled_whenAnyCaller_reverts][test_givenNeverEnabled_whenAnyCaller_reverts] |
 
 ## Lifecycle
 
@@ -62,11 +62,11 @@ Local action disabled; reported Core Kernel matches; ROLES initialized; previous
 
 | ID | Caller | Local active | Local enabled | Core active | Core enabled | Action settlement role | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-REENABLE-L03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansCollateral) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenDisabled_givenPolicyInactive_reverts](reEnable.t.sol#L63) |
-| BLCOL-REENABLE-D01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L80), [test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L352) |
-| BLCOL-REENABLE-D02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L80), [test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L352) |
-| BLCOL-REENABLE-D03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L80), [test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry](reEnable.t.sol#L352) |
-| BLCOL-REENABLE-L04 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | true | true | false | `ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenDisabled_givenSettlementRoleRevoked_reverts](reEnable.t.sol#L150) |
+| BLCOL-REENABLE-L03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansCollateral) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenDisabled_givenPolicyInactive_reverts][test_givenDisabled_givenPolicyInactive_reverts] |
+| BLCOL-REENABLE-D01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry][test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry] |
+| BLCOL-REENABLE-D02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry][test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry] |
+| BLCOL-REENABLE-D03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry], [test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry][test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry] |
+| BLCOL-REENABLE-L04 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | true | false | true | true | false | `ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenDisabled_givenSettlementRoleRevoked_reverts][test_givenDisabled_givenSettlementRoleRevoked_reverts] |
 
 ## Timing and transition history
 
@@ -74,9 +74,9 @@ Action locally disabled and Kernel-active; same-Kernel Core active+enabled; sett
 
 | ID | Caller | Now / fuzz interval / seeds | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOL-REENABLE-P01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz now in L..D-1; seed L,D-1; seed L=MAX48-G to reach maximum representable D | Success | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now) | Covered: [test_givenDisabled_givenValidGrace_whenPermittedCaller](reEnable.t.sol#L190), [test_givenEveryPermittedRole_whenGraceBoundarySeedsUsed_thenEnabled](reEnable.t.sol#L253) |
-| BLCOL-REENABLE-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | now=D; fuzz compatible L,G; seed D=MAX48 | Success | Same exact transition; inclusive deadline | Covered: [test_givenDisabled_givenExactDeadline_whenAdminOnly](reEnable.t.sol#L210), [test_givenDisabled_whenExactFuzzedDeadline_thenAllPermittedCallers](reEnable.t.sol#L240), [test_givenEveryPermittedRole_whenGraceBoundarySeedsUsed_thenEnabled](reEnable.t.sol#L253) |
-| BLCOL-REENABLE-P03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | D<MAX48; fuzz now in D+1..MAX48; seed D+1,MAX48 | `GracePeriod_Expired(D)` | Unchanged; no committed logs | Covered: [test_givenDisabled_givenGraceExpired_reverts](reEnable.t.sol#L106), [test_givenEveryPermittedRole_whenExpiredEndpoints_thenExactDeadlineError](reEnable.t.sol#L286) |
+| BLCOL-REENABLE-P01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz now in L..D-1; seed L,D-1; seed L=MAX48-G to reach maximum representable D | Success | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now) | Covered: [test_givenDisabled_givenValidGrace_whenPermittedCaller][test_givenDisabled_givenValidGrace_whenPermittedCaller], [test_givenEveryPermittedRole_whenGraceBoundarySeedsUsed_thenEnabled][test_givenEveryPermittedRole_whenGraceBoundarySeedsUsed_thenEnabled] |
+| BLCOL-REENABLE-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | now=D; fuzz compatible L,G; seed D=MAX48 | Success | Same exact transition; inclusive deadline | Covered: [test_givenDisabled_givenExactDeadline_whenAdminOnly][test_givenDisabled_givenExactDeadline_whenAdminOnly], [test_givenDisabled_whenExactFuzzedDeadline_thenAllPermittedCallers][test_givenDisabled_whenExactFuzzedDeadline_thenAllPermittedCallers], [test_givenEveryPermittedRole_whenGraceBoundarySeedsUsed_thenEnabled][test_givenEveryPermittedRole_whenGraceBoundarySeedsUsed_thenEnabled] |
+| BLCOL-REENABLE-P03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | D<MAX48; fuzz now in D+1..MAX48; seed D+1,MAX48 | `GracePeriod_Expired(D)` | Unchanged; no committed logs | Covered: [test_givenDisabled_givenGraceExpired_reverts][test_givenDisabled_givenGraceExpired_reverts], [test_givenEveryPermittedRole_whenExpiredEndpoints_thenExactDeadlineError][test_givenEveryPermittedRole_whenExpiredEndpoints_thenExactDeadlineError] |
 
 ## Dependency compatibility
 
@@ -84,7 +84,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Dependency / binding condition | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLCOL-REENABLE-D04 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Core reports another Kernel; lastTransitionAt nonzero; within grace | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenDisabled_givenCoreKernelChanged_reverts](reEnable.t.sol#L128) |
+| BLCOL-REENABLE-D04 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Core reports another Kernel; lastTransitionAt nonzero; within grace | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenDisabled_givenCoreKernelChanged_reverts][test_givenDisabled_givenCoreKernelChanged_reverts] |
 
 ## Grace deadline overflow
 
@@ -92,7 +92,7 @@ Initialized, locally disabled; otherwise compatible dependencies. Configure G wh
 
 | ID | Caller | Prior transition L | Grace G | Now | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-REENABLE-N01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz MAX48-G+1..MAX48 | Configured G in 1..MAX32; seed1,MAX32 | L | `SafeCastOverflowedUintDowncast(48, uint256(L)+uint256(G))` | Unchanged; no committed transition logs | Covered: [test_givenDeadlineOverflow_reverts](reEnable.t.sol#L165), [test_givenEveryPermittedRole_whenDeadlineOverflowEndpoints_thenTypedError](reEnable.t.sol#L309) |
+| BLCOL-REENABLE-N01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz MAX48-G+1..MAX48 | Configured G in 1..MAX32; seed1,MAX32 | L | `SafeCastOverflowedUintDowncast(48, uint256(L)+uint256(G))` | Unchanged; no committed transition logs | Covered: [test_givenDeadlineOverflow_reverts][test_givenDeadlineOverflow_reverts], [test_givenEveryPermittedRole_whenDeadlineOverflowEndpoints_thenTypedError][test_givenEveryPermittedRole_whenDeadlineOverflowEndpoints_thenTypedError] |
 
 Implemented lifecycle payload rule: calculate D=uint256(L)+uint256(G), then use checked SafeCast narrowing to uint48. If D exceeds MAX48, revert with SafeCastOverflowedUintDowncast(48,D). The product-local _requireGrace override uses widened addition and checked uint48 narrowing; it leaves shared ReEnabler behavior unchanged. Preserve local enabled state, transition timestamp, configuration and balances; commit no lifecycle events. The duration setter cannot validate an unknown future disable timestamp.
 
@@ -112,8 +112,27 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 | ID | Caller | Local active | Local enabled | Cached ROLES | lastTransitionAt | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-REENABLE-L05 | Fuzz all callers | false | false | 0 | 0 | `NeverEnabled()` before authorization; no ROLES call | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenCalled_thenInitializationPrecedence](reEnable.t.sol#L325) |
+| BLCOL-REENABLE-L05 | Fuzz all callers | false | false | 0 | 0 | `NeverEnabled()` before authorization; no ROLES call | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenCalled_thenInitializationPrecedence][test_givenNeverActivated_whenCalled_thenInitializationPrecedence] |
 
 ## Focused implementation status
 
 Constructor and lifecycle suites pass with solc 0.8.36, optimizer 400 and no via IR. This fixture uses real Kernel/ROLES and an existing enabled-policy mock for the Core identity. It does not prove real loan/custody preservation, settlement callbacks, or the full boundary/payload seed matrix. Deposit/withdrawal units and real-dependency integration remain pending.
+
+[test_givenCoreUnavailable_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L80
+[test_givenDeadlineOverflow_reverts]: reEnable.t.sol#L165
+[test_givenDisabled_givenCoreKernelChanged_reverts]: reEnable.t.sol#L128
+[test_givenDisabled_givenExactDeadline_whenAdminOnly]: reEnable.t.sol#L210
+[test_givenDisabled_givenGraceExpired_reverts]: reEnable.t.sol#L106
+[test_givenDisabled_givenPolicyInactive_reverts]: reEnable.t.sol#L63
+[test_givenDisabled_givenSettlementRoleRevoked_reverts]: reEnable.t.sol#L150
+[test_givenDisabled_givenValidGrace_whenPermittedCaller]: reEnable.t.sol#L190
+[test_givenDisabled_whenExactFuzzedDeadline_thenAllPermittedCallers]: reEnable.t.sol#L240
+[test_givenDisabled_whenUnauthorizedCaller_reverts]: reEnable.t.sol#L52
+[test_givenEachCoreLifecycleFailure_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L352
+[test_givenEnabled_whenAnyCaller_reverts]: reEnable.t.sol#L40
+[test_givenEveryPermittedRole_whenDeadlineOverflowEndpoints_thenTypedError]: reEnable.t.sol#L309
+[test_givenEveryPermittedRole_whenExpiredEndpoints_thenExactDeadlineError]: reEnable.t.sol#L286
+[test_givenEveryPermittedRole_whenGraceBoundarySeedsUsed_thenEnabled]: reEnable.t.sol#L253
+[test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins]: reEnable.t.sol#L338
+[test_givenNeverActivated_whenCalled_thenInitializationPrecedence]: reEnable.t.sol#L325
+[test_givenNeverEnabled_whenAnyCaller_reverts]: reEnable.t.sol#L31

@@ -1,6 +1,6 @@
 # BurnerLoansRisk.setPriceCache coverage plan
 
-Source: [setPriceCache](../../../policies/burnerloans/BurnerLoansRisk.sol#L556). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setPriceCache](../../../policies/burnerloans/BurnerLoansRisk.sol#L581). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 

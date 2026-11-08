@@ -239,6 +239,9 @@ For function-level scenario planning, test implementation, and coverage mapping,
 For Default Framework policy lifecycle scenarios and tests, also apply
 [`policy-lifecycle`](.agents/skills/policy-lifecycle/SKILL.md).
 
+For configuration timelock design, target integration, conflict domains and execution-state guards,
+use [`config-timelock-design`](.agents/skills/config-timelock-design/SKILL.md).
+
 ### MCP Servers
 
 The project includes Model Context Protocol (MCP) servers for enhanced AI capabilities:

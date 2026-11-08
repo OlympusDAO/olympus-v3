@@ -69,7 +69,7 @@ Fixture helpers describe state, such as givenPendingFees or givenInventoryDisabl
 
 ## Coverage links
 
-Use Unmapped, Partial or Covered as defined in the main skill. Keep rendered labels short and keyed by actual function names:
+Use Unmapped, Partial or Covered as defined in the main skill. Do not use inline `.t.sol#L...` links in scenario tables. Use named reference links and put their definitions at the bottom of the document, so changing a test's line number does not change table rows. Keep rendered labels short and key references by actual function names:
 
     | LIMIT-P01 | ... | Covered: [fuzz][test_givenLimit_whenInputIsWithinLimit], [seeds][test_givenLimit_whenBoundariesAreSeeded] |
     | LIMIT-I01 | ... | Partial: [fuzz][test_givenLimit_whenInputExceedsLimit_reverts]; missing exact LIMIT+1 seed |
@@ -78,6 +78,10 @@ Use Unmapped, Partial or Covered as defined in the main skill. Keep rendered lab
     [test_givenLimit_whenBoundariesAreSeeded]: ./functionName.t.sol#L80
     [test_givenLimit_whenInputExceedsLimit_reverts]: ./functionName.t.sol#L120
 
+Define each target once and reuse its reference throughout the document. If two test files contain the same function name, disambiguate the references with `--fileStem`, for example `[cap][test_whenUnauthorized_reverts--queueLimits]` and `[withdrawal][test_whenUnauthorized_reverts--queueWithdrawal]`. Each definition points to its own file and actual function declaration; the suffix is not part of the Solidity function name. Preserve existing visible labels when converting links.
+
+All reference definitions belong in one final footer, below every table, heading, checklist and explanatory paragraph. Nothing except further definitions and blank lines may follow the first definition. Insert new cases and notes before the footer, moving definitions to the end when extending an older document.
+
 Put reciprocal IDs immediately above each mapped test and seed driver:
 
     // Scenarios: LIMIT-P01.
@@ -85,4 +89,4 @@ Put reciprocal IDs immediately above each mapped test and seed driver:
         // Setup and assertions independently prove the stated endpoints.
     }
 
-A helper's comment does not replace the test's own comment. Link the actual test file even if legacy tests remain in a differently named directory. Preserve existing inline links rather than converting a document merely to use the mapping helper; verify those targets/anchors directly. The helper verifies named links and reciprocal IDs, not behavior, fuzz reachability or semantic coverage.
+A helper's comment does not replace the test's own comment. Link the actual test file even if legacy tests remain in a differently named directory. Convert existing inline table links to named references without changing scenario expectations or coverage claims. The helper verifies link style, named targets and reciprocal IDs, not behavior, fuzz reachability or semantic coverage.

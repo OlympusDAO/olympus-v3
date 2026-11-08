@@ -40,8 +40,8 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Inputs / competing fault | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOL-ENABLE-A01 | ADMIN_ROLE holder | data empty; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `Success` | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,data,now) | Covered: [test_whenAdminCaller](enable.t.sol#L123) |
-| BLCOL-ENABLE-A02 | Fuzz caller excluding every ADMIN_ROLE holder | data empty; hook dependencies ready | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; no hook executed | Covered: [test_whenUnauthorizedCaller_reverts](enable.t.sol#L39) |
+| BLCOL-ENABLE-A01 | ADMIN_ROLE holder | data empty; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `Success` | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,data,now) | Covered: [test_whenAdminCaller][test_whenAdminCaller] |
+| BLCOL-ENABLE-A02 | Fuzz caller excluding every ADMIN_ROLE holder | data empty; hook dependencies ready | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; no hook executed | Covered: [test_whenUnauthorizedCaller_reverts][test_whenUnauthorizedCaller_reverts] |
 
 ## Local transition state
 
@@ -49,7 +49,7 @@ These checks run before authorization and hook dependencies. Fuzz all callers; m
 
 | ID | Caller | Local active | Local enabled | Prior transition L | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-ENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; no dependency reads or committed logs | Covered: [test_givenEnabled_whenAnyCaller_reverts](enable.t.sol#L27) |
+| BLCOL-ENABLE-L01 | Fuzz all callers | Fuzz false/true | true | Fuzz zero/nonzero | `NotDisabled()` | Unchanged; no dependency reads or committed logs | Covered: [test_givenEnabled_whenAnyCaller_reverts][test_givenEnabled_whenAnyCaller_reverts] |
 
 ## Lifecycle
 
@@ -57,11 +57,11 @@ Local action disabled; reported Core Kernel matches; ROLES initialized; data=0x;
 
 | ID | Caller | Local active | Local enabled | Core active | Core enabled | Action settlement role | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-ENABLE-L02 | ADMIN_ROLE holder | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansCollateral) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenPolicyInactive_reverts](enable.t.sol#L48) |
-| BLCOL-ENABLE-D01 | ADMIN_ROLE holder | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L61), [test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry](enable.t.sol#L188) |
-| BLCOL-ENABLE-D02 | ADMIN_ROLE holder | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L61), [test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry](enable.t.sol#L188) |
-| BLCOL-ENABLE-D03 | ADMIN_ROLE holder | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry](enable.t.sol#L61), [test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry](enable.t.sol#L188) |
-| BLCOL-ENABLE-L03 | ADMIN_ROLE holder | true | false | true | true | false | `ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenSettlementRoleRevoked_reverts](enable.t.sol#L102) |
+| BLCOL-ENABLE-L02 | ADMIN_ROLE holder | false | false | true | true | true | BurnerLoans_PolicyNotActive(BurnerLoansCollateral) | Unchanged; no activation, timestamp change or committed logs | Covered: [test_givenPolicyInactive_reverts][test_givenPolicyInactive_reverts] |
+| BLCOL-ENABLE-D01 | ADMIN_ROLE holder | true | false | true | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry][test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry] |
+| BLCOL-ENABLE-D02 | ADMIN_ROLE holder | true | false | false | true | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry][test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry] |
+| BLCOL-ENABLE-D03 | ADMIN_ROLE holder | true | false | false | false | true | `PolicyDependency_NotActive(Core)` | Unchanged; no committed logs | Covered: [test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry][test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry], [test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry][test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry] |
+| BLCOL-ENABLE-L03 | ADMIN_ROLE holder | true | false | true | true | false | `ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE)` | Unchanged; no committed logs | Covered: [test_givenSettlementRoleRevoked_reverts][test_givenSettlementRoleRevoked_reverts] |
 
 ## Dependency compatibility
 
@@ -69,7 +69,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Dependency / binding condition | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLCOL-ENABLE-D04 | ADMIN_ROLE holder | Core reports another Kernel | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenCoreKernelChanged_reverts](enable.t.sol#L84) |
+| BLCOL-ENABLE-D04 | ADMIN_ROLE holder | Core reports another Kernel | `PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel)` | Covered: [test_givenCoreKernelChanged_reverts][test_givenCoreKernelChanged_reverts] |
 
 ## Inputs
 
@@ -77,7 +77,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Payload | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLCOL-ENABLE-I01 | ADMIN_ROLE holder | data nonempty; fuzz length 1..256; seed 0x00, 0x01, ABI-encoded zero and 256 bytes; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `BurnerLoans_InvalidEnablerData()` | Covered: [test_whenNonemptyPayload_reverts](enable.t.sol#L113), [test_whenNonemptyPayloadBoundarySeedsUsed_thenExactError](enable.t.sol#L133) |
+| BLCOL-ENABLE-I01 | ADMIN_ROLE holder | data nonempty; fuzz length 1..256; seed 0x00, 0x01, ABI-encoded zero and 256 bytes; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `BurnerLoans_InvalidEnablerData()` | Covered: [test_whenNonemptyPayload_reverts][test_whenNonemptyPayload_reverts], [test_whenNonemptyPayloadBoundarySeedsUsed_thenExactError][test_whenNonemptyPayloadBoundarySeedsUsed_thenExactError] |
 
 ## Payload rejection and error precedence
 
@@ -85,8 +85,8 @@ Local enabled=false; initialized ROLES; dependencies compatible; outside settlem
 
 | ID | Caller | Payload / competing fault | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOL-ENABLE-I02 | Fuzz all callers | Nonempty bytes; local enabled=true | `NotDisabled()` | Unchanged; local state rejects before caller/data | Covered: [test_givenEnabled_whenNonemptyEnableData_thenStateWins](enable.t.sol#L166) |
-| BLCOL-ENABLE-I03 | Fuzz callers excluding every ADMIN_ROLE holder | Nonempty bytes; local enabled=false | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization rejects before data | Covered: [test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins](enable.t.sol#L176) |
+| BLCOL-ENABLE-I02 | Fuzz all callers | Nonempty bytes; local enabled=true | `NotDisabled()` | Unchanged; local state rejects before caller/data | Covered: [test_givenEnabled_whenNonemptyEnableData_thenStateWins][test_givenEnabled_whenNonemptyEnableData_thenStateWins] |
+| BLCOL-ENABLE-I03 | Fuzz callers excluding every ADMIN_ROLE holder | Nonempty bytes; local enabled=false | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; authorization rejects before data | Covered: [test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins][test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins] |
 
 ## Shared assertions
 
@@ -104,8 +104,22 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 | ID | Caller | Local active | Local enabled | Cached ROLES | lastTransitionAt | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-ENABLE-L04 | Fuzz all callers | false | false | 0 | 0 | Empty revert data from the unset ROLES dependency call; no decoded role result | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenCalled_thenInitializationPrecedence](enable.t.sol#L151) |
+| BLCOL-ENABLE-L04 | Fuzz all callers | false | false | 0 | 0 | Empty revert data from the unset ROLES dependency call; no decoded role result | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenCalled_thenInitializationPrecedence][test_givenNeverActivated_whenCalled_thenInitializationPrecedence] |
 
 ## Focused implementation status
 
 Constructor and lifecycle suites pass with solc 0.8.36, optimizer 400 and no via IR. This fixture uses real Kernel/ROLES and an existing enabled-policy mock for the Core identity. It does not prove real loan/custody preservation, settlement callbacks, or the full boundary/payload seed matrix. Deposit/withdrawal units and real-dependency integration remain pending.
+
+[test_givenCoreKernelChanged_reverts]: enable.t.sol#L84
+[test_givenCoreUnavailable_whenEnabled_thenRejectAndRetry]: enable.t.sol#L61
+[test_givenDisabled_whenUnauthorizedNonemptyEnable_thenAuthWins]: enable.t.sol#L176
+[test_givenEachCoreLifecycleFailure_whenEnabled_thenRejectAndRetry]: enable.t.sol#L188
+[test_givenEnabled_whenAnyCaller_reverts]: enable.t.sol#L27
+[test_givenEnabled_whenNonemptyEnableData_thenStateWins]: enable.t.sol#L166
+[test_givenNeverActivated_whenCalled_thenInitializationPrecedence]: enable.t.sol#L151
+[test_givenPolicyInactive_reverts]: enable.t.sol#L48
+[test_givenSettlementRoleRevoked_reverts]: enable.t.sol#L102
+[test_whenAdminCaller]: enable.t.sol#L123
+[test_whenNonemptyPayloadBoundarySeedsUsed_thenExactError]: enable.t.sol#L133
+[test_whenNonemptyPayload_reverts]: enable.t.sol#L113
+[test_whenUnauthorizedCaller_reverts]: enable.t.sol#L39

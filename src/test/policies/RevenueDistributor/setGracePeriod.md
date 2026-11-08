@@ -27,20 +27,13 @@ Unchanged means lifecycle state, configuration, liabilities and balances retain 
 | RD-GRACE-A04 | Any non-admin, fuzz | true | true | Fuzz 0..`type(uint32).max`; seed 0, 1 and MAX | ROLES_RequireRole(ADMIN_ROLE) before numeric validation | Unchanged | Covered: [evidence][test_givenEnabled_whenNonAdminSetsGracePeriod_reverts] |
 | RD-GRACE-L02 | ADMIN_ROLE holder | false | true | Fuzz 1..`type(uint32).max` excluding current; seed 1 and MAX | RevenueDistributor_PolicyNotActive(RD) | Unchanged; no input validation, module/token calls, setter events or committed logs | Covered: [test][test_givenInactivePolicy_whenAdminChangesGrace_reverts] |
 
-[test_whenAdminSetsPositiveGracePeriod_updatesValue]: ./setGracePeriod.t.sol#L24
-
-[test_whenAdminSetsZeroGracePeriod_reverts]: ./setGracePeriod.t.sol#L60
-
-[test_givenEnabled_whenNonAdminSetsGracePeriod_reverts]: ./setGracePeriod.t.sol#L78
-
 ## Superseded behavior evidence
 
+[test_whenAdminSetsPositiveGracePeriod_updatesValue]: ./setGracePeriod.t.sol#L24
+[test_whenAdminSetsZeroGracePeriod_reverts]: ./setGracePeriod.t.sol#L60
+[test_givenEnabled_whenNonAdminSetsGracePeriod_reverts]: ./setGracePeriod.t.sol#L78
 [test_givenInactivePolicy_whenAdminChangesGrace_reverts]: ./setGracePeriod.t.sol#L101
-
 [test_givenCurrentGrace_whenAdminSetsSameValue]: ./setGracePeriod.t.sol#L120
-
 [test_givenGraceSetterBoundarySeeds]: ./setGracePeriod.t.sol#L214
-
 [test_givenDisabled_whenAnyCallerSetsGrace_reverts]: ./setGracePeriod.t.sol#L151
-
 [test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_revertsActivityFirst]: ./setGracePeriod.t.sol#L180

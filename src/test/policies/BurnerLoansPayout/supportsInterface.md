@@ -12,12 +12,12 @@ The planned standalone IBurnerLoansCoreBound generalizes the existing core-only 
 
 | ID | Caller | interfaceId input | Return | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCU-ERC165-P01 | Fuzz all callers | type(IBurnerLoansPayout).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
-| BLCU-ERC165-P02 | Fuzz all callers | type(IBurnerLoansCoreBound).interfaceId | true | No state, token, event or dependency changes | Partial: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21); identical core() selector-ID support proved under the former interface name; concrete shared-interface declaration remains to be updated |
-| BLCU-ERC165-P03 | Fuzz all callers | type(IERC165).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
-| BLCU-ERC165-P04 | Fuzz all callers | 0xffffffff | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
-| BLCU-ERC165-P05 | Fuzz all callers | 0x00000000 | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
-| BLCU-ERC165-P06 | Fuzz all callers | Fuzz bytes4 excluding the complete supported set listed above, IVersioned, IEnabler, IEnablerV2, IConfigOperator, zero and 0xffffffff | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
+| BLCU-ERC165-P01 | Fuzz all callers | type(IBurnerLoansPayout).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
+| BLCU-ERC165-P02 | Fuzz all callers | type(IBurnerLoansCoreBound).interfaceId | true | No state, token, event or dependency changes | Partial: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet]; identical core() selector-ID support proved under the former interface name; concrete shared-interface declaration remains to be updated |
+| BLCU-ERC165-P03 | Fuzz all callers | type(IERC165).interfaceId | true | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
+| BLCU-ERC165-P04 | Fuzz all callers | 0xffffffff | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
+| BLCU-ERC165-P05 | Fuzz all callers | 0x00000000 | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
+| BLCU-ERC165-P06 | Fuzz all callers | Fuzz bytes4 excluding the complete supported set listed above, IVersioned, IEnabler, IEnablerV2, IConfigOperator, zero and 0xffffffff | false | No state, token, event or dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
 
 - [x] Review expectations before production test implementation.
 - [x] Adapt existing Framework/recovery tests and map passing proofs.
@@ -26,10 +26,10 @@ The planned standalone IBurnerLoansCoreBound generalizes the existing core-only 
 
 | ID | Caller | interfaceId input | Return | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCU-ERC165-P07 | Fuzz all callers | type(IVersioned).interfaceId | true | No state/dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
-| BLCU-ERC165-P08 | Fuzz all callers | type(IEnabler).interfaceId | true | No state/dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
-| BLCU-ERC165-P09 | Fuzz all callers | type(IEnablerV2).interfaceId | true | No state/dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
-| BLCU-ERC165-P10 | Fuzz all callers | type(IConfigOperator).interfaceId | true | No state/dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet](./supportsInterface.t.sol#L21) |
+| BLCU-ERC165-P07 | Fuzz all callers | type(IVersioned).interfaceId | true | No state/dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
+| BLCU-ERC165-P08 | Fuzz all callers | type(IEnabler).interfaceId | true | No state/dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
+| BLCU-ERC165-P09 | Fuzz all callers | type(IEnablerV2).interfaceId | true | No state/dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
+| BLCU-ERC165-P10 | Fuzz all callers | type(IConfigOperator).interfaceId | true | No state/dependency changes | Covered: [test_whenInterfacesRead_thenExactAdvertisedSet][test_whenInterfacesRead_thenExactAdvertisedSet] |
 
 ## Version
 
@@ -37,4 +37,7 @@ The version-read scenario retains its ID after moving from the constructor plan.
 
 | ID | Caller | Read | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCU-CONSTRUCTOR-V01 | Fuzz all callers | VERSION() | Named major=1,minor=0 | No state changes | Covered: [test_whenVersionRead_thenConstant](./VERSION.t.sol#L9) |
+| BLCU-CONSTRUCTOR-V01 | Fuzz all callers | VERSION() | Named major=1,minor=0 | No state changes | Covered: [test_whenVersionRead_thenConstant][test_whenVersionRead_thenConstant] |
+
+[test_whenInterfacesRead_thenExactAdvertisedSet]: ./supportsInterface.t.sol#L21
+[test_whenVersionRead_thenConstant]: ./VERSION.t.sol#L9

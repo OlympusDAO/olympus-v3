@@ -75,6 +75,14 @@ are recorded explicitly and are not converted into passing expectations.
 | PCACHER-EXECUTE-T09 | HEART | true | true | First pair reverts with one byte aa | PairCacheFailed exact target/pair and aa000000; second pair updates exactly once | Covered: [test][test_givenShortPairError_whenExecuted_thenNextPairSucceeds] |
 | PCACHER-EXECUTE-T10 | HEART | true | true | First pair reverts with 4096 bytes beginning deadbeef | PairCacheFailed exact target/pair and deadbeef; second pair updates once with adequate transaction gas | Covered: [test][test_givenLargePairError_whenExecuted_thenNextPairSucceeds] |
 
+## Guard-precedence regression
+
+The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
+
+| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| PCACHER-EXECUTE-L04 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; No arguments; activity precedes Heart-role check and disabled no-op | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
+
 [test_givenCacheInactiveDisabled_whenExecuted_thenFailureAndNoCalls]: execute.t.sol#L208
 [test_givenConfiguredPairBecomesUnsupported_attemptsNextPairWithoutReverting]: execute.t.sol#L130
 [test_givenDisabled_isNoOp]: execute.t.sol#L32
@@ -99,13 +107,4 @@ are recorded explicitly and are not converted into passing expectations.
 [test_whenHeartAndCollectionVary_thenExactAttempts]: execute.t.sol#L169
 [test_whenLargerPairSet_thenAllCacheCalls]: execute.t.sol#L189
 [test_whenSinglePair_thenOneCacheCall]: execute.t.sol#L184
-
-## Guard-precedence regression
-
-The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
-
-| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| PCACHER-EXECUTE-L04 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; No arguments; activity precedes Heart-role check and disabled no-op | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
-
 [test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst]: ./execute.t.sol#L321

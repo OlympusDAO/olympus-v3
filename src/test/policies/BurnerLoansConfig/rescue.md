@@ -1,6 +1,6 @@
 # BurnerLoansConfig.rescue coverage plan
 
-Implemented Core-only forwarding: [Config.rescue](../../../policies/burnerloans/BurnerLoansConfig.sol#L271) → [Core.rescue](../../../policies/burnerloans/BurnerLoansCore.sol#L1004). Custody recovery has its own directly bound timelock.
+Implemented Core-only forwarding: [Config.rescue](../../../policies/burnerloans/BurnerLoansConfig.sol#L271) → [Core.rescue](../../../policies/burnerloans/BurnerLoansCore.sol#L1025). Custody recovery has its own directly bound timelock.
 
 ## Domains and notation
 
@@ -82,6 +82,12 @@ Use [existing Config rescue tests](rescue.t.sol) for authorization, empty/nonemp
 - [x] Implemented ownership: Config→Core only.
 - [x] Adapt existing recovery tests and map full domains after focused validation.
 
+## Forwarding authority and quote identity
+
+| ID | Quote requester | Config active | Config enabled | Core selection | Preview / execution | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCRE-A03 | Fuzz every address | true | true | Another Config selected; this Config has no ADMIN role | Quote current Core balance; execution through this Config still rejects downstream NotAuthorised() | Covered: [test][test_givenConfigDeselected_whenAnyViewerQuotesRecovery] |
+
 [test_givenAuthorizedCaller_whenCoreRescued]: ./rescue.t.sol#L24
 [test_whenCallerIsUnauthorized_thenPreviewSucceedsAndRescueReverts]: ./rescue.t.sol#L51
 [test_givenConfigInactiveEnabled_whenRescued_reverts]: ./rescue.t.sol#L70
@@ -103,13 +109,5 @@ Use [existing Config rescue tests](rescue.t.sol) for authorization, empty/nonemp
 [test_givenCoreSelectsAnotherConfig_whenRescued_reverts]: ./rescue.t.sol#L336
 [test_givenRescueCallback_whenNestedRecoveryCaught]: ./rescue.t.sol#L351
 [test_givenRescueCallback_whenNestedRecoveryPropagated]: ./rescue.t.sol#L375
-
-## Forwarding authority and quote identity
-
-| ID | Quote requester | Config active | Config enabled | Core selection | Preview / execution | Test |
-| --- | --- | --- | --- | --- | --- | --- |
-| BLCRE-A03 | Fuzz every address | true | true | Another Config selected; this Config has no ADMIN role | Quote current Core balance; execution through this Config still rejects downstream NotAuthorised() | Covered: [test][test_givenConfigDeselected_whenAnyViewerQuotesRecovery] |
-
 [test_givenConfigDeselected_whenAnyViewerQuotesRecovery]: ./rescue.t.sol#L398
-
 [test_givenInactive_whenUnauthorizedAndInvalid_reverts]: rescue.t.sol#L416

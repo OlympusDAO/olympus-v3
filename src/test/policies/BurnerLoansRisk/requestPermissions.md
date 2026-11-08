@@ -1,6 +1,6 @@
 # BurnerLoansRisk.requestPermissions coverage plan
 
-Source: [requestPermissions](../../../policies/burnerloans/BurnerLoansRisk.sol#L161).
+Source: [requestPermissions](../../../policies/burnerloans/BurnerLoansRisk.sol#L166).
 
 ## Domains and notation
 

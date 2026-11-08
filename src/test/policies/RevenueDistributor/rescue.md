@@ -94,6 +94,17 @@ Nested requests must be independently authorized and otherwise valid, so they re
 | RD-RESCUE-C03 | Fuzz ADMIN-only, selected configOperator-only and overlap callers; seed each | Otherwise eligible guarded pending rescue/retry/distribute/configuration; independently seed each named route; callback catches failure | Nested ReentrancyGuardReentrantCall(); one outer payment; no nested mutation; post-transfer preview reflects actual remaining balance | Covered: [test][test_givenPendingRescueCallback_whenFailureIsCaught], [test][test_givenPendingRetryCallback_whenFailureIsCaught], [test][test_givenDistributeCallback_whenFailureIsCaught], [test][test_givenConfigurationCallback_whenFailureIsCaught], [test][test_givenPendingRescueCallback_whenFailureIsCaught_AdminOnlySeed], [test][test_givenPendingRescueCallback_whenFailureIsCaught_OperatorOnlySeed], [test][test_givenPendingRescueCallback_whenFailureIsCaught_RolesOverlapSeed], [test][test_givenPendingRetryCallback_whenFailureIsCaught_AdminOnlySeed], [test][test_givenPendingRetryCallback_whenFailureIsCaught_OperatorOnlySeed], [test][test_givenPendingRetryCallback_whenFailureIsCaught_RolesOverlapSeed], [test][test_givenDistributeCallback_whenFailureIsCaught_AdminOnlySeed], [test][test_givenDistributeCallback_whenFailureIsCaught_OperatorOnlySeed], [test][test_givenDistributeCallback_whenFailureIsCaught_RolesOverlapSeed], [test][test_givenConfigurationCallback_whenFailureIsCaught_AdminOnlySeed], [test][test_givenConfigurationCallback_whenFailureIsCaught_OperatorOnlySeed], [test][test_givenConfigurationCallback_whenFailureIsCaught_RolesOverlapSeed] |
 | RD-RESCUE-C06 | Fuzz ADMIN-only, selected configOperator-only and overlap callers; seed each | Otherwise eligible guarded pending rescue/retry/distribute/configuration; independently seed each named route; callback propagates failure | Outer token CallbackFailed(); entire transaction rolls back, including balances, indexes, liabilities, configuration and committed logs | Covered: [test][test_givenPendingRescueCallback_whenFailureIsPropagated], [test][test_givenPendingRetryCallback_whenFailureIsPropagated], [test][test_givenDistributeCallback_whenFailureIsPropagated], [test][test_givenConfigurationCallback_whenFailureIsPropagated], [test][test_givenPendingRescueCallback_whenFailureIsPropagated_AdminOnlySeed], [test][test_givenPendingRescueCallback_whenFailureIsPropagated_OperatorOnlySeed], [test][test_givenPendingRescueCallback_whenFailureIsPropagated_RolesOverlapSeed], [test][test_givenPendingRetryCallback_whenFailureIsPropagated_AdminOnlySeed], [test][test_givenPendingRetryCallback_whenFailureIsPropagated_OperatorOnlySeed], [test][test_givenPendingRetryCallback_whenFailureIsPropagated_RolesOverlapSeed], [test][test_givenDistributeCallback_whenFailureIsPropagated_AdminOnlySeed], [test][test_givenDistributeCallback_whenFailureIsPropagated_OperatorOnlySeed], [test][test_givenDistributeCallback_whenFailureIsPropagated_RolesOverlapSeed], [test][test_givenConfigurationCallback_whenFailureIsPropagated_AdminOnlySeed], [test][test_givenConfigurationCallback_whenFailureIsPropagated_OperatorOnlySeed], [test][test_givenConfigurationCallback_whenFailureIsPropagated_RolesOverlapSeed] |
 
+## Additional existing test evidence
+
+- [test_givenOperatorRotated_whenFormerOperatorRescues_reverts][test_givenOperatorRotated_whenFormerOperatorRescues_reverts] — existing regression evidence; review generators and assertions before mapping the expanded cases.
+- [test_givenOperatorRotated_whenCurrentAuthorityRescues][test_givenOperatorRotated_whenCurrentAuthorityRescues] — existing regression evidence; review generators and assertions before mapping the expanded cases.
+- [test_givenOperatorRevoked_whenFormerOperatorOrZeroCallerRescues_reverts][test_givenOperatorRevoked_whenFormerOperatorOrZeroCallerRescues_reverts] — existing regression evidence; review generators and assertions before mapping the expanded cases.
+- [test_givenOperatorRevoked_whenAdminRescues][test_givenOperatorRevoked_whenAdminRescues] — existing regression evidence; review generators and assertions before mapping the expanded cases.
+
+Retired duplicate caller IDs: RD-RESCUE-C02, RD-RESCUE-C04. Equivalent caller classes now share each caught/propagated outcome; retain exclusive and overlapping authority seeds.
+
+Retired duplicate caller IDs: RD-RESCUE-L02, RD-RESCUE-L08, RD-RESCUE-L11, RD-RESCUE-L12, RD-RESCUE-P02, RD-RESCUE-P04, RD-RESCUE-P06, RD-RESCUE-I03, RD-RESCUE-I04, RD-RESCUE-I09, RD-RESCUE-I10, RD-RESCUE-I11, RD-RESCUE-I12, RD-RESCUE-I14, RD-RESCUE-I16, RD-RESCUE-I18, RD-RESCUE-T02, RD-RESCUE-T04. Retained caller families include explicit exclusive-role and overlapping-role seeds.
+
 [test_givenDistributorEnabled_whenAdminRescues]: ./rescue.t.sol#L38
 [test_givenActiveDistributor_whenAnyCallerPreviews]: ./rescue.t.sol#L245
 [test_givenDistributorRestored_whenSurplusRescued]: ./rescue.t.sol#L1071
@@ -130,180 +141,86 @@ Nested requests must be independently authorized and otherwise valid, so they re
 [test_givenDistributeCallback_whenFailureIsPropagated]: ./rescue.t.sol#L962
 [test_givenConfigurationCallback_whenFailureIsCaught]: ./rescue.t.sol#L992
 [test_givenConfigurationCallback_whenFailureIsPropagated]: ./rescue.t.sol#L1020
-
-## Additional existing test evidence
-
-- [test_givenOperatorRotated_whenFormerOperatorRescues_reverts][test_givenOperatorRotated_whenFormerOperatorRescues_reverts] — existing regression evidence; review generators and assertions before mapping the expanded cases.
-- [test_givenOperatorRotated_whenCurrentAuthorityRescues][test_givenOperatorRotated_whenCurrentAuthorityRescues] — existing regression evidence; review generators and assertions before mapping the expanded cases.
-- [test_givenOperatorRevoked_whenFormerOperatorOrZeroCallerRescues_reverts][test_givenOperatorRevoked_whenFormerOperatorOrZeroCallerRescues_reverts] — existing regression evidence; review generators and assertions before mapping the expanded cases.
-- [test_givenOperatorRevoked_whenAdminRescues][test_givenOperatorRevoked_whenAdminRescues] — existing regression evidence; review generators and assertions before mapping the expanded cases.
-
-Retired duplicate caller IDs: RD-RESCUE-C02, RD-RESCUE-C04. Equivalent caller classes now share each caught/propagated outcome; retain exclusive and overlapping authority seeds.
-
-Retired duplicate caller IDs: RD-RESCUE-L02, RD-RESCUE-L08, RD-RESCUE-L11, RD-RESCUE-L12, RD-RESCUE-P02, RD-RESCUE-P04, RD-RESCUE-P06, RD-RESCUE-I03, RD-RESCUE-I04, RD-RESCUE-I09, RD-RESCUE-I10, RD-RESCUE-I11, RD-RESCUE-I12, RD-RESCUE-I14, RD-RESCUE-I16, RD-RESCUE-I18, RD-RESCUE-T02, RD-RESCUE-T04. Retained caller families include explicit exclusive-role and overlapping-role seeds.
-
 [test_givenDistributorEnabled_whenAdminRescues_AdminOnlySeed]: ./rescue.t.sol#L1239
-
 [test_givenDistributorEnabled_whenAdminRescues_OperatorOnlySeed]: ./rescue.t.sol#L1244
-
 [test_givenDistributorEnabled_whenAdminRescues_RolesOverlapSeed]: ./rescue.t.sol#L1249
-
 [test_givenDistributorRestored_whenSurplusRescued_AdminOnlySeed]: ./rescue.t.sol#L1299
-
 [test_givenDistributorRestored_whenSurplusRescued_OperatorOnlySeed]: ./rescue.t.sol#L1304
-
 [test_givenDistributorRestored_whenSurplusRescued_RolesOverlapSeed]: ./rescue.t.sol#L1309
-
 [test_givenDistributorEnabled_whenOperatorRescues_AdminOnlySeed]: ./rescue.t.sol#L1254
-
 [test_givenDistributorEnabled_whenOperatorRescues_OperatorOnlySeed]: ./rescue.t.sol#L1259
-
 [test_givenDistributorEnabled_whenOperatorRescues_RolesOverlapSeed]: ./rescue.t.sol#L1264
-
 [test_givenDistributorDisabled_whenAdminRescues_AdminOnlySeed]: ./rescue.t.sol#L1209
-
 [test_givenDistributorDisabled_whenAdminRescues_OperatorOnlySeed]: ./rescue.t.sol#L1214
-
 [test_givenDistributorDisabled_whenAdminRescues_RolesOverlapSeed]: ./rescue.t.sol#L1219
-
 [test_givenDistributorDisabled_whenOperatorRescues_AdminOnlySeed]: ./rescue.t.sol#L1224
-
 [test_givenDistributorDisabled_whenOperatorRescues_OperatorOnlySeed]: ./rescue.t.sol#L1229
-
 [test_givenDistributorDisabled_whenOperatorRescues_RolesOverlapSeed]: ./rescue.t.sol#L1234
-
 [test_givenDistributorInactive_whenAdminRescues_reverts_AdminOnlySeed]: ./rescue.t.sol#L1269
-
 [test_givenDistributorInactive_whenAdminRescues_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1274
-
 [test_givenDistributorInactive_whenAdminRescues_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1279
-
 [test_givenDistributorInactive_whenOperatorRescues_reverts_AdminOnlySeed]: ./rescue.t.sol#L1284
-
 [test_givenDistributorInactive_whenOperatorRescues_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1289
-
 [test_givenDistributorInactive_whenOperatorRescues_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1294
-
 [test_givenNeverListedAsset_whenFullCustodyRescued_AdminOnlySeed]: ./rescue.t.sol#L1386
-
 [test_givenNeverListedAsset_whenFullCustodyRescued_OperatorOnlySeed]: ./rescue.t.sol#L1391
-
 [test_givenNeverListedAsset_whenFullCustodyRescued_RolesOverlapSeed]: ./rescue.t.sol#L1396
-
 [test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded_AdminOnlySeed]: ./rescue.t.sol#L1344
-
 [test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded_OperatorOnlySeed]: ./rescue.t.sol#L1349
-
 [test_givenNeverListedAsset_whenBalancesAndDestinationsSeeded_RolesOverlapSeed]: ./rescue.t.sol#L1356
-
 [test_givenZeroCustody_whenEachPermittedCallerRescues_AdminOnlySeed]: ./rescue.t.sol#L1536
-
 [test_givenZeroCustody_whenEachPermittedCallerRescues_OperatorOnlySeed]: ./rescue.t.sol#L1541
-
 [test_givenZeroCustody_whenEachPermittedCallerRescues_RolesOverlapSeed]: ./rescue.t.sol#L1546
-
 [test_givenNeverListedAsset_whenAssetHasNoCode_reverts_AdminOnlySeed]: ./rescue.t.sol#L1314
-
 [test_givenNeverListedAsset_whenAssetHasNoCode_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1319
-
 [test_givenNeverListedAsset_whenAssetHasNoCode_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1324
-
 [test_givenNeverListedAsset_whenDestinationIsForbidden_reverts_AdminOnlySeed]: ./rescue.t.sol#L1363
-
 [test_givenNeverListedAsset_whenDestinationIsForbidden_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1372
-
 [test_givenNeverListedAsset_whenDestinationIsForbidden_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1379
-
 [test_givenActiveAsset_whenSurplusRescueRequested_reverts_AdminOnlySeed]: ./rescue.t.sol#L1134
-
 [test_givenActiveAsset_whenSurplusRescueRequested_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1139
-
 [test_givenActiveAsset_whenSurplusRescueRequested_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1144
-
 [test_givenRetiredAsset_whenSurplusRescueRequested_reverts_AdminOnlySeed]: ./rescue.t.sol#L1491
-
 [test_givenRetiredAsset_whenSurplusRescueRequested_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1496
-
 [test_givenRetiredAsset_whenSurplusRescueRequested_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1501
-
 [test_givenNeverListedAsset_whenBalanceQueryReverts_reverts_AdminOnlySeed]: ./rescue.t.sol#L1329
-
 [test_givenNeverListedAsset_whenBalanceQueryReverts_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1334
-
 [test_givenNeverListedAsset_whenBalanceQueryReverts_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1339
-
 [test_givenNeverListedAsset_whenTransferReverts_reverts_AdminOnlySeed]: ./rescue.t.sol#L1416
-
 [test_givenNeverListedAsset_whenTransferReverts_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1421
-
 [test_givenNeverListedAsset_whenTransferReverts_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1426
-
 [test_givenNeverListedAsset_whenTransferReturnsFalse_reverts_AdminOnlySeed]: ./rescue.t.sol#L1401
-
 [test_givenNeverListedAsset_whenTransferReturnsFalse_reverts_OperatorOnlySeed]: ./rescue.t.sol#L1406
-
 [test_givenNeverListedAsset_whenTransferReturnsFalse_reverts_RolesOverlapSeed]: ./rescue.t.sol#L1411
-
 [test_givenSurplusRescueCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescue.t.sol#L1506
-
 [test_givenSurplusRescueCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescue.t.sol#L1511
-
 [test_givenSurplusRescueCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescue.t.sol#L1516
-
 [test_givenSurplusRescueCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescue.t.sol#L1521
-
 [test_givenSurplusRescueCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescue.t.sol#L1526
-
 [test_givenSurplusRescueCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescue.t.sol#L1531
-
 [test_givenPendingRescueCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescue.t.sol#L1431
-
 [test_givenPendingRescueCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescue.t.sol#L1436
-
 [test_givenPendingRescueCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescue.t.sol#L1441
-
 [test_givenPendingRetryCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescue.t.sol#L1461
-
 [test_givenPendingRetryCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescue.t.sol#L1466
-
 [test_givenPendingRetryCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescue.t.sol#L1471
-
 [test_givenDistributeCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescue.t.sol#L1179
-
 [test_givenDistributeCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescue.t.sol#L1184
-
 [test_givenDistributeCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescue.t.sol#L1189
-
 [test_givenConfigurationCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescue.t.sol#L1149
-
 [test_givenConfigurationCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescue.t.sol#L1154
-
 [test_givenConfigurationCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescue.t.sol#L1159
-
 [test_givenPendingRescueCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescue.t.sol#L1446
-
 [test_givenPendingRescueCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescue.t.sol#L1451
-
 [test_givenPendingRescueCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescue.t.sol#L1456
-
 [test_givenPendingRetryCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescue.t.sol#L1476
-
 [test_givenPendingRetryCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescue.t.sol#L1481
-
 [test_givenPendingRetryCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescue.t.sol#L1486
-
 [test_givenDistributeCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescue.t.sol#L1194
-
 [test_givenDistributeCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescue.t.sol#L1199
-
 [test_givenDistributeCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescue.t.sol#L1204
-
 [test_givenConfigurationCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescue.t.sol#L1164
-
 [test_givenConfigurationCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescue.t.sol#L1169
-
 [test_givenConfigurationCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescue.t.sol#L1174
-
 [test_givenInactiveDistributor_whenCallerUnauthorized_reverts]: ./rescue.t.sol#L221
-
 [test_givenInactiveUnauthorizedIdentities_whenSeeded_reverts]: ./rescue.t.sol#L1551

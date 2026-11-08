@@ -1,6 +1,6 @@
 # BurnerLoansRisk.validatePriceSupport coverage plan
 
-Source: [validatePriceSupport](../../../policies/burnerloans/BurnerLoansRisk.sol#L526). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [validatePriceSupport](../../../policies/burnerloans/BurnerLoansRisk.sol#L551). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 

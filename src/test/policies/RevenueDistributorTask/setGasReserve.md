@@ -48,19 +48,6 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 | RDTASK-GAS-RESERVE-P03 | Fuzz permitted role caller | true | Repeat 2 and 250,000 | Same as input | Current valid reserve | Success | No storage change and no event | Covered: [test][test_whenPermittedCallerSetsCurrentReserve_isNoOp], [test][test_givenRoleAndNumericBoundaries_whenGasReserveSet] |
 | RDTASK-GAS-RESERVE-P05 | Fuzz permitted role caller | false | Repeat 2 and 250,000 | Same as input | Current valid reserve | Success | No storage change and no event | Covered: [test][test_whenPermittedCallerSetsCurrentReserve_isNoOp], [test][test_givenRoleAndNumericBoundaries_whenGasReserveSet] |
 
-[test_whenUnauthorizedCallerSetsReserve_reverts]: ./setGasReserve.t.sol#L10
-[test_whenPermittedCallerSetsValidReserve_updatesValue]: ./setGasReserve.t.sol#L148
-[test_whenPermittedCallerSetsCurrentReserve_isNoOp]: ./setGasReserve.t.sol#L189
-[test_givenTaskInactive_whenPermittedCallerSetsReserve_reverts]: ./setGasReserve.t.sol#L41
-
-[test_whenReserveReachesThreshold_reverts]: ./setGasReserve.t.sol#L109
-
-[test_givenRoleAndNumericBoundaries_whenGasReserveSet]: ./setGasReserve.t.sol#L262
-
-[test_whenMinimumReserveSet_updatesValue]: ./setGasReserve.t.sol#L229
-
-[test_whenPermittedCallerSetsInvalidReserve_reverts]: ./setGasReserve.t.sol#L77
-
 ## Guard-precedence regression
 
 The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
@@ -69,4 +56,12 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | RDTASK-GAS-RESERVE-L02 | Any address, fuzz, without authorization exclusions | false | false | Task locally disabled, then Kernel-deactivated; Fuzz full `uint32` input type without bounds/exclusions | `RevenueDistributorTask_PolicyNotActive(task)` before local enablement (where required), caller and input checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenAnyCallerSetsValue_revertsActivityFirst] |
 
+[test_whenUnauthorizedCallerSetsReserve_reverts]: ./setGasReserve.t.sol#L10
+[test_whenPermittedCallerSetsValidReserve_updatesValue]: ./setGasReserve.t.sol#L148
+[test_whenPermittedCallerSetsCurrentReserve_isNoOp]: ./setGasReserve.t.sol#L189
+[test_givenTaskInactive_whenPermittedCallerSetsReserve_reverts]: ./setGasReserve.t.sol#L41
+[test_whenReserveReachesThreshold_reverts]: ./setGasReserve.t.sol#L109
+[test_givenRoleAndNumericBoundaries_whenGasReserveSet]: ./setGasReserve.t.sol#L262
+[test_whenMinimumReserveSet_updatesValue]: ./setGasReserve.t.sol#L229
+[test_whenPermittedCallerSetsInvalidReserve_reverts]: ./setGasReserve.t.sol#L77
 [test_givenInactiveAndDisabled_whenAnyCallerSetsValue_revertsActivityFirst]: ./setGasReserve.t.sol#L691

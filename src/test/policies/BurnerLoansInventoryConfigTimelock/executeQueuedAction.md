@@ -2,7 +2,7 @@
 
 Shared action existence, terminal-status and execution-window checks precede concrete admission. Execution then requires own Kernel activity before local enablement and target checks; its caller remains permissionless.
 
-Source: [executeQueuedAction](../../../policies/utils/TimelockBatchQueue.sol#L136). Concrete behavior: [_validateExecution](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L237).
+Source: [executeQueuedAction](../../../policies/utils/TimelockBatchQueue.sol#L138). Concrete behavior: [_validateExecution](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L247).
 
 ## Scope and fixtures
 

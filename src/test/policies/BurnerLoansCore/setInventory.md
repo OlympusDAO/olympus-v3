@@ -1,6 +1,6 @@
 # BurnerLoansCore.setInventory coverage plan
 
-Source: [setInventory](../../../policies/burnerloans/BurnerLoansCore.sol#L647). Acceptance criteria below include replacement requirements not yet implemented by the current setter. No migration implementation is required for this spike.
+Source: [setInventory](../../../policies/burnerloans/BurnerLoansCore.sol#L683). Acceptance criteria below include replacement requirements not yet implemented by the current setter. No migration implementation is required for this spike.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 

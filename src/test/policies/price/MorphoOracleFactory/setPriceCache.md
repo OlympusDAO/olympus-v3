@@ -45,6 +45,14 @@ ADMIN_ROLE caller; local active=true, local enabled=true.
 | --- | --- | --- | --- | --- | --- |
 | MORPHO-CACHE-P01 | Fuzz initially enabled or disabled then enabled again | Different compatible cache | Success | Pointer/getter selects replacement; exact PriceCacheSet(candidate) event | Covered: [test][test_whenCallerIsAdmin_setsPriceCache] |
 
+## Guard-precedence regression
+
+The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
+
+| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| MORPHO-CACHE-L04 | Any address, fuzz, without authorization exclusions | false | Fuzz false/true | Kernel-deactivated after optional local enablement; creation is enabled; Current selected `priceCache` address | `OracleFactory_PolicyNotActive()` before local enablement, caller and action checks | Revert; no effects of the attempted action commit. Selected cache pointer is explicitly asserted unchanged. | Covered: [test][test_givenInactive_whenAnyCallerChangesFactory_revertsActivityFirst] |
+
 [test_whenCallerIsAdmin_setsPriceCache]: ./setPriceCache.t.sol#L24
 [test_whenPriceCacheAddressIsZero_reverts]: ./setPriceCache.t.sol#L38
 [test_whenCallerIsOracleManager_reverts]: ./setPriceCache.t.sol#L50
@@ -54,15 +62,5 @@ ADMIN_ROLE caller; local active=true, local enabled=true.
 [test_whenPriceCacheUnchanged_reverts]: ./setPriceCache.t.sol#L100
 [test_whenCallerIsNotAdmin_whenPriceCacheUnchanged_reverts]: ./setPriceCache.t.sol#L160
 [test_givenDisabled_whenPriceCacheUnchanged_reverts]: ./setPriceCache.t.sol#L171
-
 [test_givenInactive_whenPriceCacheUnchanged_revertsActivityFirst]: ./setPriceCache.t.sol#L130
-
-## Guard-precedence regression
-
-The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
-
-| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| MORPHO-CACHE-L04 | Any address, fuzz, without authorization exclusions | false | Fuzz false/true | Kernel-deactivated after optional local enablement; creation is enabled; Current selected `priceCache` address | `OracleFactory_PolicyNotActive()` before local enablement, caller and action checks | Revert; no effects of the attempted action commit. Selected cache pointer is explicitly asserted unchanged. | Covered: [test][test_givenInactive_whenAnyCallerChangesFactory_revertsActivityFirst] |
-
 [test_givenInactive_whenAnyCallerChangesFactory_revertsActivityFirst]: ./setPriceCache.t.sol#L190

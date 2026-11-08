@@ -82,6 +82,14 @@ The task must neither require IVersioned support nor call the cache VERSION gett
 | PCACHER-SET-CACHE-D13 | ADMIN | true | true | ERC165 probe reverts | PriceCacherTask_InvalidPriceCache(candidate); unchanged | Covered: [test][test_givenInterfaceProbeReverts_whenSelected_reverts] |
 | PCACHER-SET-CACHE-D14 | ADMIN | true | true | ERC165 probe returns malformed bool ABI | PriceCacherTask_InvalidPriceCache(candidate); unchanged | Covered: [test][test_givenInterfaceProbeMalformed_whenSelected_reverts] |
 
+## Guard-precedence regression
+
+The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
+
+| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| PCACHER-SET-CACHE-L03 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; Candidate=`address(0)` | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
+
 [test_givenCacheInterfaceMissing_whenSelected_reverts]: setPriceCache.t.sol#L207
 [test_givenDisabled_whenAdminRotatesPriceCache]: setPriceCache.t.sol#L53
 [test_givenEnabled_whenAdminRotatesPriceCache]: setPriceCache.t.sol#L32
@@ -108,13 +116,4 @@ The task must neither require IVersioned support nor call the cache VERSION gett
 [test_whenNoPairs_whenRotationSucceeds]: setPriceCache.t.sol#L139
 [test_whenSinglePair_whenRotationSucceeds]: setPriceCache.t.sol#L144
 [test_whenUnchangedCacheSelected_revertsBeforeProbes]: setPriceCache.t.sol#L168
-
-## Guard-precedence regression
-
-The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
-
-| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| PCACHER-SET-CACHE-L03 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; Candidate=`address(0)` | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
-
 [test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst]: ./setPriceCache.t.sol#L367

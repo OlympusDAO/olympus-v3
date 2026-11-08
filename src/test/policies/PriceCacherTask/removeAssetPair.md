@@ -64,6 +64,14 @@ are recorded explicitly and are not converted into passing expectations.
 - [x] Derive scenarios from concrete entry points and inherited guards.
 - [x] Verify named mappings after focused execution.
 
+## Guard-precedence regression
+
+The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
+
+| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| PCACHER-REMOVE-PAIR-L06 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; Asset and quote both `address(0)` | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
+
 [test_givenDisabled_whenAdminRemovesPair]: removeAssetPair.t.sol#L160
 [test_givenInactive_whenPairRemoved_reverts]: removeAssetPair.t.sol#L230
 [test_givenMultipleEntries_whenAdminRemovesMultiplePairs]: removeAssetPair.t.sol#L134
@@ -80,19 +88,7 @@ are recorded explicitly and are not converted into passing expectations.
 [test_whenPairDoesNotExist_reverts]: removeAssetPair.t.sol#L88
 [test_whenQuoteIsZero_reverts]: removeAssetPair.t.sol#L70
 [test_whenRemovalBoundarySeedsUsed]: removeAssetPair.t.sol#L214
-
 [test_whenPriceAdminRemovesPair]: removeAssetPair.t.sol#L28
-
 [test_whenBothRolesRemovePair]: removeAssetPair.t.sol#L36
-
 [test_givenInactive_whenPriceAdminRemovesPair_reverts]: removeAssetPair.t.sol#L43
-
-## Guard-precedence regression
-
-The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
-
-| ID | Caller | Local active | Local enabled | Fixture and input domain | Exact result and precedence | Effects | Test |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| PCACHER-REMOVE-PAIR-L06 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; Asset and quote both `address(0)` | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
-
 [test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst]: ./removeAssetPair.t.sol#L274

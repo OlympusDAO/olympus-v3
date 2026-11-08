@@ -2,7 +2,7 @@
 
 Coverage records implemented domains and assertions independently of pass/fail status.
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansPayoutConfigTimelock.sol#L506).
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansPayoutConfigTimelock.sol#L563).
 
 ## Domains and notation
 

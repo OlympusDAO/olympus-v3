@@ -46,17 +46,6 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 | RDTASK-EXECUTION-GAS-P03 | Fuzz permitted role caller | true | Same as input | Current valid value | Success | No storage change and no event | Covered: [test][test_whenPermittedCallerSetsCurrentExecutionGas_isNoOp], [test][test_givenRoleAndNumericBoundaries_whenExecutionGasLimitSet] |
 | RDTASK-EXECUTION-GAS-P05 | Fuzz permitted role caller | false | Same as input | Current valid value | Success | No storage change and no event | Covered: [test][test_whenPermittedCallerSetsCurrentExecutionGas_isNoOp], [test][test_givenRoleAndNumericBoundaries_whenExecutionGasLimitSet] |
 
-[test_whenUnauthorizedCallerSetsExecutionGas_reverts]: ./setExecutionGasLimit.t.sol#L10
-
-[test_whenPermittedCallerSetsCurrentExecutionGas_isNoOp]: ./setExecutionGasLimit.t.sol#L146
-[test_givenTaskInactive_whenPermittedCallerSetsExecutionGas_reverts]: ./setExecutionGasLimit.t.sol#L41
-
-[test_givenRoleAndNumericBoundaries_whenExecutionGasLimitSet]: ./setExecutionGasLimit.t.sol#L177
-
-[test_whenPermittedCallerSetsValidExecutionGas_updatesValue]: ./setExecutionGasLimit.t.sol#L111
-
-[test_whenPermittedCallerSetsInvalidExecutionGas_reverts]: ./setExecutionGasLimit.t.sol#L77
-
 ## Guard-precedence regression
 
 The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
@@ -65,4 +54,10 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | RDTASK-EXECUTION-GAS-L02 | Any address, fuzz, without authorization exclusions | false | false | Task locally disabled, then Kernel-deactivated; Fuzz full `uint32` input type without bounds/exclusions | `RevenueDistributorTask_PolicyNotActive(task)` before local enablement (where required), caller and input checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenAnyCallerSetsValue_revertsActivityFirst] |
 
+[test_whenUnauthorizedCallerSetsExecutionGas_reverts]: ./setExecutionGasLimit.t.sol#L10
+[test_whenPermittedCallerSetsCurrentExecutionGas_isNoOp]: ./setExecutionGasLimit.t.sol#L146
+[test_givenTaskInactive_whenPermittedCallerSetsExecutionGas_reverts]: ./setExecutionGasLimit.t.sol#L41
+[test_givenRoleAndNumericBoundaries_whenExecutionGasLimitSet]: ./setExecutionGasLimit.t.sol#L177
+[test_whenPermittedCallerSetsValidExecutionGas_updatesValue]: ./setExecutionGasLimit.t.sol#L111
+[test_whenPermittedCallerSetsInvalidExecutionGas_reverts]: ./setExecutionGasLimit.t.sol#L77
 [test_givenInactiveAndDisabled_whenAnyCallerSetsValue_revertsActivityFirst]: ./setExecutionGasLimit.t.sol#L419

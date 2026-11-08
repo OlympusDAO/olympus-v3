@@ -49,25 +49,12 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 | CUR-P03 | Fuzz permitted role caller | true | Fuzz 0,1,multiple | Same as input and valid for live count | Current cursor | Success | For nonzero input, live count is queried; zero skips lookup; no storage change/event | Covered: [test][test_whenCurrentCursorProvided_isNoOp], [test][test_givenCursorAndRoleBoundarySeeds] |
 | CUR-P08 | Fuzz permitted role caller | false | Fuzz 0,1,multiple | Same as input and valid for live count | Current cursor | Success | For nonzero input, live count is queried; zero skips lookup; no storage change/event | Covered: [test][test_whenCurrentCursorProvided_isNoOp], [test][test_givenCursorAndRoleBoundarySeeds] |
 
-[test_whenUnauthorizedCallerSetsCursor_reverts]: ./setNextAssetIndex.t.sol#L16
-[test_givenTaskDisabled_whenPermittedCallerSetsCursor_ignoresDistributorLifecycle]: ./setNextAssetIndex.t.sol#L77
-[test_givenTaskInactive_whenPermittedCallerSetsCursor_reverts]: ./setNextAssetIndex.t.sol#L49
-[test_whenCursorIsOutOfRange_reverts]: ./setNextAssetIndex.t.sol#L95
-[test_whenChangedCursorIsValid_storesExactInput]: ./setNextAssetIndex.t.sol#L138
-[test_whenCurrentCursorProvided_isNoOp]: ./setNextAssetIndex.t.sol#L166
-[test_givenActiveAssets_whenCursorSelected_nextBeatStartsThere]: ./setNextAssetIndex.t.sol#L202
-
 ## Registry-independent reset
 
 | ID | Caller | Local active | Local enabled | Registry | Input | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | CUR-P09 | Admin | true | true | Count getter reverts | 0 from nonzero cursor | Success; no registry probe | Cursor reset; exact event | Covered: [test][test_givenUnavailableRegistry_whenCursorReset_succeeds] |
 | CUR-P10 | Admin | true | true | Count getter reverts | 0 from zero cursor | Success; no registry probe | No state change or event | Covered: [test][test_givenUnavailableRegistry_whenZeroCursorSetAgain_succeeds] |
-
-[test_givenUnavailableRegistry_whenCursorReset_succeeds]: ./setNextAssetIndex.t.sol#L237
-[test_givenUnavailableRegistry_whenZeroCursorSetAgain_succeeds]: ./setNextAssetIndex.t.sol#L254
-
-[test_givenCursorAndRoleBoundarySeeds]: ./setNextAssetIndex.t.sol#L268
 
 ## Guard-precedence regression
 
@@ -77,4 +64,14 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | CUR-L02 | Any address, fuzz, without authorization exclusions | false | false | Task locally disabled, then Kernel-deactivated; Fuzz full `uint256` input type without bounds/exclusions | `RevenueDistributorTask_PolicyNotActive(task)` before local enablement (where required), caller and input checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenAnyCallerSetsValue_revertsActivityFirst] |
 
+[test_whenUnauthorizedCallerSetsCursor_reverts]: ./setNextAssetIndex.t.sol#L16
+[test_givenTaskDisabled_whenPermittedCallerSetsCursor_ignoresDistributorLifecycle]: ./setNextAssetIndex.t.sol#L77
+[test_givenTaskInactive_whenPermittedCallerSetsCursor_reverts]: ./setNextAssetIndex.t.sol#L49
+[test_whenCursorIsOutOfRange_reverts]: ./setNextAssetIndex.t.sol#L95
+[test_whenChangedCursorIsValid_storesExactInput]: ./setNextAssetIndex.t.sol#L138
+[test_whenCurrentCursorProvided_isNoOp]: ./setNextAssetIndex.t.sol#L166
+[test_givenActiveAssets_whenCursorSelected_nextBeatStartsThere]: ./setNextAssetIndex.t.sol#L202
+[test_givenUnavailableRegistry_whenCursorReset_succeeds]: ./setNextAssetIndex.t.sol#L237
+[test_givenUnavailableRegistry_whenZeroCursorSetAgain_succeeds]: ./setNextAssetIndex.t.sol#L254
+[test_givenCursorAndRoleBoundarySeeds]: ./setNextAssetIndex.t.sol#L268
 [test_givenInactiveAndDisabled_whenAnyCallerSetsValue_revertsActivityFirst]: ./setNextAssetIndex.t.sol#L851

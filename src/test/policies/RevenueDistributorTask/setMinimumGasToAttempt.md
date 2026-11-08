@@ -46,15 +46,6 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 | RDTASK-MINIMUM-GAS-P03 | Fuzz permitted role caller | true | Repeat 1 and 100,000 | Same as input | Current valid threshold | Success | No storage change and no event | Covered: [test][test_whenPermittedCallerSetsCurrentMinimumGas_isNoOp], [test][test_givenRoleAndNumericBoundaries_whenMinimumGasToAttemptSet] |
 | RDTASK-MINIMUM-GAS-P05 | Fuzz permitted role caller | false | Repeat 1 and 100,000 | Same as input | Current valid threshold | Success | No storage change and no event | Covered: [test][test_whenPermittedCallerSetsCurrentMinimumGas_isNoOp], [test][test_givenRoleAndNumericBoundaries_whenMinimumGasToAttemptSet] |
 
-[test_whenUnauthorizedCallerSetsMinimumGas_reverts]: ./setMinimumGasToAttempt.t.sol#L10
-[test_whenPermittedCallerSetsValidMinimumGas_updatesValue]: ./setMinimumGasToAttempt.t.sol#L106
-[test_whenPermittedCallerSetsCurrentMinimumGas_isNoOp]: ./setMinimumGasToAttempt.t.sol#L140
-[test_givenTaskInactive_whenPermittedCallerSetsMinimumGas_reverts]: ./setMinimumGasToAttempt.t.sol#L37
-
-[test_givenRoleAndNumericBoundaries_whenMinimumGasToAttemptSet]: ./setMinimumGasToAttempt.t.sol#L169
-
-[test_whenPermittedCallerSetsInvalidMinimumGas_reverts]: ./setMinimumGasToAttempt.t.sol#L69
-
 ## Guard-precedence regression
 
 The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
@@ -63,4 +54,10 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | RDTASK-MINIMUM-GAS-L02 | Any address, fuzz, without authorization exclusions | false | false | Task locally disabled, then Kernel-deactivated; Fuzz full `uint32` input type without bounds/exclusions | `RevenueDistributorTask_PolicyNotActive(task)` before local enablement (where required), caller and input checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenAnyCallerSetsValue_revertsActivityFirst] |
 
+[test_whenUnauthorizedCallerSetsMinimumGas_reverts]: ./setMinimumGasToAttempt.t.sol#L10
+[test_whenPermittedCallerSetsValidMinimumGas_updatesValue]: ./setMinimumGasToAttempt.t.sol#L106
+[test_whenPermittedCallerSetsCurrentMinimumGas_isNoOp]: ./setMinimumGasToAttempt.t.sol#L140
+[test_givenTaskInactive_whenPermittedCallerSetsMinimumGas_reverts]: ./setMinimumGasToAttempt.t.sol#L37
+[test_givenRoleAndNumericBoundaries_whenMinimumGasToAttemptSet]: ./setMinimumGasToAttempt.t.sol#L169
+[test_whenPermittedCallerSetsInvalidMinimumGas_reverts]: ./setMinimumGasToAttempt.t.sol#L69
 [test_givenInactiveAndDisabled_whenAnyCallerSetsValue_revertsActivityFirst]: ./setMinimumGasToAttempt.t.sol#L969

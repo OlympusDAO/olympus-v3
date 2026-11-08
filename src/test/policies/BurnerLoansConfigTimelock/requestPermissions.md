@@ -1,6 +1,6 @@
 # BurnerLoansConfigTimelock.requestPermissions coverage plan
 
-Source: [requestPermissions](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L142). Coverage is recorded in the Test column.
+Source: [requestPermissions](../../../policies/burnerloans/BurnerLoansConfigTimelock.sol#L138). Coverage is recorded in the Test column.
 
 Implementation: 1 scenario functions mapped; 1 Covered, 0 Partial. Partial rows have complete test implementations blocked by the current production behavior.
 

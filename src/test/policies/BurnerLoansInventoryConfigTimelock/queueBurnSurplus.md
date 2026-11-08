@@ -2,7 +2,7 @@
 
 Queue admission requires own Kernel activity, then local enablement, then an accepted proposer role. Bounds, target metadata and action validation follow. Rejected admission preserves IDs, keys, payloads, custody and committed logs.
 
-Source: [queueBurnSurplus](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L125).
+Source: [queueBurnSurplus](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L124).
 
 ## Scope and fixtures
 

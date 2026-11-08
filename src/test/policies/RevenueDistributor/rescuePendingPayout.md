@@ -154,6 +154,8 @@ Nested guarded actions: pending rescue, surplus `rescue`, distribute and transfe
 | RD-X03 | Fuzz ADMIN-only, selected configOperator-only and overlapping authority; seed each | Callback reads preview, raw/combined entitlement, pending membership and configuration after partial rescue | Reads see entitlement−amount, updated indexes and unchanged configuration; no duplicate payment | Covered: [test][test_givenReadCallback_whenPartialPayoutStateIsRead], [test][test_givenReadCallback_whenOneUnitPayoutStateIsRead], [test][test_givenReadCallback_whenPartialPayoutStateIsRead_AdminOnlySeed], [test][test_givenReadCallback_whenPartialPayoutStateIsRead_OperatorOnlySeed], [test][test_givenReadCallback_whenPartialPayoutStateIsRead_RolesOverlapSeed], [test][test_givenReadCallback_whenOneUnitPayoutStateIsRead_AdminOnlySeed], [test][test_givenReadCallback_whenOneUnitPayoutStateIsRead_OperatorOnlySeed], [test][test_givenReadCallback_whenOneUnitPayoutStateIsRead_RolesOverlapSeed] |
 | RD-PENDING-RESCUE-C01 | Fuzz ADMIN-only, selected configOperator-only and overlapping authority; seed each | Same reads after full recipient drain; callback catches preview error for amount=1 | pendingPayout=0; preview gives `RevenueDistributor_InsufficientPendingDistribution(asset,1,0)`; outer rescue succeeds once | Covered: [test][test_givenReadCallback_whenFullPayoutStateIsRead], [test][test_givenReadCallback_whenFullPayoutStateIsRead_AdminOnlySeed], [test][test_givenReadCallback_whenFullPayoutStateIsRead_OperatorOnlySeed], [test][test_givenReadCallback_whenFullPayoutStateIsRead_RolesOverlapSeed] |
 
+Retired duplicate caller IDs: RD-L05, RD-L08, RD-L09, RD-L10, RD-I09, RD-I10, RD-I11, RD-I12, RD-I13, RD-I14, RD-I15, RD-I16, RD-I17, RD-I18, RD-I19, RD-P12, RD-P13, RD-P14, RD-P15, RD-P16, RD-P17, RD-P18, RD-P19, RD-N04, RD-N05, RD-P20, RD-P21, RD-P22, RD-X04, RD-X05, RD-X06, RD-PENDING-RESCUE-C02. Retained caller families include explicit exclusive-role and overlapping-role seeds.
+
 [test_authorization_givenEnabled_givenPolicyActive_whenAdminCalls]: ./rescuePendingPayout.t.sol#L2385
 [test_authorization_givenEnabled_givenPolicyActive_whenAdminCalls_whenInputsInvalid_reverts]: ./rescuePendingPayout.t.sol#L2427
 [test_authorization_givenEnabled_givenPolicyActive_whenOperatorCalls]: ./rescuePendingPayout.t.sol#L2471
@@ -238,470 +240,236 @@ Nested guarded actions: pending rescue, surplus `rescue`, distribute and transfe
 [test_givenReadCallback_whenPartialPayoutStateIsRead]: ./rescuePendingPayout.t.sol#L1130
 [test_givenReadCallback_whenOneUnitPayoutStateIsRead]: ./rescuePendingPayout.t.sol#L2899
 [test_givenReadCallback_whenFullPayoutStateIsRead]: ./rescuePendingPayout.t.sol#L2879
-Retired duplicate caller IDs: RD-L05, RD-L08, RD-L09, RD-L10, RD-I09, RD-I10, RD-I11, RD-I12, RD-I13, RD-I14, RD-I15, RD-I16, RD-I17, RD-I18, RD-I19, RD-P12, RD-P13, RD-P14, RD-P15, RD-P16, RD-P17, RD-P18, RD-P19, RD-N04, RD-N05, RD-P20, RD-P21, RD-P22, RD-X04, RD-X05, RD-X06, RD-PENDING-RESCUE-C02. Retained caller families include explicit exclusive-role and overlapping-role seeds.
-
 [test_authorization_givenEnabled_givenPolicyActive_whenAdminCalls_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2394
-
 [test_authorization_givenEnabled_givenPolicyActive_whenAdminCalls_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2405
-
 [test_authorization_givenEnabled_givenPolicyActive_whenAdminCalls_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2416
-
 [test_authorization_givenEnabled_givenPolicyActive_whenAdminCalls_whenInputsInvalid_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2438
-
 [test_authorization_givenEnabled_givenPolicyActive_whenAdminCalls_whenInputsInvalid_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2449
-
 [test_authorization_givenEnabled_givenPolicyActive_whenAdminCalls_whenInputsInvalid_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2460
-
 [test_authorization_givenEnabled_givenPolicyActive_whenOperatorCalls_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2480
-
 [test_authorization_givenEnabled_givenPolicyActive_whenOperatorCalls_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2491
-
 [test_authorization_givenEnabled_givenPolicyActive_whenOperatorCalls_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2502
-
 [test_authorization_givenEnabled_givenPolicyActive_whenOperatorCalls_whenInputsInvalid_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2524
-
 [test_authorization_givenEnabled_givenPolicyActive_whenOperatorCalls_whenInputsInvalid_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2535
-
 [test_authorization_givenEnabled_givenPolicyActive_whenOperatorCalls_whenInputsInvalid_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2546
-
 [test_authorization_givenDisabled_givenPolicyActive_whenAdminCalls_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2136
-
 [test_authorization_givenDisabled_givenPolicyActive_whenAdminCalls_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2147
-
 [test_authorization_givenDisabled_givenPolicyActive_whenAdminCalls_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2158
-
 [test_authorization_givenDisabled_givenPolicyActive_whenAdminCalls_whenInputsInvalid_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2180
-
 [test_authorization_givenDisabled_givenPolicyActive_whenAdminCalls_whenInputsInvalid_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2191
-
 [test_authorization_givenDisabled_givenPolicyActive_whenAdminCalls_whenInputsInvalid_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2202
-
 [test_authorization_givenDisabled_givenPolicyActive_whenOperatorCalls_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2222
-
 [test_authorization_givenDisabled_givenPolicyActive_whenOperatorCalls_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2233
-
 [test_authorization_givenDisabled_givenPolicyActive_whenOperatorCalls_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2244
-
 [test_authorization_givenDisabled_givenPolicyActive_whenOperatorCalls_whenInputsInvalid_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2266
-
 [test_authorization_givenDisabled_givenPolicyActive_whenOperatorCalls_whenInputsInvalid_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2277
-
 [test_authorization_givenDisabled_givenPolicyActive_whenOperatorCalls_whenInputsInvalid_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2288
-
 [test_authorization_givenEnabled_givenPolicyInactive_whenAdminCalls_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2566
-
 [test_authorization_givenEnabled_givenPolicyInactive_whenAdminCalls_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2577
-
 [test_authorization_givenEnabled_givenPolicyInactive_whenAdminCalls_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2588
-
 [test_authorization_givenEnabled_givenPolicyInactive_whenOperatorCalls_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2610
-
 [test_authorization_givenEnabled_givenPolicyInactive_whenOperatorCalls_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2621
-
 [test_authorization_givenEnabled_givenPolicyInactive_whenOperatorCalls_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2632
-
 [test_authorization_givenDisabled_givenPolicyInactive_whenAdminCalls_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2308
-
 [test_authorization_givenDisabled_givenPolicyInactive_whenAdminCalls_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2319
-
 [test_authorization_givenDisabled_givenPolicyInactive_whenAdminCalls_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2330
-
 [test_authorization_givenDisabled_givenPolicyInactive_whenOperatorCalls_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2352
-
 [test_authorization_givenDisabled_givenPolicyInactive_whenOperatorCalls_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2363
-
 [test_authorization_givenDisabled_givenPolicyInactive_whenOperatorCalls_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2374
-
 [test_invalidInputs_whenAssetIsZero_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3719
-
 [test_invalidInputs_whenAssetIsZero_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3724
-
 [test_invalidInputs_whenAssetIsZero_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3729
-
 [test_invalidInputs_whenAssetHasNoCode_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3664
-
 [test_invalidInputs_whenAssetHasNoCode_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3669
-
 [test_invalidInputs_whenAssetHasNoCode_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3674
-
 [test_invalidInputs_whenAssetIsZero_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3743
-
 [test_invalidInputs_whenAssetIsZero_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3752
-
 [test_invalidInputs_whenAssetIsZero_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3761
-
 [test_invalidInputs_whenAssetHasNoCode_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3688
-
 [test_invalidInputs_whenAssetHasNoCode_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3697
-
 [test_invalidInputs_whenAssetHasNoCode_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3708
-
 [test_invalidInputs_whenDestinationIsZero_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3841
-
 [test_invalidInputs_whenDestinationIsZero_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3846
-
 [test_invalidInputs_whenDestinationIsZero_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3851
-
 [test_invalidInputs_whenDestinationIsZero_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3865
-
 [test_invalidInputs_whenDestinationIsZero_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3876
-
 [test_invalidInputs_whenDestinationIsZero_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3887
-
 [test_invalidInputs_whenRecipientIsZero_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3940
-
 [test_invalidInputs_whenRecipientIsZero_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3945
-
 [test_invalidInputs_whenRecipientIsZero_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3950
-
 [test_invalidInputs_whenRecipientIsZero_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3964
-
 [test_invalidInputs_whenRecipientIsZero_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3973
-
 [test_invalidInputs_whenRecipientIsZero_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3984
-
 [test_invalidInputs_whenAmountIsZero_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3613
-
 [test_invalidInputs_whenAmountIsZero_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3618
-
 [test_invalidInputs_whenAmountIsZero_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3623
-
 [test_invalidInputs_whenAmountIsZero_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3637
-
 [test_invalidInputs_whenAmountIsZero_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3646
-
 [test_invalidInputs_whenAmountIsZero_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3655
-
 [test_invalidInputs_whenAmountExceedsEntitlement_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3535
-
 [test_invalidInputs_whenAmountExceedsEntitlement_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3547
-
 [test_invalidInputs_whenAmountExceedsEntitlement_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3559
-
 [test_invalidInputs_whenAmountExceedsEntitlement_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3580
-
 [test_invalidInputs_whenAmountExceedsEntitlement_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3591
-
 [test_invalidInputs_whenAmountExceedsEntitlement_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3602
-
 [test_invalidInputs_whenDestinationIsForbidden_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3770
-
 [test_invalidInputs_whenDestinationIsForbidden_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3782
-
 [test_invalidInputs_whenDestinationIsForbidden_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3794
-
 [test_invalidInputs_whenDestinationIsForbidden_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3808
-
 [test_invalidInputs_whenDestinationIsForbidden_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3819
-
 [test_invalidInputs_whenDestinationIsForbidden_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3830
-
 [test_givenTokenOwnsDebt_whenRescued_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3048
-
 [test_givenTokenOwnsDebt_whenRescued_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3053
-
 [test_givenTokenOwnsDebt_whenRescued_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3058
-
 [test_givenAdminOwnsDebt_whenRescued_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2643
-
 [test_givenAdminOwnsDebt_whenRescued_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2648
-
 [test_givenAdminOwnsDebt_whenRescued_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2653
-
 [test_givenOperatorOwnsDebt_whenRescued_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2744
-
 [test_givenOperatorOwnsDebt_whenRescued_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2749
-
 [test_givenOperatorOwnsDebt_whenRescued_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2754
-
 [test_givenNeverListedAsset_whenPendingPayoutRequested_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2710
-
 [test_givenNeverListedAsset_whenPendingPayoutRequested_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2720
-
 [test_givenNeverListedAsset_whenPendingPayoutRequested_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2732
-
 [test_invalidInputs_whenInvalidDestinationAndZeroRecipientCompete_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3907
-
 [test_invalidInputs_whenInvalidDestinationAndZeroRecipientCompete_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3918
-
 [test_invalidInputs_whenInvalidDestinationAndZeroRecipientCompete_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3929
-
 [test_allocation_givenRoute_whenAmountIsWithinInterval_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2007
-
 [test_allocation_givenRoute_whenAmountIsWithinInterval_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2020
-
 [test_allocation_givenRoute_whenAmountIsWithinInterval_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2033
-
 [test_allocation_givenRoute_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2046
-
 [test_allocation_givenRoute_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2051
-
 [test_allocation_givenRoute_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2056
-
 [test_allocation_givenRepurchase_whenAmountIsWithinInterval_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1799
-
 [test_allocation_givenRepurchase_whenAmountIsWithinInterval_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1812
-
 [test_allocation_givenRepurchase_whenAmountIsWithinInterval_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1825
-
 [test_allocation_givenRepurchase_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1838
-
 [test_allocation_givenRepurchase_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1847
-
 [test_allocation_givenRepurchase_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1856
-
 [test_allocation_givenTreasury_whenAmountIsWithinInterval_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2061
-
 [test_allocation_givenTreasury_whenAmountIsWithinInterval_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2074
-
 [test_allocation_givenTreasury_whenAmountIsWithinInterval_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2087
-
 [test_allocation_givenTreasury_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2100
-
 [test_allocation_givenTreasury_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2109
-
 [test_allocation_givenTreasury_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2118
-
 [test_allocation_givenRouteAndRepurchase_whenAmountSpansBoth_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1865
-
 [test_allocation_givenRouteAndRepurchase_whenAmountSpansBoth_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1878
-
 [test_allocation_givenRouteAndRepurchase_whenAmountSpansBoth_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1891
-
 [test_allocation_givenRouteAndRepurchase_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1904
-
 [test_allocation_givenRouteAndRepurchase_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1915
-
 [test_allocation_givenRouteAndRepurchase_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1926
-
 [test_allocation_givenRouteAndTreasury_whenAmountSpansBoth_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1937
-
 [test_allocation_givenRouteAndTreasury_whenAmountSpansBoth_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1950
-
 [test_allocation_givenRouteAndTreasury_whenAmountSpansBoth_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1963
-
 [test_allocation_givenRouteAndTreasury_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1976
-
 [test_allocation_givenRouteAndTreasury_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1985
-
 [test_allocation_givenRouteAndTreasury_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1996
-
 [test_allocation_givenRepurchaseAndTreasury_whenAmountSpansBoth_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1723
-
 [test_allocation_givenRepurchaseAndTreasury_whenAmountSpansBoth_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1736
-
 [test_allocation_givenRepurchaseAndTreasury_whenAmountSpansBoth_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1751
-
 [test_allocation_givenRepurchaseAndTreasury_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1766
-
 [test_allocation_givenRepurchaseAndTreasury_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1777
-
 [test_allocation_givenRepurchaseAndTreasury_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1788
-
 [test_allocation_givenAllBuckets_whenAmountSpansAll_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1681
-
 [test_allocation_givenAllBuckets_whenAmountSpansAll_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1686
-
 [test_allocation_givenAllBuckets_whenAmountSpansAll_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1691
-
 [test_allocation_givenAllBuckets_whenBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L1696
-
 [test_allocation_givenAllBuckets_whenBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L1705
-
 [test_allocation_givenAllBuckets_whenBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L1714
-
 [test_numericExtremes_whenMaximumIsRescued_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L4174
-
 [test_numericExtremes_whenMaximumIsRescued_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L4179
-
 [test_numericExtremes_whenMaximumIsRescued_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L4184
-
 [test_numericExtremes_givenAllRolesOverlap_whenQuantitiesVary_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3995
-
 [test_numericExtremes_givenAllRolesOverlap_whenQuantitiesVary_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L4009
-
 [test_numericExtremes_givenAllRolesOverlap_whenQuantitiesVary_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L4025
-
 [test_numericExtremes_whenQuantityBoundariesAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L4198
-
 [test_numericExtremes_whenQuantityBoundariesAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L4207
-
 [test_numericExtremes_whenQuantityBoundariesAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L4216
-
 [test_numericExtremes_givenEntitlementBoundaries_whenAmountIsZero_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L4094
-
 [test_numericExtremes_givenEntitlementBoundaries_whenAmountIsZero_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L4105
-
 [test_numericExtremes_givenEntitlementBoundaries_whenAmountIsZero_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L4116
-
 [test_numericExtremes_givenEntitlementBoundaries_whenValidAmountIsRescued_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L4136
-
 [test_numericExtremes_givenEntitlementBoundaries_whenValidAmountIsRescued_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L4147
-
 [test_numericExtremes_givenEntitlementBoundaries_whenValidAmountIsRescued_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L4158
-
 [test_numericExtremes_givenEntitlementBoundaries_whenAmountExceedsEntitlement_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L4052
-
 [test_numericExtremes_givenEntitlementBoundaries_whenAmountExceedsEntitlement_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L4063
-
 [test_numericExtremes_givenEntitlementBoundaries_whenAmountExceedsEntitlement_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L4074
-
 [test_givenRouteRemoved_whenHistoricalAndCurrentEntitlementsAreRescued_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2951
-
 [test_givenRouteRemoved_whenHistoricalAndCurrentEntitlementsAreRescued_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2962
-
 [test_givenRouteRemoved_whenHistoricalAndCurrentEntitlementsAreRescued_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2973
-
 [test_givenYieldRecipientRotated_whenFormerRoleRecipientRescues_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3460
-
 [test_givenYieldRecipientRotated_whenFormerRoleRecipientRescues_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3471
-
 [test_givenYieldRecipientRotated_whenFormerRoleRecipientRescues_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3482
-
 [test_givenYieldRecipientRotated_whenHistoricalRouteRecipientRescues_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3502
-
 [test_givenYieldRecipientRotated_whenHistoricalRouteRecipientRescues_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3513
-
 [test_givenYieldRecipientRotated_whenHistoricalRouteRecipientRescues_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3524
-
 [test_givenYieldRecipientRotated_whenCurrentRoleRecipientRescues_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3418
-
 [test_givenYieldRecipientRotated_whenCurrentRoleRecipientRescues_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3429
-
 [test_givenYieldRecipientRotated_whenCurrentRoleRecipientRescues_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3440
-
 [test_givenYieldRecipientCleared_whenFormerRoleRecipientRescues_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3334
-
 [test_givenYieldRecipientCleared_whenFormerRoleRecipientRescues_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3345
-
 [test_givenYieldRecipientCleared_whenFormerRoleRecipientRescues_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3356
-
 [test_givenYieldRecipientCleared_whenHistoricalRouteRecipientRescues_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3376
-
 [test_givenYieldRecipientCleared_whenHistoricalRouteRecipientRescues_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3387
-
 [test_givenYieldRecipientCleared_whenHistoricalRouteRecipientRescues_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3398
-
 [test_givenYieldRecipientCleared_whenCurrentRoleRecipientRescues_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3292
-
 [test_givenYieldRecipientCleared_whenCurrentRoleRecipientRescues_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3303
-
 [test_givenYieldRecipientCleared_whenCurrentRoleRecipientRescues_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3314
-
 [test_givenTreasuryUpgraded_whenFormerRoleRecipientRescues_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3108
-
 [test_givenTreasuryUpgraded_whenFormerRoleRecipientRescues_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3119
-
 [test_givenTreasuryUpgraded_whenFormerRoleRecipientRescues_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3130
-
 [test_givenTreasuryUpgraded_whenHistoricalRouteRecipientRescues_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3150
-
 [test_givenTreasuryUpgraded_whenHistoricalRouteRecipientRescues_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3159
-
 [test_givenTreasuryUpgraded_whenHistoricalRouteRecipientRescues_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3170
-
 [test_givenTreasuryUpgraded_whenCurrentRoleRecipientRescues_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3072
-
 [test_givenTreasuryUpgraded_whenCurrentRoleRecipientRescues_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3081
-
 [test_givenTreasuryUpgraded_whenCurrentRoleRecipientRescues_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3090
-
 [test_whenPermittedDestinationsAreSeeded_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L4226
-
 [test_whenPermittedDestinationsAreSeeded_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L4231
-
 [test_whenPermittedDestinationsAreSeeded_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L4236
-
 [test_givenValidPreview_whenTokenRejectsTransfer_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3226
-
 [test_givenValidPreview_whenTokenRejectsTransfer_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3235
-
 [test_givenValidPreview_whenTokenRejectsTransfer_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3244
-
 [test_givenValidPreview_whenCustodyIsInsufficient_reverts_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3190
-
 [test_givenValidPreview_whenCustodyIsInsufficient_reverts_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3199
-
 [test_givenValidPreview_whenCustodyIsInsufficient_reverts_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3208
-
 [test_givenPendingRescueCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2768
-
 [test_givenPendingRescueCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2777
-
 [test_givenPendingRescueCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2782
-
 [test_givenPendingRescueCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2796
-
 [test_givenPendingRescueCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2805
-
 [test_givenPendingRescueCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2814
-
 [test_givenSurplusRescueCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2993
-
 [test_givenSurplusRescueCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3002
-
 [test_givenSurplusRescueCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3007
-
 [test_givenSurplusRescueCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3021
-
 [test_givenSurplusRescueCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3030
-
 [test_givenSurplusRescueCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3039
-
 [test_givenDistributeCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2663
-
 [test_givenDistributeCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2668
-
 [test_givenDistributeCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2673
-
 [test_givenDistributeCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2687
-
 [test_givenDistributeCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2696
-
 [test_givenDistributeCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2705
-
 [test_givenPendingRetryCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2828
-
 [test_givenPendingRetryCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2833
-
 [test_givenPendingRetryCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2838
-
 [test_givenPendingRetryCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2852
-
 [test_givenPendingRetryCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2861
-
 [test_givenPendingRetryCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2870
-
 [test_givenWriteCallback_whenFailureIsCaught_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3253
-
 [test_givenWriteCallback_whenFailureIsCaught_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3258
-
 [test_givenWriteCallback_whenFailureIsCaught_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3263
-
 [test_givenWriteCallback_whenFailureIsPropagated_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L3268
-
 [test_givenWriteCallback_whenFailureIsPropagated_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L3273
-
 [test_givenWriteCallback_whenFailureIsPropagated_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L3278
-
 [test_givenReadCallback_whenPartialPayoutStateIsRead_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2927
-
 [test_givenReadCallback_whenPartialPayoutStateIsRead_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2932
-
 [test_givenReadCallback_whenPartialPayoutStateIsRead_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2937
-
 [test_givenReadCallback_whenOneUnitPayoutStateIsRead_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2908
-
 [test_givenReadCallback_whenOneUnitPayoutStateIsRead_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2917
-
 [test_givenReadCallback_whenOneUnitPayoutStateIsRead_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2922
-
 [test_givenReadCallback_whenFullPayoutStateIsRead_AdminOnlySeed]: ./rescuePendingPayout.t.sol#L2884
-
 [test_givenReadCallback_whenFullPayoutStateIsRead_OperatorOnlySeed]: ./rescuePendingPayout.t.sol#L2889
-
 [test_givenReadCallback_whenFullPayoutStateIsRead_RolesOverlapSeed]: ./rescuePendingPayout.t.sol#L2894
-
 [test_authorization_whenCallerIsUnauthorized_reverts_givenInactive]: ./rescuePendingPayout.t.sol#L5755
-
 [test_authorization_whenUnauthorizedIdentitiesAreSeeded_reverts_givenInactive]: ./rescuePendingPayout.t.sol#L5763

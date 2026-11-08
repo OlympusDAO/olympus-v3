@@ -86,6 +86,12 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 
 The mapped tests run in the focused Inventory suite. [Shared fixtures](BurnerLoansInventoryTest.sol) isolate Core for unit tests; modular tests exercise real Core. The [stateful campaign](BurnerLoansInventory.invariant.t.sol) covers one provider and successful accounting/lifecycle sequences; token failures and multiple providers have focused tests. This is not a repository-wide validation claim.
 
+## Activity precedence
+
+| ID | Caller | Pre-state | Expected behavior | Test |
+| --- | --- | --- | --- | --- |
+| BLINV-RESCUE-SURPLUS-L05 | Unauthorized caller | Inventory inactive; fuzz local enablement | BurnerLoans_PolicyNotActive(Inventory) before caller and no-op checks | Covered: [test][test_givenInactive_whenUnauthorizedAndInvalid_reverts] |
+
 [test_givenActiveDisabledInventory_whenSurplusRescued_thenIdleRemainsBacked]: rescueSurplusIntegration.t.sol#L49
 [test_givenActiveEnabledInventory_whenSurplusRescued_thenIdleRemainsBacked]: rescueSurplusIntegration.t.sol#L44
 [test_givenConfiguratorCleared_whenZeroAddressRescues_reverts]: rescueSurplusIntegration.t.sol#L114
@@ -106,11 +112,4 @@ The mapped tests run in the focused Inventory suite. [Shared fixtures](BurnerLoa
 [test_givenTreasuryUpgrade_whenSurplusRescued]: rescueSurplus.t.sol#L94
 [test_whenCallerIsNeitherConfigNorAdmin_reverts]: rescueSurplusIntegration.t.sol#L95
 [test_whenRescueBoundarySeeds]: rescueSurplus.t.sol#L123
-
-## Activity precedence
-
-| ID | Caller | Pre-state | Expected behavior | Test |
-| --- | --- | --- | --- | --- |
-| BLINV-RESCUE-SURPLUS-L05 | Unauthorized caller | Inventory inactive; fuzz local enablement | BurnerLoans_PolicyNotActive(Inventory) before caller and no-op checks | Covered: [test][test_givenInactive_whenUnauthorizedAndInvalid_reverts] |
-
 [test_givenInactive_whenUnauthorizedAndInvalid_reverts]: rescueSurplus.t.sol#L23

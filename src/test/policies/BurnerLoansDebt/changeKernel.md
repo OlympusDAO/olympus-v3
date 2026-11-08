@@ -14,8 +14,8 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 
 | ID | Caller | Operation / pre-state | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLDEBT-KERNEL-P01 | Current Kernel | Same/distinct/zero new Kernel across lifecycle | Pointer updates without other checks | Only kernel pointer changes; no role/module/Core rebinding | Covered: [test_whenKernelChanges_thenOnlyPointerChanges](changeKernel.t.sol#L10), [test_whenKernelIsZero_thenPointerChanges](changeKernel.t.sol#L39), [test_whenKernelIsUnchanged_thenPointerStillAccepted](changeKernel.t.sol#L44) |
-| BLDEBT-KERNEL-P02 | Fuzz except current Kernel | Any new pointer including same/zero | KernelAdapter_OnlyKernel(caller) | Unchanged | Covered: [test_whenNonKernelChangesKernel_reverts](changeKernel.t.sol#L27) |
+| BLDEBT-KERNEL-P01 | Current Kernel | Same/distinct/zero new Kernel across lifecycle | Pointer updates without other checks | Only kernel pointer changes; no role/module/Core rebinding | Covered: [test_whenKernelChanges_thenOnlyPointerChanges][test_whenKernelChanges_thenOnlyPointerChanges], [test_whenKernelIsZero_thenPointerChanges][test_whenKernelIsZero_thenPointerChanges], [test_whenKernelIsUnchanged_thenPointerStillAccepted][test_whenKernelIsUnchanged_thenPointerStillAccepted] |
+| BLDEBT-KERNEL-P02 | Fuzz except current Kernel | Any new pointer including same/zero | KernelAdapter_OnlyKernel(caller) | Unchanged | Covered: [test_whenNonKernelChangesKernel_reverts][test_whenNonKernelChangesKernel_reverts] |
 
 ## Shared assertions
 
@@ -30,3 +30,8 @@ Co-located API assertions: `kernel`, `isActive`. These must be asserted independ
 ## Existing tests informing this plan
 
 New modular entrypoint with no direct legacy counterpart. Its caller/binding/replacement cases supplement the existing settlement and lifecycle suites; do not manufacture a legacy coverage mapping.
+
+[test_whenKernelChanges_thenOnlyPointerChanges]: changeKernel.t.sol#L10
+[test_whenKernelIsUnchanged_thenPointerStillAccepted]: changeKernel.t.sol#L44
+[test_whenKernelIsZero_thenPointerChanges]: changeKernel.t.sol#L39
+[test_whenNonKernelChangesKernel_reverts]: changeKernel.t.sol#L27

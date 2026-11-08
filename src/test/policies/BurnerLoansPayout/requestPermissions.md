@@ -10,10 +10,12 @@ Inherited Policy function is permissionless and returns an empty permission arra
 
 | ID | Caller | Payout active | Execution / effects | Test |
 | --- | --- | --- | --- | --- |
-| BLCU-PERMISSIONS-P01 | Fuzz any address | true | Empty array; no accounting, routing or authorization changes | Covered: [test_whenPermissionsRead_thenEmpty](./requestPermissions.t.sol#L10) |
-| BLCU-PERMISSIONS-P02 | Fuzz any address | false | Empty array; no accounting, routing or authorization changes | Covered: [test_whenPermissionsRead_thenEmpty](./requestPermissions.t.sol#L10) |
+| BLCU-PERMISSIONS-P01 | Fuzz any address | true | Empty array; no accounting, routing or authorization changes | Covered: [test_whenPermissionsRead_thenEmpty][test_whenPermissionsRead_thenEmpty] |
+| BLCU-PERMISSIONS-P02 | Fuzz any address | false | Empty array; no accounting, routing or authorization changes | Covered: [test_whenPermissionsRead_thenEmpty][test_whenPermissionsRead_thenEmpty] |
 
 Core enablement/activity does not affect this getter. Verify activation grants no FLOAN/MINTR/TRSRY writes.
 
 - [x] Review expectations before production test implementation.
 - [x] Adapt existing Framework/recovery tests and map passing proofs.
+
+[test_whenPermissionsRead_thenEmpty]: ./requestPermissions.t.sol#L10

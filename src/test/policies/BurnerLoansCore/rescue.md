@@ -1,6 +1,6 @@
 # BurnerLoansCore.rescue coverage plan
 
-Source: [rescue](../../../policies/burnerloans/BurnerLoansCore.sol#L1004). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [rescue](../../../policies/burnerloans/BurnerLoansCore.sol#L1060). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -61,6 +61,13 @@ Unchanged means Core/DM/Inventory/Custody balances, loans, pending obligations a
 
 Core preview is permissionless and validates lifecycle, settlement-busy, token and destination conditions and quotes the current direct balance without writes. Config.rescue forwards only to Core; CustodyConfigTimelock.queueRescue targets Custody independently. Core tests must not expect a Custody transfer.
 
+## Permissionless recovery quote
+
+| ID | Quote requester | Core active | Core enabled | Balance / condition | Preview / execution | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCORE-RESCUE-A02 | Fuzz all addresses | true | true | Full uint256 direct token balance; seeds 0,1,MAX256 | Exact balance quote without authority or writes; unauthorized rescue still rejects | Covered: [test][test_whenAnyViewerQuotesRecovery], [test][test_whenRecoveryQuoteBalanceBoundaries] |
+| BLCORE-RESCUE-A03 | Fuzz unrelated addresses | true | false | Positive direct balance | Quote and authorized recovery remain available while Core is paused | Covered: [test][test_givenPausedCore_whenAnyViewerQuotesRecovery] |
+
 [test_givenAuthorizedCallback_whenCaughtRescue]: rescue.t.sol#L248
 [test_givenAuthorizedCallback_whenPropagatedRescue]: rescue.t.sol#L263
 [test_givenAuthorized_whenRescued]: rescue.t.sol#L45
@@ -78,15 +85,6 @@ Core preview is permissionless and validates lifecycle, settlement-busy, token a
 [test_givenUnauthorized_whenRescued_reverts]: rescue.t.sol#L20
 [test_givenZeroDestination_whenRescued_reverts]: rescue.t.sol#L111
 [test_whenSurplusBoundarySeeds]: rescue.t.sol#L80
-
-## Permissionless recovery quote
-
-| ID | Quote requester | Core active | Core enabled | Balance / condition | Preview / execution | Test |
-| --- | --- | --- | --- | --- | --- | --- |
-| BLCORE-RESCUE-A02 | Fuzz all addresses | true | true | Full uint256 direct token balance; seeds 0,1,MAX256 | Exact balance quote without authority or writes; unauthorized rescue still rejects | Covered: [test][test_whenAnyViewerQuotesRecovery], [test][test_whenRecoveryQuoteBalanceBoundaries] |
-| BLCORE-RESCUE-A03 | Fuzz unrelated addresses | true | false | Positive direct balance | Quote and authorized recovery remain available while Core is paused | Covered: [test][test_givenPausedCore_whenAnyViewerQuotesRecovery] |
-
 [test_whenAnyViewerQuotesRecovery]: ./rescue.t.sol#L288
 [test_whenRecoveryQuoteBalanceBoundaries]: ./rescue.t.sol#L305
-
 [test_givenPausedCore_whenAnyViewerQuotesRecovery]: ./rescue.t.sol#L312

@@ -16,7 +16,7 @@ Fixed for this table: Accounting / events: No extras, duplicates or mutation.
 
 | ID | Caller | Operation / pre-state | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLLIQ-PERMISSIONS-P01 | Fuzz all callers | Before/after activation,disable,migration | Exact ordered keycode/selector pairs and length | Covered: [test_whenPermissionsRequested_thenEmpty](requestPermissions.t.sol#L14), [test_whenReadAcrossAllLifecycleStates_thenStable](requestPermissions.t.sol#L27), [test_givenNeverActivated_whenPermissionsRequested_thenEmpty](requestPermissions.t.sol#L42), [test_givenKernelMigrated_whenPermissionsRequested_thenEmpty](requestPermissions.t.sol#L54) |
+| BLLIQ-PERMISSIONS-P01 | Fuzz all callers | Before/after activation,disable,migration | Exact ordered keycode/selector pairs and length | Covered: [test_whenPermissionsRequested_thenEmpty][test_whenPermissionsRequested_thenEmpty], [test_whenReadAcrossAllLifecycleStates_thenStable][test_whenReadAcrossAllLifecycleStates_thenStable], [test_givenNeverActivated_whenPermissionsRequested_thenEmpty][test_givenNeverActivated_whenPermissionsRequested_thenEmpty], [test_givenKernelMigrated_whenPermissionsRequested_thenEmpty][test_givenKernelMigrated_whenPermissionsRequested_thenEmpty] |
 
 ## Shared assertions
 
@@ -25,3 +25,8 @@ No pricing/custody/configuration permissions added to public actions.
 - [x] Review these expectations.
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to passing tests.
+
+[test_givenKernelMigrated_whenPermissionsRequested_thenEmpty]: requestPermissions.t.sol#L54
+[test_givenNeverActivated_whenPermissionsRequested_thenEmpty]: requestPermissions.t.sol#L42
+[test_whenPermissionsRequested_thenEmpty]: requestPermissions.t.sol#L14
+[test_whenReadAcrossAllLifecycleStates_thenStable]: requestPermissions.t.sol#L27

@@ -2,7 +2,7 @@
 
 The concrete setter requires own Kernel activity before inherited local enablement, ADMIN authorization and nonzero-period validation. Same valid periods retain the inherited single-event behavior and do not alter lifecycle history.
 
-Source: [setGracePeriod](../../../bases/ReEnablerGracePeriod.sol#L74). Concrete behavior: [_authorizeSetGracePeriod](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L347).
+Source: [setGracePeriod](../../../bases/ReEnablerGracePeriod.sol#L74). Concrete behavior: [_authorizeSetGracePeriod](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L400).
 
 ## Scope and fixtures
 

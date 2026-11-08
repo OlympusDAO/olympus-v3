@@ -1,6 +1,6 @@
 # BurnerLoansCore.setAuthorization coverage plan
 
-Source: [setAuthorization](../../../policies/utils/OperatorAuth.sol#L64). Acceptance plan; coverage and execution results are recorded separately.
+Source: [setAuthorization](../../../policies/utils/OperatorAuth.sol#L65). Acceptance plan; coverage and execution results are recorded separately.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -40,9 +40,9 @@ Fixed for this table: Accounting / events: Unchanged.
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
 | BLCORE-AUTHORIZATION-P01 | Fuzz account | true | true | Success with valid request | Grant/nonce effects only; no role or settlement admission | Covered: [test][test_givenValidDeadline_whenGranted] |
-| BLCORE-AUTHORIZATION-L01 | Fuzz account | true | false | NotEnabled() | Existing grant/nonce unchanged; no logs, including with invalid inputs | Covered: [test][test_givenUnavailableCore_whenGranted_reverts], [invariant_lifecycleAuthorizationAndCustodyStayIndependent](setAuthorization.t.sol#L193) |
-| BLCORE-AUTHORIZATION-L02 | Fuzz account | false | true | BurnerLoans_PolicyNotActive(BurnerLoansCore) | Existing grant/nonce unchanged; no logs, including with invalid inputs | Covered: [test][test_givenUnavailableCore_whenGranted_reverts], [invariant_lifecycleAuthorizationAndCustodyStayIndependent](setAuthorization.t.sol#L193) |
-| BLCORE-AUTHORIZATION-L03 | Fuzz account | false | false | BurnerLoans_PolicyNotActive(BurnerLoansCore) | Activity rejection precedes enablement and input checks | Covered: [test][test_givenUnavailableCore_whenGranted_reverts], [invariant_lifecycleAuthorizationAndCustodyStayIndependent](setAuthorization.t.sol#L193) |
+| BLCORE-AUTHORIZATION-L01 | Fuzz account | true | false | NotEnabled() | Existing grant/nonce unchanged; no logs, including with invalid inputs | Covered: [test][test_givenUnavailableCore_whenGranted_reverts], [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent] |
+| BLCORE-AUTHORIZATION-L02 | Fuzz account | false | true | BurnerLoans_PolicyNotActive(BurnerLoansCore) | Existing grant/nonce unchanged; no logs, including with invalid inputs | Covered: [test][test_givenUnavailableCore_whenGranted_reverts], [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent] |
+| BLCORE-AUTHORIZATION-L03 | Fuzz account | false | false | BurnerLoans_PolicyNotActive(BurnerLoansCore) | Activity rejection precedes enablement and input checks | Covered: [test][test_givenUnavailableCore_whenGranted_reverts], [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent] |
 
 Retired IDs BLCORE-AUTHORIZATION-P02/P03/P04 described the superseded inactive/disabled-success requirement. Restore activity and enablement, then retry; a rejected request must not consume a nonce or replace an existing grant.
 
@@ -81,3 +81,5 @@ Implemented shared OperatorAuth behavior: reject incrementing MAX256 with Operat
 [test_givenValidDeadline_whenGranted]: setAuthorization.t.sol#L37
 [test_whenDeadlineBoundarySeeds]: setAuthorization.t.sol#L71
 [test_whenExpiredDeadlineBoundarySeeds_reverts]: setAuthorization.t.sol#L121
+
+[invariant_lifecycleAuthorizationAndCustodyStayIndependent]: setAuthorization.t.sol#L193

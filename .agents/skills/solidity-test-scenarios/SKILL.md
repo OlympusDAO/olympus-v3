@@ -83,12 +83,15 @@ Use only these Test labels:
 
 Map actual test functions and deterministic seed drivers, with reciprocal `// Scenarios:` comments. Several tests may prove one row; one test may prove several rows. Existing legacy tests inform the plan but are not automatically proof for a rewritten API.
 
-The existing helper checks named test/invariant references, function locations and reciprocal IDs. It accepts
-shared-test IDs from sibling Markdown documents while checking reciprocity within the selected document:
+Do not use inline test links such as `[test](functionName.t.sol#L42)` in scenario tables. Use named reference links such as `[test][test_givenState_whenAction]`, with `[test_givenState_whenAction]: ./functionName.t.sol#L42` defined once at the bottom of the document. This keeps line-number updates out of the tables. Preserve readable link labels and key references by the actual function name; qualify the reference with `--fileStem` only when different test files contain the same function name. Apply this format to existing scenario tables as well as new ones.
+
+Keep all reference definitions together in a final footer after every table, section and prose paragraph. Only reference definitions and blank lines may follow the first definition. When adding scenarios or notes, insert them above the footer; do not append tables or other content below existing definitions.
+
+The existing helper checks named test/invariant references, function locations and reciprocal IDs. Shared tests may name cases in other scenario files or suites under `src/test`; reciprocity is checked within the selected document:
 
     python3 <skill-dir>/scripts/check_mapping.py path/to/functionName.md
     python3 <skill-dir>/scripts/check_mapping.py path/to/functionName.md --update
 
-It does not certify semantic coverage or legacy inline links. Preserve inline mappings when present and verify them directly. Refresh anchors only within the authorized document scope.
+The helper rejects inline test links in tables and content below reference definitions, and checks file-qualified references against their actual function names. It does not certify semantic coverage. Refresh anchors only within the authorized document scope.
 
 Run focused tests when code/tests change and the required repository formatting/lint checks. For documentation-only work, validate Markdown, links, IDs and mappings without claiming Solidity behavior is proved. Report remaining Partial/Unmapped cases and actual validation failures; keep unrelated suite failures separate. Never weaken an expected result to make a test pass.

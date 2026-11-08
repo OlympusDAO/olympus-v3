@@ -50,6 +50,8 @@ For lifecycle rows, fuzz `asset_` across zero, EOA, NeverListed, Active and Reti
 | DAR-I01 | Fuzz ADMIN-only, selected configOperator-only and overlapping authority; seed each | Fuzz zero, EOA, never-listed token contract | NeverListed | None | RevenueDistributor_AssetNotActive(asset) | Unchanged | Covered: [test][test_givenNeverListedAsset_whenDisabled_reverts], [test][test_givenNeverListedAddress_whenPermittedCallerDisables_reverts], [test][test_givenNeverListedAsset_whenDisabled_reverts_AdminOnlySeed], [test][test_givenNeverListedAsset_whenDisabled_reverts_OperatorOnlySeed], [test][test_givenNeverListedAsset_whenDisabled_reverts_RolesOverlapSeed], [test][test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_AdminOnlySeed], [test][test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_OperatorOnlySeed], [test][test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_RolesOverlapSeed] |
 | DAR-I02 | Fuzz ADMIN-only, selected configOperator-only and overlapping authority; seed each | Listed token contract | Retired | Fuzz absent/present configured, yield and Treasury buckets | RevenueDistributor_AssetNotActive(asset) | Route remains deleted; retirement, debt, custody and indexes unchanged | Covered: [test][test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts], [test][test_givenRetirementMembershipAndAmountSeeds] |
 
+Retired duplicate caller IDs: DAR-P02, DAR-P05, DAR-I03, DAR-I04. Retained caller families include explicit exclusive-role and overlapping-role seeds.
+
 [test_givenActiveAsset_whenAdminDisables_succeeds]: ./disableAssetRoutes.t.sol#L19
 [test_givenActiveAsset_whenDisabled_clearsRoute]: ./disableAssetRoutes.t.sol#L52
 [test_givenActiveAsset_whenUnauthorizedCallerDisables_reverts]: ./disableAssetRoutes.t.sol#L236
@@ -57,9 +59,7 @@ For lifecycle rows, fuzz `asset_` across zero, EOA, NeverListed, Active and Reti
 [test_givenPolicyInactive_whenOperatorDisablesAsset_reverts]: ./disableAssetRoutes.t.sol#L326
 [test_givenPendingConfiguredPayout_whenDisabled_preservesLiability]: ./disableAssetRoutes.t.sol#L605
 [test_givenNeverListedAsset_whenDisabled_reverts]: ./disableAssetRoutes.t.sol#L411
-
 [test_givenNeverListedAddress_whenPermittedCallerDisables_reverts]: ./disableAssetRoutes.t.sol#L434
-
 [test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership]: ./disableAssetRoutes.t.sol#L526
 [test_givenPolicyInactiveAndDisabled_whenAssetDisabled_revertsActivityFirst]: ./disableAssetRoutes.t.sol#L371
 [test_givenPolicyActiveEnabledAndAssetState_whenUnauthorizedCallerDisables_reverts]: ./disableAssetRoutes.t.sol#L95
@@ -68,48 +68,25 @@ For lifecycle rows, fuzz `asset_` across zero, EOA, NeverListed, Active and Reti
 [test_givenPolicyInactive_whenPermittedCallerDisablesAnyAsset_reverts]: ./disableAssetRoutes.t.sol#L337
 [test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets]: ./disableAssetRoutes.t.sol#L556
 [test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability]: ./disableAssetRoutes.t.sol#L636
-Retired duplicate caller IDs: DAR-P02, DAR-P05, DAR-I03, DAR-I04. Retained caller families include explicit exclusive-role and overlapping-role seeds.
-
 [test_givenRetiredAsset_whenPendingBucketMaskVaries_reverts]: ./disableAssetRoutes.t.sol#L962
-
 [test_givenRetirementMembershipAndAmountSeeds]: ./disableAssetRoutes.t.sol#L1008
-
 [test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability_AdminOnlySeed]: ./disableAssetRoutes.t.sol#L719
-
 [test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability_OperatorOnlySeed]: ./disableAssetRoutes.t.sol#L734
-
 [test_givenAnyPendingBuckets_whenPermittedCallerDisables_preservesEveryLiability_RolesOverlapSeed]: ./disableAssetRoutes.t.sol#L749
-
 [test_givenPendingConfiguredPayout_whenDisabled_preservesLiability_AdminOnlySeed]: ./disableAssetRoutes.t.sol#L848
-
 [test_givenPendingConfiguredPayout_whenDisabled_preservesLiability_OperatorOnlySeed]: ./disableAssetRoutes.t.sol#L859
-
 [test_givenPendingConfiguredPayout_whenDisabled_preservesLiability_RolesOverlapSeed]: ./disableAssetRoutes.t.sol#L870
-
 [test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets_AdminOnlySeed]: ./disableAssetRoutes.t.sol#L923
-
 [test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets_OperatorOnlySeed]: ./disableAssetRoutes.t.sol#L936
-
 [test_givenThreeActiveAssets_whenAnyPositionDisabled_preservesOtherAssets_RolesOverlapSeed]: ./disableAssetRoutes.t.sol#L949
-
 [test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership_AdminOnlySeed]: ./disableAssetRoutes.t.sol#L764
-
 [test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership_OperatorOnlySeed]: ./disableAssetRoutes.t.sol#L775
-
 [test_givenMultipleActiveAssets_whenOneDisabled_preservesOtherMembership_RolesOverlapSeed]: ./disableAssetRoutes.t.sol#L786
-
 [test_givenNeverListedAsset_whenDisabled_reverts_AdminOnlySeed]: ./disableAssetRoutes.t.sol#L833
-
 [test_givenNeverListedAsset_whenDisabled_reverts_OperatorOnlySeed]: ./disableAssetRoutes.t.sol#L838
-
 [test_givenNeverListedAsset_whenDisabled_reverts_RolesOverlapSeed]: ./disableAssetRoutes.t.sol#L843
-
 [test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_AdminOnlySeed]: ./disableAssetRoutes.t.sol#L797
-
 [test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_OperatorOnlySeed]: ./disableAssetRoutes.t.sol#L809
-
 [test_givenNeverListedAddress_whenPermittedCallerDisables_reverts_RolesOverlapSeed]: ./disableAssetRoutes.t.sol#L821
-
 [test_givenPolicyActiveDisabledAndAssetState_whenUnauthorizedCallerDisables_reverts]: ./disableAssetRoutes.t.sol#L134
-
 [test_givenPolicyInactiveAndAssetState_whenUnauthorizedCallerDisables_reverts]: ./disableAssetRoutes.t.sol#L170

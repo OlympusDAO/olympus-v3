@@ -1,6 +1,6 @@
 # BurnerLoansRisk.supportsInterface coverage plan
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansRisk.sol#L721). Scenario scope: `BLRISK-ERC165`. Existing `BLRISK-CONSTRUCTOR` IDs moved from the constructor plan retain their original discovery behavior.
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansRisk.sol#L797). Scenario scope: `BLRISK-ERC165`. Existing `BLRISK-CONSTRUCTOR` IDs moved from the constructor plan retain their original discovery behavior.
 
 Version/interface discovery is permissionless in every independent local active/enabled state, without calling dependencies. VERSION returns named major=1,minor=0. Risk advertises standalone IConfigOperator. It exposes the immutable Core identity through standalone IBurnerLoansCoreBound; discovery makes no Core service calls.
 

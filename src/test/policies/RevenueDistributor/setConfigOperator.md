@@ -49,18 +49,6 @@ RevenueDistributor therefore preserves that shared behavior instead of introduci
 | OP-I01 | ADMIN_ROLE holder | true | true | Fuzz zero/nonzero | Equal to current | ConfigOperator_Unchanged() from the shared abstract contract | Unchanged; no event | Covered: [test][test_givenFundedPolicy_whenAdminRepeatsOperator_reverts], [test][test_givenOperatorLifecycleAndIdentitySeeds] |
 | OP-I02 | ADMIN_ROLE holder | true | false | Fuzz zero/nonzero | Equal to current | ConfigOperator_Unchanged() from the shared abstract contract | Unchanged; no event | Covered: [test][test_givenFundedPolicy_whenAdminRepeatsOperator_reverts], [test][test_givenOperatorLifecycleAndIdentitySeeds] |
 
-[test_givenPolicyActiveAndOperatorState_whenNonAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L15
-
-[test_givenPolicyInactive_whenAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L220
-
-[test_givenOperatorLifecycleAndIdentitySeeds]: ./setConfigOperator.t.sol#L384
-
-[test_givenFundedActivePolicy_whenAdminChangesOperator]: ./setConfigOperator.t.sol#L303
-
-[test_givenFundedPolicy_whenAdminRepeatsOperator_reverts]: ./setConfigOperator.t.sol#L357
-
-[test_givenPolicyInactiveAndOperatorState_whenNonAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L61
-
 ## Guard-precedence regression
 
 The following row maps the narrow competing-fault regression; it does not expand the other scenario domains.
@@ -69,4 +57,10 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | OP-L03 | Fixed `alice`, lacking admin authority | false | true | Enabled distributor, then Kernel-deactivated; Requested config operator=`alice` | `RevenueDistributor_PolicyNotActive(RD)` before config-operator authorization | Revert; no effects of the attempted action commit. | Covered: [test][test_givenPolicyInactive_whenNonAdminSetsOperator_revertsActivityFirst] |
 
+[test_givenPolicyActiveAndOperatorState_whenNonAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L15
+[test_givenPolicyInactive_whenAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L220
+[test_givenOperatorLifecycleAndIdentitySeeds]: ./setConfigOperator.t.sol#L384
+[test_givenFundedActivePolicy_whenAdminChangesOperator]: ./setConfigOperator.t.sol#L303
+[test_givenFundedPolicy_whenAdminRepeatsOperator_reverts]: ./setConfigOperator.t.sol#L357
+[test_givenPolicyInactiveAndOperatorState_whenNonAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L61
 [test_givenPolicyInactive_whenNonAdminSetsOperator_revertsActivityFirst]: ./setConfigOperator.t.sol#L258

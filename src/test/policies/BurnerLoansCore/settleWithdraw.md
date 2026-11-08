@@ -1,6 +1,6 @@
 # BurnerLoansCore.settleWithdraw coverage plan
 
-Source: [settleWithdraw](../../../policies/burnerloans/BurnerLoansCore.sol#L298). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleWithdraw](../../../policies/burnerloans/BurnerLoansCore.sol#L301). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -79,7 +79,7 @@ Fixed for this table: Accounting / events: No ordinary-recipient Core delta asse
 
 | ID | Caller | Operation / pre-state | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLCORE-SETTLE-WITHDRAW-P02 | BL_COLLATERAL_POLICY_ROLE holder | Ordinary recipient; DM success; actual output differs numerically from credit debit | Return actual token/output/remaining | Covered: [invariant_canonicalDebtAndCustodyMatchIndependentModel](settleSeize.t.sol#L963), [test][test_givenActualOutputDifferentFromDebit_whenWithdrawn], [test][test_givenRealCustody_whenWithdrawn], [test][test_whenWithdrawalBoundarySeeds] |
+| BLCORE-SETTLE-WITHDRAW-P02 | BL_COLLATERAL_POLICY_ROLE holder | Ordinary recipient; DM success; actual output differs numerically from credit debit | Return actual token/output/remaining | Covered: [invariant_canonicalDebtAndCustodyMatchIndependentModel][invariant_canonicalDebtAndCustodyMatchIndependentModel], [test][test_givenActualOutputDifferentFromDebit_whenWithdrawn], [test][test_givenRealCustody_whenWithdrawn], [test][test_whenWithdrawalBoundarySeeds] |
 
 ## Transfers and dependency failures
 
@@ -126,3 +126,5 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 [test_whenCallerLacksSettlementRole_reverts]: settleWithdraw.t.sol#L32
 [test_whenCollateralDebitMaximumSeed_reverts]: settleWithdraw.t.sol#L332
 [test_whenWithdrawalBoundarySeeds]: settleWithdraw.t.sol#L256
+
+[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L963

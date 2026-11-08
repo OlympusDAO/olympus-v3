@@ -1,6 +1,6 @@
 # BurnerLoansRisk.validateFeeConfig coverage plan
 
-Source: [validateFeeConfig](../../../policies/burnerloans/BurnerLoansRisk.sol#L506). Coverage is recorded in the Test column.
+Source: [validateFeeConfig](../../../policies/burnerloans/BurnerLoansRisk.sol#L531). Coverage is recorded in the Test column.
 
 ## Domains and notation
 

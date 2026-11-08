@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.configureDependencies coverage plan
 
-Source: [configureDependencies](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L84).
+Source: [configureDependencies](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L83).
 
 ## Scope and fixtures
 
