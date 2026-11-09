@@ -39,7 +39,7 @@ contract BurnerLoansPayoutAccountingInvariantsTest is BurnerLoansPayoutTest {
             address(_otherPayout)
         );
         _rolesAdmin.grantRole(ADMIN_ROLE, address(_handler));
-        bytes4[] memory selectors = new bytes4[](13);
+        bytes4[] memory selectors = new bytes4[](14);
         selectors[0] = _handler.creditFee.selector;
         selectors[1] = _handler.creditSeizure.selector;
         selectors[2] = _handler.retry.selector;
@@ -53,6 +53,7 @@ contract BurnerLoansPayoutAccountingInvariantsTest is BurnerLoansPayoutTest {
         selectors[10] = _handler.setReferralShare.selector;
         selectors[11] = _handler.setReferrer.selector;
         selectors[12] = _handler.donate.selector;
+        selectors[13] = _handler.setGracePeriod.selector;
         targetSelector(FuzzSelector({addr: address(_handler), selectors: selectors}));
         targetContract(address(_handler));
     }
@@ -72,8 +73,18 @@ contract BurnerLoansPayoutAccountingInvariantsTest is BurnerLoansPayoutTest {
         );
     }
 
-    // Scenarios: BLCUTRY-P21.
+    // Scenarios: BLCUTRY-P21, BLCU-REENABLE-V01.
     function invariant_backingBucketsIndexesAndRoutes() public view {
+        assertEq(
+            _payout.lastTransitionAt(),
+            _handler.lastTransitionAt(),
+            "Only explicit transitions update history"
+        );
+        assertEq(
+            _payout.gracePeriod(),
+            _handler.gracePeriod(),
+            "Only authorized enabled configuration changes grace"
+        );
         assertEq(
             _core.payout(),
             _handler.selected() ? address(_payout) : address(_otherPayout),

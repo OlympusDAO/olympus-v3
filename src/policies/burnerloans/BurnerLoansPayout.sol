@@ -5,7 +5,6 @@ pragma solidity >=0.8.24;
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
@@ -15,15 +14,18 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+import {LoanParameters} from "src/policies/burnerloans/libraries/LoanParameters.sol";
 import {LoanPayouts} from "src/policies/burnerloans/libraries/LoanPayouts.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {Kernel, Keycode, Policy, toKeycode} from "src/Kernel.sol";
 import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleStep.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
@@ -34,6 +36,7 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 contract BurnerLoansPayout is
     Policy,
     PolicyEnablerV2,
+    ReEnablerGracePeriod,
     ConfigOperatorSingleStep,
     IBurnerLoansPayout,
     ReentrancyGuard,
@@ -57,7 +60,10 @@ contract BurnerLoansPayout is
     ///      - The already-deployed Core lacks its interface or reports another Kernel.
     /// @param	kernel_	Kernel providing Treasury and governance roles.
     /// @param	core_	Permanent Core allowed to credit received fees and liquidation proceeds.
-    constructor(Kernel kernel_, address core_) Policy(kernel_) {
+    constructor(
+        Kernel kernel_,
+        address core_
+    ) Policy(kernel_) ReEnablerGracePeriod(LoanParameters._REENABLE_GRACE_PERIOD) {
         if (!ERC165Checker.supportsInterface(core_, type(IBurnerLoansCore).interfaceId))
             revert IBurnerLoansCoreBound.BurnerLoansAction_InvalidCore(core_);
         PolicyDependency.requireSameKernel(core_, address(kernel_));
@@ -78,10 +84,19 @@ contract BurnerLoansPayout is
     ///
     /// @dev Core's activity and enablement are not queried.
     modifier onlyCore() {
+        _requireCore();
+        _;
+    }
+
+    /// @notice Checks Payout readiness and the immutable receipt-credit authority.
+    /// @dev Reverts if:
+    ///      - Payout is Kernel-inactive.
+    ///      - Payout is locally disabled.
+    ///      - The caller is not the immutable Core (NotAuthorised).
+    function _requireCore() private view {
         _requireActive();
         _requireEnabled();
         if (msg.sender != address(_CORE)) revert NotAuthorised();
-        _;
     }
 
     // Receipt-before-credit belongs to Core; direct recovery must wait until that settlement ends.
@@ -91,8 +106,15 @@ contract BurnerLoansPayout is
     ///
     /// @dev Protects funds received before Core credits their payout reserves.
     modifier whenCoreNotSettling() {
-        _CORE.requireNotReentrant();
+        _requireCoreNotSettling();
         _;
+    }
+
+    /// @notice Checks that Core is outside any guarded settlement.
+    /// @dev Reverts if:
+    ///      - Core's settlement guard is entered (ReentrancyGuardReentrantCall).
+    function _requireCoreNotSettling() private view {
+        _CORE.requireNotReentrant();
     }
 
     /// @notice Requires the local config operator or governance ADMIN; ignores operator lifecycle.
@@ -262,7 +284,9 @@ contract BurnerLoansPayout is
 
     /// @inheritdoc	IERC165
     /// @dev	Returns this contract's and inherited interface identifiers without external calls; does not revert.
-    function supportsInterface(bytes4 interfaceId_) public view override(EnablerV2) returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId_
+    ) public view override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
             interfaceId_ == type(IVersioned).interfaceId ||
             interfaceId_ == type(IBurnerLoansPayout).interfaceId ||
@@ -660,8 +684,8 @@ contract BurnerLoansPayout is
     ///
     /// @dev Core is an immutable authority reference; its lifecycle does not gate enablement.
     function _beforeEnable(bytes calldata data_) internal view override {
-        _checkTransition(data_);
-        _requireActive();
+        if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
+        _validateActivation();
     }
 
     /// @inheritdoc	EnablerV2
@@ -684,8 +708,75 @@ contract BurnerLoansPayout is
     /// @param	data_	Unused lifecycle data; must be empty.
     function _checkTransition(bytes calldata data_) private view {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
+        _checkSettlement();
+    }
+
+    /// @notice Requires idle local and Core settlement guards.
+    /// @dev Reverts if:
+    ///      - Payout's settlement guard is entered (ReentrancyGuardReentrantCall).
+    ///      - Core's settlement guard is entered (ReentrancyGuardReentrantCall).
+    function _checkSettlement() private view {
         if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
-        _CORE.requireNotReentrant();
+        _requireCoreNotSettling();
+    }
+
+    /// @notice Applies the same readiness checks to enable and reEnable.
+    /// @dev Reverts if:
+    ///      - Payout's settlement guard is entered.
+    ///      - Core's settlement guard is entered.
+    ///      - Payout is Kernel-inactive.
+    ///
+    /// @dev Core is an authority reference; its activity and enablement are not prerequisites.
+    function _validateActivation() private view {
+        _checkSettlement();
+        _requireActive();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - The widened grace deadline exceeds uint48.
+    ///      - The inclusive grace deadline has expired.
+    ///      - Payout's settlement guard is entered.
+    ///      - Core's settlement guard is entered.
+    ///      - Payout is Kernel-inactive.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _validateActivation();
+    }
+
+    /// @notice Authorizes fast re-enablement by governance or the Burner Loans admin.
+    /// @dev Reverts if:
+    ///      - The caller holds neither ADMIN nor the Burner Loans admin role (NotAuthorised).
+    function _authorizeReEnable() internal view override {
+        if (!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE))
+            revert NotAuthorised();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Reverts if:
+    ///      - Payout's settlement guard is entered.
+    ///      - Core's settlement guard is entered.
+    ///      - Payout is Kernel-inactive.
+    ///      - Payout is locally disabled.
+    ///      - The caller lacks ADMIN.
+    ///      - The requested period is zero.
+    function setGracePeriod(uint32 period_) public override nonReentrant whenCoreNotSettling {
+        _requireActive();
+        super.setGracePeriod(period_);
+    }
+
+    /// @dev Reverts if:
+    ///      - The caller lacks ADMIN, after public admission checks.
+    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Widen before narrowing so an overflowing uint48 deadline uses the peer SafeCast error.
+    ///      Reverts if:
+    ///      - The widened grace deadline exceeds uint48 (SafeCast overflow).
+    ///      - The inclusive grace deadline has expired (GracePeriod_Expired).
+    function _requireGrace() internal view override {
+        uint48 deadline = SafeCast.toUint48(uint256(lastTransitionAt) + gracePeriod);
+        if (_getBlockTimestamp() > deadline) revert GracePeriod_Expired(deadline);
     }
 
     /// @inheritdoc	IVersioned

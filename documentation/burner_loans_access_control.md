@@ -101,7 +101,7 @@ See [Operating states](burner_loans.md#operating-states) for the effect of the a
 
 ## Policy-lifecycle matrix
 
-Core, Collateral, Debt, Seize, Risk, Inventory, Config, all four config queues and both Burner Loans tasks use the shared enable/disable and re-enable/grace model. Payout uses ordinary enable/disable only. Lens has no Kernel lifecycle.
+Core, Collateral, Debt, Seize, Risk, Inventory, Payout, Config, all four config queues and both Burner Loans tasks use the shared enable/disable and re-enable/grace model. Lens has no Kernel lifecycle.
 
 | Transition | Caller | Conditions |
 | --- | --- | --- |
@@ -111,6 +111,8 @@ Core, Collateral, Debt, Seize, Risk, Inventory, Config, all four config queues a
 | `setGracePeriod` where supported | ADMIN | Nonzero period and the component's state/activity checks pass |
 
 Unused lifecycle payloads must be empty. A pause does not clear positions, pending obligations or queue history. An expired fast re-enable window does not remove ADMIN's ordinary `enable` path.
+
+Payout uses a seven-day default grace window measured from its last transition. Its ADMIN-only grace setter requires local enablement and Kernel activity; same-value nonzero updates emit the grace event. Both settlement guards reject lifecycle and grace changes during payouts or Core settlement. Enable and re-enable share Payout's own activity checks, with no Core lifecycle or selection requirement. Recovery stays available while Payout is locally paused or replaced.
 
 ## User and automation matrix
 

@@ -41,6 +41,8 @@ contract PayoutAccountingHandler is Test {
     bool[3][2] public blocked;
     uint256 public feeRoute;
     bool public enabled = true;
+    uint48 public lastTransitionAt;
+    uint32 public gracePeriod = 7 days;
     bool public selected = true;
     uint16 public referralBps;
     bool[3] public allowed;
@@ -63,6 +65,7 @@ contract PayoutAccountingHandler is Test {
         _DESTINATION = destination_;
         _RISK = risk_;
         _REPLACEMENT = replacement_;
+        lastTransitionAt = uint48(block.timestamp);
     }
 
     function creditFee(uint8 token_, uint80 amount_) external {
@@ -141,9 +144,16 @@ contract PayoutAccountingHandler is Test {
 
     function setEnabled(bool enabled_) external {
         if (enabled_ == enabled) return;
-        if (enabled_) _PAYOUT.enable("");
+        if (enabled_) _PAYOUT.reEnable();
         else _PAYOUT.disable("");
         enabled = enabled_;
+        lastTransitionAt = uint48(block.timestamp);
+    }
+
+    function setGracePeriod(uint32 period_) external {
+        if (!enabled) return;
+        gracePeriod = uint32(bound(period_, 1, type(uint32).max));
+        _PAYOUT.setGracePeriod(gracePeriod);
     }
 
     function setSelected(bool selected_) external {

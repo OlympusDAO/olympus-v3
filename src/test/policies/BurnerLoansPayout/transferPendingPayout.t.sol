@@ -139,7 +139,7 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
         _payout.disable("");
         _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
         _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
-        _payout.enable("");
+        _payout.reEnable();
         _assertReferral(address(_token), _keeper, 25);
         _token.setTransferReverts(_keeper, false);
         vm.recordLogs();

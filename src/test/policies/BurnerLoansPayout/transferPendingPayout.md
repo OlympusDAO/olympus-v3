@@ -127,7 +127,7 @@ Add handler coverage alongside this action, not a new catch-all scenario file. A
 | BLCUTRY-P21 | Authorized credit caller and fuzz retry callers | Two tokens, at least two referrers, failed/successful delivery, independently overlapping recipient classes | balance(Payout)≥T; T=all raw buckets; stored keeper/referral aggregates equal their per-recipient sums; token index iff T>0; referral-recipient index iff amount>0; each cumulative referral credit=paid+pending+authorized rescue; retries never pay another identity; settings never reprice earned amounts. Explicitly seed referral-only reserves, combined old-kind/new-kind reserves, balance=T and balance=T+1, plus MAX256 referral-only backing; explicit pending-payout rescue consumes only the approved original entitlement; seizure credits and surplus rescues must preserve the referral bucket and may not remove its live token index | Covered: [test_givenReferralOnly_whenModelRescuesBoundarySeeds][test_givenReferralOnly_whenModelRescuesBoundarySeeds], [invariant_backingBucketsIndexesAndRoutes][invariant_backingBucketsIndexesAndRoutes], [test_givenReferralOnlyAndMixedBuckets_whenModelBoundarySeeds][test_givenReferralOnlyAndMixedBuckets_whenModelBoundarySeeds], [test_givenMaximumReferralOnly_whenModelBoundarySeed][test_givenMaximumReferralOnly_whenModelBoundarySeed] |
 | BLCUTRY-P22 | ADMIN/BLA/O plus unrelated callers | Configuration and lifecycle drift interleaved with real borrow/top-up/extend and deferred delivery | Only authorized mutations occur; unauthorized/lifecycle-rejected calls change nothing; gross receipts=protocol allocation+referral allocation and funded liabilities remain conserved | Covered: [invariant_referralReceiptsAndFixedFeesConserved][invariant_referralReceiptsAndFixedFeesConserved] |
 
-Proof boundaries: the Payout accounting campaign uses two tokens, three overlapping recipient identities, bounded random credits, real Risk share/membership changes, actual Payout replacement/restoration and independently tracked surplus. Its deterministic seeds cover referral-only and mixed reserves at balance=T/T+1 plus MAX256 referral-only backing. The separate loan campaign uses one 6-decimal market, fixed prices/time, bounded principal, real borrow/top-up/extend, ADMIN/operator writes, rejected BLA/unrelated direct mutations and independent policy lifecycle changes. BLRCT scenarios own notice periods and BLA queue forwarding.
+Proof boundaries: the Payout accounting campaign uses two tokens, three overlapping recipient identities, bounded random credits, real Risk share/membership changes, actual Payout replacement/restoration and independently tracked surplus. Local restoration calls reEnable; ADMIN grace changes and transition history are checked against the model. Campaign time stays fixed; unit tests own grace expiry and deadline boundaries. Its deterministic seeds cover referral-only and mixed reserves at balance=T/T+1 plus MAX256 referral-only backing. The separate loan campaign uses one 6-decimal market, fixed prices/time, bounded principal, real borrow/top-up/extend, ADMIN/operator writes, rejected BLA/unrelated direct mutations and independent policy lifecycle changes. BLRCT scenarios own notice periods and BLA queue forwarding.
 
 - [x] Review the referral cases before writing tests.
 
@@ -151,9 +151,9 @@ Proof boundaries: the Payout accounting campaign uses two tokens, three overlapp
 [test_givenReferralPending_whenCaughtCallbackRetries]: transferPendingPayoutCallback.t.sol#L15
 [test_givenReferralPending_whenPropagatedCallbackRetries]: transferPendingPayoutCallback.t.sol#L38
 
-[invariant_backingBucketsIndexesAndRoutes]: accounting.invariants.t.sol#L76
-[test_givenReferralOnlyAndMixedBuckets_whenModelBoundarySeeds]: accounting.invariants.t.sol#L246
-[test_givenMaximumReferralOnly_whenModelBoundarySeed]: accounting.invariants.t.sol#L277
+[invariant_backingBucketsIndexesAndRoutes]: accounting.invariants.t.sol#L77
+[test_givenReferralOnlyAndMixedBuckets_whenModelBoundarySeeds]: accounting.invariants.t.sol#L257
+[test_givenMaximumReferralOnly_whenModelBoundarySeed]: accounting.invariants.t.sol#L288
 [invariant_referralReceiptsAndFixedFeesConserved]: ../BurnerLoansDebt/referralFees.invariant.t.sol#L120
 
 [test_givenAllBucketsOverlap_whenRetiredPausedPayoutClaims_thenEveryBucketPaidOnce]: ./transferPendingPayout.t.sol#L290
@@ -179,6 +179,6 @@ Proof boundaries: the Payout accounting campaign uses two tokens, three overlapp
 [test_givenSharedRecipientAndOtherKeeper_whenRetried_thenOnlySelectedClaimsPaid]: ./transferPendingPayout.t.sol#L420
 [test_givenTreasuryReplacement_whenRetried_thenGenericBucketsFollowLiveModule]: ./transferPendingPayout.t.sol#L521
 [test_givenUnrelatedRecipient_whenRetried_thenExactEligibleBuckets]: ./transferPendingPayout.t.sol#L725
-[test_givenReferralOnly_whenModelRescuesBoundarySeeds]: ./accounting.invariants.t.sol#L61
+[test_givenReferralOnly_whenModelRescuesBoundarySeeds]: ./accounting.invariants.t.sol#L62
 [test_givenProtocolRouteBecomesPayout_whenRetried_reverts]: ./transferPendingPayout.t.sol#L42
 [test_whenRecipientIsZero_reverts]: transferPendingPayout.t.sol#L24

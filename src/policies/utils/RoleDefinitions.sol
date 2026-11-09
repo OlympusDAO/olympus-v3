@@ -43,7 +43,8 @@ bytes32 constant BRIDGE_CHANNEL_MANAGER_ROLE = "bridge_channel_manager";
 
 /// @dev Oracle manager role, e.g. managing oracle deployments.
 bytes32 constant ORACLE_MANAGER_ROLE = "oracle_manager";
-/// @dev Burner Loans parameter manager role, e.g. managing bounded operational parameters.
+/// @dev Burner Loans parameter manager role, e.g. managing bounded operational parameters
+///      and re-enabling Burner Loans policies within their grace windows.
 bytes32 constant BURNER_LOANS_ADMIN_ROLE = "burner_loans_admin";
 /// @dev Revenue Distributor configuration proposer role. Proposals execute through its selected
 ///      config timelock after the configured delay.

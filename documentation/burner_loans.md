@@ -255,7 +255,7 @@ This is a dependency order, not a reviewed production deployment script. Confirm
 8. Configure RevenueDistributor routes and Payout flags before relying on routed fee or yield receipts.
 9. Enable each required queue and task after its own target/binding checks pass, then configure Heart ordering.
 
-Risk can bind a precomputed Core address at construction; Core checks the returned identity when selecting it. Lens has no Kernel activation or enable step. Payout uses Enabler without a separate re-enable/grace API.
+Risk can bind a precomputed Core address at construction; Core checks the returned identity when selecting it. Lens has no Kernel activation or enable step. Payout supports the shared re-enable/grace API: ADMIN or burner_loans_admin can re-enable it within the inclusive grace window (seven days by default), while only ADMIN can change the nonzero grace period on an active, enabled Payout. Enable and re-enable require Payout's own Kernel activity and idle local/Core settlement guards, without requiring Core activity, enablement or current Payout selection. Pausing or re-enabling preserves pending obligations and custody; recovery remains available while locally paused or replaced.
 
 For delayed Risk settings, deploy RiskConfigTimelock with the deployed Risk address. Activate Risk and select this queue as its operator while Risk and the queue are disabled. Enable Risk, then activate and enable the queue. The queue needs no ADMIN role or FLOAN write permission. Referral percentage starts at zero and the whitelist starts empty; configure them through queued actions or direct ADMIN governance.
 
