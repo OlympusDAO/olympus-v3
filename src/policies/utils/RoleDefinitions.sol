@@ -58,3 +58,6 @@ bytes32 constant DEPOSIT_MANAGER_ADMIN_ROLE = "deposit_manager_admin";
 /// @dev Deposit Manager operator role. Holders may call operator-gated actions against their
 ///      accounting namespace for configured asset periods.
 bytes32 constant DEPOSIT_OPERATOR_ROLE = "deposit_operator";
+
+/// @dev Proposes bounded backing updates through BackingOracle's timelock.
+bytes32 constant BACKING_ADMIN_ROLE = "backing_admin";
