@@ -4,6 +4,9 @@ pragma solidity ^0.8.24;
 import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
+// A test double of the CCIP router. It shares `getOnRamp` with the script-local
+// `ICCIPFeeRouter` by coincidence, and it keeps the fees it is paid: the tests read its balance.
+// forge-lint: disable-next-line(missing-inheritance,locked-ether)
 contract MockCCIPRouter {
     address public onRamp;
     address public offRamp;
@@ -16,13 +19,14 @@ contract MockCCIPRouter {
     bytes public messageExtraArgs;
     address public messageFeeToken;
 
-    bytes32 public constant DEFAULT_MESSAGE_ID =
-        bytes32(0x0000000000000000000000000000000000000000000000000000000000000001);
+    bytes32 public constant DEFAULT_MESSAGE_ID = bytes32(uint256(1));
 
     function getOnRamp(uint64) external view returns (address) {
         return onRamp;
     }
 
+    // A test double: it stores whatever ramp address the test supplies
+    // forge-lint: disable-next-line(missing-zero-check)
     function setOnRamp(address onRamp_) external {
         onRamp = onRamp_;
     }
@@ -31,6 +35,8 @@ contract MockCCIPRouter {
         return offRamp == offRamp_;
     }
 
+    // A test double: it stores whatever ramp address the test supplies
+    // forge-lint: disable-next-line(missing-zero-check)
     function setOffRamp(address offRamp_) external {
         offRamp = offRamp_;
     }
@@ -52,6 +58,8 @@ contract MockCCIPRouter {
 
         // Pull token from the sender
         Client.EVMTokenAmount[] memory tokenAmounts = message_.tokenAmounts;
+        // The mock tokens of the tests revert on a failed transfer
+        // forge-lint: disable-next-item(erc20-unchecked-transfer)
         IERC20(tokenAmounts[0].token).transferFrom(
             msg.sender,
             address(this),

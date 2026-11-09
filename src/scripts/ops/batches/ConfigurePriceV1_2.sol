@@ -56,15 +56,12 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
     /// @notice Configure PRICE v1.2 module with all assets
     /// @param useDaoMS_ Whether to use the DAO multisig
-    /// @param signOnly_ Whether to only sign the batch
     /// @param argsFilePath_ Path to the args file containing price feed addresses
     function configurePriceV1_2(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFilePath_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFilePath_, ledgerDerivationPath) {
         console2.log("=== Configuring PRICE v1.2 Module ===");
 
         // Load dependencies from env

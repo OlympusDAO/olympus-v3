@@ -227,6 +227,8 @@ Expiry is a timestamp condition, not a state transition. An expired action keeps
 authorized caller cancels it. Cancellation can occur after expiry, subject to the product's lifecycle
 gates. Product configuration timelocks require themselves Kernel-active and the caller to hold EMERGENCY, but permit local disablement. Target state and operator selection do not gate cancellation, and cancellation makes no target/operator calls. A paused queue or broken target must not strand reservations; Kernel deactivation still blocks cancellation until governance restores membership.
 
+`CCIPTokenPoolConfigTimelock` is an exception: cancellation does not require local enablement or Kernel activity. ADMIN, EMERGENCY, or the proposer can cancel through the expiry timestamp; anyone can cancel after expiry. See [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for its cancellation authority.
+
 ## Policy activation versus operation readiness
 
 The shared base does not impose Policy lifecycle rules. Product configuration timelocks use identical target prerequisites for enable and reEnable: consumed interfaces are compatible, the target reports the same Kernel and is active in it, and this queue is the target's current config operator. Target local enablement is not required or read during activation. Inherited local transition, caller, payload, history and grace checks still apply.
@@ -441,7 +443,7 @@ section and the remaining `TimelockBatchQueue` lifecycle hooks.
 
 Product-specific keys and hashes belong with each product's configuration documentation. See
 [Burner Loans access control](burner_loans_access_control.md) for its timelock authority and
-[Revenue Distributor access control](revenue_distributor_access_control.md) for distribution routes.
+[Revenue Distributor access control](revenue_distributor_access_control.md) for distribution routes. See also [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for CCIP token pool configuration.
 
 ## Observability
 

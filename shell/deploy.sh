@@ -4,12 +4,13 @@
 #
 # Usage:
 # ./deploy.sh --account <cast wallet> --sequence <sequence-file> --broadcast <false> --verify <false> --resume <false> --env <env-file>
+# --verifier <all|both|etherscan|sourcify|blockscout> selects verification providers (default: all).
 #
 # Environment variables:
 # RPC_URL
 # CHAIN
-# ETHERSCAN_KEY (only needed if verify is true)
-# VERIFIER_URL (only needed for a custom verifier or on a fork)
+# Source verification uses Etherscan, Sourcify and Blockscout by default.
+# Etherscan requires ETHERSCAN_API_KEY; Blockscout requires BLOCKSCOUT_API_KEY.
 
 # Exit if any error occurs
 set -e
@@ -49,17 +50,16 @@ echo "  Using RPC at URL: $RPC_URL"
 # Validate and set forge script flags
 source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
-set_verify_flag $VERIFY $ETHERSCAN_KEY $VERIFIER_URL
+configure_verification "$VERIFY" "${verifier:-all}" "$RPC_URL"
 set_resume_flag $RESUME
 set_account_address $account
 
 # Deploy using script
 echo ""
 echo "Running forge script"
-FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/DeployV2.sol:OlympusDeploy \
-    --sig "deploy(string,string)()" $CHAIN $sequence \
-    --rpc-url $RPC_URL --account $account --slow -vvv \
-    --sender $ACCOUNT_ADDRESS \
-    $BROADCAST_FLAG \
-    $VERIFY_FLAG \
-    $RESUME_FLAG
+FORGE_ARGS=(./src/scripts/deploy/DeployV2.sol:OlympusDeploy
+    --sig "deploy(string,string)()" "$CHAIN" "$sequence"
+    --rpc-url "$RPC_URL" --account "$account" --slow -vvv
+    --sender "$ACCOUNT_ADDRESS" $BROADCAST_FLAG)
+FOUNDRY_PROFILE=deploy forge script "${FORGE_ARGS[@]}" $RESUME_FLAG
+FOUNDRY_PROFILE=deploy verify_deployment "${FORGE_ARGS[@]}"

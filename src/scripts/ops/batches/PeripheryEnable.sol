@@ -12,11 +12,9 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 contract PeripheryEnable is BatchScriptV2 {
     function enable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         // Grab the contract key from the args file
         string memory contractKey = _readBatchArgString("PeripheryEnable", "contract");
 

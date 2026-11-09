@@ -32,11 +32,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @dev    Currently, the DAO MS has kernel executor role, so this will be run as a batch script through the DAO MS
     function install(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address kernel = _envAddressNotZero("olympus.Kernel");
@@ -153,11 +151,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Replaces the initial EmissionManager policy with the new one
     function replaceEmissionManager(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address kernel = _envAddressNotZero("olympus.Kernel");
@@ -195,11 +191,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @dev    Currently, the DAO MS has kernel executor role, so this will be run as a batch script through the DAO MS
     function deactivateOldPolicies(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address kernel = _envAddressNotZero("olympus.Kernel");
@@ -243,11 +237,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     function grantHeartRole(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
@@ -270,11 +262,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Configure DepositManager and enable it
     function configureDepositManager(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
@@ -292,11 +282,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Configure ConvertibleDepositFacility and enable it
     function configureConvertibleDepositFacility(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         string memory facilityName = _readBatchArgString(
             "ConfigureConvertibleDepositFacility",
             "facilityName"
@@ -333,11 +321,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Add a new asset and its vault to the DepositManager
     function configureUSDS(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address usds = _envAddressNotZero("external.tokens.USDS");
         address usdsVault = _envAddressNotZero("external.tokens.sUSDS");
@@ -370,11 +356,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Add asset period for ConvertibleDepositFacility
     function configureUSDSDepositPeriod(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
@@ -426,11 +410,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Grant roles for ConvertibleDeposit system
     function grantConvertibleDepositRoles(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
@@ -473,11 +455,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Configure ConvertibleDepositAuctioneer
     function configureConvertibleDepositAuctioneer(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address convertibleDepositAuctioneer = _envAddressNotZero(
@@ -518,11 +498,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     function configureEmissionManagerRoles(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
@@ -555,11 +533,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Configure and initialize EmissionManager
     function configureEmissionManager(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
@@ -610,11 +586,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Disable ConvertibleDepositAuctioneer
     function disableConvertibleDepositAuctioneer(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address convertibleDepositAuctioneer = _envAddressNotZero(
@@ -637,11 +611,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Enable DepositRedemptionVault and configure cross-authorization
     function enableDepositRedemptionVault(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address depositRedemptionVault = _envAddressNotZero(
@@ -688,11 +660,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Configure asset settings in DepositRedemptionVault
     function configureDepositRedemptionVaultAsset(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         address depositRedemptionVault = _envAddressNotZero(
             "olympus.policies.DepositRedemptionVault"
         );
@@ -742,11 +712,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     function enableReserveWrapper(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address reserveWrapper = _envAddressNotZero("olympus.policies.ReserveWrapper");
@@ -763,11 +731,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     function runActivator(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         address activator = _envAddressNotZero("olympus.periphery.ConvertibleDepositActivator");
@@ -804,11 +770,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     ///         Reads desired values from args file
     function configureDepositParameters(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         address depositRedemptionVault = _envAddressNotZero(
             "olympus.policies.DepositRedemptionVault"
         );

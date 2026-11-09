@@ -28,6 +28,13 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
+            - name: Install shfmt
+              uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+              with:
+                  minimum_release_age: 7d
+                  install_args: shfmt
+                  add_shims_to_path: false
+
             - name: Restore Foundry build cache
               uses: ./.github/actions/foundry-cache
 

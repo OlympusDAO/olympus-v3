@@ -266,10 +266,10 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
    ```
 
 2. **Format the JSON files** to ensure consistent formatting. `jq` remains the only tool used for
-   semantic edits to `emergency-config.json`; this final Prettier pass is formatting-only:
+   semantic edits to `emergency-config.json`; this final Biome pass is formatting-only:
 
    ```bash
-   pnpm exec prettier --cache --cache-strategy content --write documentation/emergency/emergency-config.json documentation/emergency/emergency-abis.json documentation/emergency/emergency-config.schema.json
+   pnpm format:biome documentation/emergency/emergency-config.json documentation/emergency/emergency-abis.json documentation/emergency/emergency-config.schema.json
    ```
 
 #### B6: Validate
