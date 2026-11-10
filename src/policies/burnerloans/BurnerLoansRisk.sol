@@ -136,7 +136,7 @@ contract BurnerLoansRisk is
 
     /// @notice Resolves Kernel modules used for authorization, prices and market reads.
     /// @dev Reverts if:
-    ///      - A required module is missing or has an incompatible major version.
+    ///      - A required module is missing or has an incompatible version.
     ///      - PRICE decimals cannot be represented as a uint256 decimal scale.
     /// @return dependencies ROLES, PRICE and FLOAN keycodes.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -150,13 +150,12 @@ contract BurnerLoansRisk is
         // Only the module major version determines compatibility.
         // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = Module(address(ROLES)).VERSION();
-        // Only the module major version determines compatibility.
-        // forge-lint: disable-next-line(unused-return)
-        (uint8 priceMajor, ) = Module(address(_PRICE)).VERSION();
+        (uint8 priceMajor, uint8 priceMinor) = Module(address(_PRICE)).VERSION();
         // Only the module major version determines compatibility.
         // forge-lint: disable-next-line(unused-return)
         (uint8 loanMajor, ) = Module(address(_FLOAN)).VERSION();
-        if (rolesMajor != 1 || priceMajor != 2 || loanMajor != 1)
+        bool compatiblePrice = priceMajor == 2 || (priceMajor == 1 && priceMinor == 2);
+        if (rolesMajor != 1 || !compatiblePrice || loanMajor != 1)
             revert Policy_WrongModuleVersion(abi.encode([1, 2, 1]));
         LoanMath.scale(_PRICE.decimals());
     }
