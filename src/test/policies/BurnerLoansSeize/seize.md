@@ -227,23 +227,33 @@ not create a keeper obligation or call the destination validator.
 | BLLIQ-SEIZE-I06 | Selected Payout, otherwise operational | 7 raw units; positive | BurnerLoansPayout_InvalidRecipient(Payout) | Same Payout error; full rollback of defaults, redemptions, Inventory principal, reserves and custody | Covered: [test_whenPayoutKeeperSeizes_reverts][test_whenPayoutKeeperSeizes_reverts] |
 | BLLIQ-SEIZE-P20 | Independently zero / selected Payout | 0 | Quote zero keeper reward and complete Treasury allocation | Seizure succeeds; Treasury receives all 2,000,000,000 raw output units; no keeper claim or pending reserve | Covered: [test_givenZeroReward_whenKeeperDestinationUnused][test_givenZeroReward_whenKeeperDestinationUnused] |
 
+## Backing readiness for matured debt
+
+Local action/Core and ordinary dependencies are active/enabled. A public keeper
+and a HEART_ROLE keeper both require snapshot acquisition, even after maturity.
+The Lens maturity predicate remains true independently of backing readiness.
+
+| ID | Oracle active | Oracle enabled | Caller | Execution and preview | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLLIQ-SEIZE-D13 | true | false | Public keeper / HEART_ROLE keeper, guarantee both | PolicyDependency_NotActive(oracle); debt, custody and payouts unchanged | Covered: [test][test_givenMaturedDebtAndBackingPaused_whenSeized_reverts] |
+
 [invariant_modelMatchesEveryAuthoritativeLedger]: accounting.invariants.t.sol#L39
 [invariant_shareCustodyAndPositionAccountingConserve]: seizeShares.invariant.t.sol#L197
 [test_givenActionKernelGetterReverts_whenAnyKeeperSeizes]: seize.t.sol#L433
 [test_givenActionKernelGetterReverts_whenSeized_thenGetterIsNotRead]: seize.t.sol#L407
 [test_givenActionReEnabled_whenSeized_thenDefaultSucceeds]: seize.t.sol#L541
 [test_givenActionReactivated_whenSeized_thenDefaultSucceeds]: seize.t.sol#L548
-[test_givenAllDebtExpiredAndRealPriceStale_whenSeized_thenSnapshotStillRequired]: seizeIntegration.t.sol#L75
+[test_givenAllDebtExpiredAndRealPriceStale_whenSeized_thenSnapshotStillRequired]: seizeIntegration.t.sol#L76
 [test_givenBothPayoutsFail_whenSeized_thenBothRemainPending]: seizePayout.t.sol#L33
 [test_givenCoreUnavailable_whenSeized_thenDependencyIdentified]: seize.t.sol#L478
 [test_givenCustodyCreditFailure_whenSeized_thenEverythingRollsBack]: seizeSettlement.t.sol#L78
-[test_givenDefaultedPosition_whenBorrowerReopens_thenPositionIdReused]: seizeIntegration.t.sol#L164
+[test_givenDefaultedPosition_whenBorrowerReopens_thenPositionIdReused]: seizeIntegration.t.sol#L165
 [test_givenDepositManagerInactive_whenSeizedOrPreviewed_reverts]: seize.t.sol#L28
 [test_givenDepositManagerPaused_whenSeizedOrPreviewed_reverts]: seize.t.sol#L49
 [test_givenDepositPeriodDisabled_whenSeized_thenExitRemainsAvailable]: seize.t.sol#L43
 [test_givenDisabledActionAndEveryCoreState_whenSeized_thenLocalPauseWins]: seize.t.sol#L555
 [test_givenDisabledAction_whenSeized_thenLocalPauseWins]: seize.t.sol#L467
-[test_givenEachProtocolRole_whenSeized_thenNoReward]: seizeIntegration.t.sol#L106
+[test_givenEachProtocolRole_whenSeized_thenNoReward]: seizeIntegration.t.sol#L107
 [test_givenEachUnavailableInventoryState_whenSeized_thenDependencyIdentified]: seize.t.sol#L603
 [test_givenEachUnavailablePayoutState_whenSeized_thenDependencyIdentified]: seize.t.sol#L531
 [test_givenEveryUnavailableCoreState_whenSeized_thenDependencyIdentified]: seize.t.sol#L593
@@ -262,27 +272,27 @@ not create a keeper obligation or call the destination validator.
 [test_givenKeeperPayoutFails_whenSeized_thenOnlyKeeperRemainsPending]: seizePayout.t.sol#L21
 [test_givenLateInventoryFailure_whenSeized_thenAllAccountingRollsBack]: seizeSettlement.t.sol#L38
 [test_givenOldCustodySurplus_whenNewReceiptShort_thenSurplusCannotMaskIt]: seizeSettlement.t.sol#L60
-[test_givenOriginationsDisabled_whenSeized_thenDefaultStillSucceeds]: seizeIntegration.t.sol#L192
+[test_givenOriginationsDisabled_whenSeized_thenDefaultStillSucceeds]: seizeIntegration.t.sol#L193
 [test_givenPayoutReportsAnotherKernel_whenSeizedOrPreviewed_reverts]: seize.t.sol#L495
 [test_givenPayoutUnavailable_whenSeizedOrPreviewed_reverts]: seize.t.sol#L513
 [test_givenPositiveCreditAndZeroShareOutput_whenSeized_thenNoPayout]: seizeSharesIntegration.t.sol#L49
 [test_givenPropagatedCollateralCallback_whenSeized_thenMandatoryTransferRollsBack]: seizeCallback.t.sol#L72
-[test_givenProtocolKeeper_whenSeized_thenNoReward]: seizeIntegration.t.sol#L46
-[test_givenRealUnhealthyUnexpiredDebt_whenSeized_thenHealthAndBalancesMatch]: seizeIntegration.t.sol#L200
-[test_givenRedemptionFeeConsumesSurplus_whenSeized_thenKeeperCannotTakeBacking]: seizeIntegration.t.sol#L121
+[test_givenProtocolKeeper_whenSeized_thenNoReward]: seizeIntegration.t.sol#L47
+[test_givenRealUnhealthyUnexpiredDebt_whenSeized_thenHealthAndBalancesMatch]: seizeIntegration.t.sol#L201
+[test_givenRedemptionFeeConsumesSurplus_whenSeized_thenKeeperCannotTakeBacking]: seizeIntegration.t.sol#L122
 [test_givenReportedKernelMismatch_whenAnyKeeperSeizes]: seize.t.sol#L418
 [test_givenReportedKernelMismatch_whenSeized_thenGetterIsNotRead]: seize.t.sol#L396
 [test_givenRiskRewardExceedsOutput_whenSeized_reverts]: seizeSettlement.t.sol#L24
 [test_givenSettlementRoleRevoked_whenSeized_reverts]: seize.t.sol#L386
 [test_givenSubShareReward_whenSharesSeized_thenWholeShareToTreasury]: seizeSharesIntegration.t.sol#L40
-[test_givenSubUnitPercentageRemainder_whenSeized_thenIntegerConservation]: seizeIntegration.t.sol#L37
-[test_givenSubUnitReward_whenUnderlyingSeized_thenZeroReward]: seizeIntegration.t.sol#L28
+[test_givenSubUnitPercentageRemainder_whenSeized_thenIntegerConservation]: seizeIntegration.t.sol#L38
+[test_givenSubUnitReward_whenUnderlyingSeized_thenZeroReward]: seizeIntegration.t.sol#L29
 [test_givenTreasuryPayoutFails_whenSeized_thenOnlyTreasuryRemainsPending]: seizePayout.t.sol#L27
 [test_givenUnexpectedRedemptionToken_whenSeized_thenDefaultRollsBack]: seizeSettlement.t.sol#L48
 [test_givenUnexpiredDebt_whenHealthBelowThreshold_thenSeizes]: seize.t.sol#L302
 [test_givenUnhealthyDebt_whenSeized_thenDefaultAndPayoutConserveOutput]: seize.t.sol#L115
 [test_givenZeroBorrowerAtAnyIndex_whenSeized_reverts]: seize.t.sol#L277
-[test_givenZeroCollateralDebt_whenSeized_thenDebtDefaultsWithoutRedemption]: seizeIntegration.t.sol#L146
+[test_givenZeroCollateralDebt_whenSeized_thenDebtDefaultsWithoutRedemption]: seizeIntegration.t.sol#L147
 [test_whenAdjacentDuplicate_reverts]: seize.t.sol#L166
 [test_whenBatchEmpty_reverts]: seize.t.sol#L135
 [test_whenBatchFiftyOneContainsZeroBorrower_reverts]: seize.t.sol#L341
@@ -303,3 +313,5 @@ not create a keeper obligation or call the destination validator.
 [test_whenZeroAddressKeeperSeizes_reverts]: seizePayout.t.sol#L123
 [test_whenPayoutKeeperSeizes_reverts]: seizePayout.t.sol#L139
 [test_givenZeroReward_whenKeeperDestinationUnused]: seizePayout.t.sol#L155
+
+[test_givenMaturedDebtAndBackingPaused_whenSeized_reverts]: ./seizeIntegration.t.sol#L231

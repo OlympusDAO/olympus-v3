@@ -3,13 +3,18 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 
-contract MockBackingOracle is IBackingOracle, IERC165, IVersioned {
+// Contracts
+import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
+
+/// @dev Unrestricted fixture injection; backing remains readable independently of lifecycle.
+contract MockBackingOracle is Policy, IBackingOracle, IEnabler, IERC165 {
+    bool public override isEnabled = true;
     uint256 public override backing;
 
-    constructor(uint256 backing_) {
+    constructor(Kernel kernel_, uint256 backing_) Policy(kernel_) {
         backing = backing_;
     }
 
@@ -29,13 +34,30 @@ contract MockBackingOracle is IBackingOracle, IERC165, IVersioned {
 
     function supportsInterface(bytes4 interfaceId_) external pure override returns (bool) {
         return
-            interfaceId_ == type(IVersioned).interfaceId ||
+            interfaceId_ == type(IEnabler).interfaceId ||
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IBackingOracle).interfaceId;
     }
 
-    /// @inheritdoc IVersioned
-    function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        return (1, 0);
+    function setEnabled(bool enabled_) external {
+        isEnabled = enabled_;
+    }
+
+    function enable(bytes calldata) external override {
+        isEnabled = true;
+        emit Enabled();
+    }
+
+    function disable(bytes calldata) external override {
+        isEnabled = false;
+        emit Disabled();
+    }
+
+    function configureDependencies() external pure override returns (Keycode[] memory) {
+        return new Keycode[](0);
+    }
+
+    function requestPermissions() external pure override returns (Permissions[] memory) {
+        return new Permissions[](0);
     }
 }

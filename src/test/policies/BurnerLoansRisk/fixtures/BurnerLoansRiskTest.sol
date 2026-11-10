@@ -69,7 +69,8 @@ abstract contract BurnerLoansRiskTest is Test, IERC165 {
         _rolesAdmin.grantRole(ADMIN_ROLE, address(this));
         _ohm = new MockERC20("OHM", "OHM", 9);
         _asset = new MockERC20("Collateral", "COL", 6);
-        _oracle = new MockBackingOracle(1e18);
+        _oracle = new MockBackingOracle(_kernel, 1e18);
+        _kernel.executeAction(Actions.ActivatePolicy, address(_oracle));
         _cache = new MockPriceCache(address(_kernel));
         _cache.setUsdPrice(address(_ohm), 3e18);
         _cache.setUsdPrice(address(_asset), 4e18);

@@ -472,7 +472,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     //  when governance changes the backing oracle
     //   then it records the direct address(this) gas cost
     function test_gasSnapshot_admin_setBackingOracle() public {
-        MockBackingOracle newOracle = new MockBackingOracle(12e18);
+        MockBackingOracle newOracle = new MockBackingOracle(_kernel, 12e18);
 
         vm.startPrank(address(this));
         vm.startSnapshotGas("BurnerLoansRisk.setBackingOracle");

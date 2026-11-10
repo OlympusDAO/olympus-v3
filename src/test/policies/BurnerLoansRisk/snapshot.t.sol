@@ -11,6 +11,8 @@ import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {stdError} from "@forge-std-1.16.2/StdError.sol";
 import {LoanMath} from "src/policies/burnerloans/libraries/LoanMath.sol";
 
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
 import {Actions, Kernel} from "src/Kernel.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
@@ -464,5 +466,105 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
         _kernel.executeAction(Actions.UpgradeModule, address(replacement));
         vm.prank(caller_);
         _assertSnapshot(_risk.snapshot(address(_asset)), 7e18, 8e18, 1e18);
+    }
+
+    // Scenarios: BLRISK-SNAPSHOT-D01.
+    function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
+        vm.assume(!active_ || !enabled_);
+        _oracle.setEnabled(enabled_);
+        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.snapshot(address(_asset));
+    }
+
+    // Scenarios: BLRISK-SNAPSHOT-D02.
+    function test_givenBackingLifecycleBoundaries_whenConsumed_reverts() public {
+        uint256 initial = vm.snapshotState();
+        test_givenBackingUnavailable_whenConsumed_reverts(true, false);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, true);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, false);
+    }
+
+    // Scenarios: BLRISK-SNAPSHOT-D03.
+    function test_givenFreshCache_whenBackingPaused_thenRestored() public givenCache {
+        _oracle.setEnabled(false);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.snapshot(address(_asset));
+        _oracle.setBacking(2e18);
+        _oracle.setEnabled(true);
+        assertEq(
+            _risk.snapshot(address(_asset)).backingPerOhmUsd,
+            2e18,
+            "fresh cached prices use current backing after restoration"
+        );
+    }
+
+    // Scenarios: BLRISK-SNAPSHOT-D04.
+    function test_givenBackingMalformedEnabled_whenConsumed_reverts() public {
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeWithSignature("isEnabled()"),
+            abi.encode(uint256(2))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_oracle)
+            )
+        );
+        _risk.snapshot(address(_asset));
+    }
+
+    // Scenarios: BLRISK-SNAPSHOT-D05.
+    function test_givenMigratedOracle_whenOldKernelMembershipRemains_reverts() public {
+        Kernel next = new Kernel();
+        vm.prank(address(_kernel));
+        _oracle.changeKernel(next);
+        assertTrue(_kernel.isPolicyActive(_oracle), "old Kernel membership remains recorded");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_oracle),
+                address(_kernel),
+                address(next)
+            )
+        );
+        _risk.snapshot(address(_asset));
+    }
+
+    // Scenarios: BLRISK-SNAPSHOT-D06.
+    function test_givenKernelMigration_whenOracleReactivated_thenPricingRestored() public {
+        Kernel next = new Kernel();
+        _kernel.executeAction(Actions.MigrateKernel, address(next));
+        next.executeAction(Actions.InstallModule, address(_roles));
+        next.executeAction(Actions.InstallModule, address(_floan));
+        next.executeAction(Actions.InstallModule, address(_price));
+        next.executeAction(Actions.ActivatePolicy, address(_risk));
+        assertTrue(_risk.isEnabled(), "migration preserves local enabled flag");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.snapshot(address(_asset));
+        next.executeAction(Actions.ActivatePolicy, address(_oracle));
+        assertEq(
+            _risk.snapshot(address(_asset)).backingPerOhmUsd,
+            1e18,
+            "new Kernel readiness restores pricing"
+        );
     }
 }

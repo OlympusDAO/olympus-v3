@@ -8,7 +8,7 @@ Scenario scope: `BLRISK-ENABLE`. ROLES is initialized through Kernel activation.
 
 ## Dependency validation contract
 
-Risk validates its immutable Core interface and matching Kernel; Core activity and enablement and controller readiness do not gate Risk activation. Backing oracle is an ordinary calculator with interface/version checks. Optional cache needs IPriceCache/IEnabler/IVersioned and a matching Kernel; no numeric cache version is queried but may be inactive or disabled because PRICE is the fallback. Kernel modules use module-version checks, not Policy lifecycle checks.
+Risk validates its immutable Core interface and matching Kernel; Core activity and enablement and controller readiness do not gate Risk activation. Backing oracle must advertise IBackingOracle/IEnabler (no IVersioned requirement), report the same Kernel, be active in that Kernel and be enabled. Kernel/status failures use shared PolicyDependency errors. Optional cache needs IPriceCache/IEnabler/IVersioned and a matching Kernel; no numeric cache version is queried but may be inactive or disabled because PRICE is the fallback. Kernel modules use module-version checks, not Policy lifecycle checks.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Invalid metadata uses the consumer-owned InvalidDependency error; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -70,6 +70,20 @@ Constructor and activation share the same interface and Kernel validator. Interf
 | BLRISK-ENABLE-I22 | Malformed Core interface support/response | BurnerLoansRisk_InvalidCore(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_revertsThenRestored] |
 | BLRISK-ENABLE-K05 | Same-Kernel compatible Core; all four active/enabled combinations | Success without Core readiness probes | Exact normal success; other state preserved | Covered: [test][test_givenCoreLifecycle_whenCompatible]; [test][test_whenCoreLifecycleSeeds] |
 
+## Backing lifecycle acceptance
+
+After existing authorization, payload and own-policy checks, activation requires
+a compatible same-Kernel, active and enabled backing policy. The compatibility
+check requires IBackingOracle/IEnabler, without IVersioned.
+
+| ID | Caller | Scenario | Expected result | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-ENABLE-D06 | ADMIN | Oracle active/enabled vary independently; exclude true/true | PolicyDependency_NotActive(oracle); no committed changes | Covered: [test][test_givenBackingUnavailable_whenConsumed_reverts] |
+| BLRISK-ENABLE-D07 | ADMIN | Deterministic oracle states: active/disabled, inactive/enabled, inactive/disabled | PolicyDependency_NotActive(oracle) for each seed | Covered: [test][test_givenBackingLifecycleBoundaries_whenConsumed_reverts] |
+| BLRISK-ENABLE-D08 | ADMIN | Oracle kernel() reports 0xBAD instead of Risk Kernel | PolicyDependency_KernelMismatch(oracle,Risk Kernel,0xBAD) | Covered: [test][test_givenBackingForeignKernel_whenAdmitted_reverts] |
+| BLRISK-ENABLE-D09 | ADMIN | Oracle kernel() returns uint256.max, a noncanonical address | PolicyDependency_InvalidDependency(oracle) | Covered: [test][test_givenBackingMalformedKernel_whenAdmitted_reverts] |
+| BLRISK-ENABLE-D10 | ADMIN | Oracle no longer advertises IEnabler | BurnerLoans_InvalidBackingOracle(oracle) | Covered: [test][test_givenBackingMissingEnabler_whenAdmitted_reverts] |
+
 [test_givenAdminActive_whenAlreadyEnabled_reverts]: enable.t.sol#L63
 
 [test_givenAdminCache00_whenTransition]: enable.t.sol#L249
@@ -117,3 +131,13 @@ Constructor and activation share the same interface and Kernel validator. Interf
 [test_givenCoreLifecycle_whenCompatible]: enable.t.sol#L434
 
 [test_whenCoreLifecycleSeeds]: enable.t.sol#L443
+
+[test_givenBackingUnavailable_whenConsumed_reverts]: ./enable.t.sol#L453
+
+[test_givenBackingLifecycleBoundaries_whenConsumed_reverts]: ./enable.t.sol#L468
+
+[test_givenBackingForeignKernel_whenAdmitted_reverts]: ./enable.t.sol#L478
+
+[test_givenBackingMalformedKernel_whenAdmitted_reverts]: ./enable.t.sol#L497
+
+[test_givenBackingMissingEnabler_whenAdmitted_reverts]: ./enable.t.sol#L514

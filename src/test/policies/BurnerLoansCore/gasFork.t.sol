@@ -430,7 +430,8 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         OlympusFixedTermLoan floan = new OlympusFixedTermLoan(_kernel);
         ReceiptTokenManager receiptTokenManager = new ReceiptTokenManager();
         _depositManager = new DepositManager(address(_kernel), address(receiptTokenManager));
-        _backingOracle = new MockBackingOracle(_BACKING_PER_OHM_USD);
+        _backingOracle = new MockBackingOracle(_kernel, _BACKING_PER_OHM_USD);
+        _kernel.executeAction(Actions.ActivatePolicy, address(_backingOracle));
         _core = new BurnerLoansCore(_kernel, _ohm, _depositManager);
         _inventory = new BurnerLoansInventory(_kernel, _ohm, address(_core));
         _burnerLoansConfig = new BurnerLoansConfig(_kernel, IBurnerLoansCore(address(_core)));

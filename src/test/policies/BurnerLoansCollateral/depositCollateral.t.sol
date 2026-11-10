@@ -23,6 +23,7 @@ import {BL_COLLATERAL_POLICY_ROLE} from "src/policies/burnerloans/libraries/Loan
 import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
 
 // Contracts
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansCollateralActionTest} from "./fixtures/BurnerLoansCollateralActionTest.sol";
 import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {Actions} from "src/Kernel.sol";
@@ -1537,6 +1538,51 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         assertEq(total, 107, "borrower position, not viewer position, receives projected credit");
         assertEq(health, type(uint256).max, "specified position is debt-free");
         assertEq(_accountingDigest(address(_asset)), beforeState, "neither position changes");
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D05.
+    function test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement()
+        public
+    {
+        _depositAsset(_asset, 2000e6, _borrower);
+        _asset.mint(_borrower, 100e6);
+        vm.prank(_borrower);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, type(uint256).max, address(0));
+        address oracle = _risk.backingOracle();
+        MockBackingOracle(oracle).setEnabled(false);
+        bytes32 beforeState = _accountingDigest(address(_asset));
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        );
+        _collateral.previewDepositCollateral(address(_asset), 1e6, _borrower);
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        );
+        vm.prank(_borrower);
+        _collateral.depositCollateral(address(_asset), 1e6, _borrower);
+        assertEq(
+            _accountingDigest(address(_asset)),
+            beforeState,
+            "backing outage leaves collateral and custody unchanged"
+        );
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D06.
+    function test_givenDebtFreeAndBackingPaused_whenCollateralChanged()
+        public
+        givenDebtFreeCollateral
+    {
+        MockBackingOracle(_risk.backingOracle()).setEnabled(false);
+        _asset.mint(_borrower, 1e6);
+        vm.prank(_borrower);
+        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
+            address(_asset),
+            1e6,
+            _borrower
+        );
+        assertEq(credit, 1e6, "debt-free deposit retains exact credit during backing outage");
+        assertEq(collateral, 101e6, "debt-free deposit adds collateral during backing outage");
+        assertEq(health, type(uint256).max, "debt-free health requires no backing");
     }
 }
 

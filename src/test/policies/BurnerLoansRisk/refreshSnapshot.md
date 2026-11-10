@@ -88,41 +88,70 @@ Assert each snapshot field against independently calculated prices/backing conve
 
 Port one refresh call and one backing read per priced action with cache getter deliberately reverting; pair orientation both address orders, fresh cache round unchanged, stale round refreshed, and rollback of refresh on failed settlement. Debt-bearing deposits and partial repayments each capture one snapshot; debt-free deposits and full repayments perform no pricing calls.
 
-[test_givenAuthorizedCacheCallback_whenCanonicalMarketChanges]: refreshSnapshot.t.sol#L516
-[test_givenBackingFailure_whenRefreshed_reverts]: refreshSnapshot.t.sol#L210
-[test_givenCacheFailure_whenPricesRead_reverts]: refreshSnapshot.t.sol#L469
-[test_givenCacheTimestampZero_whenPricesRead]: refreshSnapshot.t.sol#L103
-[test_givenCachedCollateralZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L118
-[test_givenCachedOhmZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L110
-[test_givenCollateralAtObservationDeadline_whenPricesRead]: refreshSnapshot.t.sol#L241
-[test_givenCollateralStale_whenPricesRead_reverts]: refreshSnapshot.t.sol#L168
-[test_givenCollateralTimestampZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L160
-[test_givenDirectCollateralZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L136
-[test_givenDirectOhmZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L128
-[test_givenDisabledCache_whenPricesRead]: refreshSnapshot.t.sol#L85
-[test_givenDisabled_whenCalled_reverts]: refreshSnapshot.t.sol#L30
-[test_givenInactiveAndDisabled_whenCalled_reverts]: refreshSnapshot.t.sol#L44
-[test_givenInactiveCache_whenPricesRead]: refreshSnapshot.t.sol#L67
-[test_givenInactive_whenCalled_reverts]: refreshSnapshot.t.sol#L37
-[test_givenNoCache_whenPricesRead]: refreshSnapshot.t.sol#L59
-[test_givenOhmAtObservationDeadline_whenPricesRead]: refreshSnapshot.t.sol#L234
-[test_givenOhmStale_whenPricesRead_reverts]: refreshSnapshot.t.sol#L152
-[test_givenOhmTimestampZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L144
-[test_givenOperational_whenCalled]: refreshSnapshot.t.sol#L24
-[test_givenOracleFailure_whenPricesRead_reverts]: refreshSnapshot.t.sol#L493
-[test_givenPriceFailure_whenPricesRead_reverts]: refreshSnapshot.t.sol#L481
-[test_givenPriceModuleUpgrade_whenPricesRead]: refreshSnapshot.t.sol#L505
-[test_givenReEnabled_whenCalled]: refreshSnapshot.t.sol#L53
-[test_givenStaleCache_whenRefreshed]: refreshSnapshot.t.sol#L184
-[test_givenZeroBacking_whenPricesRead_reverts]: refreshSnapshot.t.sol#L176
-[test_whenBacking0BoundarySeeds]: refreshSnapshot.t.sol#L267
-[test_whenBacking18BoundarySeeds]: refreshSnapshot.t.sol#L354
-[test_whenBacking36BoundarySeeds]: refreshSnapshot.t.sol#L400
-[test_whenBacking6BoundarySeeds]: refreshSnapshot.t.sol#L313
-[test_whenBackingConversionOverflows_reverts]: refreshSnapshot.t.sol#L460
-[test_whenBackingUses0PriceDecimals]: refreshSnapshot.t.sol#L248
-[test_whenBackingUses18PriceDecimals]: refreshSnapshot.t.sol#L340
-[test_whenBackingUses36PriceDecimals]: refreshSnapshot.t.sol#L381
-[test_whenBackingUses6PriceDecimals]: refreshSnapshot.t.sol#L294
-[test_whenPriceScaleCannotFit_reverts]: refreshSnapshot.t.sol#L449
-[test_whenUnsupportedScaleBoundaries_reverts]: refreshSnapshot.t.sol#L454
+## Backing lifecycle acceptance
+
+Validate backing readiness after mutating cache maintenance, immediately before
+reading backing. Both cache and live paths require a same-Kernel, active and
+enabled policy. Getter failures propagate and a rejected refresh rolls back writes.
+
+| ID | Caller | Scenario | Expected result | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-REFRESH-D01 | Test caller (permissionless API) | Oracle active/enabled vary independently; exclude true/true | PolicyDependency_NotActive(oracle); no committed changes | Covered: [test][test_givenBackingUnavailable_whenConsumed_reverts] |
+| BLRISK-REFRESH-D02 | Test caller (permissionless API) | Deterministic oracle states: active/disabled, inactive/enabled, inactive/disabled | PolicyDependency_NotActive(oracle) for each seed | Covered: [test][test_givenBackingLifecycleBoundaries_whenConsumed_reverts] |
+| BLRISK-REFRESH-D03 | Test caller (permissionless API) | Fresh cached prices; pause oracle, change backing to 2e18, restore enablement | Paused call: PolicyDependency_NotActive(oracle); restored snapshot backing=2e18 | Covered: [test][test_givenFreshCache_whenBackingPaused_thenRestored] |
+| BLRISK-REFRESH-D04 | Test caller (permissionless API) | Oracle isEnabled() returns noncanonical bool word 2 | PolicyDependency_InvalidDependency(oracle) | Covered: [test][test_givenBackingMalformedEnabled_whenConsumed_reverts] |
+
+## Backing availability regressions
+
+Local policy and ordinary dependencies are active/enabled; callers satisfy the
+existing action authorization. Each fault varies backing readiness independently.
+Rejection preserves authoritative accounting, custody and emitted logs.
+
+| ID | Scenario | Expected execution and preview | Test |
+| --- | --- | --- | --- |
+| BLRISK-REFRESH-D05 | Cache callback disables oracle during refresh; retry restores readiness | PolicyDependency_NotActive(oracle); pause/cache writes roll back; retry backing=1e18 | Covered: [test][test_givenCacheCallbackPausesBacking_whenRefreshed_revertsAndRollsBack] |
+
+[test_givenAuthorizedCacheCallback_whenCanonicalMarketChanges]: refreshSnapshot.t.sol#L502
+[test_givenBackingFailure_whenRefreshed_reverts]: refreshSnapshot.t.sol#L212
+[test_givenCacheFailure_whenPricesRead_reverts]: refreshSnapshot.t.sol#L455
+[test_givenCacheTimestampZero_whenPricesRead]: refreshSnapshot.t.sol#L105
+[test_givenCachedCollateralZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L120
+[test_givenCachedOhmZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L112
+[test_givenCollateralAtObservationDeadline_whenPricesRead]: refreshSnapshot.t.sol#L243
+[test_givenCollateralStale_whenPricesRead_reverts]: refreshSnapshot.t.sol#L170
+[test_givenCollateralTimestampZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L162
+[test_givenDirectCollateralZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L138
+[test_givenDirectOhmZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L130
+[test_givenDisabledCache_whenPricesRead]: refreshSnapshot.t.sol#L87
+[test_givenDisabled_whenCalled_reverts]: refreshSnapshot.t.sol#L32
+[test_givenInactiveAndDisabled_whenCalled_reverts]: refreshSnapshot.t.sol#L46
+[test_givenInactiveCache_whenPricesRead]: refreshSnapshot.t.sol#L69
+[test_givenInactive_whenCalled_reverts]: refreshSnapshot.t.sol#L39
+[test_givenNoCache_whenPricesRead]: refreshSnapshot.t.sol#L61
+[test_givenOhmAtObservationDeadline_whenPricesRead]: refreshSnapshot.t.sol#L236
+[test_givenOhmStale_whenPricesRead_reverts]: refreshSnapshot.t.sol#L154
+[test_givenOhmTimestampZero_whenPricesRead_reverts]: refreshSnapshot.t.sol#L146
+[test_givenOperational_whenCalled]: refreshSnapshot.t.sol#L26
+[test_givenOracleFailure_whenPricesRead_reverts]: refreshSnapshot.t.sol#L479
+[test_givenPriceFailure_whenPricesRead_reverts]: refreshSnapshot.t.sol#L467
+[test_givenPriceModuleUpgrade_whenPricesRead]: refreshSnapshot.t.sol#L491
+[test_givenReEnabled_whenCalled]: refreshSnapshot.t.sol#L55
+[test_givenStaleCache_whenRefreshed]: refreshSnapshot.t.sol#L186
+[test_givenZeroBacking_whenPricesRead_reverts]: refreshSnapshot.t.sol#L178
+[test_whenBacking0BoundarySeeds]: refreshSnapshot.t.sol#L265
+[test_whenBacking18BoundarySeeds]: refreshSnapshot.t.sol#L344
+[test_whenBacking36BoundarySeeds]: refreshSnapshot.t.sol#L386
+[test_whenBacking6BoundarySeeds]: refreshSnapshot.t.sol#L307
+[test_whenBackingConversionOverflows_reverts]: refreshSnapshot.t.sol#L446
+[test_whenBackingUses0PriceDecimals]: refreshSnapshot.t.sol#L250
+[test_whenBackingUses18PriceDecimals]: refreshSnapshot.t.sol#L334
+[test_whenBackingUses36PriceDecimals]: refreshSnapshot.t.sol#L371
+[test_whenBackingUses6PriceDecimals]: refreshSnapshot.t.sol#L292
+[test_whenPriceScaleCannotFit_reverts]: refreshSnapshot.t.sol#L435
+[test_whenUnsupportedScaleBoundaries_reverts]: refreshSnapshot.t.sol#L440
+[test_givenBackingUnavailable_whenConsumed_reverts]: ./refreshSnapshot.t.sol#L566
+[test_givenBackingLifecycleBoundaries_whenConsumed_reverts]: ./refreshSnapshot.t.sol#L580
+[test_givenFreshCache_whenBackingPaused_thenRestored]: ./refreshSnapshot.t.sol#L590
+[test_givenBackingMalformedEnabled_whenConsumed_reverts]: ./refreshSnapshot.t.sol#L609
+
+[test_givenCacheCallbackPausesBacking_whenRefreshed_revertsAndRollsBack]: ./refreshSnapshot.t.sol#L625

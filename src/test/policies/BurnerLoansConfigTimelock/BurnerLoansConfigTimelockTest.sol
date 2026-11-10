@@ -607,10 +607,12 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
     }
 
     function _replaceRisk(uint48 age_) internal returns (BurnerLoansRisk replacement) {
+        MockBackingOracle oracle = new MockBackingOracle(_kernel, 1e18);
+        _kernel.executeAction(Actions.ActivatePolicy, address(oracle));
         replacement = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
-            address(new MockBackingOracle(1e18)),
+            address(oracle),
             address(0),
             age_,
             address(_core)

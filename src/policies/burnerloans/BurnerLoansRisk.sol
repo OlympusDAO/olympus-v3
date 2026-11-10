@@ -256,6 +256,7 @@ contract BurnerLoansRisk is
         IPRICEv2 price_,
         IBurnerLoansCore.PriceSnapshot memory snapshot_
     ) private view returns (IBurnerLoansCore.PriceSnapshot memory) {
+        _requireBackingOracleReady();
         uint256 backing18 = IBackingOracle(backingOracle).backing();
         if (backing18 == 0) revert IBurnerLoansRisk.BurnerLoans_InvalidPrice();
         // backing: 18 decimals -> PRICE decimals, rounded up in favor of the protocol.
@@ -387,6 +388,7 @@ contract BurnerLoansRisk is
         IBurnerLoansCore.AssetConfig memory cfg_,
         uint256 debt_
     ) private view returns (uint256) {
+        _requireBackingOracleReady();
         uint8 decimals = _OHM_DECIMALS;
         return
             LoanMath.requiredCollateralValue(
@@ -459,6 +461,7 @@ contract BurnerLoansRisk is
     ) external view onlyOperational returns (uint256 reward) {
         (IBurnerLoansCore.AssetConfig memory cfg, ) = _configuration(marketId_);
         if (protocolCaller_ || cfg.keeperRewardBps == 0 || cfg.maxKeeperReward == 0) return 0;
+        _requireBackingOracleReady();
         // Configure and cap rewards in underlying collateral units even when redemption pays shares.
         // Protect backing first, then convert the permitted reward to actual output units below.
         uint256 rewardBasis = cfg.withdrawAsShares ? collateral_ : output_;
@@ -554,7 +557,8 @@ contract BurnerLoansRisk is
     /// @inheritdoc IBurnerLoansRisk
     /// @dev Reverts if:
     ///      - The caller lacks ADMIN.
-    ///      - The oracle has no code or lacks IBackingOracle.
+    ///      - The oracle has no code, lacks IBackingOracle/IEnabler or reports a different Kernel.
+    ///      - The oracle Kernel metadata is invalid.
     function setBackingOracle(
         // The oracle validator rejects zero via code-length and interface checks.
         // forge-lint: disable-next-line(missing-zero-check)
@@ -659,17 +663,25 @@ contract BurnerLoansRisk is
         _requireRole(msg.sender, ADMIN_ROLE);
     }
 
-    /// @notice Validates the backing-oracle interface at installation.
+    /// @notice Validates backing-oracle interfaces and Kernel binding without requiring readiness.
     /// @dev Reverts if:
-    ///      - The configured backing oracle lacks IBackingOracle or IVersioned.
+    ///      - The configured backing oracle lacks IBackingOracle or IEnabler.
+    ///      - Its Kernel metadata is invalid or reports a different Kernel.
     /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param oracle_ Canonical backing-oracle dependency.
     function _validateBackingOracle(address oracle_) private view {
         if (
             oracle_.code.length == 0 ||
             !ERC165Checker.supportsInterface(oracle_, type(IBackingOracle).interfaceId) ||
-            !ERC165Checker.supportsInterface(oracle_, type(IVersioned).interfaceId)
+            !ERC165Checker.supportsInterface(oracle_, type(IEnabler).interfaceId)
         ) revert IBurnerLoansRisk.BurnerLoans_InvalidBackingOracle(oracle_);
+        PolicyDependency.requireSameKernel(oracle_, address(kernel));
+    }
+
+    /// @notice Revalidates the operational backing policy before consuming current or captured backing.
+    /// @dev Reverts for invalid metadata, a foreign Kernel, inactivity or local disablement.
+    function _requireBackingOracleReady() private view {
+        PolicyDependency.requireActiveAndEnabled(backingOracle, address(kernel));
     }
 
     /// @notice Validates optional cache interfaces and Kernel binding.
@@ -740,12 +752,13 @@ contract BurnerLoansRisk is
     /// @dev Reverts if:
     ///      - Risk is Kernel-inactive.
     ///      - Core interface or Kernel compatibility is invalid.
-    ///      - The backing oracle binding is incompatible.
+    ///      - The backing oracle binding is incompatible, inactive or disabled.
     ///      - A nonzero price-cache binding is incompatible.
     function _validateActivation() private view {
         _requireActive();
         _validateCore(_CORE);
         _validateBackingOracle(backingOracle);
+        _requireBackingOracleReady();
         _validatePriceCache(priceCache);
     }
 
@@ -755,7 +768,7 @@ contract BurnerLoansRisk is
     ///      - The inclusive grace deadline has expired.
     ///      - Risk is Kernel-inactive.
     ///      - Core interface or Kernel compatibility is invalid.
-    ///      - The backing oracle binding is incompatible.
+    ///      - The backing oracle binding is incompatible, inactive or disabled.
     ///      - A nonzero price-cache binding is incompatible.
     function _beforeReEnable() internal override {
         super._beforeReEnable();

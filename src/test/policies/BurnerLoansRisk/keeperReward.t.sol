@@ -11,7 +11,10 @@ import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {stdError} from "@forge-std-1.16.2/StdError.sol";
 import {LoanMath} from "src/policies/burnerloans/libraries/LoanMath.sol";
 
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
+import {Actions} from "src/Kernel.sol";
 import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/BurnerLoansRiskTest.sol";
 
 contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
@@ -348,5 +351,29 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
             100,
             false
         );
+    }
+
+    // Scenarios: BLRISK-KEEPER-REWARD-D01.
+    function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
+        vm.assume(!active_ || !enabled_);
+        _oracle.setEnabled(enabled_);
+        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.keeperReward(_prices(), _MARKET, 1e9, 2e6, 2e6, false);
+    }
+
+    // Scenarios: BLRISK-KEEPER-REWARD-D02.
+    function test_givenBackingLifecycleBoundaries_whenConsumed_reverts() public {
+        uint256 initial = vm.snapshotState();
+        test_givenBackingUnavailable_whenConsumed_reverts(true, false);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, true);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, false);
     }
 }

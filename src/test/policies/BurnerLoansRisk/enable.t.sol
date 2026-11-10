@@ -17,7 +17,7 @@ import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Kernel} from "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/BurnerLoansRiskTest.sol";
 
@@ -447,5 +447,83 @@ contract BurnerLoansRiskEnableTest is BurnerLoansRiskTest {
             test_givenCoreLifecycle_whenCompatible(flags & 1 != 0, flags & 2 != 0);
             assertTrue(vm.revertToState(checkpoint), "Restores lifecycle seed state");
         }
+    }
+
+    // Scenarios: BLRISK-ENABLE-D06.
+    function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
+        vm.assume(!active_ || !enabled_);
+        _risk.disable("");
+        _oracle.setEnabled(enabled_);
+        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.enable("");
+    }
+
+    // Scenarios: BLRISK-ENABLE-D07.
+    function test_givenBackingLifecycleBoundaries_whenConsumed_reverts() public {
+        uint256 initial = vm.snapshotState();
+        test_givenBackingUnavailable_whenConsumed_reverts(true, false);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, true);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, false);
+    }
+
+    // Scenarios: BLRISK-ENABLE-D08.
+    function test_givenBackingForeignKernel_whenAdmitted_reverts() public {
+        _risk.disable("");
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(address(0xBAD))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_oracle),
+                address(_kernel),
+                address(0xBAD)
+            )
+        );
+        _risk.enable("");
+    }
+
+    // Scenarios: BLRISK-ENABLE-D09.
+    function test_givenBackingMalformedKernel_whenAdmitted_reverts() public {
+        _risk.disable("");
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(type(uint256).max)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_oracle)
+            )
+        );
+        _risk.enable("");
+    }
+
+    // Scenarios: BLRISK-ENABLE-D10.
+    function test_givenBackingMissingEnabler_whenAdmitted_reverts() public {
+        _risk.disable("");
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeCall(IERC165.supportsInterface, (type(IEnabler).interfaceId)),
+            abi.encode(false)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoans_InvalidBackingOracle.selector,
+                address(_oracle)
+            )
+        );
+        _risk.enable("");
     }
 }

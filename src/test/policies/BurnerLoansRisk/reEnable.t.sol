@@ -928,4 +928,82 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             assertTrue(vm.revertToState(checkpoint), "Restores lifecycle seed state");
         }
     }
+
+    // Scenarios: BLRISK-REENABLE-D06.
+    function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
+        vm.assume(!active_ || !enabled_);
+        _risk.disable("");
+        _oracle.setEnabled(enabled_);
+        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.reEnable();
+    }
+
+    // Scenarios: BLRISK-REENABLE-D07.
+    function test_givenBackingLifecycleBoundaries_whenConsumed_reverts() public {
+        uint256 initial = vm.snapshotState();
+        test_givenBackingUnavailable_whenConsumed_reverts(true, false);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, true);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, false);
+    }
+
+    // Scenarios: BLRISK-REENABLE-D08.
+    function test_givenBackingForeignKernel_whenAdmitted_reverts() public {
+        _risk.disable("");
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(address(0xBAD))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_oracle),
+                address(_kernel),
+                address(0xBAD)
+            )
+        );
+        _risk.reEnable();
+    }
+
+    // Scenarios: BLRISK-REENABLE-D09.
+    function test_givenBackingMalformedKernel_whenAdmitted_reverts() public {
+        _risk.disable("");
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(type(uint256).max)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_oracle)
+            )
+        );
+        _risk.reEnable();
+    }
+
+    // Scenarios: BLRISK-REENABLE-D10.
+    function test_givenBackingMissingEnabler_whenAdmitted_reverts() public {
+        _risk.disable("");
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeCall(IERC165.supportsInterface, (type(IEnabler).interfaceId)),
+            abi.encode(false)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoans_InvalidBackingOracle.selector,
+                address(_oracle)
+            )
+        );
+        _risk.reEnable();
+    }
 }

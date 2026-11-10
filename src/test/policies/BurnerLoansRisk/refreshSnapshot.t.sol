@@ -13,6 +13,8 @@ import {stdError} from "@forge-std-1.16.2/StdError.sol";
 import {LoanMarket} from "src/policies/burnerloans/libraries/LoanMarket.sol";
 import {LoanMath} from "src/policies/burnerloans/libraries/LoanMath.sol";
 
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
 import {Actions, Kernel} from "src/Kernel.sol";
 import {BurnerLoansCallbackCache} from "src/test/mocks/BurnerLoansCallbackCache.sol";
@@ -558,5 +560,97 @@ contract BurnerLoansRiskRefreshSnapshotTest is BurnerLoansRiskTest {
         );
         assertEq(callback.rejection().length, 0, "nested authorized call succeeded");
         assertEq(callback.cachePriceIfNecessaryCallCount(), 1, "single maintenance call");
+    }
+
+    // Scenarios: BLRISK-REFRESH-D01.
+    function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
+        vm.assume(!active_ || !enabled_);
+        _oracle.setEnabled(enabled_);
+        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.refreshSnapshot(address(_asset));
+    }
+
+    // Scenarios: BLRISK-REFRESH-D02.
+    function test_givenBackingLifecycleBoundaries_whenConsumed_reverts() public {
+        uint256 initial = vm.snapshotState();
+        test_givenBackingUnavailable_whenConsumed_reverts(true, false);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, true);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, false);
+    }
+
+    // Scenarios: BLRISK-REFRESH-D03.
+    function test_givenFreshCache_whenBackingPaused_thenRestored() public givenCache {
+        _oracle.setEnabled(false);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.refreshSnapshot(address(_asset));
+        _oracle.setBacking(2e18);
+        _oracle.setEnabled(true);
+        assertEq(
+            _risk.refreshSnapshot(address(_asset)).backingPerOhmUsd,
+            2e18,
+            "fresh cached prices use current backing after restoration"
+        );
+    }
+
+    // Scenarios: BLRISK-REFRESH-D04.
+    function test_givenBackingMalformedEnabled_whenConsumed_reverts() public {
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeWithSignature("isEnabled()"),
+            abi.encode(uint256(2))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_oracle)
+            )
+        );
+        _risk.refreshSnapshot(address(_asset));
+    }
+
+    // Scenarios: BLRISK-REFRESH-D05.
+    function test_givenCacheCallbackPausesBacking_whenRefreshed_revertsAndRollsBack() public {
+        BurnerLoansCallbackCache callback = new BurnerLoansCallbackCache(address(_kernel));
+        callback.setUsdPrice(address(_ohm), 3e18);
+        callback.setUsdPrice(address(_asset), 4e18);
+        _risk.setPriceCache(address(callback));
+        vm.mockCall(
+            address(_kernel),
+            abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(callback)),
+            abi.encode(true)
+        );
+        callback.arm(address(_oracle), abi.encodeWithSignature("setEnabled(bool)", false), true);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.refreshSnapshot(address(_asset));
+        assertTrue(_oracle.isEnabled(), "rejected acquisition rolls back dependency pause");
+        assertEq(
+            callback.cachePriceIfNecessaryCallCount(),
+            0,
+            "rejected acquisition rolls back cache maintenance"
+        );
+        callback.arm(address(_oracle), abi.encodeWithSignature("setEnabled(bool)", true), true);
+        assertEq(
+            _risk.refreshSnapshot(address(_asset)).backingPerOhmUsd,
+            1e18,
+            "restored callback permits retry"
+        );
     }
 }

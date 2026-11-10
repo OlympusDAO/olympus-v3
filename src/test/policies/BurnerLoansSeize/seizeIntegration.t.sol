@@ -8,6 +8,7 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
@@ -224,6 +225,34 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
         );
         // Reward = floor(2000e6 * 100/10000) = 20e6; Treasury receives 1980e6.
         _assertSeizure(address(_asset), address(_asset), 20e6, 1980e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D13.
+    function test_givenMaturedDebtAndBackingPaused_whenSeized_reverts(bool protocol_) public {
+        _open(address(_asset), _borrower, 2000e6, 100e9);
+        if (protocol_) _rolesAdmin.grantRole(HEART_ROLE, _keeper);
+        _expire();
+        address oracle = _risk.backingOracle();
+        MockBackingOracle(oracle).setEnabled(false);
+        assertTrue(
+            _lens.isSeizable(address(_asset), _borrower),
+            "maturity eligibility remains independent of pricing"
+        );
+        bytes32 beforeState = _stateDigestFor(address(_asset), _keeper);
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        );
+        _liquidation.previewSeizeFor(_keeper, address(_asset), _single(_borrower));
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        );
+        vm.prank(_keeper);
+        _liquidation.seize(address(_asset), _single(_borrower));
+        assertEq(
+            _stateDigestFor(address(_asset), _keeper),
+            beforeState,
+            "backing outage preserves default and payout accounting"
+        );
     }
 }
 

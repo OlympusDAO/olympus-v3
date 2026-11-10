@@ -16,7 +16,7 @@ setter authority. Getter/framework queries retain their read/setup semantics.
 Real oracle and separate timelock with real Kernel/ROLES and BurnerLoansRisk.
 PRICE is the existing mock module; oracle admission/backing are never mocked.
 Risk constructor/setter accept the oracle, direct and delayed writes appear live,
-and paused/inactive oracle reads remain usable. Ceil((1e18+1)*1e8/1e18)
+and direct paused/inactive oracle getters remain readable while Risk consumption rejects. Ceil((1e18+1)*1e8/1e18)
 =100000001 proves conversion to eight PRICE decimals. Refresh prices after notice.
 
 | ID | Caller | Local active | Local enabled | Oracle active | Oracle enabled | Input/history | Expected execution | Test |
@@ -25,6 +25,6 @@ and paused/inactive oracle reads remain usable. Ceil((1e18+1)*1e8/1e18)
 | BO-SETBACKINGRISKINTEGRATION-01 | ADMIN | true | false/true (read/setup) | N/A | N/A | when Real Oracle Selected | Success; exact authoritative state/getter assertions | Covered: [test][test_whenRealOracleSelected] |
 | BO-SETBACKINGRISKINTEGRATION-02 | ADMIN | true | false/true (read/setup) | N/A | N/A | when Real Oracle In Constructor | Success; exact authoritative state/getter assertions | Covered: [test][test_whenRealOracleInConstructor] |
 
-[test_whenPriceScaleDiffers_roundsUp]: ./setBackingRiskIntegration.t.sol#L29
-[test_whenRealOracleSelected]: ./setBackingRiskIntegration.t.sol#L48
-[test_whenRealOracleInConstructor]: ./setBackingRiskIntegration.t.sol#L89
+[test_whenPriceScaleDiffers_roundsUp]: ./setBackingRiskIntegration.t.sol#L32
+[test_whenRealOracleSelected]: ./setBackingRiskIntegration.t.sol#L51
+[test_whenRealOracleInConstructor]: ./setBackingRiskIntegration.t.sol#L97

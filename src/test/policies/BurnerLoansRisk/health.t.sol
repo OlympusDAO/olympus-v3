@@ -11,7 +11,10 @@ import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {stdError} from "@forge-std-1.16.2/StdError.sol";
 import {LoanMath} from "src/policies/burnerloans/libraries/LoanMath.sol";
 
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
+import {Actions} from "src/Kernel.sol";
 import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/BurnerLoansRiskTest.sol";
 
 contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
@@ -544,6 +547,88 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
             type(uint256).max,
             type(uint256).max,
             address(this)
+        );
+    }
+
+    // Scenarios: BLRISK-HEALTH-D01.
+    function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
+        vm.assume(!active_ || !enabled_);
+        _oracle.setEnabled(enabled_);
+        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.health(_prices(), _MARKET, 2e6, 1e9);
+    }
+
+    // Scenarios: BLRISK-HEALTH-D02.
+    function test_givenBackingLifecycleBoundaries_whenConsumed_reverts() public {
+        uint256 initial = vm.snapshotState();
+        test_givenBackingUnavailable_whenConsumed_reverts(true, false);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, true);
+        vm.revertToState(initial);
+        test_givenBackingUnavailable_whenConsumed_reverts(false, false);
+    }
+
+    // Scenarios: BLRISK-HEALTH-D03.
+    function test_givenBackingDisabled_whenHealthValidated_reverts(bool final_) public {
+        _oracle.setEnabled(false);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.validateHealth(_prices(), _MARKET, 2e6, 1e9, final_);
+    }
+
+    // Scenarios: BLRISK-HEALTH-D04.
+    function test_givenBackingDisabled_whenDebtFreeHealthValidated() public {
+        _oracle.setEnabled(false);
+        assertEq(
+            _risk.health(_prices(), _MARKET, 0, 0),
+            type(uint256).max,
+            "debt-free health skips backing"
+        );
+        assertEq(
+            _risk.validateHealth(_prices(), _MARKET, 0, 0, true),
+            type(uint256).max,
+            "debt-free validation skips backing"
+        );
+    }
+
+    // Scenarios: BLRISK-HEALTH-D05.
+    function test_givenCapturedBacking_whenGetterFails_thenHealthUsesCapture() public {
+        IBurnerLoansCore.PriceSnapshot memory captured = _risk.snapshot(address(_asset));
+        vm.mockCallRevert(
+            address(_oracle),
+            abi.encodeWithSignature("backing()"),
+            abi.encodeWithSelector(DependencyReadFailed.selector)
+        );
+        // 1e6 collateral / 1e6 * $2 = $2; 1e9 OHM / 1e9 * max($1 market,$1 backing) = $1.
+        // Health = $2 / $1 * 1e18 = 2e18.
+        assertEq(
+            _risk.health(captured, _MARKET, 1e6, 1e9),
+            2e18,
+            "health consumes captured values without rereading backing"
+        );
+        _oracle.setEnabled(false);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(_oracle)
+            )
+        );
+        _risk.health(captured, _MARKET, 1e6, 1e9);
+        _oracle.setEnabled(true);
+        assertEq(
+            _risk.health(captured, _MARKET, 1e6, 1e9),
+            2e18,
+            "restored readiness permits captured values"
         );
     }
 }

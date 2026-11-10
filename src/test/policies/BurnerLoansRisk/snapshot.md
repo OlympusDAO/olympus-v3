@@ -83,42 +83,85 @@ Assert each snapshot field against independently calculated prices/backing conve
 
 Port production PriceCache pair orientation with collateral address below AND above OHM; max age UINT48_MAX; stale/disabled/inactive cache fallback; zero/stale production Chainlink feeds; six PRICE decimals with fractional backing conversion; malformed/reverting cached pair; future timestamps as current source behavior.
 
-[test_givenCacheAtDeadline_whenPricesRead]: snapshot.t.sol#L188
-[test_givenCacheExpired_whenPricesRead]: snapshot.t.sol#L195
-[test_givenCacheFailure_whenPricesRead_reverts]: snapshot.t.sol#L439
-[test_givenCacheFresh_whenPricesRead]: snapshot.t.sol#L181
-[test_givenCacheFuture_whenPricesRead]: snapshot.t.sol#L202
-[test_givenCacheTimestampZero_whenPricesRead]: snapshot.t.sol#L100
-[test_givenCachedCollateralZero_whenPricesRead_reverts]: snapshot.t.sol#L115
-[test_givenCachedOhmZero_whenPricesRead_reverts]: snapshot.t.sol#L107
-[test_givenCollateralAtObservationDeadline_whenPricesRead]: snapshot.t.sol#L216
-[test_givenCollateralStale_whenPricesRead_reverts]: snapshot.t.sol#L165
-[test_givenCollateralTimestampZero_whenPricesRead_reverts]: snapshot.t.sol#L157
-[test_givenDirectCollateralZero_whenPricesRead_reverts]: snapshot.t.sol#L133
-[test_givenDirectOhmZero_whenPricesRead_reverts]: snapshot.t.sol#L125
-[test_givenDisabledCache_whenPricesRead]: snapshot.t.sol#L82
-[test_givenDisabled_whenCalled_reverts]: snapshot.t.sol#L27
-[test_givenInactiveAndDisabled_whenCalled_reverts]: snapshot.t.sol#L41
-[test_givenInactiveCache_whenPricesRead]: snapshot.t.sol#L64
-[test_givenInactive_whenCalled_reverts]: snapshot.t.sol#L34
-[test_givenNoCache_whenPricesRead]: snapshot.t.sol#L56
-[test_givenOhmAtObservationDeadline_whenPricesRead]: snapshot.t.sol#L209
-[test_givenOhmStale_whenPricesRead_reverts]: snapshot.t.sol#L149
-[test_givenOhmTimestampZero_whenPricesRead_reverts]: snapshot.t.sol#L141
-[test_givenOperational_whenCalled]: snapshot.t.sol#L21
-[test_givenOracleFailure_whenPricesRead_reverts]: snapshot.t.sol#L463
-[test_givenPriceFailure_whenPricesRead_reverts]: snapshot.t.sol#L451
-[test_givenPriceModuleUpgrade_whenPricesRead]: snapshot.t.sol#L475
-[test_givenReEnabled_whenCalled]: snapshot.t.sol#L50
-[test_givenZeroBacking_whenPricesRead_reverts]: snapshot.t.sol#L173
-[test_whenBacking0BoundarySeeds]: snapshot.t.sol#L242
-[test_whenBacking18BoundarySeeds]: snapshot.t.sol#L329
-[test_whenBacking36BoundarySeeds]: snapshot.t.sol#L370
-[test_whenBacking6BoundarySeeds]: snapshot.t.sol#L288
-[test_whenBackingConversionOverflows_reverts]: snapshot.t.sol#L430
-[test_whenBackingUses0PriceDecimals]: snapshot.t.sol#L223
-[test_whenBackingUses18PriceDecimals]: snapshot.t.sol#L315
-[test_whenBackingUses36PriceDecimals]: snapshot.t.sol#L356
-[test_whenBackingUses6PriceDecimals]: snapshot.t.sol#L269
-[test_whenPriceScaleCannotFit_reverts]: snapshot.t.sol#L419
-[test_whenUnsupportedScaleBoundaries_reverts]: snapshot.t.sol#L424
+## Backing lifecycle acceptance
+
+Both fresh cached prices and live PRICE reads require a same-Kernel, active and
+enabled backing policy immediately before backing acquisition. Getter failures
+still propagate independently; restoration uses current backing, not cached backing.
+
+| ID | Caller | Scenario | Expected result | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-SNAPSHOT-D01 | Test caller (permissionless API) | Oracle active/enabled vary independently; exclude true/true | PolicyDependency_NotActive(oracle); no committed changes | Covered: [test][test_givenBackingUnavailable_whenConsumed_reverts] |
+| BLRISK-SNAPSHOT-D02 | Test caller (permissionless API) | Deterministic oracle states: active/disabled, inactive/enabled, inactive/disabled | PolicyDependency_NotActive(oracle) for each seed | Covered: [test][test_givenBackingLifecycleBoundaries_whenConsumed_reverts] |
+| BLRISK-SNAPSHOT-D03 | Test caller (permissionless API) | Fresh cached prices; pause oracle, change backing to 2e18, restore enablement | Paused call: PolicyDependency_NotActive(oracle); restored snapshot backing=2e18 | Covered: [test][test_givenFreshCache_whenBackingPaused_thenRestored] |
+| BLRISK-SNAPSHOT-D04 | Test caller (permissionless API) | Oracle isEnabled() returns noncanonical bool word 2 | PolicyDependency_InvalidDependency(oracle) | Covered: [test][test_givenBackingMalformedEnabled_whenConsumed_reverts] |
+
+## Backing availability regressions
+
+Local policy and ordinary dependencies are active/enabled; callers satisfy the
+existing action authorization. Each fault varies backing readiness independently.
+Rejection preserves authoritative accounting, custody and emitted logs.
+
+| ID | Scenario | Expected execution and preview | Test |
+| --- | --- | --- | --- |
+| BLRISK-SNAPSHOT-D05 | Oracle migrated alone; old Kernel still records active membership | PolicyDependency_KernelMismatch(oracle,old Kernel,new Kernel) | Covered: [test][test_givenMigratedOracle_whenOldKernelMembershipRemains_reverts] |
+| BLRISK-SNAPSHOT-D06 | Risk and oracle moved; new Kernel activates Risk before oracle | PolicyDependency_NotActive(oracle), then backing=1e18 after oracle activation | Covered: [test][test_givenKernelMigration_whenOracleReactivated_thenPricingRestored] |
+
+## Stateful readiness
+
+The handler varies oracle Kernel membership and enablement independently, alongside
+Risk pause/enable and authorized configuration. An already-enabled Risk may remain
+enabled during an oracle outage, but snapshot consumption must reject; restoration
+permits consumption again. Local Risk disablement retains its own guard.
+
+| ID | Sequence | Expected invariant | Test |
+| --- | --- | --- | --- |
+| BLRISK-SNAPSHOT-S01 | Arbitrary oracle active/enabled and Risk lifecycle/configuration actions | Enabled Risk consumes backing only while its oracle is active and enabled | Covered: [invariant][invariant_backingConsumptionRequiresReadiness] |
+
+[test_givenCacheAtDeadline_whenPricesRead]: snapshot.t.sol#L190
+[test_givenCacheExpired_whenPricesRead]: snapshot.t.sol#L197
+[test_givenCacheFailure_whenPricesRead_reverts]: snapshot.t.sol#L425
+[test_givenCacheFresh_whenPricesRead]: snapshot.t.sol#L183
+[test_givenCacheFuture_whenPricesRead]: snapshot.t.sol#L204
+[test_givenCacheTimestampZero_whenPricesRead]: snapshot.t.sol#L102
+[test_givenCachedCollateralZero_whenPricesRead_reverts]: snapshot.t.sol#L117
+[test_givenCachedOhmZero_whenPricesRead_reverts]: snapshot.t.sol#L109
+[test_givenCollateralAtObservationDeadline_whenPricesRead]: snapshot.t.sol#L218
+[test_givenCollateralStale_whenPricesRead_reverts]: snapshot.t.sol#L167
+[test_givenCollateralTimestampZero_whenPricesRead_reverts]: snapshot.t.sol#L159
+[test_givenDirectCollateralZero_whenPricesRead_reverts]: snapshot.t.sol#L135
+[test_givenDirectOhmZero_whenPricesRead_reverts]: snapshot.t.sol#L127
+[test_givenDisabledCache_whenPricesRead]: snapshot.t.sol#L84
+[test_givenDisabled_whenCalled_reverts]: snapshot.t.sol#L29
+[test_givenInactiveAndDisabled_whenCalled_reverts]: snapshot.t.sol#L43
+[test_givenInactiveCache_whenPricesRead]: snapshot.t.sol#L66
+[test_givenInactive_whenCalled_reverts]: snapshot.t.sol#L36
+[test_givenNoCache_whenPricesRead]: snapshot.t.sol#L58
+[test_givenOhmAtObservationDeadline_whenPricesRead]: snapshot.t.sol#L211
+[test_givenOhmStale_whenPricesRead_reverts]: snapshot.t.sol#L151
+[test_givenOhmTimestampZero_whenPricesRead_reverts]: snapshot.t.sol#L143
+[test_givenOperational_whenCalled]: snapshot.t.sol#L23
+[test_givenOracleFailure_whenPricesRead_reverts]: snapshot.t.sol#L449
+[test_givenPriceFailure_whenPricesRead_reverts]: snapshot.t.sol#L437
+[test_givenPriceModuleUpgrade_whenPricesRead]: snapshot.t.sol#L461
+[test_givenReEnabled_whenCalled]: snapshot.t.sol#L52
+[test_givenZeroBacking_whenPricesRead_reverts]: snapshot.t.sol#L175
+[test_whenBacking0BoundarySeeds]: snapshot.t.sol#L240
+[test_whenBacking18BoundarySeeds]: snapshot.t.sol#L319
+[test_whenBacking36BoundarySeeds]: snapshot.t.sol#L356
+[test_whenBacking6BoundarySeeds]: snapshot.t.sol#L282
+[test_whenBackingConversionOverflows_reverts]: snapshot.t.sol#L416
+[test_whenBackingUses0PriceDecimals]: snapshot.t.sol#L225
+[test_whenBackingUses18PriceDecimals]: snapshot.t.sol#L309
+[test_whenBackingUses36PriceDecimals]: snapshot.t.sol#L346
+[test_whenBackingUses6PriceDecimals]: snapshot.t.sol#L267
+[test_whenPriceScaleCannotFit_reverts]: snapshot.t.sol#L405
+[test_whenUnsupportedScaleBoundaries_reverts]: snapshot.t.sol#L410
+[test_givenBackingUnavailable_whenConsumed_reverts]: ./snapshot.t.sol#L472
+[test_givenBackingLifecycleBoundaries_whenConsumed_reverts]: ./snapshot.t.sol#L486
+[test_givenFreshCache_whenBackingPaused_thenRestored]: ./snapshot.t.sol#L496
+[test_givenBackingMalformedEnabled_whenConsumed_reverts]: ./snapshot.t.sol#L515
+[test_givenMigratedOracle_whenOldKernelMembershipRemains_reverts]: ./snapshot.t.sol#L531
+[test_givenKernelMigration_whenOracleReactivated_thenPricingRestored]: ./snapshot.t.sol#L548
+
+[invariant_backingConsumptionRequiresReadiness]: ./setConfigOperator.invariant.t.sol#L50

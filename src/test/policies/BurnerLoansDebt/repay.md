@@ -160,6 +160,17 @@ Use an outer partial repayment and fund a nested repayment of the remaining debt
 | --- | --- | --- | --- | --- | --- | --- |
 | BLDEBT-REPAY-C08 | Fuzz all callers | Mandatory payer→Inventory OHM transferFrom attempts nested repayment | Nested `ReentrancyGuardReentrantCall()`; outer `ReentrantFeeToken.CallbackFailed()` | Exact pre-call OHM balances, FLOAN/Inventory principal, provider claims and payer allowance restored; no committed logs | Quote before arming callback; view performs no OHM transfer and cannot predict token failure | Covered: [test_givenOhmCallback_whenRepaid_thenMandatoryReceiptFailureRollsBack][test_givenOhmCallback_whenRepaid_thenMandatoryReceiptFailureRollsBack] |
 
+## Backing availability regressions
+
+Local policy and ordinary dependencies are active/enabled; callers satisfy the
+existing action authorization. Each fault varies backing readiness independently.
+Rejection preserves authoritative accounting, custody and emitted logs.
+
+| ID | Scenario | Expected execution and preview | Test |
+| --- | --- | --- | --- |
+| BLDEBT-REPAY-D10 | Debt=100e9, repay=50e9, oracle disabled | Preview/execution: PolicyDependency_NotActive(oracle); principal/collateral/OHM unchanged | Covered: [test][test_givenBackingPaused_whenPartiallyRepaid_revertsWithoutSettlement] |
+| BLDEBT-REPAY-D11 | Debt=100e9, repay=100e9, oracle disabled | Preview/execution: zero remaining debt, uint256.max health; collateral retained | Covered: [test][test_givenBackingPaused_whenFullyRepaid_thenDebtCloses] |
+
 [test_givenActionKernelGetterReverts_whenRepaid_thenGetterIsNotRead]: repay.t.sol#L411
 [test_givenActionReportedKernelMismatch_whenRepaid_thenGetterIsNotRead]: repay.t.sol#L398
 [test_givenActionRoleRevoked_whenRepaid_reverts]: repay.t.sol#L387
@@ -191,10 +202,10 @@ Use an outer partial repayment and fund a nested repayment of the remaining debt
 [test_givenPolicyReactivated_whenRepayExecuted_thenSucceeds]: repay.t.sol#L746
 [test_givenPropagatedUnauthorizedCacheBorrow_whenRepaying_thenRollback]: repayPriceCallbacks.t.sol#L124
 [test_givenReEnabled_whenRepayExecuted_thenSucceeds]: repay.t.sol#L753
-[test_givenRealRisk_whenUnrelatedPayerPartiallyRepays_thenIndependentHealth]: repayIntegration.t.sol#L106
-[test_givenRealStalePrice_whenRepayQuotedOrExecuted_reverts]: repayIntegration.t.sol#L136
-[test_givenTwoBorrowers_whenOneFullyRepaid]: repayIntegration.t.sol#L18
-[test_givenTwoMarkets_whenOnePartiallyRepaid]: repayIntegration.t.sol#L65
+[test_givenRealRisk_whenUnrelatedPayerPartiallyRepays_thenIndependentHealth]: repayIntegration.t.sol#L110
+[test_givenRealStalePrice_whenRepayQuotedOrExecuted_reverts]: repayIntegration.t.sol#L140
+[test_givenTwoBorrowers_whenOneFullyRepaid]: repayIntegration.t.sol#L22
+[test_givenTwoMarkets_whenOnePartiallyRepaid]: repayIntegration.t.sol#L69
 [test_givenUnhealthyDebt_whenPartiallyRepaid_thenHelpfulRepaymentAllowed]: repay.t.sol#L143
 [test_givenZeroDebt_whenPositiveRepayment_reverts]: repay.t.sol#L202
 [test_whenAllButOneRawUnitRepaid_thenOneRemains]: repay.t.sol#L96
@@ -210,3 +221,7 @@ Use an outer partial repayment and fund a nested repayment of the remaining debt
 [test_whenPayerIsZero_thenQuoteSucceedsAndTokenRejectsAllowance]: repay.t.sol#L618
 [test_whenPositionAbsent_reverts]: repay.t.sol#L191
 [test_whenRepaymentExceedsDebt_reverts]: repay.t.sol#L221
+
+[test_givenBackingPaused_whenPartiallyRepaid_revertsWithoutSettlement]: ./repayIntegration.t.sol#L159
+
+[test_givenBackingPaused_whenFullyRepaid_thenDebtCloses]: ./repayIntegration.t.sol#L180

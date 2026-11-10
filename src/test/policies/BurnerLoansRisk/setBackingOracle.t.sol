@@ -2,16 +2,18 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
+import {Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/BurnerLoansRiskTest.sol";
@@ -19,7 +21,8 @@ import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/Bu
 contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-BACKING-ORACLE-I06.
     function test_whenOnlyCurrentInterfaceSupported() public {
-        MockBackingOracle next = new MockBackingOracle(1e18);
+        MockBackingOracle next = new MockBackingOracle(_kernel, 1e18);
+        _kernel.executeAction(Actions.ActivatePolicy, address(next));
         bytes4 removedInterface = bytes4(keccak256("backing()")) ^
             bytes4(keccak256("setBacking(uint256)"));
         vm.mockCall(
@@ -61,14 +64,14 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-L01.
     function test_givenEnabled_whenDependencyChanges(address caller_) public givenAdmin(caller_) {
-        _select(address(new MockBackingOracle(0)));
+        _select(address(new MockBackingOracle(_kernel, 0)));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-L02.
     function test_givenDisabled_whenDependencyChanges(
         address caller_
     ) public givenDisabled givenAdmin(caller_) {
-        _select(address(new MockBackingOracle(0)));
+        _select(address(new MockBackingOracle(_kernel, 0)));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-L03.
@@ -111,11 +114,11 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-D02.
-    function test_whenUnversioned_reverts(address caller_) public givenAdmin(caller_) {
-        _oracle = new MockBackingOracle(1e18);
+    function test_whenMissingEnabler_reverts(address caller_) public givenAdmin(caller_) {
+        _oracle = new MockBackingOracle(_kernel, 1e18);
         vm.mockCall(
             address(_oracle),
-            abi.encodeCall(IERC165.supportsInterface, (type(IVersioned).interfaceId)),
+            abi.encodeCall(IERC165.supportsInterface, (type(IEnabler).interfaceId)),
             abi.encode(false)
         );
         _reject(address(_oracle));
@@ -123,7 +126,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-I04.
     function test_whenRevertingERC165_reverts(address caller_) public givenAdmin(caller_) {
-        _oracle = new MockBackingOracle(1e18);
+        _oracle = new MockBackingOracle(_kernel, 1e18);
         vm.mockCallRevert(
             address(_oracle),
             abi.encodeWithSelector(IERC165.supportsInterface.selector),
@@ -134,7 +137,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-I05.
     function test_whenMalformedERC165_reverts(address caller_) public givenAdmin(caller_) {
-        _oracle = new MockBackingOracle(1e18);
+        _oracle = new MockBackingOracle(_kernel, 1e18);
         vm.mockCall(
             address(_oracle),
             abi.encodeWithSelector(IERC165.supportsInterface.selector),
@@ -161,9 +164,48 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-P01.
     function test_whenZeroBackingOracleSelected(address caller_) public givenAdmin(caller_) {
-        MockBackingOracle next = new MockBackingOracle(0);
+        MockBackingOracle next = new MockBackingOracle(_kernel, 0);
+        vm.stopPrank();
+        _kernel.executeAction(Actions.ActivatePolicy, address(next));
+        vm.startPrank(caller_);
         _select(address(next));
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         _risk.snapshot(address(_asset));
+    }
+
+    // Scenarios: BLRISK-BACKING-ORACLE-D03.
+    function test_givenBackingForeignKernel_whenAdmitted_reverts() public {
+        MockBackingOracle candidate = new MockBackingOracle(_kernel, 1e18);
+        vm.mockCall(
+            address(candidate),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(address(0xBAD))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(candidate),
+                address(_kernel),
+                address(0xBAD)
+            )
+        );
+        _risk.setBackingOracle(address(candidate));
+    }
+
+    // Scenarios: BLRISK-BACKING-ORACLE-D04.
+    function test_givenBackingMalformedKernel_whenAdmitted_reverts() public {
+        MockBackingOracle candidate = new MockBackingOracle(_kernel, 1e18);
+        vm.mockCall(
+            address(candidate),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(type(uint256).max)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(candidate)
+            )
+        );
+        _risk.setBackingOracle(address(candidate));
     }
 }

@@ -73,10 +73,12 @@ abstract contract BurnerLoansModularTest is Test {
         _payout = new BurnerLoansPayout(_kernel, address(_core));
         _inventory = new BurnerLoansInventory(_kernel, IERC20(address(_ohm)), address(_core));
         _config = new BurnerLoansConfig(_kernel, IBurnerLoansCore(address(_core)));
+        MockBackingOracle oracle = new MockBackingOracle(_kernel, 1e18);
+        _kernel.executeAction(Actions.ActivatePolicy, address(oracle));
         _risk = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
-            address(new MockBackingOracle(1e18)),
+            address(oracle),
             address(0),
             0,
             address(_core)

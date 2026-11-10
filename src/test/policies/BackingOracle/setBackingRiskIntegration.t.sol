@@ -6,6 +6,9 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
 import {Actions} from "src/Kernel.sol";
 import {BackingOracle} from "src/policies/BackingOracle.sol";
@@ -78,11 +81,16 @@ contract BackingOracleSetBackingRiskIntegrationTest is BurnerLoansRiskTest {
         vm.prank(_ADMIN);
         oracle.disable("");
         _kernel.executeAction(Actions.DeactivatePolicy, address(oracle));
-        assertEq(
-            _risk.snapshot(address(_asset)).backingPerOhmUsd,
-            17e18,
-            "ordinary oracle identity remains readable"
+        assertEq(oracle.backing(), 17e18, "oracle getter remains readable");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_NotActive.selector,
+                address(oracle)
+            )
         );
+        // The expected revert prevents a snapshot return value.
+        // forge-lint: disable-next-line(unused-return)
+        _risk.snapshot(address(_asset));
     }
 
     // Scenarios: BO-SETBACKINGRISKINTEGRATION-02.

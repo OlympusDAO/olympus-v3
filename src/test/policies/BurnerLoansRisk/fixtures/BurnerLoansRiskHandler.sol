@@ -4,7 +4,12 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
+import {Actions, Kernel, Policy} from "src/Kernel.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {BurnerLoansRisk} from "src/policies/burnerloans/BurnerLoansRisk.sol";
 
@@ -61,7 +66,29 @@ contract BurnerLoansRiskHandler is Test {
 
     function enable() external {
         if (expectedEnabled) return;
+        address oracle = _risk.backingOracle();
+        if (
+            !_risk.kernel().isPolicyActive(Policy(oracle)) || !MockBackingOracle(oracle).isEnabled()
+        ) {
+            vm.expectRevert(
+                abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+            );
+            _risk.enable("");
+            return;
+        }
         _risk.enable("");
         expectedEnabled = true;
+    }
+
+    function setBackingEnabled(bool enabled_) external {
+        MockBackingOracle(_risk.backingOracle()).setEnabled(enabled_);
+    }
+
+    function setBackingActive(bool active_) external {
+        address oracle = _risk.backingOracle();
+        if (_risk.kernel().isPolicyActive(Policy(oracle)) == active_) return;
+        Kernel kernel = _risk.kernel();
+        vm.prank(_otherAdmin);
+        kernel.executeAction(active_ ? Actions.ActivatePolicy : Actions.DeactivatePolicy, oracle);
     }
 }

@@ -12,7 +12,7 @@ All failed deployments commit no contract or logs. No constructor call refreshes
 
 ## Dependency compatibility and invalid inputs
 
-All unvaried dependencies are valid. Each fault is isolated. The backing oracle must advertise IVersioned. The cache must advertise IPriceCache, IEnabler and IVersioned and report the supplied Kernel; no numeric cache version is queried. Failed or malformed OHM decimal reads use InvalidOhm.
+All unvaried dependencies are valid. Each fault is isolated. The backing oracle must advertise IBackingOracle and IEnabler and report the supplied Kernel; constructor admission does not require readiness or IVersioned. The cache must advertise IPriceCache, IEnabler and IVersioned and report the supplied Kernel; no numeric cache version is queried. Failed or malformed OHM decimal reads use InvalidOhm.
 
 | ID | Caller | Dependency | Fault | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -27,7 +27,7 @@ All unvaried dependencies are valid. Each fault is isolated. The backing oracle 
 | BLRISK-CONSTRUCTOR-I05 | Fuzz deployer | Backing oracle | Deployed, does not support IBackingOracle | BurnerLoans_InvalidBackingOracle(oracle) | No deployment or logs | Covered: [test][test_whenMissingOracleInterface_reverts] |
 | BLRISK-CONSTRUCTOR-D01 | Fuzz deployer | Backing oracle | ERC165 call reverts | BurnerLoans_InvalidBackingOracle(oracle) | No deployment or logs | Covered: [test][test_whenRevertingOracleERC165_reverts] |
 | BLRISK-CONSTRUCTOR-D04 | Fuzz deployer | Backing oracle | ERC165 returns malformed data | BurnerLoans_InvalidBackingOracle(oracle) | No deployment or logs | Covered: [test][test_whenMalformedOracleERC165_reverts] |
-| BLRISK-CONSTRUCTOR-D12 | Fuzz deployer | Backing oracle | Nonzero deployed oracle supports IBackingOracle but not IVersioned | BurnerLoans_InvalidBackingOracle(oracle) | No deployment or logs | Covered: [test][test_whenUnversionedOracle_reverts] |
+| BLRISK-CONSTRUCTOR-D12 | Fuzz deployer | Backing oracle | Nonzero deployed oracle supports IBackingOracle but not IEnabler | BurnerLoans_InvalidBackingOracle(oracle) | No deployment or logs | Covered: [test][test_whenMissingOracleEnabler_reverts] |
 | BLRISK-CONSTRUCTOR-I07 | Fuzz deployer | Price cache | Nonzero deployed cache lacks IPriceCache | BurnerLoans_InvalidPriceCache(cache) | No deployment or logs | Covered: [test][test_whenMissingCacheInterface_reverts] |
 | BLRISK-CONSTRUCTOR-D02 | Fuzz deployer | Price cache | Nonzero deployed cache supports IPriceCache but lacks IEnabler | BurnerLoans_InvalidPriceCache(cache) | No deployment or logs | Covered: [test][test_whenMissingCacheEnabler_reverts] |
 | BLRISK-CONSTRUCTOR-D03 | Fuzz deployer | Price cache | Nonzero, required interfaces valid, reports another Kernel | PolicyDependency_KernelMismatch(cache,expectedKernel,reportedKernel) | No deployment or logs | Covered: [test][test_whenCacheKernelDiffers_reverts] |
@@ -111,6 +111,18 @@ Constructor and activation share the same interface and Kernel validator. Interf
 | BLRISK-CONSTRUCTOR-I22 | Malformed Core interface support/response | BurnerLoansRisk_InvalidCore(Core) | No deployment or committed logs | Covered: [test][test_givenMalformedCoreInterface_whenDeployed_reverts] |
 | BLRISK-CONSTRUCTOR-K05 | Same-Kernel compatible Core; all four active/enabled combinations | Success without Core readiness probes | Exact normal success; other state preserved | Covered: [test][test_givenCoreLifecycle_whenCompatible]; [test][test_whenCoreLifecycleSeeds] |
 
+## Backing lifecycle acceptance
+
+Construction requires IBackingOracle/IEnabler support and matching Kernel,
+without IVersioned, membership or enablement requirements. This preserves
+deployment before oracle activation and initialization.
+
+| ID | Caller | Scenario | Expected result | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-CONSTRUCTOR-D13 | Test deployer | Oracle kernel() reports 0xBAD instead of Risk Kernel | PolicyDependency_KernelMismatch(oracle,Risk Kernel,0xBAD) | Covered: [test][test_givenBackingForeignKernel_whenAdmitted_reverts] |
+| BLRISK-CONSTRUCTOR-D14 | Test deployer | Oracle kernel() returns uint256.max, a noncanonical address | PolicyDependency_InvalidDependency(oracle) | Covered: [test][test_givenBackingMalformedKernel_whenAdmitted_reverts] |
+| BLRISK-CONSTRUCTOR-D15 | Test deployer | Oracle advertises no IVersioned; IBackingOracle/IEnabler and Kernel match | Deployment succeeds; exact bindings and initially-disabled state | Covered: [test][test_givenUnversionedBacking_whenDeployed] |
+
 [test_givenCache00_whenDeployed]: constructor.t.sol#L486
 [test_givenCache01_whenDeployed]: constructor.t.sol#L470
 [test_givenCache10_whenDeployed]: constructor.t.sol#L454
@@ -137,7 +149,7 @@ Constructor and activation share the same interface and Kernel validator. Interf
 [test_whenOhmPrecisionEndpoints]: constructor.t.sol#L446
 [test_whenOhmPrecisionIsUnsupported_reverts]: constructor.t.sol#L153
 [test_whenRevertingOracleERC165_reverts]: constructor.t.sol#L213
-[test_whenUnversionedOracle_reverts]: constructor.t.sol#L245
+[test_whenMissingOracleEnabler_reverts]: constructor.t.sol#L245
 [test_whenZeroAge]: constructor.t.sol#L375
 [test_whenZeroOhm_reverts]: constructor.t.sol#L123
 [test_whenZeroOracle_reverts]: constructor.t.sol#L180
@@ -165,3 +177,9 @@ Constructor and activation share the same interface and Kernel validator. Interf
 [test_givenCoreLifecycle_whenCompatible]: constructor.t.sol#L648
 
 [test_whenCoreLifecycleSeeds]: constructor.t.sol#L659
+
+[test_givenBackingForeignKernel_whenAdmitted_reverts]: ./constructor.t.sol#L669
+
+[test_givenBackingMalformedKernel_whenAdmitted_reverts]: ./constructor.t.sol#L687
+
+[test_givenUnversionedBacking_whenDeployed]: ./constructor.t.sol#L703

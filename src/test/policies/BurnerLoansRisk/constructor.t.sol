@@ -2,10 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
@@ -242,10 +242,10 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
     }
 
     // Scenarios: BLRISK-CONSTRUCTOR-D12.
-    function test_whenUnversionedOracle_reverts(address caller_) public {
+    function test_whenMissingOracleEnabler_reverts(address caller_) public {
         vm.mockCall(
             address(_oracle),
-            abi.encodeCall(IERC165.supportsInterface, (type(IVersioned).interfaceId)),
+            abi.encodeCall(IERC165.supportsInterface, (type(IEnabler).interfaceId)),
             abi.encode(false)
         );
         vm.expectRevert(
@@ -663,5 +663,53 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
             test_givenCoreLifecycle_whenCompatible(flags & 1 != 0, flags & 2 != 0);
             assertTrue(vm.revertToState(checkpoint), "Restores lifecycle seed state");
         }
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-D13.
+    function test_givenBackingForeignKernel_whenAdmitted_reverts() public {
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(address(0xBAD))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_oracle),
+                address(_kernel),
+                address(0xBAD)
+            )
+        );
+        _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, address(this));
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-D14.
+    function test_givenBackingMalformedKernel_whenAdmitted_reverts() public {
+        vm.mockCall(
+            address(_oracle),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(type(uint256).max)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_oracle)
+            )
+        );
+        _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, address(this));
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-D15.
+    function test_givenUnversionedBacking_whenDeployed() public {
+        assertFalse(
+            _oracle.supportsInterface(type(IVersioned).interfaceId),
+            "fixture oracle has no version interface"
+        );
+        _assertDeployment(
+            _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, address(this)),
+            address(_ohm),
+            address(0),
+            0
+        );
     }
 }

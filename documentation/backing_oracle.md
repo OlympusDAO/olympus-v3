@@ -35,8 +35,11 @@ account delegates immediate bounded write authority to that account.
 Both policies depend only on ROLES major version one and request no module-write
 permissions. Kernel membership and local enablement are independent. Oracle reads,
 interface queries and framework hooks retain their read/framework semantics.
-BurnerLoansRisk consumes the oracle as an ordinary readable identity: pausing or
-deactivating the oracle does not hide the last stored backing from Risk.
+The oracle getter remains readable while paused or inactive. BurnerLoansRisk
+requires a same-Kernel, active and enabled oracle at enable/reEnable and whenever
+it consumes backing, including supplied snapshots. Binding requires IBackingOracle
+and IEnabler, without an IVersioned requirement. A ready oracle getter can still
+revert independently; Risk propagates that failure when acquiring a snapshot.
 
 ## Updates and numeric rules
 

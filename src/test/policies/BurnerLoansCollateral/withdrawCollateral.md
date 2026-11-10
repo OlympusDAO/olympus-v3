@@ -117,7 +117,7 @@ The action retains its own active/enabled gates; Core retains its own lifecycle 
 
 Action unit tests use mock Risk for snapshot, fee, health and reward responses used by this function. Assert exact method arguments and call counts, actual Core/FLOAN state and returned configured values; do not duplicate Risk arithmetic in action assertions. Debt-free or full-repayment price-free paths configure the mock to reject unexpected pricing calls. Risk’s suite independently proves math and rounding.
 
-Seed uint128 maximum, one-unit redemption rounding, exact health threshold and token=recipient overlaps permitted by the public layer. DM recipient validation may reject DM itself. The preview reverts with BurnerLoans_UnhealthyFinalPosition(H) for unhealthy remaining collateral and BurnerLoansCore_ZeroCollateralWithdrawal() for zero projected output. Recipient and borrower-grant validation follows the action rules. Test nested guarded Core operations at withdrawal callbacks, caught and propagated, and isolate other positions.
+Seed uint128 maximum, one-unit redemption rounding, exact health threshold and token and recipient sharing an address overlaps permitted by the public layer. DM recipient validation may reject DM itself. The preview reverts with BurnerLoans_UnhealthyFinalPosition(H) for unhealthy remaining collateral and BurnerLoansCore_ZeroCollateralWithdrawal() for zero projected output. Recipient and borrower-grant validation follows the action rules. Test nested guarded Core operations at withdrawal callbacks, caught and propagated, and isolate other positions.
 
 - [x] Review these expectations.
 - [x] Implement named Foundry tests and boundary seed drivers.
@@ -191,77 +191,88 @@ Action and Core are active/enabled. Permitted borrower for withdrawals; fuzz per
 | --- | --- | --- | --- | --- |
 | BLCOL-WITHDRAW-D07 | Borrower | DepositManager Kernel-inactive; valid withdrawal | PolicyDependency_NotActive(DepositManager) on preview and execution; custody/position unchanged | Covered: [test_givenDepositManagerInactive_whenWithdrawn_reverts][test_givenDepositManagerInactive_whenWithdrawn_reverts] |
 
+## Backing availability regressions
+
+Local policy and ordinary dependencies are active/enabled; callers satisfy the
+existing action authorization. Each fault varies backing readiness independently.
+Rejection preserves authoritative accounting, custody and emitted logs.
+
+| ID | Scenario | Expected execution and preview | Test |
+| --- | --- | --- | --- |
+| BLCOL-WITHDRAW-D08 | Debt=100e9; oracle disabled; change collateral by 1e6 | Preview/execution: PolicyDependency_NotActive(oracle); accounting/custody unchanged | Covered: [test][test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement] |
+| BLCOL-WITHDRAW-D09 | Debt-free collateral=100e6; oracle disabled; change collateral by 1e6 | Exact 1e6 credit/output and 101e6 deposit or 99e6 withdrawal remainder; uint256.max health | Covered: [test][test_givenDebtFreeAndBackingPaused_whenCollateralChanged] |
+
 [_withdrawSynchronousVault]: withdrawCollateralIntegration.t.sol#L28
-[test_givenActionKernelGetterReverts_whenWithdrawn_thenGetterIsNotRead]: withdrawCollateral.t.sol#L512
-[test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected]: withdrawCollateral.t.sol#L875
+[test_givenActionKernelGetterReverts_whenWithdrawn_thenGetterIsNotRead]: withdrawCollateral.t.sol#L513
+[test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected]: withdrawCollateral.t.sol#L876
 [test_givenAsynchronousVaultDrift_whenSharesRequested_thenExitRemainsAvailable]: withdrawCollateralIntegration.t.sol#L440
 [test_givenAsynchronousVaultDrift_whenUnderlyingRequested_thenBothPathsReject]: withdrawCollateralIntegration.t.sol#L424
 [test_givenCacheWithdraws_whenOuterNowExceedsCollateral_thenRollback]: withdrawCollateralPriceCallbacks.t.sol#L19
-[test_givenCancelledGrant_whenOperatorActs_reverts]: withdrawCollateral.t.sol#L410
+[test_givenCancelledGrant_whenOperatorActs_reverts]: withdrawCollateral.t.sol#L411
 [test_givenCaughtUnauthorizedCacheAction_whenWithdrawing_thenOneDebit]: withdrawCollateralPriceCallbacks.t.sol#L56
-[test_givenCollateral_whenActionIsDisabled_reverts]: withdrawCollateral.t.sol#L272
-[test_givenCollateral_whenActionIsInactive_reverts]: withdrawCollateral.t.sol#L278
-[test_givenCollateral_whenAmountExceedsBalance_reverts]: withdrawCollateral.t.sol#L190
-[test_givenCollateral_whenAmountIsZero_reverts]: withdrawCollateral.t.sol#L181
-[test_givenCollateral_whenCoreIsDisabled_reverts]: withdrawCollateral.t.sol#L291
-[test_givenCollateral_whenCoreIsInactive_reverts]: withdrawCollateral.t.sol#L304
-[test_givenCollateral_whenImmediatelyOverBalance_thenBothPathsReject]: withdrawCollateral.t.sol#L707
-[test_givenCollateral_whenMaximumAmount_thenBothPathsReject]: withdrawCollateral.t.sol#L723
-[test_givenCollateral_whenRecipientIsAction_reverts]: withdrawCollateral.t.sol#L219
-[test_givenCollateral_whenRecipientIsCore_reverts]: withdrawCollateral.t.sol#L230
-[test_givenCollateral_whenRecipientIsCustody_reverts]: withdrawCollateral.t.sol#L241
-[test_givenCollateral_whenRecipientIsZero_reverts]: withdrawCollateral.t.sol#L211
-[test_givenCoreReportsAnotherKernel_whenWithdrawn_thenKernelMismatch]: withdrawCollateral.t.sol#L85
-[test_givenCoreUnavailable_whenInvoked_thenDependencyIdentified]: withdrawCollateral.t.sol#L473
-[test_givenDebtAndBrokenPricing_whenAmountExceedsCollateral_thenBoundsWin]: withdrawCollateral.t.sol#L891
+[test_givenCollateral_whenActionIsDisabled_reverts]: withdrawCollateral.t.sol#L273
+[test_givenCollateral_whenActionIsInactive_reverts]: withdrawCollateral.t.sol#L279
+[test_givenCollateral_whenAmountExceedsBalance_reverts]: withdrawCollateral.t.sol#L191
+[test_givenCollateral_whenAmountIsZero_reverts]: withdrawCollateral.t.sol#L182
+[test_givenCollateral_whenCoreIsDisabled_reverts]: withdrawCollateral.t.sol#L292
+[test_givenCollateral_whenCoreIsInactive_reverts]: withdrawCollateral.t.sol#L305
+[test_givenCollateral_whenImmediatelyOverBalance_thenBothPathsReject]: withdrawCollateral.t.sol#L708
+[test_givenCollateral_whenMaximumAmount_thenBothPathsReject]: withdrawCollateral.t.sol#L724
+[test_givenCollateral_whenRecipientIsAction_reverts]: withdrawCollateral.t.sol#L220
+[test_givenCollateral_whenRecipientIsCore_reverts]: withdrawCollateral.t.sol#L231
+[test_givenCollateral_whenRecipientIsCustody_reverts]: withdrawCollateral.t.sol#L242
+[test_givenCollateral_whenRecipientIsZero_reverts]: withdrawCollateral.t.sol#L212
+[test_givenCoreReportsAnotherKernel_whenWithdrawn_thenKernelMismatch]: withdrawCollateral.t.sol#L86
+[test_givenCoreUnavailable_whenInvoked_thenDependencyIdentified]: withdrawCollateral.t.sol#L474
+[test_givenDebtAndBrokenPricing_whenAmountExceedsCollateral_thenBoundsWin]: withdrawCollateral.t.sol#L892
 [test_givenDebtAndSubShareOutput_whenWithdrawn_thenBothPathsReject]: withdrawCollateralIntegration.t.sol#L401
-[test_givenDebtFreePosition_whenCallerIsUnauthorized_reverts]: withdrawCollateral.t.sol#L169
-[test_givenDebtFreePosition_whenCollateralIsWithdrawn_thenNoPriceIsRequired]: withdrawCollateral.t.sol#L104
-[test_givenDebtFreePosition_whenFullRangeWithdrawal_thenAllReturnsAndCustodyAgree]: withdrawCollateral.t.sol#L673
+[test_givenDebtFreePosition_whenCallerIsUnauthorized_reverts]: withdrawCollateral.t.sol#L170
+[test_givenDebtFreePosition_whenCollateralIsWithdrawn_thenNoPriceIsRequired]: withdrawCollateral.t.sol#L105
+[test_givenDebtFreePosition_whenFullRangeWithdrawal_thenAllReturnsAndCustodyAgree]: withdrawCollateral.t.sol#L674
 [test_givenDebt_whenCollateralIsWithdrawn_thenHealthUsesActualRemainingCollateral]: withdrawCollateralIntegration.t.sol#L258
-[test_givenDebt_whenHealthExactlyOne_thenAccepted]: withdrawCollateral.t.sol#L575
-[test_givenDebt_whenPostSettlementRiskValidationFails_thenTransfersAndAccountingRollBack]: withdrawCollateral.t.sol#L135
-[test_givenDebt_whenRiskReturnsBoundaryHealth_thenExactValueReturned]: withdrawCollateral.t.sol#L529
-[test_givenDepositManagerInactive_whenWithdrawn_reverts]: withdrawCollateral.t.sol#L30
-[test_givenDepositManagerPaused_whenWithdrawn_reverts]: withdrawCollateral.t.sol#L46
-[test_givenDepositPeriodDisabled_whenWithdrawn_thenExitRemainsAvailable]: withdrawCollateral.t.sol#L59
-[test_givenDisabledAction_whenInvoked_thenLocalPauseWins]: withdrawCollateral.t.sol#L460
-[test_givenDisabled_whenAllLifecycleSeedsUsed_thenAdmissionWins]: withdrawCollateral.t.sol#L808
-[test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized]: withdrawCollateral.t.sol#L865
-[test_givenExpiredGrant_whenOperatorActs_reverts]: withdrawCollateral.t.sol#L424
-[test_givenExpiredGrant_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L995
+[test_givenDebt_whenHealthExactlyOne_thenAccepted]: withdrawCollateral.t.sol#L576
+[test_givenDebt_whenPostSettlementRiskValidationFails_thenTransfersAndAccountingRollBack]: withdrawCollateral.t.sol#L136
+[test_givenDebt_whenRiskReturnsBoundaryHealth_thenExactValueReturned]: withdrawCollateral.t.sol#L530
+[test_givenDepositManagerInactive_whenWithdrawn_reverts]: withdrawCollateral.t.sol#L31
+[test_givenDepositManagerPaused_whenWithdrawn_reverts]: withdrawCollateral.t.sol#L47
+[test_givenDepositPeriodDisabled_whenWithdrawn_thenExitRemainsAvailable]: withdrawCollateral.t.sol#L60
+[test_givenDisabledAction_whenInvoked_thenLocalPauseWins]: withdrawCollateral.t.sol#L461
+[test_givenDisabled_whenAllLifecycleSeedsUsed_thenAdmissionWins]: withdrawCollateral.t.sol#L809
+[test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized]: withdrawCollateral.t.sol#L866
+[test_givenExpiredGrant_whenOperatorActs_reverts]: withdrawCollateral.t.sol#L425
+[test_givenExpiredGrant_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L996
 [test_givenExplicitWarmupRequirement_whenUnderlyingRequested_thenBothPathsReject]: withdrawCollateralIntegration.t.sol#L431
 [test_givenExternalSharesWithDifferentDecimals_whenWithdrawn_thenUnitsPreserved]: withdrawCollateralIntegration.t.sol#L108
 [test_givenExternalSharesWithSameDecimals_whenWithdrawn_thenExternalTokenDelivered]: withdrawCollateralIntegration.t.sol#L80
-[test_givenGrantDeadline_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L986
-[test_givenHealthImmediatelyAboveOne_whenWithdrawn_thenExactValueReturned]: withdrawCollateral.t.sol#L766
-[test_givenHealthImmediatelyBelowOne_whenWithdrawn_reverts]: withdrawCollateral.t.sol#L756
-[test_givenInactiveAction_whenInvoked_thenOwnAddressIdentified]: withdrawCollateral.t.sol#L442
-[test_givenInactive_whenAllLifecycleSeedsUsed_thenAdmissionWins]: withdrawCollateral.t.sol#L791
-[test_givenMaximumCollateral_whenFullyWithdrawn_thenAllReturnsAndCustodyAgree]: withdrawCollateral.t.sol#L694
-[test_givenMaximumHealth_whenWithdrawn_thenExactValueReturned]: withdrawCollateral.t.sol#L761
-[test_givenMaximumOperatorDeadline_whenWithdrawalBoundaryTimesUsed]: withdrawCollateral.t.sol#L648
+[test_givenGrantDeadline_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L987
+[test_givenHealthImmediatelyAboveOne_whenWithdrawn_thenExactValueReturned]: withdrawCollateral.t.sol#L767
+[test_givenHealthImmediatelyBelowOne_whenWithdrawn_reverts]: withdrawCollateral.t.sol#L757
+[test_givenInactiveAction_whenInvoked_thenOwnAddressIdentified]: withdrawCollateral.t.sol#L443
+[test_givenInactive_whenAllLifecycleSeedsUsed_thenAdmissionWins]: withdrawCollateral.t.sol#L792
+[test_givenMaximumCollateral_whenFullyWithdrawn_thenAllReturnsAndCustodyAgree]: withdrawCollateral.t.sol#L695
+[test_givenMaximumHealth_whenWithdrawn_thenExactValueReturned]: withdrawCollateral.t.sol#L762
+[test_givenMaximumOperatorDeadline_whenWithdrawalBoundaryTimesUsed]: withdrawCollateral.t.sol#L649
 [test_givenMaximumVaultCredit_whenFullyWithdrawn_thenFullWidthUnitsPreserved]: withdrawCollateralIntegration.t.sol#L219
 [test_givenMaximumVaultCredit_whenUnderlyingFullyWithdrawn]: withdrawCollateralIntegration.t.sol#L516
-[test_givenNoGrant_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L967
-[test_givenNoPosition_whenPositiveWithdrawal_thenBothPathsReject]: withdrawCollateral.t.sol#L917
+[test_givenNoGrant_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L968
+[test_givenNoPosition_whenPositiveWithdrawal_thenBothPathsReject]: withdrawCollateral.t.sol#L918
 [test_givenOneRawVaultUnit_whenWithdrawn_thenExactOutput]: withdrawCollateralIntegration.t.sol#L224
-[test_givenOneUnitCollateral_whenFullyWithdrawn_thenAllReturnsAndCustodyAgree]: withdrawCollateral.t.sol#L702
+[test_givenOneUnitCollateral_whenFullyWithdrawn_thenAllReturnsAndCustodyAgree]: withdrawCollateral.t.sol#L703
 [test_givenOneVaultUnit_whenSharesWithdrawn]: withdrawCollateralIntegration.t.sol#L521
-[test_givenOperatorGrant_whenAtDeadline_thenWithdrawalSucceeds]: withdrawCollateral.t.sol#L637
-[test_givenOperatorGrant_whenBeforeDeadline_thenAllWithdrawalEffectsAgree]: withdrawCollateral.t.sol#L625
-[test_givenOriginationsAndInventoryDisabled_whenHealthyWithdrawn_thenServicingOpen]: withdrawCollateral.t.sol#L596
-[test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts]: withdrawCollateral.t.sol#L388
+[test_givenOperatorGrant_whenAtDeadline_thenWithdrawalSucceeds]: withdrawCollateral.t.sol#L638
+[test_givenOperatorGrant_whenBeforeDeadline_thenAllWithdrawalEffectsAgree]: withdrawCollateral.t.sol#L626
+[test_givenOriginationsAndInventoryDisabled_whenHealthyWithdrawn_thenServicingOpen]: withdrawCollateral.t.sol#L597
+[test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts]: withdrawCollateral.t.sol#L389
 [test_givenPropagatedUnauthorizedCacheAction_whenWithdrawing_thenRollback]: withdrawCollateralPriceCallbacks.t.sol#L76
-[test_givenReEnabledAction_whenWithdrawn_thenOperational]: withdrawCollateral.t.sol#L771
-[test_givenReactivatedAction_whenWithdrawn_thenOperational]: withdrawCollateral.t.sol#L781
+[test_givenReEnabledAction_whenWithdrawn_thenOperational]: withdrawCollateral.t.sol#L772
+[test_givenReactivatedAction_whenWithdrawn_thenOperational]: withdrawCollateral.t.sol#L782
 [test_givenRealRisk_whenOneUnitBeyondHealthyWithdrawal_thenFullRollback]: withdrawCollateralIntegration.t.sol#L318
 [test_givenRealRisk_whenWithdrawalLeavesExactBacking_thenAccepted]: withdrawCollateralIntegration.t.sol#L293
 [test_givenRealStalePrice_whenWithdrawalQuotedOrExecuted_thenRejectsBeforeTransfers]: withdrawCollateralIntegration.t.sol#L229
 [test_givenRepeatedPartialWithdrawals_whenLastCreditConsumed_thenExactlyExhausted]: withdrawCollateralIntegration.t.sol#L370
-[test_givenReportedKernelMismatch_whenWithdrawn_thenGetterIsNotRead]: withdrawCollateral.t.sol#L500
-[test_givenRevokedGrant_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L1008
-[test_givenSettlementRoleRevoked_whenWithdrawing_thenBothPathsReject]: withdrawCollateral.t.sol#L660
+[test_givenReportedKernelMismatch_whenWithdrawn_thenGetterIsNotRead]: withdrawCollateral.t.sol#L501
+[test_givenRevokedGrant_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L1009
+[test_givenSettlementRoleRevoked_whenWithdrawing_thenBothPathsReject]: withdrawCollateral.t.sol#L661
 [test_givenShareDeliveryCallback_whenActionReentryCaught]: withdrawCollateralCallbacks.t.sol#L140
 [test_givenShareDeliveryCallback_whenActionReentryPropagated]: withdrawCollateralCallbacks.t.sol#L156
 [test_givenShareDeliveryCallback_whenCoreReentryCaught]: withdrawCollateralCallbacks.t.sol#L173
@@ -269,15 +280,15 @@ Action and Core are active/enabled. Permitted borrower for withdrawals; fuzz per
 [test_givenStaleRealCache_whenPriceFeedFails_thenQuoteAndExecutionRollBack]: withdrawCollateralIntegration.t.sol#L526
 [test_givenSynchronousVault_whenSharesWithdrawn]: withdrawCollateralIntegration.t.sol#L508
 [test_givenSynchronousVault_whenUnderlyingWithdrawn]: withdrawCollateralIntegration.t.sol#L500
-[test_givenTokenIsRecipient_whenWithdrawn_thenAllowedOverlap]: withdrawCollateral.t.sol#L840
-[test_givenUnavailableCore_whenAllLifecycleSeedsUsed_thenAdmissionWins]: withdrawCollateral.t.sol#L824
+[test_givenTokenIsRecipient_whenWithdrawn_thenAllowedOverlap]: withdrawCollateral.t.sol#L841
+[test_givenUnavailableCore_whenAllLifecycleSeedsUsed_thenAdmissionWins]: withdrawCollateral.t.sol#L825
 [test_givenUnderlyingDeliveryCallback_whenActionReentryCaught]: withdrawCollateralCallbacks.t.sol#L26
 [test_givenUnderlyingDeliveryCallback_whenActionReentryPropagated]: withdrawCollateralCallbacks.t.sol#L42
 [test_givenUnderlyingDeliveryCallback_whenCoreReentryCaught]: withdrawCollateralCallbacks.t.sol#L34
 [test_givenUnderlyingDeliveryCallback_whenCoreReentryPropagated]: withdrawCollateralCallbacks.t.sol#L51
-[test_givenUnexpectedWithdrawalToken_whenWithdrawn_thenCollateralDebitRollsBack]: withdrawCollateral.t.sol#L317
-[test_givenUnhealthyFinalPosition_whenWithdrawn_thenExactErrorAndFullRollback]: withdrawCollateral.t.sol#L739
-[test_givenValidGrant_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L978
+[test_givenUnexpectedWithdrawalToken_whenWithdrawn_thenCollateralDebitRollsBack]: withdrawCollateral.t.sol#L318
+[test_givenUnhealthyFinalPosition_whenWithdrawn_thenExactErrorAndFullRollback]: withdrawCollateral.t.sol#L740
+[test_givenValidGrant_whenUnrelatedViewerQuotes]: withdrawCollateral.t.sol#L979
 [test_givenVaultLoss_whenWithdrawn_thenDepositManagerEnforcesPostExitSolvency]: withdrawCollateralIntegration.t.sol#L180
 [test_givenVaultRedemptionCallback_whenActionReentryCaught]: withdrawCollateralCallbacks.t.sol#L60
 [test_givenVaultRedemptionCallback_whenActionReentryPropagated]: withdrawCollateralCallbacks.t.sol#L76
@@ -285,7 +296,11 @@ Action and Core are active/enabled. Permitted borrower for withdrawals; fuzz per
 [test_givenVaultRedemptionCallback_whenCoreReentryPropagated]: withdrawCollateralCallbacks.t.sol#L85
 [test_givenVaultYieldAfterQuote_whenSharesWithdrawn_thenActualOutputUsed]: withdrawCollateralIntegration.t.sol#L334
 [test_givenWithdrawalRoundsToZero_whenQuotedOrExecuted_thenRejectAndRollback]: withdrawCollateralIntegration.t.sol#L152
-[test_givenWithdrawalTokenReturnsFalse_whenWithdrawn_thenEntireExitRollsBack]: withdrawCollateral.t.sol#L346
-[test_whenAnyViewerQuotesWithoutAuthorizationRead]: withdrawCollateral.t.sol#L933
-[test_whenViewerHasAnotherPosition_thenSpecifiedBorrowerQuoted]: withdrawCollateral.t.sol#L1022
-[test_whenWithdrawalBorrowerZero_reverts]: withdrawCollateral.t.sol#L580
+[test_givenWithdrawalTokenReturnsFalse_whenWithdrawn_thenEntireExitRollsBack]: withdrawCollateral.t.sol#L347
+[test_whenAnyViewerQuotesWithoutAuthorizationRead]: withdrawCollateral.t.sol#L934
+[test_whenViewerHasAnotherPosition_thenSpecifiedBorrowerQuoted]: withdrawCollateral.t.sol#L1023
+[test_whenWithdrawalBorrowerZero_reverts]: withdrawCollateral.t.sol#L581
+
+[test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement]: ./withdrawCollateral.t.sol#L1045
+
+[test_givenDebtFreeAndBackingPaused_whenCollateralChanged]: ./withdrawCollateral.t.sol#L1072

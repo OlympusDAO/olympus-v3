@@ -49,7 +49,7 @@ interface IBurnerLoansRisk {
     /// @notice A required asset price is zero or otherwise invalid.
     error BurnerLoans_InvalidPrice();
 
-    /// @notice The configured backing oracle lacks IBackingOracle or IVersioned.
+    /// @notice The configured backing oracle has no code or lacks IBackingOracle or IEnabler.
     /// @param backingOracle Invalid backing oracle address.
     error BurnerLoans_InvalidBackingOracle(address backingOracle);
 

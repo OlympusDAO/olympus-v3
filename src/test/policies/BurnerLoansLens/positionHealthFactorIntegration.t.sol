@@ -308,7 +308,8 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
             1e18,
             "Original fixed quote"
         );
-        MockBackingOracle replacement = new MockBackingOracle(20e18);
+        MockBackingOracle replacement = new MockBackingOracle(_kernel, 20e18);
+        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
         _risk.setBackingOracle(address(replacement));
         vm.expectCall(address(_oracle), abi.encodeWithSignature("backing()"), uint64(0));
         vm.prank(caller_);
@@ -422,7 +423,8 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
         price.setPrice(address(_asset), 10 ** uint256(priceDecimals_));
         _kernel.executeAction(Actions.UpgradeModule, address(price));
         _price = price;
-        _oracle = new MockBackingOracle(10e18);
+        _oracle = new MockBackingOracle(_kernel, 10e18);
+        _kernel.executeAction(Actions.ActivatePolicy, address(_oracle));
         BurnerLoansRisk evaluator = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),

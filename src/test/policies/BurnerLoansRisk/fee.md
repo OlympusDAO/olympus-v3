@@ -195,12 +195,23 @@ Fixed caller, approved nonzero referrer and the independently controlled gross-f
 - [x] Review the extended fee API and component assertions.
 - [x] Port existing fee tests, add the new cases, execute and map evidence.
 
-[test_givenAfterKink_whenFeeQuoted]: fee.t.sol#L279
+## Backing lifecycle acceptance
+
+Fee calculations consume supplied backing through the shared collateral
+requirement calculation and require current oracle Kernel/membership/enablement.
+They retain the captured numeric value rather than rereading the backing getter.
+
+| ID | Caller | Scenario | Expected result | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-FEE-D03 | Test caller (permissionless API) | Oracle active/enabled vary independently; exclude true/true | PolicyDependency_NotActive(oracle); no committed changes | Covered: [test][test_givenBackingUnavailable_whenConsumed_reverts] |
+| BLRISK-FEE-D04 | Test caller (permissionless API) | Deterministic oracle states: active/disabled, inactive/enabled, inactive/disabled | PolicyDependency_NotActive(oracle) for each seed | Covered: [test][test_givenBackingLifecycleBoundaries_whenConsumed_reverts] |
+
+[test_givenAfterKink_whenFeeQuoted]: fee.t.sol#L281
 [test_givenAnotherMarketHasDebt_whenSelectedMarketFeeIsQuoted]: feeIntegration.t.sol#L212
-[test_givenAtCap_whenFeeQuoted]: fee.t.sol#L295
-[test_givenAtKink_whenFeeQuoted]: fee.t.sol#L267
-[test_givenBeforeKink_whenFeeQuoted]: fee.t.sol#L251
-[test_givenDebtAboveCap_whenFeeQuoted_reverts]: fee.t.sol#L148
+[test_givenAtCap_whenFeeQuoted]: fee.t.sol#L297
+[test_givenAtKink_whenFeeQuoted]: fee.t.sol#L269
+[test_givenBeforeKink_whenFeeQuoted]: fee.t.sol#L253
+[test_givenDebtAboveCap_whenFeeQuoted_reverts]: fee.t.sol#L150
 [test_givenDefaultCurve_whenCrossingKink]: ../../libraries/LoanMath/fee.t.sol#L153
 [test_givenDefaultCurve_whenUtilizationEndpointsAreCompared]: ../../libraries/LoanMath/fee.t.sol#L226
 [test_givenDefaultCurve_whenUtilizationIncreases]: ../../libraries/LoanMath/fee.t.sol#L204
@@ -218,10 +229,10 @@ Fixed caller, approved nonzero referrer and the independently controlled gross-f
 [test_givenDefaultCurve_whenUtilizationIsPreKinkMidpoint_whenRiskIsCalled]: feeIntegration.t.sol#L35
 [test_givenDefaultCurve_whenUtilizationIsZero]: ../../libraries/LoanMath/fee.t.sol#L32
 [test_givenDefaultCurve_whenUtilizationIsZero_whenRiskIsCalled]: feeIntegration.t.sol#L24
-[test_givenDisabled_whenCalled_reverts]: fee.t.sol#L101
+[test_givenDisabled_whenCalled_reverts]: fee.t.sol#L103
 [test_givenDustFee_whenMaximumTermsAreQuoted]: feeIntegration.t.sol#L156
 [test_givenDustFee_whenThreeTermsAreQuoted]: feeIntegration.t.sol#L149
-[test_givenEmptyMarketZeroCap_whenFeeQuoted]: fee.t.sol#L175
+[test_givenEmptyMarketZeroCap_whenFeeQuoted]: fee.t.sol#L177
 [test_givenExistingMarketDebt_whenRequestedPrincipalDoubles]: feeIntegration.t.sol#L196
 [test_givenFlatCurve_whenFeeIsExactlyAnInteger]: feeIntegration.t.sol#L174
 [test_givenFlatCurve_whenFeeIsImmediatelyAboveAnInteger]: feeIntegration.t.sol#L185
@@ -229,52 +240,52 @@ Fixed caller, approved nonzero referrer and the independently controlled gross-f
 [test_givenFlatCurve_whenPrincipalIsOneRawOhmUnit]: feeIntegration.t.sol#L130
 [test_givenFlatCurve_whenThreeTermsAreQuoted]: feeIntegration.t.sol#L138
 [test_givenGlobalFundingChanges_whenSelectedMarketFeeQuoted]: feeIntegration.t.sol#L283
-[test_givenInactiveAndDisabled_whenCalled_reverts]: fee.t.sol#L115
-[test_givenInactive_whenCalled_reverts]: fee.t.sol#L108
+[test_givenInactiveAndDisabled_whenCalled_reverts]: fee.t.sol#L117
+[test_givenInactive_whenCalled_reverts]: fee.t.sol#L110
 [test_givenLinearCurve_whenDebtIsTiny]: feeIntegration.t.sol#L118
 [test_givenLinearCurve_whenUtilizationIsNearCap]: feeIntegration.t.sol#L101
-[test_givenOperational_whenCalled]: fee.t.sol#L95
-[test_givenReEnabled_whenCalled]: fee.t.sol#L124
+[test_givenOperational_whenCalled]: fee.t.sol#L97
+[test_givenReEnabled_whenCalled]: fee.t.sol#L126
 [test_givenReplacementSelected_whenOldRiskQuoted]: feeIntegration.t.sol#L303
-[test_givenZeroCap_whenFeeQuoted_reverts]: fee.t.sol#L138
-[test_givenZeroKinkFlatCurve_whenFeeQuoted]: fee.t.sol#L183
+[test_givenZeroCap_whenFeeQuoted_reverts]: fee.t.sol#L140
+[test_givenZeroKinkFlatCurve_whenFeeQuoted]: fee.t.sol#L185
 [test_givenZeroKink_whenNearCapBorrowFeeIsCalculated]: ../../libraries/LoanMath/fee.t.sol#L173
 [test_givenZeroKink_whenSlopeContributionHasRemainder]: ../../libraries/LoanMath/fee.t.sol#L119
 [test_givenZeroKink_whenSlopeIsNonzero]: ../../libraries/LoanMath/fee.t.sol#L103
 [test_givenZeroKink_whenUtilizationIsNearCap]: ../../libraries/LoanMath/fee.t.sol#L136
-[test_givenZeroPrincipal_whenFeeQuoted]: fee.t.sol#L190
-[test_givenZeroTermsAndZeroCap_whenFeeQuoted_reverts]: fee.t.sol#L156
-[test_givenZeroTerms_whenFeeQuoted]: fee.t.sol#L196
-[test_whenBackingMultiplier]: fee.t.sol#L407
-[test_whenBackingRequirement]: fee.t.sol#L332
-[test_whenBackingRoundUpOverflows_thenFeeAndHealthRevert]: fee.t.sol#L73
+[test_givenZeroPrincipal_whenFeeQuoted]: fee.t.sol#L192
+[test_givenZeroTermsAndZeroCap_whenFeeQuoted_reverts]: fee.t.sol#L158
+[test_givenZeroTerms_whenFeeQuoted]: fee.t.sol#L198
+[test_whenBackingMultiplier]: fee.t.sol#L409
+[test_whenBackingRequirement]: fee.t.sol#L334
+[test_whenBackingRoundUpOverflows_thenFeeAndHealthRevert]: fee.t.sol#L75
 [test_whenBorrowFeeIsCalculated]: ../../libraries/LoanMath/fee.t.sol#L166
-[test_whenCollateralConversionRoundsUp]: fee.t.sol#L432
-[test_whenCollateralPriceIsZero_whenTermsAreZero_reverts]: fee.t.sol#L24
-[test_whenDebtTokenDiffers_reverts]: fee.t.sol#L532
-[test_whenDiscountedLtv]: fee.t.sol#L382
-[test_whenEighteenOhmDecimals]: fee.t.sol#L489
-[test_whenEqualRequirements]: fee.t.sol#L357
-[test_whenFeePerTermTimesTermsOverflows_reverts]: fee.t.sol#L50
-[test_whenFlatBase]: fee.t.sol#L518
-[test_whenMarketExitsAsShares]: fee.t.sol#L558
-[test_whenMarketMissing_reverts]: fee.t.sol#L166
-[test_whenMarketRequirement]: fee.t.sol#L307
-[test_whenMarketSchemaDiffers_reverts]: fee.t.sol#L543
+[test_whenCollateralConversionRoundsUp]: fee.t.sol#L434
+[test_whenCollateralPriceIsZero_whenTermsAreZero_reverts]: fee.t.sol#L26
+[test_whenDebtTokenDiffers_reverts]: fee.t.sol#L534
+[test_whenDiscountedLtv]: fee.t.sol#L384
+[test_whenEighteenOhmDecimals]: fee.t.sol#L491
+[test_whenEqualRequirements]: fee.t.sol#L359
+[test_whenFeePerTermTimesTermsOverflows_reverts]: fee.t.sol#L52
+[test_whenFlatBase]: fee.t.sol#L520
+[test_whenMarketExitsAsShares]: fee.t.sol#L560
+[test_whenMarketMissing_reverts]: fee.t.sol#L168
+[test_whenMarketRequirement]: fee.t.sol#L309
+[test_whenMarketSchemaDiffers_reverts]: fee.t.sol#L545
 [test_whenNonzeroDebtIsTiny]: ../../libraries/LoanMath/fee.t.sol#L220
-[test_whenPrincipalAndTermEndpoints]: fee.t.sol#L220
-[test_whenRequiredDebtValueOverflows_reverts]: fee.t.sol#L37
-[test_whenSixPriceDecimals]: fee.t.sol#L457
-[test_whenSixPriceEighteenCollateralDecimals]: fee.t.sol#L473
-[test_whenSnapshotFieldsAreMaximum]: fee.t.sol#L572
-[test_whenTermsAndPrincipalAreRepresentable]: fee.t.sol#L202
+[test_whenPrincipalAndTermEndpoints]: fee.t.sol#L222
+[test_whenRequiredDebtValueOverflows_reverts]: fee.t.sol#L39
+[test_whenSixPriceDecimals]: fee.t.sol#L459
+[test_whenSixPriceEighteenCollateralDecimals]: fee.t.sol#L475
+[test_whenSnapshotFieldsAreMaximum]: fee.t.sol#L574
+[test_whenTermsAndPrincipalAreRepresentable]: fee.t.sol#L204
 [test_whenUtilizationIsNearCap]: ../../libraries/LoanMath/fee.t.sol#L20
 [test_whenUtilizationIsRoundedUp]: ../../libraries/LoanMath/fee.t.sol#L191
-[test_whenUtilizationRoundsUp]: fee.t.sol#L236
-[test_whenZeroCurve]: fee.t.sol#L525
-[test_givenApprovedReferrer_whenFeeQuoted]: fee.t.sol#L663
-[test_givenRejectedReferrer_whenFeeQuoted_reverts]: fee.t.sol#L688
-[test_givenRejectedReferrer_whenZeroFeeOrShare_reverts]: fee.t.sol#L711
+[test_whenUtilizationRoundsUp]: fee.t.sol#L238
+[test_whenZeroCurve]: fee.t.sol#L527
+[test_givenApprovedReferrer_whenFeeQuoted]: fee.t.sol#L665
+[test_givenRejectedReferrer_whenFeeQuoted_reverts]: fee.t.sol#L690
+[test_givenRejectedReferrer_whenZeroFeeOrShare_reverts]: fee.t.sol#L713
 [test_givenRiskQueueInactivePaused_whenBorrowed]: ../BurnerLoansDebt/borrowReferralIntegration.t.sol#L548
 [test_givenRiskQueueInactivePaused_whenExtended]: ../BurnerLoansDebt/extendReferralIntegration.t.sol#L480
 [test_givenRiskQueueInactive_whenBorrowed]: ../BurnerLoansDebt/borrowReferralIntegration.t.sol#L543
@@ -286,5 +297,9 @@ Fixed caller, approved nonzero referrer and the independently controlled gross-f
 [test_givenRiskQueuePaused_whenBorrowed]: ../BurnerLoansDebt/borrowReferralIntegration.t.sol#L538
 [test_givenRiskQueuePaused_whenExtended]: ../BurnerLoansDebt/extendReferralIntegration.t.sol#L470
 [test_givenSharedReferralPercentage_whenDifferentMarketsAndTermsQuoted]: feeIntegration.t.sol#L338
-[test_whenReferralRoundingBoundaries]: fee.t.sol#L629
-[test_whenZeroReferrer]: fee.t.sol#L647
+[test_whenReferralRoundingBoundaries]: fee.t.sol#L631
+[test_whenZeroReferrer]: fee.t.sol#L649
+
+[test_givenBackingUnavailable_whenConsumed_reverts]: ./fee.t.sol#L720
+
+[test_givenBackingLifecycleBoundaries_whenConsumed_reverts]: ./fee.t.sol#L734

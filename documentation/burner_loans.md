@@ -92,7 +92,7 @@ Pausing Payout stops new credits. Retries and authorized Payout recovery require
 
 Risk calculates health using the current FLOAN market configuration. Prices and USD values use `PRICE.decimals()`. The backing oracle returns 18-decimal USD per OHM; Risk converts it to the PRICE scale, rounding up.
 
-[BackingOracle](backing_oracle.md) stores that value independently of Risk. Its separate, replaceable `BackingOracleConfigTimelock` applies delayed updates with a fixed one-day notice. `backing_admin` proposes updates and can recover the oracle or its queue within grace; `burner_loans_admin` does not confer those permissions. Pausing or deactivating the oracle blocks updates but leaves the last value readable by Risk.
+[BackingOracle](backing_oracle.md) stores that value independently of Risk. Its separate, replaceable `BackingOracleConfigTimelock` applies delayed updates with a fixed one-day notice. `backing_admin` proposes updates and can recover the oracle or its queue within grace; `burner_loans_admin` does not confer those permissions. Pausing or deactivating the oracle leaves its getter readable but blocks Risk from consuming backing. Risk requires a same-Kernel, active and enabled oracle at enable/reEnable and backing consumption, including calculations using captured snapshots.
 
 ```text
 marketRequirementUsd = ceil(debtValueUsd * 10_000 / maxLtvBps)
@@ -120,7 +120,7 @@ crossover = (maxLtvBps / 10_000) * (backingMultiplierBps / 10_000)
 
 Risk owns `backingOracle`, `priceCache` and `priceCacheMaxAge`. Zero cache selects direct PRICE reads. A configured cache is used only while active and enabled; otherwise Risk uses PRICE. Cache compatibility and lifecycle errors remain distinct, including the shared Kernel-mismatch error.
 
-Views use a fresh cached snapshot or read PRICE without writing the cache. Price-dependent actions refresh an operational cache when necessary. An error from an operational cache propagates. Debt-free health does not need a price read.
+Views use a fresh cached snapshot or read PRICE without writing the cache. Price-dependent actions refresh an operational cache when necessary. An error from an operational cache propagates. Debt-free health does not need a price read. An unavailable backing oracle blocks borrow/extend, partial repayment, indebted collateral deposits/withdrawals and seizure execution, including their price-dependent previews. Full repayment and debt-free collateral operations retain their pricing-independent paths. Pause originations rather than backing to retain price-dependent servicing during wind-down.
 
 A full repayment has a debt-free result, but it still applies custody, amount and same-block validation. Repaid positions with remaining debt use current pricing for their resulting health.
 
@@ -251,7 +251,7 @@ This is a dependency order, not a reviewed production deployment script. Confirm
 2. Deploy Core with its permanent OHM and DepositManager identities, then activate it while disabled.
 3. Deploy Core-bound Inventory, Payout, Config and Risk, plus Lens and the required actions and tasks.
 4. Activate the policies and grant their operation-specific roles. Prepare the independent Risk, Inventory and Payout controllers.
-5. Verify DepositManager is active and enabled. Enable Inventory, Payout and Risk, then select those services on Core using ADMIN.
+5. Verify DepositManager and the backing oracle are active and enabled in the same Kernel. Enable Inventory, Payout and Risk, then select those services on Core using ADMIN.
 6. Select Config on Core. Enable Core, then Config and the public actions after their dependency checks pass. After enabling Config, select its local config operator.
 7. Grant Core `deposit_operator` and register its DepositManager operator name. Configure custody and enabled period-1 routes for Core, plus required prices. Add each asset through Config and set Inventory capacity.
 8. Configure RevenueDistributor routes and Payout flags before relying on routed fee or yield receipts.

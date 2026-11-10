@@ -64,40 +64,69 @@ OHM decimals=9, collateral decimals=6, debt=1e9, OHM price=2e18, collateral pric
 - [x] Review expectations and complete remaining domains.
 - [x] Map focused tests with reciprocal scenario IDs.
 
-[test_givenBackingRequirementBinds_whenCollateralEqualsRequirement]: health.t.sol#L119
-[test_givenBackingRequirementBinds_whenCollateralIsOneUnitAbove]: health.t.sol#L125
-[test_givenBackingRequirementBinds_whenCollateralIsOneUnitBelow_revertsValidation]: health.t.sol#L110
-[test_givenDisabled_whenCalled_reverts]: health.t.sol#L143
-[test_givenDisabled_whenHealthValidated_reverts]: health.t.sol#L178
-[test_givenInactiveAndDisabled_whenCalled_reverts]: health.t.sol#L157
-[test_givenInactiveAndDisabled_whenHealthValidated_reverts]: health.t.sol#L198
-[test_givenInactive_whenCalled_reverts]: health.t.sol#L150
-[test_givenInactive_whenHealthValidated_reverts]: health.t.sol#L188
-[test_givenMarketRequirementBinds_whenCollateralEqualsRequirement]: health.t.sol#L80
-[test_givenMarketRequirementBinds_whenCollateralIsOneUnitAbove]: health.t.sol#L86
-[test_givenMarketRequirementBinds_whenCollateralIsOneUnitBelow_revertsValidation]: health.t.sol#L71
-[test_givenOperational_whenCalled]: health.t.sol#L131
-[test_givenReEnabled_whenCalled]: health.t.sol#L166
-[test_givenRequirementsEqual_whenCollateralEqualsRequirement]: health.t.sol#L98
-[test_givenRequirementsEqual_whenCollateralIsOneUnitAbove]: health.t.sol#L104
-[test_givenRequirementsEqual_whenCollateralIsOneUnitBelow_revertsValidation]: health.t.sol#L92
-[test_whenBackingRoundUpOverflows_reverts]: health.t.sol#L362
-[test_whenBackingRoundUpOverflows_thenFeeAndHealthRevert]: fee.t.sol#L73
-[test_whenDebtAndCollateralEndpoints]: health.t.sol#L523
-[test_whenDebtIsZero]: health.t.sol#L257
-[test_whenExactEconomicsUse18PriceDecimals]: health.t.sol#L436
-[test_whenExactEconomicsUse36PriceDecimals]: health.t.sol#L473
-[test_whenExactEconomicsUse6PriceDecimals]: health.t.sol#L378
-[test_whenExactEconomicsUse8PriceDecimals]: health.t.sol#L407
-[test_whenHealthQuotientOverflows_reverts]: health.t.sol#L349
-[test_whenInexactEconomicsUse18PriceDecimals]: health.t.sol#L454
-[test_whenInexactEconomicsUse36PriceDecimals]: health.t.sol#L491
-[test_whenInexactEconomicsUse6PriceDecimals]: health.t.sol#L392
-[test_whenInexactEconomicsUse8PriceDecimals]: health.t.sol#L421
-[test_whenMarketDebtTokenDiffers_reverts]: health.t.sol#L332
-[test_whenMarketMissing_reverts]: health.t.sol#L320
-[test_whenPositionIsExactlyHealthy]: health.t.sol#L309
-[test_whenPositionIsHealthy]: health.t.sol#L314
-[test_whenPositionIsUnhealthy_revertsValidation]: health.t.sol#L281
-[test_whenRequirementIsZero]: health.t.sol#L269
-[test_whenSnapshotFieldsAreMaximum]: health.t.sol#L510
+## Backing lifecycle acceptance
+
+Nonzero-debt health and validateHealth require current oracle readiness even
+with a captured snapshot. They do not reread backing. Zero-debt health retains
+its max-uint shortcut; own Risk lifecycle checks still apply.
+
+| ID | Caller | Scenario | Expected result | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-HEALTH-D01 | Test caller (permissionless API) | Oracle active/enabled vary independently; exclude true/true | PolicyDependency_NotActive(oracle); no committed changes | Covered: [test][test_givenBackingUnavailable_whenConsumed_reverts] |
+| BLRISK-HEALTH-D02 | Test caller (permissionless API) | Deterministic oracle states: active/disabled, inactive/enabled, inactive/disabled | PolicyDependency_NotActive(oracle) for each seed | Covered: [test][test_givenBackingLifecycleBoundaries_whenConsumed_reverts] |
+| BLRISK-HEALTH-D03 | Test caller (permissionless API) | Oracle disabled; nonzero debt; both final-position flag values | PolicyDependency_NotActive(oracle) | Covered: [test][test_givenBackingDisabled_whenHealthValidated_reverts] |
+| BLRISK-HEALTH-D04 | Test caller (permissionless API) | Oracle disabled; debt=0 for health and validateHealth | Both return uint256.max without backing consumption | Covered: [test][test_givenBackingDisabled_whenDebtFreeHealthValidated] |
+
+## Backing availability regressions
+
+Local policy and ordinary dependencies are active/enabled; callers satisfy the
+existing action authorization. Each fault varies backing readiness independently.
+Rejection preserves authoritative accounting, custody and emitted logs.
+
+| ID | Scenario | Expected execution and preview | Test |
+| --- | --- | --- | --- |
+| BLRISK-HEALTH-D05 | Capture backing, fail backing getter, pause and restore oracle | Ready captured health=2e18; paused calculation: PolicyDependency_NotActive(oracle); restored health=2e18 | Covered: [test][test_givenCapturedBacking_whenGetterFails_thenHealthUsesCapture] |
+
+[test_givenBackingRequirementBinds_whenCollateralEqualsRequirement]: health.t.sol#L122
+[test_givenBackingRequirementBinds_whenCollateralIsOneUnitAbove]: health.t.sol#L128
+[test_givenBackingRequirementBinds_whenCollateralIsOneUnitBelow_revertsValidation]: health.t.sol#L113
+[test_givenDisabled_whenCalled_reverts]: health.t.sol#L146
+[test_givenDisabled_whenHealthValidated_reverts]: health.t.sol#L181
+[test_givenInactiveAndDisabled_whenCalled_reverts]: health.t.sol#L160
+[test_givenInactiveAndDisabled_whenHealthValidated_reverts]: health.t.sol#L201
+[test_givenInactive_whenCalled_reverts]: health.t.sol#L153
+[test_givenInactive_whenHealthValidated_reverts]: health.t.sol#L191
+[test_givenMarketRequirementBinds_whenCollateralEqualsRequirement]: health.t.sol#L83
+[test_givenMarketRequirementBinds_whenCollateralIsOneUnitAbove]: health.t.sol#L89
+[test_givenMarketRequirementBinds_whenCollateralIsOneUnitBelow_revertsValidation]: health.t.sol#L74
+[test_givenOperational_whenCalled]: health.t.sol#L134
+[test_givenReEnabled_whenCalled]: health.t.sol#L169
+[test_givenRequirementsEqual_whenCollateralEqualsRequirement]: health.t.sol#L101
+[test_givenRequirementsEqual_whenCollateralIsOneUnitAbove]: health.t.sol#L107
+[test_givenRequirementsEqual_whenCollateralIsOneUnitBelow_revertsValidation]: health.t.sol#L95
+[test_whenBackingRoundUpOverflows_reverts]: health.t.sol#L365
+[test_whenBackingRoundUpOverflows_thenFeeAndHealthRevert]: fee.t.sol#L75
+[test_whenDebtAndCollateralEndpoints]: health.t.sol#L526
+[test_whenDebtIsZero]: health.t.sol#L260
+[test_whenExactEconomicsUse18PriceDecimals]: health.t.sol#L439
+[test_whenExactEconomicsUse36PriceDecimals]: health.t.sol#L476
+[test_whenExactEconomicsUse6PriceDecimals]: health.t.sol#L381
+[test_whenExactEconomicsUse8PriceDecimals]: health.t.sol#L410
+[test_whenHealthQuotientOverflows_reverts]: health.t.sol#L352
+[test_whenInexactEconomicsUse18PriceDecimals]: health.t.sol#L457
+[test_whenInexactEconomicsUse36PriceDecimals]: health.t.sol#L494
+[test_whenInexactEconomicsUse6PriceDecimals]: health.t.sol#L395
+[test_whenInexactEconomicsUse8PriceDecimals]: health.t.sol#L424
+[test_whenMarketDebtTokenDiffers_reverts]: health.t.sol#L335
+[test_whenMarketMissing_reverts]: health.t.sol#L323
+[test_whenPositionIsExactlyHealthy]: health.t.sol#L312
+[test_whenPositionIsHealthy]: health.t.sol#L317
+[test_whenPositionIsUnhealthy_revertsValidation]: health.t.sol#L284
+[test_whenRequirementIsZero]: health.t.sol#L272
+[test_whenSnapshotFieldsAreMaximum]: health.t.sol#L513
+[test_givenBackingUnavailable_whenConsumed_reverts]: ./health.t.sol#L554
+[test_givenBackingLifecycleBoundaries_whenConsumed_reverts]: ./health.t.sol#L568
+[test_givenBackingDisabled_whenHealthValidated_reverts]: ./health.t.sol#L578
+[test_givenBackingDisabled_whenDebtFreeHealthValidated]: ./health.t.sol#L590
+
+[test_givenCapturedBacking_whenGetterFails_thenHealthUsesCapture]: ./health.t.sol#L605

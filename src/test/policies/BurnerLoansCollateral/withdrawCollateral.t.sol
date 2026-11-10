@@ -16,6 +16,7 @@ import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {BL_COLLATERAL_POLICY_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
 
 // Contracts
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansCollateralActionTest} from "./fixtures/BurnerLoansCollateralActionTest.sol";
 import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {Actions} from "src/Kernel.sol";
@@ -1037,6 +1038,64 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
             _accountingDigest(address(_asset)),
             beforeState,
             "viewer, borrower and recipient remain distinct and unchanged"
+        );
+    }
+
+    // Scenarios: BLCOL-WITHDRAW-D08.
+    function test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement()
+        public
+    {
+        _depositAsset(_asset, 2000e6, _borrower);
+        _asset.mint(_borrower, 100e6);
+        vm.prank(_borrower);
+        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, type(uint256).max, address(0));
+        address oracle = _risk.backingOracle();
+        MockBackingOracle(oracle).setEnabled(false);
+        bytes32 beforeState = _accountingDigest(address(_asset));
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        );
+        _collateral.previewWithdrawCollateral(address(_asset), 1e6, _borrower, _recipient);
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        );
+        vm.prank(_borrower);
+        _collateral.withdrawCollateral(address(_asset), 1e6, _borrower, _recipient);
+        assertEq(
+            _accountingDigest(address(_asset)),
+            beforeState,
+            "backing outage leaves collateral and custody unchanged"
+        );
+    }
+
+    // Scenarios: BLCOL-WITHDRAW-D09.
+    function test_givenDebtFreeAndBackingPaused_whenCollateralChanged()
+        public
+        givenDebtFreeCollateral
+    {
+        MockBackingOracle(_risk.backingOracle()).setEnabled(false);
+        _asset.mint(_borrower, 1e6);
+        vm.prank(_borrower);
+        IBurnerLoansCollateral.WithdrawPreview memory result = _collateral.withdrawCollateral(
+            address(_asset),
+            1e6,
+            _borrower,
+            _recipient
+        );
+        assertEq(
+            result.remainingDepositedCollateral,
+            99e6,
+            "debt-free exit removes collateral during backing outage"
+        );
+        assertEq(
+            result.returnAmount,
+            1e6,
+            "debt-free exit transfers exact output during backing outage"
+        );
+        assertEq(
+            result.resultingHealthFactor,
+            type(uint256).max,
+            "debt-free exit requires no backing"
         );
     }
 }

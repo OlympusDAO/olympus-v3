@@ -5,7 +5,11 @@ pragma solidity >=0.8.24;
 import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {BurnerLoansDebtIntegrationTest} from "src/test/policies/BurnerLoansDebt/fixtures/BurnerLoansDebtIntegrationTest.sol";
 
@@ -149,6 +153,47 @@ contract BurnerLoansDebtRepayIntegrationTest is BurnerLoansDebtIntegrationTest {
             state,
             "Real pricing failure restores all ledgers, custody and allowances"
         );
+    }
+
+    // Scenarios: BLDEBT-REPAY-D10.
+    function test_givenBackingPaused_whenPartiallyRepaid_revertsWithoutSettlement() public {
+        _openRealDebt(2000e6, 100e9);
+        vm.roll(block.number + 1);
+        _fundRepayer(_borrower, 100e9);
+        address oracle = _risk.backingOracle();
+        MockBackingOracle(oracle).setEnabled(false);
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        );
+        _debt.previewRepay(address(_asset), 50e9, _borrower);
+        uint256 beforeBalance = _ohm.balanceOf(_borrower);
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        );
+        vm.prank(_borrower);
+        _debt.repay(address(_asset), 50e9, _borrower);
+        assertEq(_ohm.balanceOf(_borrower), beforeBalance, "rejected repayment transfers no OHM");
+        _assertMarketTotals(address(_asset), 100e9, 2000e6, 1);
+    }
+
+    // Scenarios: BLDEBT-REPAY-D11.
+    function test_givenBackingPaused_whenFullyRepaid_thenDebtCloses() public {
+        _openRealDebt(2000e6, 100e9);
+        vm.roll(block.number + 1);
+        _fundRepayer(_borrower, 100e9);
+        MockBackingOracle(_risk.backingOracle()).setEnabled(false);
+        (uint128 quotedDebt, uint256 quotedHealth) = _debt.previewRepay(
+            address(_asset),
+            100e9,
+            _borrower
+        );
+        assertEq(quotedDebt, 0, "full repayment preview clears debt during backing outage");
+        assertEq(quotedHealth, type(uint256).max, "debt-free preview needs no backing");
+        vm.prank(_borrower);
+        (uint128 remaining, uint256 health) = _debt.repay(address(_asset), 100e9, _borrower);
+        assertEq(remaining, 0, "full repayment clears debt during backing outage");
+        assertEq(health, type(uint256).max, "debt-free settlement needs no backing");
+        _assertMarketTotals(address(_asset), 0, 2000e6, 0);
     }
 }
 

@@ -87,32 +87,47 @@ Registered asset; representable snapshot fields; unset fields not used by this e
 | --- | --- | --- | --- | --- | --- |
 | BLRISK-KEEPER-REWARD-N03 | Fuzz all callers | Required backing Math.mulDiv quotient exceeds MAX256; earlier configuration lookup valid | `Panic(0x11)` | No state writes, cache updates or token movements | Covered: [test][test_whenRequiredBackingOverflows_reverts] |
 
-[test_givenDisabled_whenCalled_reverts]: keeperReward.t.sol#L29
-[test_givenInactiveAndDisabled_whenCalled_reverts]: keeperReward.t.sol#L43
-[test_givenInactive_whenCalled_reverts]: keeperReward.t.sol#L36
-[test_givenOperational_whenCalled]: keeperReward.t.sol#L19
-[test_givenProtocolCaller_whenRewardQuoted]: keeperReward.t.sol#L272
-[test_givenReEnabled_whenCalled]: keeperReward.t.sol#L52
-[test_givenZeroBps_whenRewardQuoted]: keeperReward.t.sol#L294
-[test_givenZeroCap_whenRewardQuoted]: keeperReward.t.sol#L317
-[test_whenAboveBacking]: keeperReward.t.sol#L153
-[test_whenAbovePercentBoundary]: keeperReward.t.sol#L99
-[test_whenAtBacking]: keeperReward.t.sol#L144
-[test_whenAtPercentBoundary]: keeperReward.t.sol#L90
-[test_whenBelowBacking]: keeperReward.t.sol#L135
-[test_whenBelowPercentBoundary]: keeperReward.t.sol#L81
-[test_whenCapAbovePercent]: keeperReward.t.sol#L126
-[test_whenCapBelowPercent]: keeperReward.t.sol#L108
-[test_whenCapEqualsPercent]: keeperReward.t.sol#L117
-[test_whenFractionalShareReward]: keeperReward.t.sol#L207
-[test_whenFractionalUnderlyingReward]: keeperReward.t.sol#L162
-[test_whenRequiredBackingOverflows_reverts]: keeperReward.t.sol#L340
-[test_whenRewardLeavesBackingRemainder]: keeperReward.t.sol#L171
-[test_whenShareCollateralIsZero]: keeperReward.t.sol#L250
-[test_whenShareConversionUsesAnyRepresentableOutput]: keeperReward.t.sol#L225
-[test_whenShareOutputMaximum]: keeperReward.t.sol#L240
-[test_whenSharesAboveUnity]: keeperReward.t.sol#L198
-[test_whenSharesAtUnity]: keeperReward.t.sol#L189
-[test_whenSharesBelowUnity]: keeperReward.t.sol#L180
-[test_whenZeroCollateralOutputEndpoints]: keeperReward.t.sol#L261
-[test_whenZeroShareOutput]: keeperReward.t.sol#L216
+## Backing lifecycle acceptance
+
+Backing-dependent rewards require current oracle Kernel/membership/enablement.
+Protocol callers and zero reward configurations keep their existing zero-reward
+shortcuts, which do not consume backing.
+
+| ID | Caller | Scenario | Expected result | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-KEEPER-REWARD-D01 | Test caller (permissionless API) | Oracle active/enabled vary independently; exclude true/true | PolicyDependency_NotActive(oracle); no committed changes | Covered: [test][test_givenBackingUnavailable_whenConsumed_reverts] |
+| BLRISK-KEEPER-REWARD-D02 | Test caller (permissionless API) | Deterministic oracle states: active/disabled, inactive/enabled, inactive/disabled | PolicyDependency_NotActive(oracle) for each seed | Covered: [test][test_givenBackingLifecycleBoundaries_whenConsumed_reverts] |
+
+[test_givenDisabled_whenCalled_reverts]: keeperReward.t.sol#L32
+[test_givenInactiveAndDisabled_whenCalled_reverts]: keeperReward.t.sol#L46
+[test_givenInactive_whenCalled_reverts]: keeperReward.t.sol#L39
+[test_givenOperational_whenCalled]: keeperReward.t.sol#L22
+[test_givenProtocolCaller_whenRewardQuoted]: keeperReward.t.sol#L275
+[test_givenReEnabled_whenCalled]: keeperReward.t.sol#L55
+[test_givenZeroBps_whenRewardQuoted]: keeperReward.t.sol#L297
+[test_givenZeroCap_whenRewardQuoted]: keeperReward.t.sol#L320
+[test_whenAboveBacking]: keeperReward.t.sol#L156
+[test_whenAbovePercentBoundary]: keeperReward.t.sol#L102
+[test_whenAtBacking]: keeperReward.t.sol#L147
+[test_whenAtPercentBoundary]: keeperReward.t.sol#L93
+[test_whenBelowBacking]: keeperReward.t.sol#L138
+[test_whenBelowPercentBoundary]: keeperReward.t.sol#L84
+[test_whenCapAbovePercent]: keeperReward.t.sol#L129
+[test_whenCapBelowPercent]: keeperReward.t.sol#L111
+[test_whenCapEqualsPercent]: keeperReward.t.sol#L120
+[test_whenFractionalShareReward]: keeperReward.t.sol#L210
+[test_whenFractionalUnderlyingReward]: keeperReward.t.sol#L165
+[test_whenRequiredBackingOverflows_reverts]: keeperReward.t.sol#L343
+[test_whenRewardLeavesBackingRemainder]: keeperReward.t.sol#L174
+[test_whenShareCollateralIsZero]: keeperReward.t.sol#L253
+[test_whenShareConversionUsesAnyRepresentableOutput]: keeperReward.t.sol#L228
+[test_whenShareOutputMaximum]: keeperReward.t.sol#L243
+[test_whenSharesAboveUnity]: keeperReward.t.sol#L201
+[test_whenSharesAtUnity]: keeperReward.t.sol#L192
+[test_whenSharesBelowUnity]: keeperReward.t.sol#L183
+[test_whenZeroCollateralOutputEndpoints]: keeperReward.t.sol#L264
+[test_whenZeroShareOutput]: keeperReward.t.sol#L219
+
+[test_givenBackingUnavailable_whenConsumed_reverts]: ./keeperReward.t.sol#L357
+
+[test_givenBackingLifecycleBoundaries_whenConsumed_reverts]: ./keeperReward.t.sol#L371
