@@ -24,7 +24,7 @@ import {BurnerLoansRisk} from "src/policies/burnerloans/BurnerLoansRisk.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
 
 /// @dev Real modular deployment; expected commitments are encoded independently of queue internals.
@@ -610,7 +610,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
         replacement = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
-            address(new MockOlympusBackingOracle(1e18)),
+            address(new MockBackingOracle(1e18)),
             address(0),
             age_,
             address(_core)

@@ -11,7 +11,7 @@ import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoans
 // Contracts
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {Actions, Policy} from "src/Kernel.sol";
 
 import {BurnerLoansRisk} from "src/policies/burnerloans/BurnerLoansRisk.sol";
@@ -308,7 +308,7 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
             1e18,
             "Original fixed quote"
         );
-        MockOlympusBackingOracle replacement = new MockOlympusBackingOracle(20e18);
+        MockBackingOracle replacement = new MockBackingOracle(20e18);
         _risk.setBackingOracle(address(replacement));
         vm.expectCall(address(_oracle), abi.encodeWithSignature("backing()"), uint64(0));
         vm.prank(caller_);
@@ -413,7 +413,7 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
     }
 
     MockERC20 internal _healthAsset;
-    MockOlympusBackingOracle internal _oracle;
+    MockBackingOracle internal _oracle;
 
     function _healthSetup(uint8 ohmDecimals_, uint8 assetDecimals_, uint8 priceDecimals_) internal {
         vm.mockCall(address(_ohm), abi.encodeWithSignature("decimals()"), abi.encode(ohmDecimals_));
@@ -422,7 +422,7 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
         price.setPrice(address(_asset), 10 ** uint256(priceDecimals_));
         _kernel.executeAction(Actions.UpgradeModule, address(price));
         _price = price;
-        _oracle = new MockOlympusBackingOracle(10e18);
+        _oracle = new MockBackingOracle(10e18);
         BurnerLoansRisk evaluator = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),

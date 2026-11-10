@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
-import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
+import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 
 // Libraries
 import {stdError} from "@forge-std-1.16.2/StdError.sol";
@@ -224,11 +224,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
         uint256 backing = bound(backing_, 1, type(uint256).max);
         _price.setPriceDecimals(0);
         _oracle.setBacking(backing);
-        vm.expectCall(
-            address(_oracle),
-            abi.encodeCall(IOlympusBackingOracle.backing, ()),
-            uint64(1)
-        );
+        vm.expectCall(address(_oracle), abi.encodeCall(IBackingOracle.backing, ()), uint64(1));
         vm.prank(caller_);
         _assertSnapshot(
             _risk.snapshot(address(_asset)),
@@ -270,11 +266,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
         uint256 backing = bound(backing_, 1, type(uint256).max);
         _price.setPriceDecimals(6);
         _oracle.setBacking(backing);
-        vm.expectCall(
-            address(_oracle),
-            abi.encodeCall(IOlympusBackingOracle.backing, ()),
-            uint64(1)
-        );
+        vm.expectCall(address(_oracle), abi.encodeCall(IBackingOracle.backing, ()), uint64(1));
         vm.prank(caller_);
         _assertSnapshot(
             _risk.snapshot(address(_asset)),
@@ -316,11 +308,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
         uint256 backing = bound(backing_, 1, type(uint256).max);
         _price.setPriceDecimals(18);
         _oracle.setBacking(backing);
-        vm.expectCall(
-            address(_oracle),
-            abi.encodeCall(IOlympusBackingOracle.backing, ()),
-            uint64(1)
-        );
+        vm.expectCall(address(_oracle), abi.encodeCall(IBackingOracle.backing, ()), uint64(1));
         vm.prank(caller_);
         _assertSnapshot(_risk.snapshot(address(_asset)), 1e18, 2e18, backing);
     }
@@ -357,11 +345,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
         uint256 backing = bound(backing_, 1, type(uint256).max / 1000000000000000000);
         _price.setPriceDecimals(36);
         _oracle.setBacking(backing);
-        vm.expectCall(
-            address(_oracle),
-            abi.encodeCall(IOlympusBackingOracle.backing, ()),
-            uint64(1)
-        );
+        vm.expectCall(address(_oracle), abi.encodeCall(IBackingOracle.backing, ()), uint64(1));
         vm.prank(caller_);
         _assertSnapshot(_risk.snapshot(address(_asset)), 1e18, 2e18, backing * 1000000000000000000);
     }
@@ -463,7 +447,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
     function test_givenOracleFailure_whenPricesRead_reverts(address caller_) public {
         vm.mockCallRevert(
             address(_oracle),
-            abi.encodeCall(IOlympusBackingOracle.backing, ()),
+            abi.encodeCall(IBackingOracle.backing, ()),
             abi.encodeWithSelector(DependencyReadFailed.selector)
         );
         vm.expectRevert(DependencyReadFailed.selector);

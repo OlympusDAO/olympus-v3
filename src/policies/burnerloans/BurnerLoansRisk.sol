@@ -13,7 +13,7 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
-import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
+import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
@@ -167,22 +167,17 @@ contract BurnerLoansRisk is
         return new Permissions[](0);
     }
 
-    /// @notice Requires this policy active and enabled before serving economic calculations.
-    /// @dev Reverts if:
-    ///      - Risk is inactive.
-    ///      - Risk is locally disabled.
-    modifier onlyActive() {
-        _requireActive();
-        _;
-    }
-
     /// @dev Reverts if:
     ///      - This policy is Kernel-inactive.
     ///      - This policy is locally disabled.
     modifier onlyOperational() {
+        _requireOperational();
+        _;
+    }
+
+    function _requireOperational() private view {
         _requireActive();
         _requireEnabled();
-        _;
     }
 
     /// @notice Requires this policy active before configuration or enablement.
@@ -261,7 +256,7 @@ contract BurnerLoansRisk is
         IPRICEv2 price_,
         IBurnerLoansCore.PriceSnapshot memory snapshot_
     ) private view returns (IBurnerLoansCore.PriceSnapshot memory) {
-        uint256 backing18 = IOlympusBackingOracle(backingOracle).backing();
+        uint256 backing18 = IBackingOracle(backingOracle).backing();
         if (backing18 == 0) revert IBurnerLoansRisk.BurnerLoans_InvalidPrice();
         // backing: 18 decimals -> PRICE decimals, rounded up in favor of the protocol.
         snapshot_.backingPerOhmUsd = Math.mulDiv(
@@ -559,7 +554,7 @@ contract BurnerLoansRisk is
     /// @inheritdoc IBurnerLoansRisk
     /// @dev Reverts if:
     ///      - The caller lacks ADMIN.
-    ///      - The oracle has no code or lacks IOlympusBackingOracle.
+    ///      - The oracle has no code or lacks IBackingOracle.
     function setBackingOracle(
         // The oracle validator rejects zero via code-length and interface checks.
         // forge-lint: disable-next-line(missing-zero-check)
@@ -666,13 +661,13 @@ contract BurnerLoansRisk is
 
     /// @notice Validates the backing-oracle interface at installation.
     /// @dev Reverts if:
-    ///      - The configured backing oracle lacks IOlympusBackingOracle or IVersioned.
+    ///      - The configured backing oracle lacks IBackingOracle or IVersioned.
     /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param oracle_ Canonical backing-oracle dependency.
     function _validateBackingOracle(address oracle_) private view {
         if (
             oracle_.code.length == 0 ||
-            !ERC165Checker.supportsInterface(oracle_, type(IOlympusBackingOracle).interfaceId) ||
+            !ERC165Checker.supportsInterface(oracle_, type(IBackingOracle).interfaceId) ||
             !ERC165Checker.supportsInterface(oracle_, type(IVersioned).interfaceId)
         ) revert IBurnerLoansRisk.BurnerLoans_InvalidBackingOracle(oracle_);
     }
@@ -771,7 +766,8 @@ contract BurnerLoansRisk is
     ///      - This policy is locally disabled.
     ///      - The caller lacks ADMIN.
     ///      - The requested period is zero.
-    function setGracePeriod(uint32 period_) public override onlyActive {
+    function setGracePeriod(uint32 period_) public override {
+        _requireActive();
         super.setGracePeriod(period_);
     }
 

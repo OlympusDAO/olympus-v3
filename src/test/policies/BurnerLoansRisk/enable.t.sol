@@ -9,7 +9,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
-import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
+import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
@@ -129,7 +129,7 @@ contract BurnerLoansRiskEnableTest is BurnerLoansRiskTest {
         _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_oracle),
-            abi.encodeCall(IERC165.supportsInterface, (type(IOlympusBackingOracle).interfaceId)),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBackingOracle).interfaceId)),
             abi.encode(false)
         );
         uint48 beforeTime = _risk.lastTransitionAt();

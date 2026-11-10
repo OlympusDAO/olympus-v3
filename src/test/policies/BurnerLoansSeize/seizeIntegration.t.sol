@@ -13,7 +13,7 @@ import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefin
 
 // Contracts
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansSeizeIntegrationTestBase} from "src/test/policies/BurnerLoansSeize/fixtures/BurnerLoansSeizeIntegrationTestBase.sol";
 import {SeizeRedemptionFeeVault} from "src/test/policies/BurnerLoansSeize/fixtures/SeizeRedemptionFeeVault.sol";
 
@@ -134,7 +134,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
         // Two assets per share makes the 2000e6 withdrawal convert to exactly 1000e6 shares.
         token.mint(address(vault), 2000e6);
         vault.chargeRedemptionFee();
-        MockOlympusBackingOracle(_risk.backingOracle()).setBacking(15e18);
+        MockBackingOracle(_risk.backingOracle()).setBacking(15e18);
         // 2000e6 collateral redeems to 1800e6 after 10% fee.
         // Required backing = 100e9 OHM * $15 * 12500/10000 / 1e9 = $1875 -> 1875e6 assets.
         // Actual output is below backing, so reward = 0 and Treasury receives all 1800e6.

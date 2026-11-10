@@ -26,6 +26,7 @@ A queue does not remove direct ADMIN authority. Revoking a queue as config opera
 | --- | --- |
 | `admin` | OCG governance; selects components and independent configuration operators |
 | `burner_loans_admin` | Operational administration, queue proposals, task tuning and bounded re-enablement |
+| `backing_admin` | Separate backing-oracle proposals and bounded re-enablement of the oracle and its queue |
 | `emergency` | Pauses enabled policies and cancels queued actions |
 | `heart` | Calls periodic `execute()` entry points |
 | `burner_loans_seizer` | Marks protocol seizure with no keeper reward; required on SeizerTask |
@@ -53,6 +54,8 @@ Settlement roles authenticate the caller directly. Core does not additionally re
 | Risk | `setBackingOracle`, `setPriceCache`, `setConfigOperator` | ADMIN | Risk active; local disablement permitted; compatibility checks apply to addresses |
 | Risk | `setPriceCacheMaxAge` | ADMIN or Risk's selected operator | Risk active and enabled; unchanged numeric age is a no-op |
 | Risk | `setReferralFeeBps`, `setReferrerAllowed` | ADMIN or Risk's selected operator | Risk active/enabled; percentage 0..10000; nonzero referrer; unchanged values are event-free no-ops |
+| BackingOracle | `setBacking` | ADMIN or oracle's selected nonzero operator | Oracle active/enabled; nonzero 18-decimal backing within the current change bounds |
+| BackingOracle | `setConfigOperator` | ADMIN | Oracle active; local pause permitted; zero revokes delegation |
 | Inventory | `setGlobalDebtCap` | ADMIN | Inventory active/enabled, Core idle; cap covers active principal and approval reconciliation succeeds |
 | Inventory | `setConfigOperator` | ADMIN | Inventory active, Core idle; local disablement permitted; zero revokes recovery authority |
 | Inventory | `syncMintApproval` | `burner_loans_admin` | Inventory active and enabled |
@@ -84,6 +87,8 @@ All four Burner Loans queues accept proposals from ADMIN or `burner_loans_admin`
 | InventoryConfigTimelock surplus burn/rescue | Constructor-bound Inventory; queue selected as Inventory's local operator | Queue active/enabled, Inventory active with matching Kernel, Core idle; burning also requires Inventory enabled, rescue permits local Inventory pause |
 
 All four queues use the same enable/reEnable prerequisites: compatible consumed target interfaces, matching Kernel, active target Policy membership and current operator selection. Target local enablement is not required or read during activation. This permits queue repair while its target is paused; the operation-specific gates in the table still apply when queueing or executing.
+
+The separate [BackingOracleConfigTimelock](backing_oracle.md) accepts ADMIN or `backing_admin` proposals, uses a fixed one-day notice and a seven-day inclusive execution window, and has EMERGENCY-only cancellation. Its enable/reEnable checks require the oracle active with matching Kernel, compatible interfaces and current operator selection, but permit the oracle to remain paused. Queueing and execution require both policies active/enabled. Its recovery role is `backing_admin`, not `burner_loans_admin`.
 
 RiskConfigTimelock dispatches directly to Risk. Selecting Config as Risk's operator enables Config's direct cache-age forwarding but does not authorize RiskConfigTimelock's actions. Select the intended route explicitly. Direct ADMIN access on Risk remains available regardless of that selection.
 

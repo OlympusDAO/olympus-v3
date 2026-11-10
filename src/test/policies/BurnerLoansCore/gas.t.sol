@@ -36,7 +36,7 @@ import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerT
 import {BurnerLoansYieldClaimerTask} from "src/policies/burnerloans/BurnerLoansYieldClaimerTask.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansConfigTimelockTest} from "src/test/policies/BurnerLoansConfigTimelock/BurnerLoansConfigTimelockTest.sol";
 
 contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
@@ -472,7 +472,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     //  when governance changes the backing oracle
     //   then it records the direct address(this) gas cost
     function test_gasSnapshot_admin_setBackingOracle() public {
-        MockOlympusBackingOracle newOracle = new MockOlympusBackingOracle(12e18);
+        MockBackingOracle newOracle = new MockBackingOracle(12e18);
 
         vm.startPrank(address(this));
         vm.startSnapshotGas("BurnerLoansRisk.setBackingOracle");

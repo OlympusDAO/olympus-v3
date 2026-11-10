@@ -92,6 +92,8 @@ Pausing Payout stops new credits. Retries and authorized Payout recovery require
 
 Risk calculates health using the current FLOAN market configuration. Prices and USD values use `PRICE.decimals()`. The backing oracle returns 18-decimal USD per OHM; Risk converts it to the PRICE scale, rounding up.
 
+[BackingOracle](backing_oracle.md) stores that value independently of Risk. Its separate, replaceable `BackingOracleConfigTimelock` applies delayed updates with a fixed one-day notice. `backing_admin` proposes updates and can recover the oracle or its queue within grace; `burner_loans_admin` does not confer those permissions. Pausing or deactivating the oracle blocks updates but leaves the last value readable by Risk.
+
 ```text
 marketRequirementUsd = ceil(debtValueUsd * 10_000 / maxLtvBps)
 backingRequirementUsd = ceil(debtBackingValueUsd * backingMultiplierBps / 10_000)

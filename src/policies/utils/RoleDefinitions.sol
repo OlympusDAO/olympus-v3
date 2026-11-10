@@ -59,5 +59,6 @@ bytes32 constant DEPOSIT_MANAGER_ADMIN_ROLE = "deposit_manager_admin";
 ///      accounting namespace for configured asset periods.
 bytes32 constant DEPOSIT_OPERATOR_ROLE = "deposit_operator";
 
-/// @dev Proposes bounded backing updates through BackingOracle's timelock.
+/// @dev Proposes bounded updates through BackingOracleConfigTimelock and re-enables
+///      the backing oracle or its queue within their grace windows.
 bytes32 constant BACKING_ADMIN_ROLE = "backing_admin";

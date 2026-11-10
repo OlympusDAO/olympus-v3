@@ -38,7 +38,7 @@ import {BurnerLoansSeize} from "src/policies/burnerloans/BurnerLoansSeize.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 
 contract BurnerLoansLivePriceForkGasTest is Test {
     uint256 internal constant _FORK_BLOCK = 25_894_485;
@@ -97,7 +97,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
     BurnerLoansLens internal _lens;
     BurnerLoansInventory internal _inventory;
     BurnerLoansConfig internal _burnerLoansConfig;
-    MockOlympusBackingOracle internal _backingOracle;
+    MockBackingOracle internal _backingOracle;
 
     function setUp() public virtual {
         uint256 forkId = vm.createSelectFork("mainnet", _FORK_BLOCK);
@@ -430,7 +430,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         OlympusFixedTermLoan floan = new OlympusFixedTermLoan(_kernel);
         ReceiptTokenManager receiptTokenManager = new ReceiptTokenManager();
         _depositManager = new DepositManager(address(_kernel), address(receiptTokenManager));
-        _backingOracle = new MockOlympusBackingOracle(_BACKING_PER_OHM_USD);
+        _backingOracle = new MockBackingOracle(_BACKING_PER_OHM_USD);
         _core = new BurnerLoansCore(_kernel, _ohm, _depositManager);
         _inventory = new BurnerLoansInventory(_kernel, _ohm, address(_core));
         _burnerLoansConfig = new BurnerLoansConfig(_kernel, IBurnerLoansCore(address(_core)));

@@ -33,7 +33,7 @@ import {BurnerLoansSeize} from "src/policies/burnerloans/BurnerLoansSeize.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
 /// @notice Real accounting fixture adapted from the existing Burner Loans spike checks.
@@ -76,7 +76,7 @@ abstract contract BurnerLoansModularTest is Test {
         _risk = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
-            address(new MockOlympusBackingOracle(1e18)),
+            address(new MockBackingOracle(1e18)),
             address(0),
             0,
             address(_core)

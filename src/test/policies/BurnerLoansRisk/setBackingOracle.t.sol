@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
@@ -12,10 +13,33 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/BurnerLoansRiskTest.sol";
 
 contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
+    // Scenarios: BLRISK-BACKING-ORACLE-I06.
+    function test_whenOnlyCurrentInterfaceSupported() public {
+        MockBackingOracle next = new MockBackingOracle(1e18);
+        bytes4 removedInterface = bytes4(keccak256("backing()")) ^
+            bytes4(keccak256("setBacking(uint256)"));
+        vm.mockCall(
+            address(next),
+            abi.encodeCall(IERC165.supportsInterface, (removedInterface)),
+            abi.encode(false)
+        );
+        vm.mockCall(
+            address(next),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBackingOracle).interfaceId)),
+            abi.encode(true)
+        );
+        _select(address(next));
+        assertEq(
+            _risk.snapshot(address(_asset)).backingPerOhmUsd,
+            1e18,
+            "current interface supplies unchanged backing"
+        );
+    }
+
     function _select(address candidate_) private {
         vm.expectEmit(true, false, false, true, address(_risk));
         emit IBurnerLoansRisk.BackingOracleSet(candidate_);
@@ -37,14 +61,14 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-L01.
     function test_givenEnabled_whenDependencyChanges(address caller_) public givenAdmin(caller_) {
-        _select(address(new MockOlympusBackingOracle(0)));
+        _select(address(new MockBackingOracle(0)));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-L02.
     function test_givenDisabled_whenDependencyChanges(
         address caller_
     ) public givenDisabled givenAdmin(caller_) {
-        _select(address(new MockOlympusBackingOracle(0)));
+        _select(address(new MockBackingOracle(0)));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-L03.
@@ -88,7 +112,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-D02.
     function test_whenUnversioned_reverts(address caller_) public givenAdmin(caller_) {
-        _oracle = new MockOlympusBackingOracle(1e18);
+        _oracle = new MockBackingOracle(1e18);
         vm.mockCall(
             address(_oracle),
             abi.encodeCall(IERC165.supportsInterface, (type(IVersioned).interfaceId)),
@@ -99,7 +123,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-I04.
     function test_whenRevertingERC165_reverts(address caller_) public givenAdmin(caller_) {
-        _oracle = new MockOlympusBackingOracle(1e18);
+        _oracle = new MockBackingOracle(1e18);
         vm.mockCallRevert(
             address(_oracle),
             abi.encodeWithSelector(IERC165.supportsInterface.selector),
@@ -110,7 +134,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-I05.
     function test_whenMalformedERC165_reverts(address caller_) public givenAdmin(caller_) {
-        _oracle = new MockOlympusBackingOracle(1e18);
+        _oracle = new MockBackingOracle(1e18);
         vm.mockCall(
             address(_oracle),
             abi.encodeWithSelector(IERC165.supportsInterface.selector),
@@ -137,7 +161,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-P01.
     function test_whenZeroBackingOracleSelected(address caller_) public givenAdmin(caller_) {
-        MockOlympusBackingOracle next = new MockOlympusBackingOracle(0);
+        MockBackingOracle next = new MockBackingOracle(0);
         _select(address(next));
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         _risk.snapshot(address(_asset));

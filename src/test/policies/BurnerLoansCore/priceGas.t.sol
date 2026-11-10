@@ -24,7 +24,7 @@ import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerT
 import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {MockPeriodicTaskManager} from "src/test/bases/PeriodicTaskManager/MockPeriodicTaskManager.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
@@ -378,7 +378,7 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
     }
 
     function _openLoan() internal {
-        MockOlympusBackingOracle(_risk.backingOracle()).setBacking(10e18);
+        MockBackingOracle(_risk.backingOracle()).setBacking(10e18);
         _depositCollateral(_LIFECYCLE_COLLATERAL);
         vm.prank(_borrower);
         _debt.borrow(

@@ -21,7 +21,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {BurnerLoansRisk} from "src/policies/burnerloans/BurnerLoansRisk.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
-import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
@@ -34,7 +34,7 @@ abstract contract BurnerLoansRiskTest is Test {
     MockPrice internal _price;
     MockERC20 internal _ohm;
     MockERC20 internal _asset;
-    MockOlympusBackingOracle internal _oracle;
+    MockBackingOracle internal _oracle;
     MockPriceCache internal _cache;
     BurnerLoansRisk internal _risk;
     IFLOANv1.Market internal _market;
@@ -57,7 +57,7 @@ abstract contract BurnerLoansRiskTest is Test {
         _rolesAdmin.grantRole(ADMIN_ROLE, address(this));
         _ohm = new MockERC20("OHM", "OHM", 9);
         _asset = new MockERC20("Collateral", "COL", 6);
-        _oracle = new MockOlympusBackingOracle(1e18);
+        _oracle = new MockBackingOracle(1e18);
         _cache = new MockPriceCache(address(_kernel));
         _cache.setUsdPrice(address(_ohm), 3e18);
         _cache.setUsdPrice(address(_asset), 4e18);

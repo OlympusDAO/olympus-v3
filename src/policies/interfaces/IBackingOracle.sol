@@ -3,9 +3,8 @@ pragma solidity ^0.8.24;
 
 /// @title IBackingOracle
 /// @notice The interface for the BackingOracle policy, which serves as the canonical OHM backing value.
-/// @dev Backing updates are timelocked: a proposer queues an update through the
-///      `IBackingOracleConfigTimelock` surface implemented by the policy. The admin role can
-///      additionally update the backing directly via `setBacking`, without the timelock.
+/// @dev ADMIN or the selected config operator can apply bounded updates. A separate
+///      BackingOracleConfigTimelock supplies the operational proposal delay.
 interface IBackingOracle {
     // ============ EVENTS ============ //
 
@@ -18,8 +17,14 @@ interface IBackingOracle {
     /// @notice Thrown when the constructor receives a zero kernel address.
     error BackingOracle_ZeroKernelAddress();
 
+    /// @notice Thrown when a mutation requires this policy to be active in its Kernel.
+    error BackingOracle_PolicyNotActive(address policy);
+
     /// @notice Thrown when the enable data length does not match the expected 32 bytes (one uint256).
     error BackingOracle_InvalidEnableDataLength();
+
+    /// @notice Thrown when disable receives nonempty data.
+    error BackingOracle_InvalidDisableDataLength();
 
     /// @notice Thrown when the new backing value is zero.
     error BackingOracle_ZeroBacking();
@@ -39,12 +44,15 @@ interface IBackingOracle {
     // ============ ADMIN FUNCTIONS ============ //
 
     /// @notice Set the backing value (the reserve per OHM, 18 decimals).
-    /// @dev The value is applied without the local timelock queue; the backing change threshold
-    ///      still applies. Intended to be callable only by the admin role, which is expected to
-    ///      be held only by the OCG timelock, so the function is de-facto timelocked.
+    /// @dev ADMIN and the current nonzero config operator can apply updates. The operator is
+    ///      intended to be a configuration timelock; ADMIN is intended to be OCG's timelock.
     ///
     /// @param newBacking_ The new backing value (18 decimals).
     function setBacking(uint256 newBacking_) external;
+
+    /// @notice Validate a proposed backing update against the current oracle state.
+    /// @param newBacking_ Proposed backing value (18 decimals).
+    function validateSetBacking(uint256 newBacking_) external view;
 
     // ============ VIEW FUNCTIONS ============ //
 

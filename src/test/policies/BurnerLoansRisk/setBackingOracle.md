@@ -6,7 +6,7 @@ Source: [setBackingOracle](../../../policies/burnerloans/BurnerLoansRisk.sol#L56
 
 Scenario scope: `BLRISK-BACKING-ORACLE` identifies this contract/function.
 
-Governance uses Risk's Kernel-resolved ROLES. Risk must be active; ADMIN may replace pricing addresses while paused to repair the service. Validate deployed code and the IOlympusBackingOracle/IVersioned interfaces with the oracle-specific error. The oracle is an ordinary shared calculator; do not invent Kernel membership, Core binding or local Enabler requirements.
+Governance uses Risk's Kernel-resolved ROLES. Risk must be active; ADMIN may replace pricing addresses while paused to repair the service. Validate deployed code and the IBackingOracle/IVersioned interfaces with the oracle-specific error. The oracle is an ordinary shared calculator; do not invent Kernel membership, Core binding or local Enabler requirements.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
@@ -37,8 +37,8 @@ Fixed for this table: pointer unchanged; no committed logs. A version getter alo
 | --- | --- | --- | --- | --- |
 | BLRISK-BACKING-ORACLE-I01 | Fuzz ADMIN_ROLE holder | candidate=0 | BurnerLoans_InvalidBackingOracle(0) | Covered: [test][test_whenZero_reverts] |
 | BLRISK-BACKING-ORACLE-I02 | Fuzz ADMIN_ROLE holder | candidate is nonzero EOA | BurnerLoans_InvalidBackingOracle(candidate) | Covered: [test][test_whenEoa_reverts] |
-| BLRISK-BACKING-ORACLE-I03 | Fuzz ADMIN_ROLE holder | Deployed candidate lacks IOlympusBackingOracle support | BurnerLoans_InvalidBackingOracle(candidate) | Covered: [test][test_whenMissingInterface_reverts] |
-| BLRISK-BACKING-ORACLE-D02 | ADMIN_ROLE holder | Nonzero deployed oracle supports IOlympusBackingOracle but not IVersioned | BurnerLoans_InvalidBackingOracle(oracle) | Covered: [test][test_whenUnversioned_reverts] |
+| BLRISK-BACKING-ORACLE-I03 | Fuzz ADMIN_ROLE holder | Deployed candidate lacks IBackingOracle support | BurnerLoans_InvalidBackingOracle(candidate) | Covered: [test][test_whenMissingInterface_reverts] |
+| BLRISK-BACKING-ORACLE-D02 | ADMIN_ROLE holder | Nonzero deployed oracle supports IBackingOracle but not IVersioned | BurnerLoans_InvalidBackingOracle(oracle) | Covered: [test][test_whenUnversioned_reverts] |
 | BLRISK-BACKING-ORACLE-I04 | ADMIN_ROLE holder | ERC165 reverts | BurnerLoans_InvalidBackingOracle(candidate) | Covered: [test][test_whenRevertingERC165_reverts] |
 | BLRISK-BACKING-ORACLE-I05 | ADMIN_ROLE holder | ERC165 returns malformed data | BurnerLoans_InvalidBackingOracle(candidate) | Covered: [test][test_whenMalformedERC165_reverts] |
 
@@ -49,6 +49,7 @@ Fixed for this table: Accounting / events: No eager backing price read; future s
 | ID | Caller | Operation / pre-state | Execution / return | Test |
 | --- | --- | --- | --- | --- |
 | BLRISK-BACKING-ORACLE-P01 | Fuzz ADMIN_ROLE holder | Distinct supported oracle, including one returning zero backing later | Store+BackingOracleSet; existing loans use the replacement on later risk evaluation | Covered: [test][test_whenZeroBackingOracleSelected] |
+| BLRISK-BACKING-ORACLE-I06 | ADMIN | Candidate advertises IBackingOracle and IVersioned but rejects the removed backing/setBacking-only interface ID | Store+BackingOracleSet; snapshot reads the same 18-decimal backing | Covered: [current interface][test_whenOnlyCurrentInterfaceSupported] |
 
 Co-located API assertions: `backingOracle`. These must be asserted independently of the action return value.
 
@@ -64,28 +65,29 @@ ADMIN-only code-address selection: submitting the current address must revert, i
 | --- | --- | --- | --- | --- | --- |
 | BLRISK-BACKING-ORACLE-P02 | Fuzz ADMIN_ROLE holder | Current nonzero oracle address | BurnerLoans_UnchangedAddress(candidate) | Unchanged; no downstream validation or events | Covered: [test][test_whenUnchanged_reverts] |
 
-[test_givenDisabled_whenDependencyChanges]: setBackingOracle.t.sol#L44
+[test_givenDisabled_whenDependencyChanges]: setBackingOracle.t.sol#L68
 
-[test_givenEnabled_whenDependencyChanges]: setBackingOracle.t.sol#L39
+[test_givenEnabled_whenDependencyChanges]: setBackingOracle.t.sol#L63
 
-[test_givenInactiveAndDisabled_whenDependencyChanges_reverts]: setBackingOracle.t.sol#L59
+[test_givenInactiveAndDisabled_whenDependencyChanges_reverts]: setBackingOracle.t.sol#L83
 
-[test_givenInactive_whenDependencyChanges_reverts]: setBackingOracle.t.sol#L51
+[test_givenInactive_whenDependencyChanges_reverts]: setBackingOracle.t.sol#L75
 
-[test_whenEoa_reverts]: setBackingOracle.t.sol#L80
+[test_whenEoa_reverts]: setBackingOracle.t.sol#L104
 
-[test_whenMalformedERC165_reverts]: setBackingOracle.t.sol#L112
+[test_whenMalformedERC165_reverts]: setBackingOracle.t.sol#L136
 
-[test_whenMissingInterface_reverts]: setBackingOracle.t.sol#L85
+[test_whenMissingInterface_reverts]: setBackingOracle.t.sol#L109
 
-[test_whenRevertingERC165_reverts]: setBackingOracle.t.sol#L101
+[test_whenRevertingERC165_reverts]: setBackingOracle.t.sol#L125
 
-[test_whenUnauthorizedCaller_reverts]: setBackingOracle.t.sol#L67
+[test_whenUnauthorizedCaller_reverts]: setBackingOracle.t.sol#L91
 
-[test_whenUnchanged_reverts]: setBackingOracle.t.sol#L123
+[test_whenUnchanged_reverts]: setBackingOracle.t.sol#L147
 
-[test_whenUnversioned_reverts]: setBackingOracle.t.sol#L90
+[test_whenUnversioned_reverts]: setBackingOracle.t.sol#L114
 
-[test_whenZeroBackingOracleSelected]: setBackingOracle.t.sol#L139
+[test_whenZeroBackingOracleSelected]: setBackingOracle.t.sol#L163
 
-[test_whenZero_reverts]: setBackingOracle.t.sol#L75
+[test_whenZero_reverts]: setBackingOracle.t.sol#L99
+[test_whenOnlyCurrentInterfaceSupported]: setBackingOracle.t.sol#L21

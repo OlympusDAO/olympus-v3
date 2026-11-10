@@ -231,11 +231,13 @@ gates. Product configuration timelocks require themselves Kernel-active and the 
 
 ## Policy activation versus operation readiness
 
-The shared base does not impose Policy lifecycle rules. Product configuration timelocks use identical target prerequisites for enable and reEnable: consumed interfaces are compatible, the target reports the same Kernel and is active in it, and this queue is the target's current config operator. Target local enablement is not required or read during activation. Inherited local transition, caller, payload, history and grace checks still apply.
+The shared base does not impose Policy lifecycle rules. Each product uses the same target prerequisites for enable and reEnable. The four Burner Loans configuration queues and `BackingOracleConfigTimelock` require compatible consumed interfaces, a target that reports the same Kernel and is active in it, and selection as the target's current config operator. Target local enablement is not required or read during activation. Inherited local transition, caller, payload, history and grace checks still apply.
 
-This separation permits queue repair while the target remains paused. It does not authorize target mutations during a pause. Queueing and execution require the target Kernel-active for all configuration and recovery. Local target enablement is operation-specific: ordinary configuration respects operational pause, while explicit recovery paths can remain usable to repair routing or discharge funded obligations. See the product access-control documents for which selectors require target enablement and why.
+`BackingOracleConfigTimelock` requires both policies active and enabled when queueing or executing backing updates. See [Backing oracle](backing_oracle.md) for its separate role and fixed one-day notice.
 
-Constructors validate the same consumed interface set and same-Kernel binding used by enable/reEnable. Reuse the interface predicate across those paths. Construction does not read or require target activity, local enablement or prior operator selection; activation separately checks activity and delegated authority.
+Activation does not waive operation-specific readiness checks. Queueing and execution require the target Kernel-active for all configuration and recovery. Local target enablement is operation-specific: ordinary configuration respects operational pause, while explicit recovery paths can remain usable to repair routing or discharge funded obligations. See the product access-control documents for which selectors require target enablement and why.
+
+Constructors validate the same consumed interface set and same-Kernel binding used by enable/reEnable. Reuse the interface predicate across those paths. Construction does not read or require target activity, local enablement or prior operator selection; activation separately checks delegated authority and any product-required target activity.
 
 ## Implement a subclass
 
