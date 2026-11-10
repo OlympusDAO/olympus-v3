@@ -79,6 +79,10 @@ interface IBurnerLoansPayout {
 
     // ========== ERRORS ========== //
 
+    /// @notice The proposed Core is zero or does not support the required interface.
+    /// @param core Invalid Core address.
+    error BurnerLoansPayout_InvalidCore(address core);
+
     /// @notice A payout allocation or retry names zero or Payout itself as its recipient.
     /// @param recipient Unsupported payout recipient.
     error BurnerLoansPayout_InvalidRecipient(address recipient);

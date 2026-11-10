@@ -78,7 +78,7 @@ contract BurnerLoansSeizerTask is
     /// @notice Deploys a gas-bounded Heart task for a same-Kernel Burner Loans policy.
     /// @dev Reverts if:
     ///      - Seize is invalid or reports another Kernel, Lens reports a different
-    ///      Core binding, or any initial execution/scan limit is invalid.
+    ///      Core binding, Core lacks IBurnerLoansCore, or an initial execution/scan limit is invalid.
     /// @param kernel_ Kernel shared with the Burner Loans target.
     /// @param seize_ Public Core-bound Seize entry point.
     /// @param lens_ Read-only scan helper bound to that same Core.
@@ -416,7 +416,7 @@ contract BurnerLoansSeizerTask is
     }
 
     /// @dev Validate the direct Seize dependency and its shared Core identity with Lens.
-    ///      Seize owns validation of Core's interface and Kernel; Task does not repeat it.
+    ///      Core's interface is consumed by addAsset; its Kernel and lifecycle remain Seize's concern.
     function _validateBindings() private view {
         address action = address(seize);
         if (
@@ -428,6 +428,9 @@ contract BurnerLoansSeizerTask is
         PolicyDependency.requireSameKernel(action, address(kernel));
         if (address(_LENS).code.length == 0 || IBurnerLoansCoreBound(address(_LENS)).core() != core)
             revert BurnerLoansSeizer_InvalidLens(address(_LENS));
+        // addAsset calls Core.isAssetRegistered() directly. Check that callable boundary here.
+        if (!ERC165Checker.supportsInterface(core, type(IBurnerLoansCore).interfaceId))
+            revert BurnerLoansSeizerTask_InvalidCore(core);
     }
 
     /// @inheritdoc IPeriodicTask

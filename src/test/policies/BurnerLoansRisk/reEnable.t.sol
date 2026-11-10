@@ -10,6 +10,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
@@ -31,13 +32,13 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         vm.expectEmit(false, false, false, true, address(_risk));
         emit IEnabler.Enabled();
         vm.expectEmit(true, true, false, true, address(_risk));
-        emit IEnablerV2.Transition(caller_, true, "", uint48(block.timestamp));
+        emit IEnablerV2.Transition(caller_, true, "", uint48(vm.getBlockTimestamp()));
         vm.recordLogs();
         vm.prank(caller_);
         _risk.reEnable();
         assertEq(vm.getRecordedLogs().length, 2, "exact lifecycle event count");
         assertEq(_risk.isEnabled(), true, "transition flag");
-        assertEq(_risk.lastTransitionAt(), block.timestamp, "transition time");
+        assertEq(_risk.lastTransitionAt(), vm.getBlockTimestamp(), "transition time");
         assertEq(
             _configurationHash(),
             beforeConfig,
@@ -756,5 +757,175 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         );
         vm.prank(caller_);
         _risk.reEnable();
+    }
+
+    // Scenarios: BLRISK-REENABLE-K03.
+    function test_givenMalformedCoreKernel_whenActivated_revertsThenRestored(
+        bytes memory data_
+    ) public {
+        _risk.disable("");
+        vm.assume(data_.length != 32);
+        vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), data_);
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(this)
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLRISK-REENABLE-K03.
+    function test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored() public {
+        _risk.disable("");
+        bytes[6] memory responses = [
+            new bytes(0),
+            new bytes(1),
+            new bytes(31),
+            new bytes(33),
+            new bytes(64),
+            abi.encode(type(uint256).max)
+        ];
+        // Every response must fail with the same owned error and preserve state.
+        // forge-lint: disable-next-line(calls-loop)
+        for (uint256 i; i < responses.length; ++i) {
+            vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), responses[i]);
+            _expectCoreRejected(
+                abi.encodeWithSelector(
+                    PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                    address(this)
+                )
+            );
+        }
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLRISK-REENABLE-K01.
+    function test_givenDifferentCoreKernel_whenActivated_revertsThenRestored() public {
+        _risk.disable("");
+        address otherKernel = address(new Kernel());
+        vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), abi.encode(otherKernel));
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(this),
+                address(_kernel),
+                otherKernel
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLRISK-REENABLE-K02.
+    function test_givenRevertingCoreKernel_whenActivated_revertsThenRestored(
+        bytes memory data_
+    ) public {
+        _risk.disable("");
+        vm.mockCallRevert(address(this), abi.encodeWithSignature("kernel()"), data_);
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(this)
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLRISK-REENABLE-I20.
+    function test_givenMissingCoreInterface_whenActivated_revertsThenRestored() public {
+        _risk.disable("");
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(this), probe, abi.encode(false));
+        vm.mockCallRevert(address(this), abi.encodeWithSignature("kernel()"), hex"01");
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoansRisk_InvalidCore.selector,
+                address(this)
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLRISK-REENABLE-I21.
+    function test_givenRevertingCoreInterface_whenActivated_revertsThenRestored() public {
+        _risk.disable("");
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCallRevert(
+            address(this),
+            probe,
+            abi.encodeWithSelector(DependencyReadFailed.selector)
+        );
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoansRisk_InvalidCore.selector,
+                address(this)
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLRISK-REENABLE-I22.
+    function test_givenMalformedCoreInterface_whenActivated_revertsThenRestored() public {
+        _risk.disable("");
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(this), probe, hex"01");
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoansRisk_InvalidCore.selector,
+                address(this)
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    function _expectCoreRejected(bytes memory reason_) private {
+        bytes32 configuration = _configurationHash();
+        uint48 transition = _risk.lastTransitionAt();
+        vm.recordLogs();
+        vm.expectRevert(reason_);
+        _risk.reEnable();
+        assertFalse(_risk.isEnabled(), "Rejected activation preserves paused state");
+        assertEq(_risk.lastTransitionAt(), transition, "Rejected activation preserves history");
+        assertEq(
+            _configurationHash(),
+            configuration,
+            "Rejected activation preserves configuration"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected activation emits no events");
+    }
+
+    // Scenarios: BLRISK-REENABLE-K05.
+    function test_givenCoreLifecycle_whenCompatible(
+        bool active_,
+        bool enabled_
+    ) public givenDisabled {
+        _mockCoreReadiness(active_, enabled_);
+        _transition(address(this));
+    }
+
+    // Scenarios: BLRISK-REENABLE-K05.
+    function test_whenCoreLifecycleSeeds() public {
+        _expectNoCoreReadinessReads();
+        for (uint8 flags; flags < 4; ++flags) {
+            uint256 checkpoint = vm.snapshotState();
+            test_givenCoreLifecycle_whenCompatible(flags & 1 != 0, flags & 2 != 0);
+            assertTrue(vm.revertToState(checkpoint), "Restores lifecycle seed state");
+        }
     }
 }

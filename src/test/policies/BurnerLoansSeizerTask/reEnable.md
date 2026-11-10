@@ -22,7 +22,7 @@ Initialization history matters independently of Kernel membership. Previously Ke
 
 Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each: independently fuzz a nonzero caller and grant ADMIN_ROLE or BURNER_LOANS_ADMIN_ROLE. Guarantee seeds with ADMIN_ROLE only, BURNER_LOANS_ADMIN_ROLE only and both roles; select the role independently from time and dependency inputs. These roles follow the same reEnable behavior, so each equivalent validation/time case has one row. Fuzz permitted callback caller uses a callback contract holding the selected role, with the outer operation initiated by its separately authorized caller.
 
-Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Seize owns Core interface/Kernel validation. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. ROLES initialized. The permitted caller fuzz family above names every accepted role; unauthorized fuzzing excludes all holders of those roles. Unauthorized fuzzing excludes all holders of the named roles. `deadline=lastTransitionAt+gracePeriod`.
+Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Task validates Core interface compatibility at construction and activation; Seize owns Core Kernel and operational-readiness checks. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. ROLES initialized. The permitted caller fuzz family above names every accepted role; unauthorized fuzzing excludes all holders of those roles. Unauthorized fuzzing excludes all holders of the named roles. `deadline=lastTransitionAt+gracePeriod`.
 
 ## Dependency validation contract
 
@@ -70,7 +70,7 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 
 ## Timing and transition history
 
-Local enabled=false; L=lastTransitionAt>0; G=gracePeriod>0; D=L+G<=MAX48. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Seize owns Core interface/Kernel validation. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Core settlement guard is not entered. Seed boundaries through the same case assertions; no now/deadline correlation.
+Local enabled=false; L=lastTransitionAt>0; G=gracePeriod>0; D=L+G<=MAX48. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Task validates Core interface compatibility at construction and activation; Seize owns Core Kernel and operational-readiness checks. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Core settlement guard is not entered. Seed boundaries through the same case assertions; no now/deadline correlation.
 
 | ID | Caller | Time domain / boundary seeds | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -82,7 +82,7 @@ Local enabled=false; L=lastTransitionAt>0; G=gracePeriod>0; D=L+G<=MAX48. Seize 
 
 For policy-service dependencies, active means membership in this consumer’s Kernel via `kernel.isPolicyActive(dependency)`, separately from a matching reported kernel(). Inactive-dependency cases retain a matching reported Kernel to prove that self-reporting alone cannot pass. A bound action or helper must report the consumer’s expected Core through core(); shared services such as DepositManager have no invented Core binding. Constructor identity binding may precede activation.
 
-Local enabled=false; prior L>0; independently fuzz a representable valid grace interval. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Seize owns Core interface/Kernel validation. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Fuzz both permitted role classes through every enable prerequisite. All dependencies except the one named in each row retain those explicit defaults. Local state/time and authorization are fixed above; activity and enablement are independent columns.
+Local enabled=false; prior L>0; independently fuzz a representable valid grace interval. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Task validates Core interface compatibility at construction and activation; Seize owns Core Kernel and operational-readiness checks. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Fuzz both permitted role classes through every enable prerequisite. All dependencies except the one named in each row retain those explicit defaults. Local state/time and authorization are fixed above; activity and enablement are independent columns.
 
 | ID | Caller | Dependency | Dependency active | Dependency enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -90,9 +90,9 @@ Local enabled=false; prior L>0; independently fuzz a representable valid grace i
 | BLSEIZ-REENABLE-D05 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Seize | false | false | PolicyDependency_NotActive(Seize) | Exact local transition/events on Success; otherwise Unchanged | Partial: [test][test_givenSeizeInactiveOrDisabled_whenReEnabled_reverts]; other permitted caller partitions remain planned |
 | BLSEIZ-REENABLE-D06 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Seize | true | false | PolicyDependency_NotActive(Seize) | Unchanged; no logs | Partial: [test][test_givenSeizeInactiveOrDisabled_whenReEnabled_reverts]; other permitted caller partitions remain planned |
 
-Retired IDs: BLSEIZ-REENABLE-D01, BLSEIZ-REENABLE-D03, BLSEIZ-REENABLE-D04. Core is an identity reached through Seize/Lens, so its lifecycle is not part of the Task activation matrix. Only Seize readiness and Kernel identity are validated here; Lens must share Seize's Core identity.
+Retired IDs: BLSEIZ-REENABLE-D01, BLSEIZ-REENABLE-D03, BLSEIZ-REENABLE-D04. Core lifecycle does not gate Task activation; P10 proves that independence. Task validates Core interface compatibility alongside Seize readiness/Kernel and the Lens/Core binding.
 
-Retired ID: BLSEIZ-REENABLE-D07. Core interface and Kernel checks belong to Seize, not Task.
+Retired ID: BLSEIZ-REENABLE-D07. Core interface compatibility is covered by D12-D14. Core Kernel validation remains owned by Seize.
 
 ## Dependency compatibility
 
@@ -105,7 +105,7 @@ Local active=true; local enabled=false; initialized ROLES; all operational depen
 
 ## Local activity
 
-Local enabled=false; prior L>0; independently fuzz a representable valid grace interval. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Seize owns Core interface/Kernel validation. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Fuzz both permitted role classes through every enable prerequisite. Own policy activity is required; the concrete hook checks local activity.
+Local enabled=false; prior L>0; independently fuzz a representable valid grace interval. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Task validates Core interface compatibility at construction and activation; Seize owns Core Kernel and operational-readiness checks. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Fuzz both permitted role classes through every enable prerequisite. Own policy activity is required; the concrete hook checks local activity.
 
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -123,6 +123,26 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 [reEnable.t.sol](./reEnable.t.sol) uses the shared Kernel/ROLES fixture with controlled dependency responses.
 
-[test_givenKernelDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L109
-[test_givenLensCoreDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L133
-[test_givenSeizeInactiveOrDisabled_whenReEnabled_reverts]: ./reEnable.t.sol#L155
+## Core compatibility revalidation
+
+The same compatibility predicate runs at construction, enable and reEnable. The consumer is active and paused, its caller is ADMIN, and all other prerequisites pass. Core Kernel metadata, membership and local enablement are not admission requirements here.
+
+| ID | Fault or state | Result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-REENABLE-D12 | Core lacks IBurnerLoansCore | BurnerLoansSeizerTask_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMissingCoreInterface_whenActivated_reverts] |
+| BLSEIZ-REENABLE-D13 | Core interface probe reverts | BurnerLoansSeizerTask_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenRevertingCoreInterface_whenActivated_reverts] |
+| BLSEIZ-REENABLE-D14 | Core interface probe returns short data | BurnerLoansSeizerTask_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_reverts] |
+| BLSEIZ-REENABLE-P10 | Compatible Core; active/enabled flags independently false/true; all four seeded | Success | Consumer becomes enabled | Covered: [test][test_givenCoreLifecycle_whenActivated]; [seeds][test_whenCoreLifecycleStatesSeeded_thenActivated] |
+
+[test_givenKernelDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L112
+[test_givenLensCoreDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L136
+[test_givenSeizeInactiveOrDisabled_whenReEnabled_reverts]: ./reEnable.t.sol#L158
+
+[test_givenMissingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L201
+
+[test_givenRevertingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L224
+
+[test_givenMalformedCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L247
+
+[test_givenCoreLifecycle_whenActivated]: ./reEnable.t.sol#L270
+[test_whenCoreLifecycleStatesSeeded_thenActivated]: ./reEnable.t.sol#L281

@@ -11,6 +11,7 @@ import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurner
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
@@ -33,7 +34,7 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 /// @title Burner Loans Inventory
 /// @notice Custodies protocol-supplied OHM and funds one authenticated fixed-term loan facility.
 /// @dev Burner Loans Inventory deliberately does not read FLOAN. Its active-principal ledger changes only
-///      through atomic deltas submitted by the immutable facility address. The immutable OHM
+///      through atomic deltas submitted by the immutable Core address. The immutable OHM
 ///      dependency is assumed to be a standard, non-fee-on-transfer token.
 contract BurnerLoansInventory is
     Policy,
@@ -74,25 +75,24 @@ contract BurnerLoansInventory is
     /// @notice Outstanding supplied-OHM claim belonging to each authorized provider.
     mapping(address provider => uint128 claimOhm) internal _providerClaimOhm;
 
-    /// @notice Constructs Burner Loans Inventory for one immutable Burner Loans facility.
+    /// @notice Constructs Burner Loans Inventory for one immutable Burner Loans Core.
     /// @dev Reverts if:
-    ///      - OHM or the facility is zero.
-    ///      - The facility has no code, reports another Kernel, or its Kernel getter fails.
-    /// @param kernel_ Kernel shared by Burner Loans Inventory and the facility.
+    ///      - OHM is zero.
+    ///      - Core is zero, lacks IBurnerLoansCore, reports another Kernel or has unreadable Kernel metadata.
+    /// @dev Core validates Inventory compatibility and readiness when selecting and activating it.
+    /// @param kernel_ Kernel providing Inventory modules and governance roles.
     /// @param ohm_ OHM token funded by Burner Loans Inventory and burned through MINTR.
-    /// @param facility_ Permanent Core facility.
+    /// @param core_ Permanent Core authorized to draw OHM and report principal changes.
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
-        address facility_
+        address core_
     ) Policy(kernel_) ReEnablerGracePeriod(LoanParameters._REENABLE_GRACE_PERIOD) {
-        if (address(ohm_) == address(0) || facility_ == address(0)) {
-            revert BurnerLoansInventory_ZeroAddress();
-        }
-        if (facility_.code.length == 0) revert BurnerLoansInventory_InvalidCore(facility_);
-        PolicyDependency.requireSameKernel(facility_, address(kernel_));
+        if (address(ohm_) == address(0)) revert BurnerLoansInventory_ZeroAddress();
+        if (core_ == address(0)) revert BurnerLoansInventory_InvalidCore(core_);
+        _validateCore(core_);
         _OHM = ohm_;
-        _CORE = facility_;
+        _CORE = core_;
     }
 
     /// @dev Reverts if:
@@ -282,7 +282,7 @@ contract BurnerLoansInventory is
 
     /// @inheritdoc IBurnerLoansInventory
     /// @dev Reverts if:
-    ///      - Inventory is locally disabled or the caller is not the immutable facility.
+    ///      - Inventory is locally disabled or the caller is not the immutable Core.
     ///      - The amount or recipient is zero.
     ///      - The amount exceeds available funding capacity.
     ///      - MINTR minting or the OHM transfer fails.
@@ -312,7 +312,7 @@ contract BurnerLoansInventory is
 
     /// @inheritdoc IBurnerLoansInventory
     /// @dev Reverts if:
-    ///      - Inventory is locally disabled or the caller is not the immutable facility.
+    ///      - Inventory is locally disabled or the caller is not the immutable Core.
     ///      - The amount is zero, exceeds active principal or lacks received OHM backing.
     ///      - Required MINTR approval reduction fails; a failed burn itself is caught.
     ///      - Another guarded Inventory operation is executing.
@@ -350,7 +350,7 @@ contract BurnerLoansInventory is
 
     /// @inheritdoc IBurnerLoansInventory
     /// @dev Reverts if:
-    ///      - Inventory is locally disabled or the caller is not the immutable facility.
+    ///      - Inventory is locally disabled or the caller is not the immutable Core.
     ///      - The amount is zero or exceeds active principal.
     ///      - Strict MINTR approval reduction fails; restoration increases are fail-soft.
     ///      - Another guarded Inventory operation is executing.
@@ -512,7 +512,7 @@ contract BurnerLoansInventory is
     }
 
     /// @dev Reverts if:
-    ///      - The caller is not the immutable Core facility.
+    ///      - The caller is not the immutable Core.
     function _onlyFacility() internal view {
         if (msg.sender != _CORE) revert NotAuthorised();
     }
@@ -537,29 +537,35 @@ contract BurnerLoansInventory is
     /// @dev The public setter applies activity and local enablement before authorization.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
-    /// @dev Revalidates constructor and mutable policy links before operational enablement.
+    /// @dev Checks Inventory settlement safety and own Kernel activity before enablement.
     function _beforeEnable(bytes calldata data_) internal view override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
 
-        _validatePolicyLinks();
+        _validateActivation();
     }
 
-    /// @dev Preserves the grace-period gate and revalidates policy links before re-enabling.
+    /// @dev Preserves the grace-period gate and repeats the activation checks.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
-        _validatePolicyLinks();
+        _validateActivation();
     }
 
     /// @dev Reverts if:
-
-    ///      - Inventory is busy, inactive, or its facility reports another Kernel.
-    ///      Core activity and enablement are not operational prerequisites for provider access.
-    function _validatePolicyLinks() private view {
+    ///      - Inventory is busy or Kernel-inactive.
+    ///      - Core lacks its required interface or reports another Kernel.
+    ///      Core activity and enablement do not gate Inventory activation.
+    function _validateActivation() private view {
         if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
 
         _requireOwnActive();
-        // Core is an identity-only reference here: its Kernel must match even while it is inactive.
-        PolicyDependency.requireSameKernel(_CORE, address(kernel));
+        _validateCore(_CORE);
+    }
+
+    /// @dev Configuration and surplus recovery call Core.requireNotReentrant().
+    function _validateCore(address core_) private view {
+        if (!ERC165Checker.supportsInterface(core_, type(IBurnerLoansCore).interfaceId))
+            revert BurnerLoansInventory_InvalidCore(core_);
+        PolicyDependency.requireSameKernel(core_, address(kernel));
     }
 
     /// @dev Reverts if:

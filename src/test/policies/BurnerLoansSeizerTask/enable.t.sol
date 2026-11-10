@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
@@ -15,6 +16,8 @@ import {BurnerLoansSeizerTaskTest} from "./BurnerLoansSeizerTaskTest.sol";
 import {Actions} from "src/Kernel.sol";
 
 contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
+    error CoreLifecycleReadFailed();
+
     // Scenarios: BLSEIZ-ENABLE-D08.
     function test_givenKernelDrift_whenEnabled_reverts(address otherKernel_) public {
         vm.assume(otherKernel_ != address(_kernel));
@@ -90,18 +93,116 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
         assertTrue(_task.isEnabled(), "Ready Seize permits enable");
     }
 
-    function test_givenCoreMetadataUnreadable_whenEnabled_succeeds() public {
+    function test_givenCoreLifecycleUnreadable_whenEnabled_succeeds() public {
         _task.disable("");
         bytes memory kernelRead = abi.encodeCall(_core.kernel, ());
-        bytes memory interfaceRead = abi.encodeWithSignature("supportsInterface(bytes4)");
-        vm.mockCallRevert(address(_core), kernelRead, hex"aabbccdd");
-        vm.mockCallRevert(address(_core), interfaceRead, hex"aabbccdd");
+        bytes memory enabledRead = abi.encodeCall(_core.isEnabled, ());
+        vm.mockCallRevert(
+            address(_core),
+            kernelRead,
+            abi.encodeWithSelector(CoreLifecycleReadFailed.selector)
+        );
+        vm.mockCallRevert(
+            address(_core),
+            enabledRead,
+            abi.encodeWithSelector(CoreLifecycleReadFailed.selector)
+        );
         vm.expectCall(address(_core), kernelRead, uint64(0));
-        vm.expectCall(address(_core), interfaceRead, uint64(0));
+        vm.expectCall(address(_core), enabledRead, uint64(0));
+        _task.enable("");
+        assertTrue(_task.isEnabled(), "Activation checks Core compatibility without its lifecycle");
+    }
+
+    // Scenarios: BLSEIZ-ENABLE-D12.
+    function test_givenMissingCoreInterface_whenActivated_reverts() public {
+        _task.disable("");
+        uint48 transition = _task.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(_core), probe, abi.encode(false));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeizerTask.BurnerLoansSeizerTask_InvalidCore.selector,
+                address(_core)
+            )
+        );
+        _task.enable("");
+        assertFalse(_task.isEnabled(), "Incompatible Core leaves consumer paused");
+        assertEq(_task.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        _task.enable("");
+        assertTrue(_task.isEnabled(), "Restored interface permits retry");
+    }
+
+    // Scenarios: BLSEIZ-ENABLE-D13.
+    function test_givenRevertingCoreInterface_whenActivated_reverts() public {
+        _task.disable("");
+        uint48 transition = _task.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCallRevert(address(_core), probe, hex"deadbeef");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeizerTask.BurnerLoansSeizerTask_InvalidCore.selector,
+                address(_core)
+            )
+        );
+        _task.enable("");
+        assertFalse(_task.isEnabled(), "Incompatible Core leaves consumer paused");
+        assertEq(_task.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        _task.enable("");
+        assertTrue(_task.isEnabled(), "Restored interface permits retry");
+    }
+
+    // Scenarios: BLSEIZ-ENABLE-D14.
+    function test_givenMalformedCoreInterface_whenActivated_reverts() public {
+        _task.disable("");
+        uint48 transition = _task.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(_core), probe, hex"01");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeizerTask.BurnerLoansSeizerTask_InvalidCore.selector,
+                address(_core)
+            )
+        );
+        _task.enable("");
+        assertFalse(_task.isEnabled(), "Incompatible Core leaves consumer paused");
+        assertEq(_task.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        _task.enable("");
+        assertTrue(_task.isEnabled(), "Restored interface permits retry");
+    }
+
+    // Scenarios: BLSEIZ-ENABLE-P10.
+    function test_givenCoreLifecycle_whenActivated(bool active_, bool enabled_) public {
+        _task.disable("");
+        _setCoreLifecycle(active_, enabled_);
         _task.enable("");
         assertTrue(
             _task.isEnabled(),
-            "Activation validates Seize without repeating its Core admission"
+            "Core lifecycle does not gate compatible consumer activation"
         );
+    }
+
+    // Scenarios: BLSEIZ-ENABLE-P10.
+    function test_whenCoreLifecycleStatesSeeded_thenActivated() public {
+        uint256 snapshot = vm.snapshotState();
+        test_givenCoreLifecycle_whenActivated(false, false);
+        assertTrue(vm.revertToState(snapshot), "Restore disabled inactive Core");
+        test_givenCoreLifecycle_whenActivated(false, true);
+        assertTrue(vm.revertToState(snapshot), "Restore enabled inactive Core");
+        test_givenCoreLifecycle_whenActivated(true, false);
+        assertTrue(vm.revertToState(snapshot), "Restore disabled active Core");
+        test_givenCoreLifecycle_whenActivated(true, true);
+        assertTrue(vm.revertToStateAndDelete(snapshot), "Restore enabled active Core");
     }
 }

@@ -255,6 +255,15 @@ abstract contract BurnerLoansInventoryTest is Test {
         inventory.reEnable();
     }
 
+    function _expectNoFacilityReadinessReads() internal {
+        vm.expectCall(address(facility), abi.encodeWithSignature("isEnabled()"), uint64(0));
+        vm.expectCall(
+            address(kernel),
+            abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(facility)),
+            uint64(0)
+        );
+    }
+
     function _mockFacilityEnabled(bool enabled_) internal {
         vm.mockCall(
             address(facility),

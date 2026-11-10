@@ -8,7 +8,7 @@ Scenario scope: `BLRISK-ENABLE`. ROLES is initialized through Kernel activation.
 
 ## Dependency validation contract
 
-Risk has an immutable Core identity only; do not call Core or gate Risk activation on Core/controller state. Backing oracle is an ordinary calculator with interface/version checks. Optional cache needs IPriceCache/IEnabler/IVersioned and a matching Kernel; no numeric cache version is queried but may be inactive or disabled because PRICE is the fallback. Kernel modules use module-version checks, not Policy lifecycle checks.
+Risk validates its immutable Core interface and matching Kernel; Core activity and enablement and controller readiness do not gate Risk activation. Backing oracle is an ordinary calculator with interface/version checks. Optional cache needs IPriceCache/IEnabler/IVersioned and a matching Kernel; no numeric cache version is queried but may be inactive or disabled because PRICE is the fallback. Kernel modules use module-version checks, not Policy lifecycle checks.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Invalid metadata uses the consumer-owned InvalidDependency error; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -44,7 +44,7 @@ Correct source transition state and permitted caller; Risk active, so earlier gu
 
 ## Direct dependency compatibility
 
-The Core binding is identity-only; Core readiness, selected configOperator readiness and market population are not activation prerequisites. Modules are supplied by Kernel activation. Cache may be inactive or disabled because direct PRICE remains available.
+The Core binding must expose IBurnerLoansCore and report the same Kernel. Core readiness, selected configOperator readiness and market population are not activation prerequisites. Modules are supplied by Kernel activation. Cache may be inactive or disabled because direct PRICE remains available.
 
 | ID | Caller | Dependency / fault | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -56,32 +56,64 @@ The Core binding is identity-only; Core readiness, selected configOperator readi
 
 - [x] Complete focused tests and exact mappings.
 
-[test_givenAdminActive_whenAlreadyEnabled_reverts]: enable.t.sol#L62
+## Core compatibility acceptance criteria
 
-[test_givenAdminCache00_whenTransition]: enable.t.sol#L248
+Constructor and activation share the same interface and Kernel validator. Interface rejection precedes Kernel probing. Failed activation preserves lifecycle fields, configuration, accounting and events; restoring compatibility permits retry. Core need not be active or enabled. Existing authorization, settlement and grace guards retain their order. No numeric action inputs, new accounting or token transfers are introduced. Existing lifecycle, authorization and grace matrices remain applicable.
 
-[test_givenAdminCache01_whenTransition]: enable.t.sol#L233
+| ID | Core condition | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-ENABLE-K03 | Kernel getter returns short, oversized or noncanonical ABI data; fuzz non-32-byte responses and seed lengths 0,1,31,33,64 plus MAX256 word | PolicyDependency_InvalidDependency(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMalformedCoreKernel_whenActivated_revertsThenRestored]; [test][test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored] |
+| BLRISK-ENABLE-K01 | Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenDifferentCoreKernel_whenActivated_revertsThenRestored] |
+| BLRISK-ENABLE-K02 | Core Kernel getter reverts | PolicyDependency_InvalidDependency(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenRevertingCoreKernel_whenActivated_revertsThenRestored] |
+| BLRISK-ENABLE-I20 | Missing Core interface support/response | BurnerLoansRisk_InvalidCore(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMissingCoreInterface_whenActivated_revertsThenRestored] |
+| BLRISK-ENABLE-I21 | Reverting Core interface support/response | BurnerLoansRisk_InvalidCore(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenRevertingCoreInterface_whenActivated_revertsThenRestored] |
+| BLRISK-ENABLE-I22 | Malformed Core interface support/response | BurnerLoansRisk_InvalidCore(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_revertsThenRestored] |
+| BLRISK-ENABLE-K05 | Same-Kernel compatible Core; all four active/enabled combinations | Success without Core readiness probes | Exact normal success; other state preserved | Covered: [test][test_givenCoreLifecycle_whenCompatible]; [test][test_whenCoreLifecycleSeeds] |
 
-[test_givenAdminCache10_whenTransition]: enable.t.sol#L218
+[test_givenAdminActive_whenAlreadyEnabled_reverts]: enable.t.sol#L63
 
-[test_givenAdminCache11_whenTransition]: enable.t.sol#L203
+[test_givenAdminCache00_whenTransition]: enable.t.sol#L249
 
-[test_givenAdminCacheInterface_whenTransition_reverts]: enable.t.sol#L149
+[test_givenAdminCache01_whenTransition]: enable.t.sol#L234
 
-[test_givenAdminCacheKernel_whenTransition_reverts]: enable.t.sol#L177
+[test_givenAdminCache10_whenTransition]: enable.t.sol#L219
 
-[test_givenAdminInactive_whenAlreadyEnabled_reverts]: enable.t.sol#L71
+[test_givenAdminCache11_whenTransition]: enable.t.sol#L204
 
-[test_givenAdminInactive_whenTransition_reverts]: enable.t.sol#L82
+[test_givenAdminCacheInterface_whenTransition_reverts]: enable.t.sol#L150
 
-[test_givenAdminOracleInterface_whenTransition_reverts]: enable.t.sol#L125
+[test_givenAdminCacheKernel_whenTransition_reverts]: enable.t.sol#L178
 
-[test_givenAdmin_whenDataIsNonempty_reverts]: enable.t.sol#L93
+[test_givenAdminInactive_whenAlreadyEnabled_reverts]: enable.t.sol#L72
 
-[test_givenAdmin_whenDependencyRestored]: enable.t.sol#L263
+[test_givenAdminInactive_whenTransition_reverts]: enable.t.sol#L83
 
-[test_givenAdmin_whenPayloadBoundarySeeds_reverts]: enable.t.sol#L106
+[test_givenAdminOracleInterface_whenTransition_reverts]: enable.t.sol#L126
 
-[test_givenAdmin_whenTransition]: enable.t.sol#L55
+[test_givenAdmin_whenDataIsNonempty_reverts]: enable.t.sol#L94
 
-[test_whenUnauthorizedCaller_reverts]: enable.t.sol#L44
+[test_givenAdmin_whenDependencyRestored]: enable.t.sol#L264
+
+[test_givenAdmin_whenPayloadBoundarySeeds_reverts]: enable.t.sol#L107
+
+[test_givenAdmin_whenTransition]: enable.t.sol#L56
+
+[test_whenUnauthorizedCaller_reverts]: enable.t.sol#L45
+
+[test_givenMalformedCoreKernel_whenActivated_revertsThenRestored]: enable.t.sol#L283
+
+[test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored]: enable.t.sol#L300
+
+[test_givenDifferentCoreKernel_whenActivated_revertsThenRestored]: enable.t.sol#L326
+
+[test_givenRevertingCoreKernel_whenActivated_revertsThenRestored]: enable.t.sol#L343
+
+[test_givenMissingCoreInterface_whenActivated_revertsThenRestored]: enable.t.sol#L359
+
+[test_givenRevertingCoreInterface_whenActivated_revertsThenRestored]: enable.t.sol#L378
+
+[test_givenMalformedCoreInterface_whenActivated_revertsThenRestored]: enable.t.sol#L400
+
+[test_givenCoreLifecycle_whenCompatible]: enable.t.sol#L434
+
+[test_whenCoreLifecycleSeeds]: enable.t.sol#L443

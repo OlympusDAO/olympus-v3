@@ -6,7 +6,9 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(calls-loop)
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
 
 // Libraries
@@ -42,7 +44,12 @@ contract BurnerLoansInventoryConstructorTest is BurnerLoansInventoryTest {
 
     // constructor
     function test_givenZeroFacility_reverts() public {
-        vm.expectRevert(IBurnerLoansInventory.BurnerLoansInventory_ZeroAddress.selector);
+        vm.expectCall(
+            address(0),
+            abi.encodeCall(IERC165.supportsInterface, (type(IERC165).interfaceId)),
+            uint64(0)
+        );
+        _expectInvalidCore(address(0));
         new BurnerLoansInventory(kernel, IERC20(address(ohm)), address(0));
     }
 
@@ -116,7 +123,12 @@ contract BurnerLoansInventoryConstructorTest is BurnerLoansInventoryTest {
 
     // Scenarios: BLINV-CONSTRUCTOR-I02.
     function test_whenZeroFacility_reverts(address caller_) public {
-        vm.expectRevert(IBurnerLoansInventory.BurnerLoansInventory_ZeroAddress.selector);
+        vm.expectCall(
+            address(0),
+            abi.encodeCall(IERC165.supportsInterface, (type(IERC165).interfaceId)),
+            uint64(0)
+        );
+        _expectInvalidCore(address(0));
         vm.prank(caller_);
         new BurnerLoansInventory(kernel, IERC20(address(ohm)), address(0));
     }
@@ -127,6 +139,55 @@ contract BurnerLoansInventoryConstructorTest is BurnerLoansInventoryTest {
         _expectInvalidCore(eoa_);
         vm.prank(caller_);
         new BurnerLoansInventory(kernel, IERC20(address(ohm)), eoa_);
+    }
+
+    // Scenarios: BLINV-CONSTRUCTOR-D02.
+    function test_givenMissingCoreInterface_whenDeployed_reverts(address caller_) public {
+        vm.mockCall(
+            address(facility),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBurnerLoansCore).interfaceId)),
+            abi.encode(false)
+        );
+        vm.mockCallRevert(address(facility), abi.encodeWithSignature("kernel()"), hex"01");
+        _expectInvalidCore(address(facility));
+        vm.prank(caller_);
+        _newInventory();
+    }
+
+    // Scenarios: BLINV-CONSTRUCTOR-D03.
+    function test_givenRevertingCoreInterface_whenDeployed_reverts(address caller_) public {
+        vm.mockCallRevert(
+            address(facility),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBurnerLoansCore).interfaceId)),
+            hex"deadbeef"
+        );
+        _expectInvalidCore(address(facility));
+        vm.prank(caller_);
+        _newInventory();
+    }
+
+    // Scenarios: BLINV-CONSTRUCTOR-D04.
+    function test_givenMalformedCoreInterface_whenDeployed_reverts(address caller_) public {
+        vm.mockCall(
+            address(facility),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBurnerLoansCore).interfaceId)),
+            hex"01"
+        );
+        _expectInvalidCore(address(facility));
+        vm.prank(caller_);
+        _newInventory();
+    }
+
+    // Scenarios: BLINV-CONSTRUCTOR-D05.
+    function test_givenMissingERC165_whenDeployed_reverts(address caller_) public {
+        vm.mockCall(
+            address(facility),
+            abi.encodeCall(IERC165.supportsInterface, (type(IERC165).interfaceId)),
+            abi.encode(false)
+        );
+        _expectInvalidCore(address(facility));
+        vm.prank(caller_);
+        _newInventory();
     }
 
     error KernelReadFailed();
@@ -159,12 +220,71 @@ contract BurnerLoansInventoryConstructorTest is BurnerLoansInventoryTest {
         _newInventory();
     }
 
+    // Scenarios: BLINV-CONSTRUCTOR-P01.
+    function test_givenMalformedCoreMetadata_whenDeployed_reverts(
+        address caller_,
+        bytes memory data_
+    ) public {
+        vm.assume(data_.length != 32);
+        vm.mockCall(address(facility), abi.encodeWithSignature("kernel()"), data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(facility)
+            )
+        );
+        vm.prank(caller_);
+        _newInventory();
+    }
+
     // Scenarios: BLINV-CONSTRUCTOR-L01, BLINV-CONSTRUCTOR-L02, BLINV-CONSTRUCTOR-L03, BLINV-CONSTRUCTOR-P02.
     function test_whenConstructorLifecycleSeeds() public {
         for (uint8 flags; flags < 4; ++flags) {
             uint256 snapshot = vm.snapshotState();
             test_givenCoreLifecycle_whenAnyCallerDeploys(outsider, flags & 1 != 0, flags & 2 != 0);
             assertTrue(vm.revertToStateAndDelete(snapshot), "Restore constructor fixture");
+        }
+    }
+
+    // Scenarios: BLINV-CONSTRUCTOR-K03.
+    function test_givenMalformedCoreKernel_whenDeployed_reverts(
+        address caller_,
+        bytes memory data_
+    ) public {
+        vm.assume(data_.length != 32);
+        vm.mockCall(address(facility), abi.encodeWithSignature("kernel()"), data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(facility)
+            )
+        );
+        vm.prank(caller_);
+        _newInventory();
+    }
+
+    // Scenarios: BLINV-CONSTRUCTOR-K03.
+    function test_givenMalformedCoreKernelBoundaries_whenDeployed_reverts(address caller_) public {
+        bytes[6] memory responses = [
+            new bytes(0),
+            new bytes(1),
+            new bytes(31),
+            new bytes(33),
+            new bytes(64),
+            abi.encode(type(uint256).max)
+        ];
+        // Every response must fail with the same owned error and preserve state.
+        // forge-lint: disable-next-line(calls-loop)
+        for (uint256 i; i < responses.length; ++i) {
+            vm.mockCall(address(facility), abi.encodeWithSignature("kernel()"), responses[i]);
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                    address(facility)
+                )
+            );
+            vm.prank(caller_);
+            _newInventory();
         }
     }
 }

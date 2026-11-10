@@ -3,13 +3,14 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
-import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
-import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Libraries
@@ -22,6 +23,9 @@ import {Actions, Kernel} from "src/Kernel.sol";
 import {BurnerLoansConfigTimelock} from "src/policies/burnerloans/BurnerLoansConfigTimelock.sol";
 
 contract BurnerLoansConfigTimelockReEnableTest is BurnerLoansConfigTimelockTest {
+    error CoreDependencyReadFailed();
+    bytes internal constant _MALFORMED_CORE_RESPONSE = hex"01";
+
     // Scenarios: BLCT-REENABLE-D01.
     function test_givenConfigActiveFalse_givenConfigEnabledTrue_whenReenable_reverts(
         address caller_,
@@ -425,5 +429,150 @@ contract BurnerLoansConfigTimelockReEnableTest is BurnerLoansConfigTimelockTest 
                 abi.encode(true)
             );
         }
+    }
+
+    // Scenarios: BLCT-REENABLE-D12.
+    function test_givenMissingCoreInterface_whenActivated_reverts() public {
+        _timelock.disable("");
+        uint48 transition = _timelock.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(_core), probe, abi.encode(false));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidCore.selector,
+                address(_core)
+            )
+        );
+        _timelock.reEnable();
+        assertFalse(_timelock.isEnabled(), "Incompatible Core leaves consumer paused");
+        assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        _timelock.reEnable();
+        assertTrue(_timelock.isEnabled(), "Restored interface permits retry");
+    }
+
+    // Scenarios: BLCT-REENABLE-D13.
+    function test_givenRevertingCoreInterface_whenActivated_reverts() public {
+        _timelock.disable("");
+        uint48 transition = _timelock.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCallRevert(
+            address(_core),
+            probe,
+            abi.encodeWithSelector(CoreDependencyReadFailed.selector)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidCore.selector,
+                address(_core)
+            )
+        );
+        _timelock.reEnable();
+        assertFalse(_timelock.isEnabled(), "Incompatible Core leaves consumer paused");
+        assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        _timelock.reEnable();
+        assertTrue(_timelock.isEnabled(), "Restored interface permits retry");
+    }
+
+    // Scenarios: BLCT-REENABLE-D14.
+    function test_givenMalformedCoreInterface_whenActivated_reverts() public {
+        _timelock.disable("");
+        uint48 transition = _timelock.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(_core), probe, _MALFORMED_CORE_RESPONSE);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidCore.selector,
+                address(_core)
+            )
+        );
+        _timelock.reEnable();
+        assertFalse(_timelock.isEnabled(), "Incompatible Core leaves consumer paused");
+        assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        _timelock.reEnable();
+        assertTrue(_timelock.isEnabled(), "Restored interface permits retry");
+    }
+
+    // Scenarios: BLCT-REENABLE-D15.
+    function test_givenRevertingCoreBinding_whenActivated_reverts() public {
+        _timelock.disable("");
+        uint48 transition = _timelock.lastTransitionAt();
+        bytes memory binding = abi.encodeCall(IBurnerLoansConfig.facility, ());
+        vm.mockCallRevert(
+            address(_config),
+            binding,
+            abi.encodeWithSelector(CoreDependencyReadFailed.selector)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
+            )
+        );
+        _timelock.reEnable();
+        assertFalse(_timelock.isEnabled(), "Invalid Core binding leaves queue paused");
+        assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        _timelock.reEnable();
+        assertTrue(_timelock.isEnabled(), "Restored binding permits retry");
+    }
+
+    // Scenarios: BLCT-REENABLE-D16.
+    function test_givenMalformedCoreBinding_whenActivated_reverts() public {
+        _timelock.disable("");
+        uint48 transition = _timelock.lastTransitionAt();
+        bytes memory binding = abi.encodeCall(IBurnerLoansConfig.facility, ());
+        vm.mockCall(address(_config), binding, _MALFORMED_CORE_RESPONSE);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
+            )
+        );
+        _timelock.reEnable();
+        assertFalse(_timelock.isEnabled(), "Invalid Core binding leaves queue paused");
+        assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        _timelock.reEnable();
+        assertTrue(_timelock.isEnabled(), "Restored binding permits retry");
+    }
+
+    // Scenarios: BLCT-REENABLE-P10.
+    function test_givenCoreLifecycle_whenActivated(bool active_, bool enabled_) public {
+        _timelock.disable("");
+        _setState(_core, active_, enabled_);
+        _timelock.reEnable();
+        assertTrue(
+            _timelock.isEnabled(),
+            "Core lifecycle does not gate compatible consumer activation"
+        );
+    }
+
+    // Scenarios: BLCT-REENABLE-P10.
+    function test_whenCoreLifecycleStatesSeeded_thenActivated() public {
+        uint256 snapshot = vm.snapshotState();
+        test_givenCoreLifecycle_whenActivated(false, false);
+        assertTrue(vm.revertToState(snapshot), "Restore disabled inactive Core");
+        test_givenCoreLifecycle_whenActivated(false, true);
+        assertTrue(vm.revertToState(snapshot), "Restore enabled inactive Core");
+        test_givenCoreLifecycle_whenActivated(true, false);
+        assertTrue(vm.revertToState(snapshot), "Restore disabled active Core");
+        test_givenCoreLifecycle_whenActivated(true, true);
+        assertTrue(vm.revertToStateAndDelete(snapshot), "Restore enabled active Core");
     }
 }

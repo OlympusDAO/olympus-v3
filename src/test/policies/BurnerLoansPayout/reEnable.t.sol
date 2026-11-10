@@ -5,24 +5,83 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant, calls-loop)
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
-import {Actions} from "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 import {BurnerLoansPayout} from "src/policies/burnerloans/BurnerLoansPayout.sol";
 import {BurnerLoansPayoutTest} from "./BurnerLoansPayoutTest.sol";
 
 contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
+    error CoreInterfaceReadFailed();
+
+    // Scenarios: BLCU-REENABLE-D01, BLCU-REENABLE-D02, BLCU-REENABLE-D03.
+    function test_givenInvalidCoreInterface_whenReEnabled_revertsThenRestored(
+        uint8 failure_
+    ) public givenPendingBuckets givenDisabled {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        uint8 failure = uint8(bound(failure_, 0, 2));
+        if (failure == 0) vm.mockCall(address(_core), probe, abi.encode(false));
+        else if (failure == 1)
+            vm.mockCallRevert(
+                address(_core),
+                probe,
+                abi.encodeWithSelector(CoreInterfaceReadFailed.selector)
+            );
+        else vm.mockCall(address(_core), probe, hex"01");
+        vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), hex"01");
+        _expectRejected(
+            address(this),
+            abi.encodeWithSelector(
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidCore.selector,
+                address(_core)
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLCU-REENABLE-D01, BLCU-REENABLE-D02, BLCU-REENABLE-D03.
+    function test_whenCoreInterfaceFailureSeeds_revertsThenRestored() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenInvalidCoreInterface_whenReEnabled_revertsThenRestored(0);
+        _restore(checkpoint);
+        test_givenInvalidCoreInterface_whenReEnabled_revertsThenRestored(1);
+        _restore(checkpoint);
+        test_givenInvalidCoreInterface_whenReEnabled_revertsThenRestored(2);
+    }
+
+    // Scenarios: BLCU-REENABLE-D04.
+    function test_givenUnreadableCoreReadiness_whenReEnabled(
+        bytes memory data_
+    ) public givenPendingBuckets givenDisabled {
+        vm.mockCall(address(_core), abi.encodeWithSignature("isEnabled()"), data_);
+        vm.expectCall(address(_core), abi.encodeWithSignature("isEnabled()"), uint64(0));
+        vm.expectCall(
+            address(_kernel),
+            abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_core)),
+            uint64(0)
+        );
+        _transition(address(this));
+    }
+
     modifier givenLifecycleClaims() {
         _seedBuckets(10, 20, 30, _keeper);
         _token.setTransferReverts(_secondKeeper, true);
@@ -330,6 +389,107 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
             configuration,
             "Rejected transition preserves configuration"
         );
+    }
+
+    // Scenarios: BLCU-REENABLE-K03.
+    function test_givenMalformedCoreKernel_whenActivated_revertsThenRestored(
+        bytes memory data_
+    ) public {
+        _payout.disable("");
+        vm.assume(data_.length != 32);
+        vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), data_);
+        _expectRejected(
+            address(this),
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_core)
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLCU-REENABLE-K03.
+    function test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored() public {
+        _payout.disable("");
+        bytes[6] memory responses = [
+            new bytes(0),
+            new bytes(1),
+            new bytes(31),
+            new bytes(33),
+            new bytes(64),
+            abi.encode(type(uint256).max)
+        ];
+        // Every response must fail with the same owned error and preserve state.
+        // forge-lint: disable-next-line(calls-loop)
+        for (uint256 i; i < responses.length; ++i) {
+            vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), responses[i]);
+            _expectRejected(
+                address(this),
+                abi.encodeWithSelector(
+                    PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                    address(_core)
+                )
+            );
+        }
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLCU-REENABLE-K01.
+    function test_givenDifferentCoreKernel_whenActivated_revertsThenRestored() public {
+        _payout.disable("");
+        address otherKernel = address(new Kernel());
+        vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), abi.encode(otherKernel));
+        _expectRejected(
+            address(this),
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_core),
+                address(_kernel),
+                otherKernel
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLCU-REENABLE-K02.
+    function test_givenRevertingCoreKernel_whenActivated_revertsThenRestored(
+        bytes memory data_
+    ) public {
+        _payout.disable("");
+        vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), data_);
+        _expectRejected(
+            address(this),
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_core)
+            )
+        );
+        vm.clearMockedCalls();
+        _transition(address(this));
+    }
+
+    // Scenarios: BLCU-REENABLE-K04.
+    function test_givenCoreMigrated_whenActivated_revertsThenRestored() public givenPendingBuckets {
+        Kernel next = new Kernel();
+        vm.prank(address(_kernel));
+        _core.changeKernel(next);
+        assertTrue(_kernel.isPolicyActive(_core), "Old Kernel still records Core membership");
+        _payout.disable("");
+        _expectRejected(
+            address(this),
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(_core),
+                address(_kernel),
+                address(next)
+            )
+        );
+        vm.prank(address(next));
+        _core.changeKernel(_kernel);
+        _transition(address(this));
     }
 }
 

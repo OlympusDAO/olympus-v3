@@ -7,7 +7,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
@@ -84,7 +84,7 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
     ) private view {
         assertEq(deployed_.ohm(), token_, "immutable OHM");
         address boundCore = deployed_.core();
-        assertEq(boundCore, address(this), "Immutable identity needs no operational Core");
+        assertEq(boundCore, address(this), "Immutable compatible Core binding");
         assertEq(address(deployed_.kernel()), address(_kernel), "Kernel binding");
         assertEq(deployed_.configOperator(), address(0), "no initial operator");
         assertEq(deployed_.backingOracle(), address(_oracle), "oracle binding");
@@ -97,7 +97,17 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CONSTRUCTOR-I14.
     function test_whenCoreBindingIsZero_reverts(address caller_) public {
-        vm.expectRevert(IBurnerLoansErrors.BurnerLoans_ZeroAddress.selector);
+        vm.expectCall(
+            address(0),
+            abi.encodeCall(IERC165.supportsInterface, (type(IERC165).interfaceId)),
+            uint64(0)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoansRisk_InvalidCore.selector,
+                address(0)
+            )
+        );
         vm.prank(caller_);
         new BurnerLoansRisk(
             _kernel,
@@ -341,15 +351,14 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
         _rejectDecimalsResponse(abi.encode(type(uint256).max), caller_);
     }
 
-    // Scenarios: BLRISK-CONSTRUCTOR-P04, BLRISK-CONSTRUCTOR-P05.
-    function test_whenNoCoreIsDeployed(address caller_) public {
-        // This fixture deploys only Risk, its modules, governance and pricing dependencies.
-        _assertDeployment(
-            _deploy(IERC20(address(_ohm)), address(_oracle), address(_cache), 1, caller_),
-            address(_ohm),
-            address(_cache),
-            1
+    // Scenarios: BLRISK-CONSTRUCTOR-P04.
+    function test_whenNoCoreIsDeployed_reverts(address caller_) public {
+        address core = address(0xBEEF);
+        vm.expectRevert(
+            abi.encodeWithSelector(IBurnerLoansRisk.BurnerLoansRisk_InvalidCore.selector, core)
         );
+        vm.prank(caller_);
+        new BurnerLoansRisk(_kernel, IERC20(address(_ohm)), address(_oracle), address(0), 1, core);
     }
 
     // Scenarios: BLRISK-CONSTRUCTOR-I06.
@@ -510,5 +519,149 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
         assertEq(_risk.referralFeeBps(), 0, "referral share starts at zero");
         assertFalse(_risk.isReferrerAllowed(address(0)), "zero is never whitelisted");
         assertFalse(_risk.isReferrerAllowed(referrer_), "no embedded partner list");
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-K03.
+    function test_givenMalformedCoreKernel_whenDeployed_reverts(
+        address caller_,
+        bytes memory data_
+    ) public {
+        vm.assume(data_.length != 32);
+        vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(this)
+            )
+        );
+        _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, caller_);
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-K03.
+    function test_givenMalformedCoreKernelBoundaries_whenDeployed_reverts(address caller_) public {
+        bytes[6] memory responses = [
+            new bytes(0),
+            new bytes(1),
+            new bytes(31),
+            new bytes(33),
+            new bytes(64),
+            abi.encode(type(uint256).max)
+        ];
+        // Every response must fail with the same owned error and preserve state.
+        // forge-lint: disable-next-line(calls-loop)
+        for (uint256 i; i < responses.length; ++i) {
+            vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), responses[i]);
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                    address(this)
+                )
+            );
+            _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, caller_);
+        }
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-K01.
+    function test_givenDifferentCoreKernel_whenDeployed_reverts(address caller_) public {
+        address otherKernel = address(new Kernel());
+        vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), abi.encode(otherKernel));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(this),
+                address(_kernel),
+                otherKernel
+            )
+        );
+        _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, caller_);
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-K02.
+    function test_givenRevertingCoreKernel_whenDeployed_reverts(
+        address caller_,
+        bytes memory data_
+    ) public {
+        vm.mockCallRevert(address(this), abi.encodeWithSignature("kernel()"), data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(this)
+            )
+        );
+        _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, caller_);
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-I20.
+    function test_givenMissingCoreInterface_whenDeployed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(this), probe, abi.encode(false));
+        vm.mockCallRevert(address(this), abi.encodeWithSignature("kernel()"), hex"01");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoansRisk_InvalidCore.selector,
+                address(this)
+            )
+        );
+        _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, caller_);
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-I21.
+    function test_givenRevertingCoreInterface_whenDeployed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCallRevert(
+            address(this),
+            probe,
+            abi.encodeWithSelector(DependencyReadFailed.selector)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoansRisk_InvalidCore.selector,
+                address(this)
+            )
+        );
+        _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, caller_);
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-I22.
+    function test_givenMalformedCoreInterface_whenDeployed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(this), probe, hex"01");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.BurnerLoansRisk_InvalidCore.selector,
+                address(this)
+            )
+        );
+        _deploy(IERC20(address(_ohm)), address(_oracle), address(0), 0, caller_);
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-K05, BLRISK-CONSTRUCTOR-P05.
+    function test_givenCoreLifecycle_whenCompatible(bool active_, bool enabled_) public {
+        _mockCoreReadiness(active_, enabled_);
+        _assertDeployment(
+            _deploy(IERC20(address(_ohm)), address(_oracle), address(_cache), 1, address(this)),
+            address(_ohm),
+            address(_cache),
+            1
+        );
+    }
+
+    // Scenarios: BLRISK-CONSTRUCTOR-K05.
+    function test_whenCoreLifecycleSeeds() public {
+        _expectNoCoreReadinessReads();
+        for (uint8 flags; flags < 4; ++flags) {
+            uint256 checkpoint = vm.snapshotState();
+            test_givenCoreLifecycle_whenCompatible(flags & 1 != 0, flags & 2 != 0);
+            assertTrue(vm.revertToState(checkpoint), "Restores lifecycle seed state");
+        }
     }
 }

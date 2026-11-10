@@ -6,20 +6,28 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(calls-loop,literal-instead-of-constant,unsafe-typecast)
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
-import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
+// Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+
 // Contracts
+import {Kernel} from "src/Kernel.sol";
 import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
 
 contract BurnerLoansInventoryReEnableTest is BurnerLoansInventoryTest {
+    error CoreInterfaceReadFailed();
+
     function _disableAt(uint48 timestamp_, uint32 grace_) internal {
         vm.warp(timestamp_);
         if (!inventory.isEnabled()) _enableAndSetCap(DEFAULT_CAP);
@@ -136,7 +144,7 @@ contract BurnerLoansInventoryReEnableTest is BurnerLoansInventoryTest {
     }
 
     // Scenarios: BLINV-REENABLE-D04.
-    function test_givenForeignCoreKernel_whenReEnabled_reverts(
+    function test_givenForeignCoreKernel_whenReEnabled_revertsThenRestored(
         address caller_,
         uint8 roles_,
         uint48 last_,
@@ -146,20 +154,34 @@ contract BurnerLoansInventoryReEnableTest is BurnerLoansInventoryTest {
         _grantTransitionCaller(caller_, roles_, BURNER_LOANS_ADMIN_ROLE);
         _disableWithinGrace(last_, grace_, now_);
         _mockFacilityKernel(outsider);
-        vm.expectRevert(
+        _expectCoreRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_KernelMismatch.selector,
                 address(facility),
                 address(kernel),
                 outsider
-            )
+            ),
+            caller_
         );
-        vm.prank(caller_);
-        inventory.reEnable();
-        assertFalse(inventory.isEnabled(), "Still paused");
-        assertLe(inventory.lastTransitionAt(), block.timestamp, "No new transition");
         vm.clearMockedCalls();
         _assertReEnable(caller_);
+    }
+
+    // Scenarios: BLINV-REENABLE-D05.
+    function test_givenUnreadableCoreMetadata_whenReEnabled_revertsThenRestored(
+        bytes memory data_
+    ) public {
+        _disableAt(1000, 7 days);
+        _mockFacilityKernelRevert(data_);
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(facility)
+            ),
+            admin
+        );
+        vm.clearMockedCalls();
+        _assertReEnable(admin);
     }
 
     // Scenarios: BLINV-REENABLE-L03.
@@ -290,7 +312,7 @@ contract BurnerLoansInventoryReEnableTest is BurnerLoansInventoryTest {
                 assertTrue(vm.revertToStateAndDelete(snapshot), "Restore dependency seed");
             }
             uint256 snapshot = vm.snapshotState();
-            test_givenForeignCoreKernel_whenReEnabled_reverts(
+            test_givenForeignCoreKernel_whenReEnabled_revertsThenRestored(
                 outsider,
                 role,
                 1,
@@ -308,6 +330,166 @@ contract BurnerLoansInventoryReEnableTest is BurnerLoansInventoryTest {
             );
             assertTrue(vm.revertToStateAndDelete(snapshot), "Restore activity seed");
         }
+    }
+
+    // Scenarios: BLINV-REENABLE-D06.
+    function test_givenMissingCoreInterface_whenActivated_reverts() public {
+        _disableAt(1000, 7 days);
+        uint48 transition = inventory.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(facility), probe, abi.encode(false));
+        vm.mockCallRevert(address(facility), abi.encodeWithSignature("kernel()"), hex"01");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansInventory.BurnerLoansInventory_InvalidCore.selector,
+                address(facility)
+            )
+        );
+        vm.prank(admin);
+        inventory.reEnable();
+        assertFalse(inventory.isEnabled(), "Core incompatibility preserves paused state");
+        assertEq(inventory.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        vm.prank(admin);
+        inventory.reEnable();
+        assertTrue(inventory.isEnabled(), "Restored interface permits retry");
+    }
+
+    // Scenarios: BLINV-REENABLE-D07.
+    function test_givenRevertingCoreInterface_whenActivated_reverts() public {
+        _disableAt(1000, 7 days);
+        uint48 transition = inventory.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCallRevert(
+            address(facility),
+            probe,
+            abi.encodeWithSelector(CoreInterfaceReadFailed.selector)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansInventory.BurnerLoansInventory_InvalidCore.selector,
+                address(facility)
+            )
+        );
+        vm.prank(admin);
+        inventory.reEnable();
+        assertFalse(inventory.isEnabled(), "Core incompatibility preserves paused state");
+        assertEq(inventory.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        vm.prank(admin);
+        inventory.reEnable();
+        assertTrue(inventory.isEnabled(), "Restored interface permits retry");
+    }
+
+    // Scenarios: BLINV-REENABLE-D08.
+    function test_givenMalformedCoreInterface_whenActivated_reverts() public {
+        _disableAt(1000, 7 days);
+        uint48 transition = inventory.lastTransitionAt();
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(facility), probe, hex"01");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansInventory.BurnerLoansInventory_InvalidCore.selector,
+                address(facility)
+            )
+        );
+        vm.prank(admin);
+        inventory.reEnable();
+        assertFalse(inventory.isEnabled(), "Core incompatibility preserves paused state");
+        assertEq(inventory.lastTransitionAt(), transition, "Rejection preserves transition time");
+        vm.clearMockedCalls();
+        vm.prank(admin);
+        inventory.reEnable();
+        assertTrue(inventory.isEnabled(), "Restored interface permits retry");
+    }
+
+    function _expectCoreRejected(bytes memory reason_, address caller_) private {
+        bytes32 beforeState = _accountingState();
+        uint48 transition = inventory.lastTransitionAt();
+        vm.recordLogs();
+        vm.expectRevert(reason_);
+        vm.prank(caller_);
+        inventory.reEnable();
+        assertFalse(inventory.isEnabled(), "Rejected activation preserves paused state");
+        assertEq(inventory.lastTransitionAt(), transition, "Rejected activation preserves history");
+        assertEq(_accountingState(), beforeState, "Rejected activation preserves accounting");
+        assertEq(vm.getRecordedLogs().length, 0, "Rejected activation emits no events");
+    }
+
+    // Scenarios: BLINV-REENABLE-K03.
+    function test_givenMalformedCoreKernel_whenActivated_revertsThenRestored(
+        bytes memory data_
+    ) public {
+        _disableAt(1000, 7 days);
+        vm.assume(data_.length != 32);
+        vm.mockCall(address(facility), abi.encodeWithSignature("kernel()"), data_);
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(facility)
+            ),
+            admin
+        );
+        vm.clearMockedCalls();
+        _assertReEnable(admin);
+    }
+
+    // Scenarios: BLINV-REENABLE-K03.
+    function test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored() public {
+        _disableAt(1000, 7 days);
+        bytes[6] memory responses = [
+            new bytes(0),
+            new bytes(1),
+            new bytes(31),
+            new bytes(33),
+            new bytes(64),
+            abi.encode(type(uint256).max)
+        ];
+        // Every response must fail with the same owned error and preserve state.
+        // forge-lint: disable-next-line(calls-loop)
+        for (uint256 i; i < responses.length; ++i) {
+            vm.mockCall(address(facility), abi.encodeWithSignature("kernel()"), responses[i]);
+            _expectCoreRejected(
+                abi.encodeWithSelector(
+                    PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                    address(facility)
+                ),
+                admin
+            );
+        }
+        vm.clearMockedCalls();
+        _assertReEnable(admin);
+    }
+
+    // Scenarios: BLINV-REENABLE-K04.
+    function test_givenCoreMigrated_whenActivated_revertsThenRestored() public {
+        _enableAndSetCap(DEFAULT_CAP);
+        Kernel next = new Kernel();
+        vm.prank(address(kernel));
+        facility.changeKernel(next);
+        assertTrue(kernel.isPolicyActive(facility), "Old Kernel still records Core membership");
+        _disableInventory();
+        _expectCoreRejected(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_KernelMismatch.selector,
+                address(facility),
+                address(kernel),
+                address(next)
+            ),
+            admin
+        );
+        vm.prank(address(next));
+        facility.changeKernel(kernel);
+        _assertReEnable(admin);
     }
 }
 

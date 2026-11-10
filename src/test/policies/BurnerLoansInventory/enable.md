@@ -6,7 +6,7 @@ Source: [enable](../../../bases/EnablerV2.sol#L52). Coverage is recorded in the 
 
 Scenario scope: `BLINV-ENABLE` identifies this contract/function.
 
-Required policy lifecycle: enable requires the subject policy to be Kernel-active, with disabled local state and valid caller/history. Operational dependencies must be ready and correctly bound; identity references do not inherit operational enablement requirements. Disable remains permitted while Kernel-inactive. The Core address is an authorization reference: Core activity and local enablement are not Inventory activation requirements; validate the reported Kernel/binding instead.
+Required policy lifecycle: enable requires the subject policy to be Kernel-active, with disabled local state and valid caller/history. Operational dependencies must be ready and correctly bound; identity references do not inherit operational enablement requirements. Disable remains permitted while Kernel-inactive. The Core address is an authorization reference: Core activity and local enablement are not Inventory activation requirements; Core validates Inventory compatibility when selecting and activating its services.
 
 Implemented lifecycle payload rule: this contract does not use lifecycle data. Accept only `data.length == 0`; reject every nonempty payload with `BurnerLoans_InvalidEnablerData()`. Check local transition state and caller authorization first, then any existing settlement guard, then payload length, then enable-hook dependencies. The concrete hook rejects nonempty data. Authorization, lifecycle and dependency rows use `data=0x` unless a payload/competing-fault row explicitly overrides it. Existing nonempty-success tests are regression evidence to revise, not proof of this requirement.
 
@@ -20,7 +20,7 @@ ROLES initialized; every dependency not varied by the selected table satisfies i
 
 ## Dependency validation contract
 
-Core is an immutable identity and settlement-guard reference, not an enabled-only funding dependency. Preserve the Core identity/reported-Kernel compatibility checks without requiring Core active/enabled. Validate own Kernel membership and resolve MINTR/ROLES/TRSRY through the Kernel; no controller lifecycle gate or activation cycle.
+Core is an immutable identity and settlement-guard reference, not an enabled-only funding dependency. Validate the immutable Core interface and matching Kernel without requiring Core activity or enablement. Core owns admission of Inventory through setInventory, enable and reEnable. Validate own Kernel membership and resolve MINTR/ROLES/TRSRY through the Kernel; no controller lifecycle gate or activation cycle.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Invalid metadata uses the consumer-owned InvalidDependency error; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -70,7 +70,7 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 
 ## Dependency lifecycle
 
-Local enabled=false; data=0x; ROLES initialized. The immutable Inventory is locally disabled and Kernel-active; Core reports the same Kernel and expected identity. Core active/enabled flags do not gate provider operations. Change only the named reference condition. All dependencies except the one named in each row retain those explicit defaults. Local state/time and authorization are fixed above; activity and enablement are independent columns.
+Local enabled=false; data=0x; ROLES initialized. The immutable Inventory is locally disabled and Kernel-active; Core is the immutable authority; its interface and matching Kernel are validated. Core active/enabled flags do not gate provider operations. Change only the named reference condition. All dependencies except the one named in each row retain those explicit defaults. Local state/time and authorization are fixed above; activity and enablement are independent columns.
 
 | ID | Caller | Dependency | Dependency active | Dependency enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -80,15 +80,15 @@ Local enabled=false; data=0x; ROLES initialized. The immutable Inventory is loca
 
 ## Dependency compatibility
 
-Local enabled=false; data=0x; ROLES initialized. The immutable Inventory is locally disabled and Kernel-active; Core reports the same Kernel and expected identity. Core active/enabled flags do not gate provider operations. Change only the named reference condition. Dependency lifecycle otherwise satisfies the listed defaults.
+Local enabled=false; data=0x; ROLES initialized. The immutable Inventory is locally disabled and Kernel-active; Core is the immutable authority; its interface and matching Kernel are validated. Core active/enabled flags do not gate provider operations. Change only the named reference condition. Dependency lifecycle otherwise satisfies the listed defaults.
 
 | ID | Caller | Component | Binding / interface fault | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLINV-ENABLE-D04 | ADMIN_ROLE holder | Core | Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Exact local transition/events on success; revert leaves state unchanged and commits no logs | Covered: [test_givenFacilityReportsDifferentKernel_reverts][test_givenFacilityReportsDifferentKernel_reverts] |
+| BLINV-ENABLE-D04 | ADMIN_ROLE holder | Core | Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Exact local transition/events on success; revert leaves state unchanged and commits no logs | Covered: [test_givenFacilityReportsDifferentKernel_whenEnabled_revertsThenRestored][test_givenFacilityReportsDifferentKernel_whenEnabled_revertsThenRestored] |
 
 ## Local activity
 
-Local enabled=false; data=0x; ROLES initialized. The immutable Inventory is locally disabled and Kernel-active; Core reports the same Kernel and expected identity. Core active/enabled flags do not gate provider operations. Change only the named reference condition. Own policy activity is required; the concrete hook checks local activity.
+Local enabled=false; data=0x; ROLES initialized. The immutable Inventory is locally disabled and Kernel-active; Core is the immutable authority; its interface and matching Kernel are validated. Core active/enabled flags do not gate provider operations. Change only the named reference condition. Own policy activity is required; the concrete hook checks local activity.
 
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -106,13 +106,52 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 The mapped tests run in the focused Inventory suite. [Shared fixtures](BurnerLoansInventoryTest.sol) isolate Core for unit tests; modular tests exercise real Core. The [stateful campaign](BurnerLoansInventory.invariant.t.sol) covers one provider and successful accounting/lifecycle sequences; token failures and multiple providers have focused tests. This is not a repository-wide validation claim.
 
-[test_givenAlreadyEnabled_whenEnabled_reverts]: enable.t.sol#L107
-[test_givenFacilityLifecycle_whenEnabled]: enable.t.sol#L36
-[test_givenFacilityReportsDifferentKernel_reverts]: enable.t.sol#L44
-[test_givenInactiveInventory_whenEnabled_reverts]: enable.t.sol#L65
-[test_givenNoConfigurator_succeeds]: enable.t.sol#L21
-[test_givenUnconfiguredInventory_whenEnabled_reverts]: enable.t.sol#L121
-[test_whenCallerIsUnauthorized_reverts]: enable.t.sol#L77
-[test_whenCoreLifecycleSeeds]: enable.t.sol#L132
-[test_whenPayloadBoundarySeeds_revert]: enable.t.sol#L97
-[test_whenPayloadIsNonempty_reverts]: enable.t.sol#L87
+## Core compatibility and readiness
+
+| ID | Caller | Core metadata | Execution | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLINV-ENABLE-D05 | ADMIN | Core Kernel getter reverts | PolicyDependency_InvalidDependency(Core) | Paused state, history and accounting preserved; restoration permits retry | Covered: [test][test_givenUnreadableCoreMetadata_whenEnabled_revertsThenRestored] |
+
+## Callable Core compatibility
+
+Construction and activation share the same IBurnerLoansCore interface validator. Core must report the same Kernel; its activity and local enablement remain independent. Existing payload, settlement, own-policy and caller guards retain their order.
+
+| ID | Core condition | Result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLINV-ENABLE-D06 | Missing IBurnerLoansCore support | BurnerLoansInventory_InvalidCore(Core) | Paused state and timestamp preserved; restoring support permits retry | Covered: [test][test_givenMissingCoreInterface_whenActivated_reverts] |
+| BLINV-ENABLE-D07 | Interface probe reverts | BurnerLoansInventory_InvalidCore(Core) | Paused state and timestamp preserved; restoring support permits retry | Covered: [test][test_givenRevertingCoreInterface_whenActivated_reverts] |
+| BLINV-ENABLE-D08 | Interface probe returns short data | BurnerLoansInventory_InvalidCore(Core) | Paused state and timestamp preserved; restoring support permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_reverts] |
+
+## Core compatibility acceptance criteria
+
+Constructor and activation share the same interface and Kernel validator. Interface rejection precedes Kernel probing. Failed activation preserves lifecycle fields, configuration, accounting and events; restoring compatibility permits retry. Core need not be active or enabled. Existing authorization, settlement and grace guards retain their order. No numeric action inputs, new accounting or token transfers are introduced. Existing lifecycle, authorization and grace matrices remain applicable.
+
+| ID | Core condition | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLINV-ENABLE-K03 | Kernel getter returns short, oversized or noncanonical ABI data; fuzz non-32-byte responses and seed lengths 0,1,31,33,64 plus MAX256 word | PolicyDependency_InvalidDependency(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMalformedCoreKernel_whenActivated_revertsThenRestored]; [test][test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored] |
+| BLINV-ENABLE-K04 | Core migrates while old Kernel retains active membership; pause remains available | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenCoreMigrated_whenActivated_revertsThenRestored] |
+
+[test_givenAlreadyEnabled_whenEnabled_reverts]: enable.t.sol#L122
+[test_givenFacilityLifecycle_whenEnabled]: enable.t.sol#L42
+[test_givenFacilityReportsDifferentKernel_whenEnabled_revertsThenRestored]: enable.t.sol#L50
+[test_givenInactiveInventory_whenEnabled_reverts]: enable.t.sol#L80
+[test_givenNoConfigurator_succeeds]: enable.t.sol#L27
+[test_givenUnconfiguredInventory_whenEnabled_reverts]: enable.t.sol#L136
+[test_whenCallerIsUnauthorized_reverts]: enable.t.sol#L92
+[test_whenCoreLifecycleSeeds]: enable.t.sol#L147
+[test_whenPayloadBoundarySeeds_revert]: enable.t.sol#L112
+[test_whenPayloadIsNonempty_reverts]: enable.t.sol#L102
+
+[test_givenUnreadableCoreMetadata_whenEnabled_revertsThenRestored]: enable.t.sol#L65
+
+[test_givenMissingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L156
+
+[test_givenRevertingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L181
+
+[test_givenMalformedCoreInterface_whenActivated_reverts]: ./enable.t.sol#L209
+
+[test_givenMalformedCoreKernel_whenActivated_revertsThenRestored]: enable.t.sol#L246
+
+[test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored]: enable.t.sol#L262
+
+[test_givenCoreMigrated_whenActivated_revertsThenRestored]: enable.t.sol#L287

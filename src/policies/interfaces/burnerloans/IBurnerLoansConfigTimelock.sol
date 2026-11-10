@@ -17,6 +17,10 @@ interface IBurnerLoansConfigTimelock {
     /// @param burnerLoans The invalid Burner Loans Config policy address.
     error BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(address burnerLoans);
 
+    /// @notice Thrown when the Core bound to Burner Loans Config is incompatible.
+    /// @param core The invalid Core address.
+    error BurnerLoansConfigTimelock_InvalidCore(address core);
+
     /// @notice Thrown when a configured module has an unsupported version.
     error BurnerLoansConfigTimelock_InvalidModuleVersion();
 

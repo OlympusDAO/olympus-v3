@@ -19,7 +19,7 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 
 ## Shared assertions
 
-After migration test Kernel.isPolicyActive independently and action enable/Core admission mismatch checks; new Kernel governance must reactivate/reconfigure graph. Zero pointer breaks later Kernel reads; setter itself succeeds as legacy framework tests demonstrate.
+After migration, test Inventory membership in its new Kernel independently from Core admission. Core rejects a provider that reports another Kernel even if old membership remains stale; new Kernel governance must reactivate/reconfigure graph. Zero pointer breaks later Kernel reads; setter itself succeeds as legacy framework tests demonstrate.
 
 Co-located API assertions: `kernel`, `isActive`. These must be asserted independently of the action return value.
 

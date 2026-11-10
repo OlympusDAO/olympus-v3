@@ -88,7 +88,7 @@ Seed a live position and pending payout. After each failure, restore only the fa
 
 ## Dependency compatibility
 
-Core active and locally disabled; other prerequisites pass. Use reachable pre-link setup for missing pointers. For reported-Kernel drift, keep membership in Core’s Kernel and vary only the reported Kernel, for example after dependency Kernel migration. Interface and immutable Core-binding failures belong to pointer-installation tests; do not erase validated code to create unreachable activation inputs. Config is not inspected.
+Core active and locally disabled; other prerequisites pass. Use reachable pre-link setup for missing pointers. For reported-Kernel drift, migrate each real provider to another Kernel while the old Kernel retains stale active membership. A mismatch must reject; restoring only the Kernel permits retry. Interface and immutable Core-binding failures belong to pointer-installation tests; do not erase validated code to create unreachable activation inputs. Config is not inspected.
 
 | ID | Caller | Dependency | Fault | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -128,26 +128,42 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to implemented tests.
 
-[test_givenAlreadyEnabled_whenEnabled_reverts]: enable.t.sol#L57
-[test_givenBusyCoreAndPayload_whenEnabled_reverts]: enable.t.sol#L398
-[test_givenBusyCore_whenCaughtEnable_reverts]: enable.t.sol#L340
-[test_givenBusyCore_whenPropagatedEnable_reverts]: enable.t.sol#L359
-[test_givenConfigUnavailable_whenEnabled]: enable.t.sol#L317
-[test_givenCoreInactive_whenEnabled_reverts]: enable.t.sol#L65
-[test_givenDepositManagerUnavailable_whenEnabled_reverts]: enable.t.sol#L81
-[test_givenDepositManagerWrongKernel_whenEnabled_reverts]: enable.t.sol#L113
-[test_givenEnabledCoreAndPayload_whenEnabled_reverts]: enable.t.sol#L383
-[test_givenInventoryUnavailable_whenEnabled_reverts]: enable.t.sol#L129
-[test_givenInventoryUnset_whenEnabled_reverts]: enable.t.sol#L281
-[test_givenInventoryWrongKernel_whenEnabled_reverts]: enable.t.sol#L161
-[test_givenNeverConfigured_whenEnabled_reverts]: enable.t.sol#L413
-[test_givenPayload_whenEnabled_reverts]: enable.t.sol#L374
-[test_givenPayoutUnavailable_whenEnabled_reverts]: enable.t.sol#L177
-[test_givenPayoutUnset_whenEnabled_reverts]: enable.t.sol#L299
-[test_givenPayoutWrongKernel_whenEnabled_reverts]: enable.t.sol#L209
-[test_givenReadyGraph_whenEnabled]: enable.t.sol#L28
-[test_givenRiskUnavailable_whenEnabled_reverts]: enable.t.sol#L221
-[test_givenRiskUnset_whenEnabled_reverts]: enable.t.sol#L265
-[test_givenRiskWrongKernel_whenEnabled_reverts]: enable.t.sol#L253
-[test_givenUnauthorizedAndPayload_whenEnabled_reverts]: enable.t.sol#L389
-[test_givenUnauthorized_whenEnabled_reverts]: enable.t.sol#L46
+## Malformed provider status
+
+Core is active and paused; all other services are ready. A selected provider returns a non-32-byte Kernel or enabled-status result. Reject with the shared error, preserve Core state, then restore the getter and retry.
+
+| ID | Provider | Execution | Test |
+| --- | --- | --- | --- |
+| BLCORE-ENABLE-D35 | Inventory | PolicyDependency_InvalidDependency(Inventory) | Covered: [test][test_givenInventoryMalformedStatus_whenEnabled_reverts] |
+| BLCORE-ENABLE-D36 | Payout | PolicyDependency_InvalidDependency(Payout) | Covered: [test][test_givenPayoutMalformedStatus_whenEnabled_reverts] |
+| BLCORE-ENABLE-D37 | Risk | PolicyDependency_InvalidDependency(Risk) | Covered: [test][test_givenRiskMalformedStatus_whenEnabled_reverts] |
+
+[test_givenAlreadyEnabled_whenEnabled_reverts]: enable.t.sol#L58
+[test_givenBusyCoreAndPayload_whenEnabled_reverts]: enable.t.sol#L518
+[test_givenBusyCore_whenCaughtEnable_reverts]: enable.t.sol#L460
+[test_givenBusyCore_whenPropagatedEnable_reverts]: enable.t.sol#L479
+[test_givenConfigUnavailable_whenEnabled]: enable.t.sol#L437
+[test_givenCoreInactive_whenEnabled_reverts]: enable.t.sol#L66
+[test_givenDepositManagerUnavailable_whenEnabled_reverts]: enable.t.sol#L82
+[test_givenDepositManagerWrongKernel_whenEnabled_reverts]: enable.t.sol#L114
+[test_givenEnabledCoreAndPayload_whenEnabled_reverts]: enable.t.sol#L503
+[test_givenInventoryUnavailable_whenEnabled_reverts]: enable.t.sol#L130
+[test_givenInventoryUnset_whenEnabled_reverts]: enable.t.sol#L401
+[test_givenInventoryWrongKernel_whenEnabled_reverts]: enable.t.sol#L162
+[test_givenNeverConfigured_whenEnabled_reverts]: enable.t.sol#L533
+[test_givenPayload_whenEnabled_reverts]: enable.t.sol#L494
+[test_givenPayoutUnavailable_whenEnabled_reverts]: enable.t.sol#L215
+[test_givenPayoutUnset_whenEnabled_reverts]: enable.t.sol#L419
+[test_givenPayoutWrongKernel_whenEnabled_reverts]: enable.t.sol#L247
+[test_givenReadyGraph_whenEnabled]: enable.t.sol#L29
+[test_givenRiskUnavailable_whenEnabled_reverts]: enable.t.sol#L300
+[test_givenRiskUnset_whenEnabled_reverts]: enable.t.sol#L385
+[test_givenRiskWrongKernel_whenEnabled_reverts]: enable.t.sol#L332
+[test_givenUnauthorizedAndPayload_whenEnabled_reverts]: enable.t.sol#L509
+[test_givenUnauthorized_whenEnabled_reverts]: enable.t.sol#L47
+
+[test_givenInventoryMalformedStatus_whenEnabled_reverts]: enable.t.sol#L187
+
+[test_givenPayoutMalformedStatus_whenEnabled_reverts]: enable.t.sol#L272
+
+[test_givenRiskMalformedStatus_whenEnabled_reverts]: enable.t.sol#L357

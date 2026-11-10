@@ -132,24 +132,50 @@ Caller is authorized and every prerequisite not varied below is valid. An incomp
 | --- | --- | --- | --- | --- | --- | --- |
 | BLCT-REENABLE-D07 | true | Fuzz false/true | Reject each consumed interface advertisement; seed every interface | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Unchanged | Covered: [test][test_givenMissingConsumedInterface_whenActivated_reverts] |
 
-[test_givenUnauthorizedWithinGrace_whenReEnabled_thenAuthorizationFirst]: reEnable.t.sol#L133
-[test_givenUnauthorizedExpiredGraceWithUnavailableConfig_whenReEnabled_thenAuthorizationFirst]: reEnable.t.sol#L146
-[test_givenOverflowDeadline_whenReEnabled_reverts]: reEnable.t.sol#L267
-[test_givenGraceN01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L376
-[test_givenAlreadyEnabled_whenReEnabled_thenStateError]: reEnable.t.sol#L161
-[test_givenNeverEnabledActivated_whenReEnabled_thenNeverEnabledFirst]: reEnable.t.sol#L174
-[test_givenBeforeDeadline_whenReEnabled_thenExactTransition]: reEnable.t.sol#L199
-[test_givenGraceP01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L292
-[test_givenAtDeadline_whenReEnabled_thenExactTransition]: reEnable.t.sol#L222
-[test_givenGraceP02RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L323
-[test_givenAfterDeadline_whenReEnabled_reverts]: reEnable.t.sol#L244
-[test_givenGraceP03RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L345
-[test_givenConfigActiveFalse_givenConfigEnabledTrue_whenReenable_reverts]: reEnable.t.sol#L26
-[test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_thenEnabled]: reEnable.t.sol#L44
-[test_givenConfigActiveFalse_givenConfigEnabledFalse_whenReenable_reverts]: reEnable.t.sol#L61
-[test_givenForeignConfigKernel_whenReenable_reverts]: reEnable.t.sol#L79
-[test_givenOwnPolicyInactive_whenReenable_reverts]: reEnable.t.sol#L104
-[test_givenNeverEnabledUninitialized_whenReEnabled_thenNeverEnabledFirst]: reEnable.t.sol#L187
-[test_givenRiskOperatorIndependent_whenReenable_thenEnabled]: reEnable.t.sol#L118
+## Core compatibility revalidation
 
-[test_givenMissingConsumedInterface_whenActivated_reverts]: reEnable.t.sol#L398
+The same compatibility predicate runs at construction, enable and reEnable. The consumer is active and paused, its caller is ADMIN, and all other prerequisites pass. Core Kernel metadata, membership and local enablement are not admission requirements here.
+
+| ID | Fault or state | Result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLCT-REENABLE-D12 | Core lacks IBurnerLoansCore | BurnerLoansConfigTimelock_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMissingCoreInterface_whenActivated_reverts] |
+| BLCT-REENABLE-D13 | Core interface probe reverts | BurnerLoansConfigTimelock_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenRevertingCoreInterface_whenActivated_reverts] |
+| BLCT-REENABLE-D14 | Core interface probe returns short data | BurnerLoansConfigTimelock_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_reverts] |
+| BLCT-REENABLE-D15 | Config.facility() reverts | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Remain paused; timestamp unchanged; restoring the binding permits retry | Covered: [test][test_givenRevertingCoreBinding_whenActivated_reverts] |
+| BLCT-REENABLE-D16 | Config.facility() returns short data | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Remain paused; timestamp unchanged; restoring the binding permits retry | Covered: [test][test_givenMalformedCoreBinding_whenActivated_reverts] |
+| BLCT-REENABLE-P10 | Compatible Core; active/enabled flags independently false/true; all four seeded | Success | Consumer becomes enabled | Covered: [test][test_givenCoreLifecycle_whenActivated]; [seeds][test_whenCoreLifecycleStatesSeeded_thenActivated] |
+
+[test_givenUnauthorizedWithinGrace_whenReEnabled_thenAuthorizationFirst]: reEnable.t.sol#L137
+[test_givenUnauthorizedExpiredGraceWithUnavailableConfig_whenReEnabled_thenAuthorizationFirst]: reEnable.t.sol#L150
+[test_givenOverflowDeadline_whenReEnabled_reverts]: reEnable.t.sol#L271
+[test_givenGraceN01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L380
+[test_givenAlreadyEnabled_whenReEnabled_thenStateError]: reEnable.t.sol#L165
+[test_givenNeverEnabledActivated_whenReEnabled_thenNeverEnabledFirst]: reEnable.t.sol#L178
+[test_givenBeforeDeadline_whenReEnabled_thenExactTransition]: reEnable.t.sol#L203
+[test_givenGraceP01RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L296
+[test_givenAtDeadline_whenReEnabled_thenExactTransition]: reEnable.t.sol#L226
+[test_givenGraceP02RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L327
+[test_givenAfterDeadline_whenReEnabled_reverts]: reEnable.t.sol#L248
+[test_givenGraceP03RoleAndTimeEndpoints_whenBoundarySeedsRun_thenScenarioHolds]: reEnable.t.sol#L349
+[test_givenConfigActiveFalse_givenConfigEnabledTrue_whenReenable_reverts]: reEnable.t.sol#L30
+[test_givenConfigActiveTrue_givenConfigEnabledFalse_whenReenable_thenEnabled]: reEnable.t.sol#L48
+[test_givenConfigActiveFalse_givenConfigEnabledFalse_whenReenable_reverts]: reEnable.t.sol#L65
+[test_givenForeignConfigKernel_whenReenable_reverts]: reEnable.t.sol#L83
+[test_givenOwnPolicyInactive_whenReenable_reverts]: reEnable.t.sol#L108
+[test_givenNeverEnabledUninitialized_whenReEnabled_thenNeverEnabledFirst]: reEnable.t.sol#L191
+[test_givenRiskOperatorIndependent_whenReenable_thenEnabled]: reEnable.t.sol#L122
+
+[test_givenMissingConsumedInterface_whenActivated_reverts]: reEnable.t.sol#L402
+
+[test_givenMissingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L435
+
+[test_givenRevertingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L458
+
+[test_givenMalformedCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L485
+
+[test_givenRevertingCoreBinding_whenActivated_reverts]: ./reEnable.t.sol#L508
+
+[test_givenMalformedCoreBinding_whenActivated_reverts]: ./reEnable.t.sol#L534
+
+[test_givenCoreLifecycle_whenActivated]: ./reEnable.t.sol#L556
+[test_whenCoreLifecycleStatesSeeded_thenActivated]: ./reEnable.t.sol#L567

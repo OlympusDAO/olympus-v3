@@ -34,6 +34,10 @@ interface IBurnerLoansRisk {
 
     // ========== ERRORS ========== //
 
+    /// @notice The proposed Core is zero or does not support the required interface.
+    /// @param core Invalid Core address.
+    error BurnerLoansRisk_InvalidCore(address core);
+
     /// @notice The OHM token is absent or its decimals are unreadable or unsupported.
     /// @param token Invalid OHM token.
     error BurnerLoansRisk_InvalidOhm(address token);

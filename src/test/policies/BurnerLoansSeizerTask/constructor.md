@@ -6,7 +6,7 @@ Source: [constructor](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L8
 
 Scenario scope: `BLSZC` identifies this contract/function.
 
-Implemented constructor binding: accept a directly bound Lens. Kernel, IBurnerLoansSeize, IBurnerLoansLens, check:uint16, seize:uint8, gas:uint32. Derive Core from Seize.core() and compare it with Lens.core(). Lens is a plain helper without its own Kernel; Seize must report the Task Kernel. Seize owns Core interface/Kernel validation; Task does not repeat those probes. There is no separately configured Core dependency or Core lifecycle gate.
+Implemented constructor binding: accept a directly bound Lens. Kernel, IBurnerLoansSeize, IBurnerLoansLens, check:uint16, seize:uint8, gas:uint32. Derive Core from Seize.core() and compare it with Lens.core(). Lens is a plain helper without its own Kernel; Seize must report the Task Kernel. Task validates the derived Core interface because addAsset calls Core.isAssetRegistered() directly. Seize owns Core Kernel and operational-readiness validation. There is no separately configured Core dependency or Core lifecycle gate.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
@@ -61,7 +61,7 @@ Fixed for this table: other bindings and inputs valid.
 | ID | Caller | Operation / pre-state | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLSZC-P02 | Fuzz all deployers | Seize binding getter reverts | Exact configured dependency error | No deployment or committed logs | Covered: [test][test_whenSeizeCoreGetterReverts_thenErrorPropagates] |
-| BLSZC-P03 | Fuzz all deployers | Other constructor inputs valid; | Success | Immutable Seize/Lens bindings sharing a derived Core; no deployment-time lifecycle/role gate | Covered: [test][test_whenBindingsMatch_thenCoreIsDerived], [test][test_whenConstructorBoundariesSeeded_thenAccepted], [direct dependency][test_whenCoreMetadataUnreadable_thenDeploymentUsesSeizeBinding] |
+| BLSZC-P03 | Fuzz all deployers | Other constructor inputs valid; | Success | Immutable Seize/Lens bindings sharing a derived Core; no deployment-time lifecycle/role gate | Covered: [test][test_whenBindingsMatch_thenCoreIsDerived], [test][test_whenConstructorBoundariesSeeded_thenAccepted], [direct dependency][test_whenCoreLifecycleUnreadable_thenDeploymentUsesSeizeBinding] |
 
 ## Scanning and progress
 
@@ -98,21 +98,47 @@ Lens has no local Enabler or Kernel activation. Core is a dependency of Lens, ne
 | BLSZC-T01 | Fuzz deployer | Lens.core() getter reverts | Exact configured getter error | Covered: [test][test_whenLensCoreGetterReverts_thenErrorPropagates] |
 | BLSZC-P01 | Fuzz deployer | Deployed Lens bound to same Core | Store Lens directly; no Core.lens() discovery | Covered: [test][test_whenBindingsMatch_thenCoreIsDerived], [test][test_whenConstructorBoundariesSeeded_thenAccepted] |
 
-[test_givenSeizeLifecycleState_whenDeployed_thenBindingStillSucceeds]: ./constructor.t.sol#L170
-[test_whenBindingsMatch_thenCoreIsDerived]: ./constructor.t.sol#L24
-[test_whenConstructorBoundariesSeeded_thenAccepted]: ./constructor.t.sol#L260
-[test_whenConstructorGasLimitZero_reverts]: ./constructor.t.sol#L254
-[test_whenSeizeInterfaceInvalid_reverts]: ./constructor.t.sol#L194
-[test_whenLensCoreGetterReverts_thenErrorPropagates]: ./constructor.t.sol#L288
-[test_whenLensHasNoCode_reverts]: ./constructor.t.sol#L90
-[test_whenLensReportsDifferentCore_reverts]: ./constructor.t.sol#L102
-[test_whenLensZero_reverts]: ./constructor.t.sol#L272
-[test_whenScanLimitZero_reverts]: ./constructor.t.sol#L214
-[test_whenSeizeCoreGetterReverts_thenErrorPropagates]: ./constructor.t.sol#L277
-[test_whenSeizeHasNoCode_reverts]: ./constructor.t.sol#L78
-[test_whenSeizeLimitExceedsScanLimit_reverts]: ./constructor.t.sol#L240
-[test_whenSeizeLimitZero_reverts]: ./constructor.t.sol#L227
-[test_whenSeizeReportsDifferentKernel_reverts]: ./constructor.t.sol#L119
-[test_whenSeizeZero_reverts]: ./constructor.t.sol#L66
+## Core interface admission
 
-[test_whenCoreMetadataUnreadable_thenDeploymentUsesSeizeBinding]: ./constructor.t.sol#L138
+Seize and Lens report the same Core; all other constructor inputs are valid. Core Kernel metadata, activity and local enablement are independent of this compatibility check. Rejection creates no contract or committed logs.
+
+| ID | Caller | Derived Core | Result | Test |
+| --- | --- | --- | --- | --- |
+| BLSZC-D07 | Fuzz deployers | Zero address | BurnerLoansSeizerTask_InvalidCore(Core) | Covered: [test][test_givenZeroCore_whenConstructed_reverts] |
+| BLSZC-D08 | Fuzz deployers | Nonzero EOA | BurnerLoansSeizerTask_InvalidCore(Core) | Covered: [test][test_givenEoaCore_whenConstructed_reverts] |
+| BLSZC-D09 | Fuzz deployers | Missing IBurnerLoansCore support | BurnerLoansSeizerTask_InvalidCore(Core) | Covered: [test][test_givenMissingCoreInterface_whenConstructed_reverts] |
+| BLSZC-D10 | Fuzz deployers | Core interface probe reverts | BurnerLoansSeizerTask_InvalidCore(Core) | Covered: [test][test_givenRevertingCoreInterface_whenConstructed_reverts] |
+| BLSZC-D11 | Fuzz deployers | Core interface probe returns short data | BurnerLoansSeizerTask_InvalidCore(Core) | Covered: [test][test_givenMalformedCoreInterface_whenConstructed_reverts] |
+| BLSZC-P06 | Fuzz deployers | Compatible Core; active/enabled flags independently false/true, with all four seeded | Success; initial Task defaults preserved | Covered: [test][test_givenCoreLifecycle_whenConstructed]; [seeds][test_whenCoreLifecycleStatesSeeded_thenAccepted] |
+
+[test_givenSeizeLifecycleState_whenDeployed_thenBindingStillSucceeds]: ./constructor.t.sol#L166
+[test_whenBindingsMatch_thenCoreIsDerived]: ./constructor.t.sol#L26
+[test_whenConstructorBoundariesSeeded_thenAccepted]: ./constructor.t.sol#L256
+[test_whenConstructorGasLimitZero_reverts]: ./constructor.t.sol#L250
+[test_whenSeizeInterfaceInvalid_reverts]: ./constructor.t.sol#L190
+[test_whenLensCoreGetterReverts_thenErrorPropagates]: ./constructor.t.sol#L284
+[test_whenLensHasNoCode_reverts]: ./constructor.t.sol#L92
+[test_whenLensReportsDifferentCore_reverts]: ./constructor.t.sol#L104
+[test_whenLensZero_reverts]: ./constructor.t.sol#L268
+[test_whenScanLimitZero_reverts]: ./constructor.t.sol#L210
+[test_whenSeizeCoreGetterReverts_thenErrorPropagates]: ./constructor.t.sol#L273
+[test_whenSeizeHasNoCode_reverts]: ./constructor.t.sol#L80
+[test_whenSeizeLimitExceedsScanLimit_reverts]: ./constructor.t.sol#L236
+[test_whenSeizeLimitZero_reverts]: ./constructor.t.sol#L223
+[test_whenSeizeReportsDifferentKernel_reverts]: ./constructor.t.sol#L121
+[test_whenSeizeZero_reverts]: ./constructor.t.sol#L68
+
+[test_whenCoreLifecycleUnreadable_thenDeploymentUsesSeizeBinding]: ./constructor.t.sol#L140
+
+[test_givenZeroCore_whenConstructed_reverts]: ./constructor.t.sol#L321
+
+[test_givenEoaCore_whenConstructed_reverts]: ./constructor.t.sol#L329
+
+[test_givenMissingCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L338
+
+[test_givenRevertingCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L350
+
+[test_givenMalformedCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L362
+
+[test_givenCoreLifecycle_whenConstructed]: ./constructor.t.sol#L374
+[test_whenCoreLifecycleStatesSeeded_thenAccepted]: ./constructor.t.sol#L384

@@ -2,9 +2,11 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
@@ -16,6 +18,9 @@ import {Kernel} from "src/Kernel.sol";
 import {BurnerLoansConfigTimelock} from "src/policies/burnerloans/BurnerLoansConfigTimelock.sol";
 
 contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTest {
+    error CoreDependencyReadFailed();
+    bytes internal constant _MALFORMED_CORE_RESPONSE = hex"01";
+
     // Scenarios: BLCT-CONSTRUCTOR-D01.
     function test_givenMissingIBurnerLoansConfig_whenConstructed_reverts(address deployer_) public {
         vm.mockCall(
@@ -264,5 +269,179 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
             "Compatible target bound without readiness reads"
         );
         assertFalse(fresh.isEnabled(), "Construction leaves queue disabled");
+    }
+
+    function _expectInvalidCore(address core_) private {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidCore.selector,
+                core_
+            )
+        );
+    }
+
+    function _expectInvalidConfig() private {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock
+                    .BurnerLoansConfigTimelock_InvalidBurnerLoansConfig
+                    .selector,
+                address(_config)
+            )
+        );
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D04.
+    function test_givenZeroCore_whenConstructed_reverts(address caller_) public {
+        vm.mockCall(
+            address(_config),
+            abi.encodeCall(IBurnerLoansConfig.facility, ()),
+            abi.encode(address(0))
+        );
+        _expectInvalidCore(address(0));
+        vm.prank(caller_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D05.
+    function test_givenEoaCore_whenConstructed_reverts(address caller_, address core_) public {
+        vm.assume(core_ != address(0) && core_.code.length == 0);
+        vm.mockCall(
+            address(_config),
+            abi.encodeCall(IBurnerLoansConfig.facility, ()),
+            abi.encode(core_)
+        );
+        _expectInvalidCore(core_);
+        vm.prank(caller_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D06.
+    function test_givenMissingCoreInterface_whenConstructed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(_core), probe, abi.encode(false));
+        _expectInvalidCore(address(_core));
+        vm.prank(caller_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D07.
+    function test_givenRevertingCoreInterface_whenConstructed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCallRevert(
+            address(_core),
+            probe,
+            abi.encodeWithSelector(CoreDependencyReadFailed.selector)
+        );
+        _expectInvalidCore(address(_core));
+        vm.prank(caller_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D08.
+    function test_givenMalformedCoreInterface_whenConstructed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(_core), probe, _MALFORMED_CORE_RESPONSE);
+        _expectInvalidCore(address(_core));
+        vm.prank(caller_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D09.
+    function test_givenRevertingCoreBinding_whenConstructed_reverts(address caller_) public {
+        vm.mockCallRevert(
+            address(_config),
+            abi.encodeCall(IBurnerLoansConfig.facility, ()),
+            abi.encodeWithSelector(CoreDependencyReadFailed.selector)
+        );
+        _expectInvalidConfig();
+        vm.prank(caller_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D10.
+    function test_givenMalformedCoreBinding_whenConstructed_reverts(
+        address caller_,
+        bytes memory data_
+    ) public {
+        vm.assume(data_.length != 32);
+        vm.mockCall(address(_config), abi.encodeCall(IBurnerLoansConfig.facility, ()), data_);
+        _expectInvalidConfig();
+        vm.prank(caller_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-D10.
+    function test_givenNoncanonicalCoreBinding_whenConstructed_reverts(address caller_) public {
+        vm.mockCall(
+            address(_config),
+            abi.encodeCall(IBurnerLoansConfig.facility, ()),
+            abi.encode(type(uint256).max)
+        );
+        _expectInvalidConfig();
+        vm.prank(caller_);
+        new BurnerLoansConfigTimelock(_kernel, _config);
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P07.
+    function test_givenCoreLifecycle_whenConstructed(
+        address caller_,
+        bool active_,
+        bool enabled_
+    ) public {
+        _setState(_core, active_, enabled_);
+        vm.prank(caller_);
+        BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
+        assertEq(address(fresh.burnerLoans()), address(_config), "Config binding preserved");
+        assertFalse(fresh.isEnabled(), "Starts disabled");
+        assertEq(fresh.lastTransitionAt(), 0, "No transition history");
+        assertEq(fresh.nextActionId(), 1, "No queued actions");
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P07.
+    function test_whenCoreLifecycleStatesSeeded_thenAccepted() public {
+        uint256 snapshot = vm.snapshotState();
+        test_givenCoreLifecycle_whenConstructed(address(this), false, false);
+        assertTrue(vm.revertToState(snapshot), "Restore disabled inactive Core");
+        test_givenCoreLifecycle_whenConstructed(address(this), false, true);
+        assertTrue(vm.revertToState(snapshot), "Restore enabled inactive Core");
+        test_givenCoreLifecycle_whenConstructed(address(this), true, false);
+        assertTrue(vm.revertToState(snapshot), "Restore disabled active Core");
+        test_givenCoreLifecycle_whenConstructed(address(this), true, true);
+        assertTrue(vm.revertToStateAndDelete(snapshot), "Restore enabled active Core");
+    }
+
+    // Scenarios: BLCT-CONSTRUCTOR-P08.
+    function test_givenUnreadableCoreLifecycle_whenConstructed(address caller_) public {
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeWithSignature("kernel()"),
+            abi.encodeWithSelector(CoreDependencyReadFailed.selector)
+        );
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeWithSignature("isEnabled()"),
+            abi.encodeWithSelector(CoreDependencyReadFailed.selector)
+        );
+        vm.expectCall(address(_core), abi.encodeWithSignature("kernel()"), uint64(0));
+        vm.expectCall(address(_core), abi.encodeWithSignature("isEnabled()"), uint64(0));
+        vm.expectCall(
+            address(_kernel),
+            abi.encodeWithSignature("isPolicyActive(address)", address(_core)),
+            uint64(0)
+        );
+        vm.prank(caller_);
+        BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
+        assertFalse(fresh.isEnabled(), "Starts disabled without Core lifecycle reads");
+        assertEq(address(fresh.burnerLoans()), address(_config), "Config binding preserved");
     }
 }

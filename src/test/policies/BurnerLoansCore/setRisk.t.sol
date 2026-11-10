@@ -166,6 +166,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _next.changeKernel(other);
+        assertTrue(_kernel.isPolicyActive(_next), "Old Kernel retains stale membership");
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         _expectDependencyKernelMismatch(address(_next), address(other));

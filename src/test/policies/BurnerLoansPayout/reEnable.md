@@ -46,24 +46,61 @@ lifecycle or distributor activation checks are introduced.
 | BLCU-REENABLE-C05 | ADMIN | Idle | Reverting guard read; own policy also inactive | Exact guard error before own inactivity | Unchanged; restoration then reactivation/retry succeeds | Covered: [test_givenCoreBusyAndPolicyInactive_whenReEnabled_revertsThenRestored][test_givenCoreBusyAndPolicyInactive_whenReEnabled_revertsThenRestored] |
 | BLCU-REENABLE-V01 | ADMIN handler | Idle | Idle | Arbitrary credit/recovery/route/pause/re-enable sequences | Independent accounting model, custody/indexes and lifecycle history hold | Covered: [invariant_backingBucketsIndexesAndRoutes][invariant_backingBucketsIndexesAndRoutes] |
 
+## Callable Core compatibility
+
+Constructor, enable and reEnable share the IBurnerLoansCore interface validator. The existing
+history, authorization, grace, settlement and own-policy checks retain their order. Core must report the same Kernel. Its activity and enablement are independent of Payout activation.
+
+| ID | Caller | Core condition | Execution | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCU-REENABLE-D01 | ADMIN | Missing IBurnerLoansCore support | BurnerLoansPayout_InvalidCore(Core) | Unchanged; restoration permits retry | Covered: [test][test_givenInvalidCoreInterface_whenReEnabled_revertsThenRestored]; [seeds][test_whenCoreInterfaceFailureSeeds_revertsThenRestored] |
+| BLCU-REENABLE-D02 | ADMIN | Interface probe reverts | BurnerLoansPayout_InvalidCore(Core) | Unchanged; restoration permits retry | Covered: [test][test_givenInvalidCoreInterface_whenReEnabled_revertsThenRestored]; [seeds][test_whenCoreInterfaceFailureSeeds_revertsThenRestored] |
+| BLCU-REENABLE-D03 | ADMIN | Interface probe returns short data | BurnerLoansPayout_InvalidCore(Core) | Unchanged; restoration permits retry | Covered: [test][test_givenInvalidCoreInterface_whenReEnabled_revertsThenRestored]; [seeds][test_whenCoreInterfaceFailureSeeds_revertsThenRestored] |
+| BLCU-REENABLE-D04 | ADMIN | Core enabled getter returns arbitrary bytes | Success without Core activity or enablement probes | Exact transition; ledger and configuration preserved | Covered: [test][test_givenUnreadableCoreReadiness_whenReEnabled] |
+
+## Core compatibility acceptance criteria
+
+Constructor and activation share the same interface and Kernel validator. Interface rejection precedes Kernel probing. Failed activation preserves lifecycle fields, configuration, accounting and events; restoring compatibility permits retry. Core need not be active or enabled. Existing authorization, settlement and grace guards retain their order. No numeric action inputs, new accounting or token transfers are introduced. Existing lifecycle, authorization and grace matrices remain applicable.
+
+| ID | Core condition | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLCU-REENABLE-K03 | Kernel getter returns short, oversized or noncanonical ABI data; fuzz non-32-byte responses and seed lengths 0,1,31,33,64 plus MAX256 word | PolicyDependency_InvalidDependency(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMalformedCoreKernel_whenActivated_revertsThenRestored]; [test][test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored] |
+| BLCU-REENABLE-K01 | Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenDifferentCoreKernel_whenActivated_revertsThenRestored] |
+| BLCU-REENABLE-K02 | Core Kernel getter reverts | PolicyDependency_InvalidDependency(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenRevertingCoreKernel_whenActivated_revertsThenRestored] |
+| BLCU-REENABLE-K04 | Core migrates while old Kernel retains active membership; pause remains available | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenCoreMigrated_whenActivated_revertsThenRestored] |
+
 [invariant_backingBucketsIndexesAndRoutes]: ./accounting.invariants.t.sol#L77
-[test_givenCoreBusyAndPolicyInactive_whenReEnabled_revertsThenRestored]: ./reEnable.t.sol#L247
-[test_givenEnabled_whenReEnabled_reverts]: ./reEnable.t.sol#L98
+[test_givenCoreBusyAndPolicyInactive_whenReEnabled_revertsThenRestored]: ./reEnable.t.sol#L306
+[test_givenEnabled_whenReEnabled_reverts]: ./reEnable.t.sol#L157
 [test_givenIncomingCallback_whenReEnableCaught]: ./reEnableCallback.t.sol#L72
 [test_givenIncomingCallback_whenReEnablePropagated_reverts]: ./reEnableCallback.t.sol#L92
-[test_givenNeverInitialized_whenReEnabled_reverts]: ./reEnable.t.sol#L125
+[test_givenNeverInitialized_whenReEnabled_reverts]: ./reEnable.t.sol#L184
 [test_givenOutgoingCallback_whenReEnableCaught]: ./reEnableCallback.t.sol#L25
 [test_givenOutgoingCallback_whenReEnablePropagated_reverts]: ./reEnableCallback.t.sol#L47
-[test_givenPermittedRole_whenReEnabled]: ./reEnable.t.sol#L43
-[test_givenPolicyInactive_whenReEnabled_revertsThenRestored]: ./reEnable.t.sol#L107
-[test_givenReEnabled_whenPausedAgain_thenWindowRestarts]: ./reEnable.t.sol#L233
-[test_givenUnauthorized_whenReEnabled_reverts]: ./reEnable.t.sol#L75
-[test_whenDeadlineOverflows_reverts]: ./reEnable.t.sol#L202
-[test_whenExclusiveRolesAndOverlapSeeded]: ./reEnable.t.sol#L63
-[test_whenExpiredBoundarySeeds_reverts]: ./reEnable.t.sol#L194
-[test_whenGraceExpired_reverts]: ./reEnable.t.sol#L170
-[test_whenInclusiveBoundarySeeds]: ./reEnable.t.sol#L154
-[test_whenLifecycleStateSeeds_reverts]: ./reEnable.t.sol#L268
-[test_whenOverflowBoundarySeeds_reverts]: ./reEnable.t.sol#L222
-[test_whenUnauthorizedClassesSeeded_reverts]: ./reEnable.t.sol#L87
-[test_whenWithinGrace]: ./reEnable.t.sol#L139
+[test_givenPermittedRole_whenReEnabled]: ./reEnable.t.sol#L102
+[test_givenPolicyInactive_whenReEnabled_revertsThenRestored]: ./reEnable.t.sol#L166
+[test_givenReEnabled_whenPausedAgain_thenWindowRestarts]: ./reEnable.t.sol#L292
+[test_givenUnauthorized_whenReEnabled_reverts]: ./reEnable.t.sol#L134
+[test_whenDeadlineOverflows_reverts]: ./reEnable.t.sol#L261
+[test_whenExclusiveRolesAndOverlapSeeded]: ./reEnable.t.sol#L122
+[test_whenExpiredBoundarySeeds_reverts]: ./reEnable.t.sol#L253
+[test_whenGraceExpired_reverts]: ./reEnable.t.sol#L229
+[test_whenInclusiveBoundarySeeds]: ./reEnable.t.sol#L213
+[test_whenLifecycleStateSeeds_reverts]: ./reEnable.t.sol#L327
+[test_whenOverflowBoundarySeeds_reverts]: ./reEnable.t.sol#L281
+[test_whenUnauthorizedClassesSeeded_reverts]: ./reEnable.t.sol#L146
+[test_whenWithinGrace]: ./reEnable.t.sol#L198
+
+[test_givenInvalidCoreInterface_whenReEnabled_revertsThenRestored]: ./reEnable.t.sol#L33
+[test_whenCoreInterfaceFailureSeeds_revertsThenRestored]: ./reEnable.t.sol#L62
+[test_givenUnreadableCoreReadiness_whenReEnabled]: ./reEnable.t.sol#L72
+
+[test_givenMalformedCoreKernel_whenActivated_revertsThenRestored]: reEnable.t.sol#L395
+
+[test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored]: reEnable.t.sol#L413
+
+[test_givenDifferentCoreKernel_whenActivated_revertsThenRestored]: reEnable.t.sol#L440
+
+[test_givenRevertingCoreKernel_whenActivated_revertsThenRestored]: reEnable.t.sol#L458
+
+[test_givenCoreMigrated_whenActivated_revertsThenRestored]: reEnable.t.sol#L475

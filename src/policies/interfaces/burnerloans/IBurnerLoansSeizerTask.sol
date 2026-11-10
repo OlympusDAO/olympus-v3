@@ -67,6 +67,10 @@ interface IBurnerLoansSeizerTask {
 
     // ========== ERRORS ========== //
 
+    /// @notice The proposed Core is zero or does not support the required interface.
+    /// @param core Invalid Core address.
+    error BurnerLoansSeizerTask_InvalidCore(address core);
+
     /// @notice The configured Seize target is zero or lacks the required interface.
     /// @param seize Invalid Seize target.
     error BurnerLoansSeizer_InvalidSeize(address seize);

@@ -74,7 +74,7 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 
 For policy-service dependencies, active means membership in this consumer’s Kernel via `kernel.isPolicyActive(dependency)`, separately from a matching reported kernel(). Inactive-dependency cases retain a matching reported Kernel to prove that self-reporting alone cannot pass. A bound action or helper must report the consumer’s expected Core through core(); shared services such as DepositManager have no invented Core binding. Constructor identity binding may precede activation.
 
-Local enabled=false; data=0x; ROLES initialized. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Seize owns Core interface/Kernel validation. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Change only the condition named in each row. All dependencies except the one named in each row retain those explicit defaults. Local state/time and authorization are fixed above; activity and enablement are independent columns.
+Local enabled=false; data=0x; ROLES initialized. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Task validates Core interface compatibility at construction and activation; Seize owns Core Kernel and operational-readiness checks. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Change only the condition named in each row. All dependencies except the one named in each row retain those explicit defaults. Local state/time and authorization are fixed above; activity and enablement are independent columns.
 
 | ID | Caller | Dependency | Dependency active | Dependency enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -82,9 +82,9 @@ Local enabled=false; data=0x; ROLES initialized. Seize must be active/enabled. S
 | BLSEIZ-ENABLE-D05 | ADMIN_ROLE holder | Seize | false | false | PolicyDependency_NotActive(Seize) | Exact local transition/events on success; revert leaves state unchanged and commits no logs | Covered: [test][test_givenSeizeInactiveOrDisabled_whenEnabled_reverts] |
 | BLSEIZ-ENABLE-D06 | ADMIN_ROLE holder | Seize | true | false | PolicyDependency_NotActive(Seize) | Unchanged; no logs | Covered: [test][test_givenSeizeInactiveOrDisabled_whenEnabled_reverts] |
 
-Retired IDs: BLSEIZ-ENABLE-D01, BLSEIZ-ENABLE-D03, BLSEIZ-ENABLE-D04. Core is an identity reached through Seize/Lens, so its lifecycle is not part of the Task activation matrix. Only Seize readiness and Kernel identity are validated here; Lens must share Seize's Core identity.
+Retired IDs: BLSEIZ-ENABLE-D01, BLSEIZ-ENABLE-D03, BLSEIZ-ENABLE-D04. Core lifecycle does not gate Task activation; P10 proves that independence. Task validates Core interface compatibility alongside Seize readiness/Kernel and the Lens/Core binding.
 
-Retired ID: BLSEIZ-ENABLE-D07. Core interface and Kernel checks belong to Seize, not Task.
+Retired ID: BLSEIZ-ENABLE-D07. Core interface compatibility is covered by D12-D14. Core Kernel validation remains owned by Seize.
 
 ## Dependency compatibility
 
@@ -97,7 +97,7 @@ Local active=true; local enabled=false; initialized ROLES; all operational depen
 
 ## Local activity
 
-Local enabled=false; data=0x; ROLES initialized. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Seize owns Core interface/Kernel validation. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Change only the condition named in each row. Own policy activity is required; the concrete hook checks local activity.
+Local enabled=false; data=0x; ROLES initialized. Seize must be active/enabled. Seize must report this Kernel, and Lens must report the same Core as Seize. Task validates Core interface compatibility at construction and activation; Seize owns Core Kernel and operational-readiness checks. Core has no independent Task lifecycle gate. SeizerTask must be Kernel-active. Change only the condition named in each row. Own policy activity is required; the concrete hook checks local activity.
 
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -115,6 +115,26 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 
 [enable.t.sol](./enable.t.sol) uses the shared Kernel/ROLES fixture with controlled dependency responses.
 
-[test_givenKernelDrift_whenEnabled_reverts]: ./enable.t.sol#L19
-[test_givenLensCoreDrift_whenEnabled_reverts]: ./enable.t.sol#L43
-[test_givenSeizeInactiveOrDisabled_whenEnabled_reverts]: ./enable.t.sol#L65
+## Core compatibility revalidation
+
+The same compatibility predicate runs at construction, enable and reEnable. The consumer is active and paused, its caller is ADMIN, and all other prerequisites pass. Core Kernel metadata, membership and local enablement are not admission requirements here.
+
+| ID | Fault or state | Result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-ENABLE-D12 | Core lacks IBurnerLoansCore | BurnerLoansSeizerTask_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMissingCoreInterface_whenActivated_reverts] |
+| BLSEIZ-ENABLE-D13 | Core interface probe reverts | BurnerLoansSeizerTask_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenRevertingCoreInterface_whenActivated_reverts] |
+| BLSEIZ-ENABLE-D14 | Core interface probe returns short data | BurnerLoansSeizerTask_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_reverts] |
+| BLSEIZ-ENABLE-P10 | Compatible Core; active/enabled flags independently false/true; all four seeded | Success | Consumer becomes enabled | Covered: [test][test_givenCoreLifecycle_whenActivated]; [seeds][test_whenCoreLifecycleStatesSeeded_thenActivated] |
+
+[test_givenKernelDrift_whenEnabled_reverts]: ./enable.t.sol#L22
+[test_givenLensCoreDrift_whenEnabled_reverts]: ./enable.t.sol#L46
+[test_givenSeizeInactiveOrDisabled_whenEnabled_reverts]: ./enable.t.sol#L68
+
+[test_givenMissingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L117
+
+[test_givenRevertingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L140
+
+[test_givenMalformedCoreInterface_whenActivated_reverts]: ./enable.t.sol#L163
+
+[test_givenCoreLifecycle_whenActivated]: ./enable.t.sol#L186
+[test_whenCoreLifecycleStatesSeeded_thenActivated]: ./enable.t.sol#L197

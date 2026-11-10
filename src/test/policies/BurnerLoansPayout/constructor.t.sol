@@ -2,8 +2,9 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
-import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
+import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
@@ -16,9 +17,14 @@ import {BurnerLoansPayout} from "src/policies/burnerloans/BurnerLoansPayout.sol"
 contract BurnerLoansPayoutConstructorTest is BurnerLoansPayoutTest {
     // Scenarios: BLCU-CONSTRUCTOR-I01.
     function test_whenCoreIsZero_reverts(address deployer_) public {
+        vm.expectCall(
+            address(0),
+            abi.encodeCall(IERC165.supportsInterface, (type(IERC165).interfaceId)),
+            uint64(0)
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansCoreBound.BurnerLoansAction_InvalidCore.selector,
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidCore.selector,
                 address(0)
             )
         );
@@ -30,7 +36,7 @@ contract BurnerLoansPayoutConstructorTest is BurnerLoansPayoutTest {
     function test_whenCoreIsEoa_reverts(address deployer_) public {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansCoreBound.BurnerLoansAction_InvalidCore.selector,
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidCore.selector,
                 _recipient
             )
         );
@@ -73,9 +79,10 @@ contract BurnerLoansPayoutConstructorTest is BurnerLoansPayoutTest {
             ),
             abi.encode(false)
         );
+        vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), hex"01");
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansCoreBound.BurnerLoansAction_InvalidCore.selector,
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidCore.selector,
                 address(_core)
             )
         );
@@ -95,7 +102,7 @@ contract BurnerLoansPayoutConstructorTest is BurnerLoansPayoutTest {
         );
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansCoreBound.BurnerLoansAction_InvalidCore.selector,
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidCore.selector,
                 address(_core)
             )
         );
@@ -115,7 +122,7 @@ contract BurnerLoansPayoutConstructorTest is BurnerLoansPayoutTest {
         );
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansCoreBound.BurnerLoansAction_InvalidCore.selector,
+                IBurnerLoansPayout.BurnerLoansPayout_InvalidCore.selector,
                 address(_core)
             )
         );
@@ -138,5 +145,63 @@ contract BurnerLoansPayoutConstructorTest is BurnerLoansPayoutTest {
         );
         vm.prank(caller_);
         new BurnerLoansPayout(_kernel, address(_core));
+    }
+
+    // Scenarios: BLCU-CONSTRUCTOR-D05.
+    function test_givenUnreadableCoreMetadata_whenDeployed_reverts(
+        address caller_,
+        bytes memory data_
+    ) public {
+        vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_core)
+            )
+        );
+        vm.prank(caller_);
+        new BurnerLoansPayout(_kernel, address(_core));
+    }
+
+    // Scenarios: BLCU-CONSTRUCTOR-K03.
+    function test_givenMalformedCoreKernel_whenDeployed_reverts(
+        address caller_,
+        bytes memory data_
+    ) public {
+        vm.assume(data_.length != 32);
+        vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), data_);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_core)
+            )
+        );
+        vm.prank(caller_);
+        new BurnerLoansPayout(_kernel, address(_core));
+    }
+
+    // Scenarios: BLCU-CONSTRUCTOR-K03.
+    function test_givenMalformedCoreKernelBoundaries_whenDeployed_reverts(address caller_) public {
+        bytes[6] memory responses = [
+            new bytes(0),
+            new bytes(1),
+            new bytes(31),
+            new bytes(33),
+            new bytes(64),
+            abi.encode(type(uint256).max)
+        ];
+        // Every response must fail with the same owned error and preserve state.
+        // forge-lint: disable-next-line(calls-loop)
+        for (uint256 i; i < responses.length; ++i) {
+            vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), responses[i]);
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                    address(_core)
+                )
+            );
+            vm.prank(caller_);
+            new BurnerLoansPayout(_kernel, address(_core));
+        }
     }
 }

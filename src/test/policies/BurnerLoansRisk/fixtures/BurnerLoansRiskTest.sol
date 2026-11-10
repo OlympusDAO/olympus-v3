@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
@@ -25,8 +26,9 @@ import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
-/// @dev Risk's actual dependency graph. No Core, Inventory, custody or actions are deployed.
-abstract contract BurnerLoansRiskTest is Test {
+/// @dev Pricing unit fixture; this contract doubles the Core compatibility boundary.
+///      Modular integration tests deploy real Core and exercise the startup sequence.
+abstract contract BurnerLoansRiskTest is Test, IERC165 {
     Kernel internal _kernel;
     OlympusRoles internal _roles;
     RolesAdmin internal _rolesAdmin;
@@ -42,6 +44,16 @@ abstract contract BurnerLoansRiskTest is Test {
     uint32 internal constant _MARKET = 7;
     address internal _operator = address(0xC0F1C);
     error DependencyReadFailed();
+
+    function supportsInterface(bytes4 interfaceId_) external pure override returns (bool) {
+        return
+            interfaceId_ == type(IERC165).interfaceId ||
+            interfaceId_ == type(IBurnerLoansCore).interfaceId;
+    }
+
+    function kernel() external view returns (Kernel) {
+        return _kernel;
+    }
 
     function setUp() public virtual {
         vm.warp(100 days);
@@ -111,6 +123,24 @@ abstract contract BurnerLoansRiskTest is Test {
         vm.startPrank(caller_);
         _;
         vm.stopPrank();
+    }
+
+    function _mockCoreReadiness(bool active_, bool enabled_) internal {
+        vm.mockCall(
+            address(_kernel),
+            abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(this)),
+            abi.encode(active_)
+        );
+        vm.mockCall(address(this), abi.encodeWithSignature("isEnabled()"), abi.encode(enabled_));
+    }
+
+    function _expectNoCoreReadinessReads() internal {
+        vm.expectCall(
+            address(_kernel),
+            abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(this)),
+            uint64(0)
+        );
+        vm.expectCall(address(this), abi.encodeWithSignature("isEnabled()"), uint64(0));
     }
 
     function _grantAdmin(address caller_) internal {

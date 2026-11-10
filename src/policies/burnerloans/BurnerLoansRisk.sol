@@ -38,7 +38,7 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 
 /// @notice OCG-replaceable pricing and arithmetic. Owns oracle/cache bindings and cache age; no custody, positions or user authorization.
 /// @dev Captures oracle inputs once, then evaluates caller-supplied snapshots against current FLOAN
-///      market terms. Core is an immutable identity binding; Risk's pricing and lifecycle are independent.
+///      market terms. Core is an immutable same-Kernel identity; its activity and enablement are independent.
 contract BurnerLoansRisk is
     Policy,
     PolicyEnablerV2,
@@ -86,6 +86,7 @@ contract BurnerLoansRisk is
 
     /// @notice Binds Kernel, OHM and pricing dependencies; starts disabled.
     /// @dev Reverts if:
+    ///      - Core is zero, lacks its interface, reports another Kernel or has unreadable Kernel metadata.
     ///      - OHM has no code, its decimals cannot be read or exceed the supported token precision.
     ///      - The backing oracle or nonzero cache fails interface/Kernel validation.
     /// @param kernel_ Kernel providing ROLES, PRICE and FLOAN.
@@ -93,7 +94,7 @@ contract BurnerLoansRisk is
     /// @param backingOracle_ Canonical backing oracle.
     /// @param priceCache_ Optional same-Kernel price cache; zero uses PRICE directly.
     /// @param maxAge_ Maximum cached-price age in seconds.
-    /// @param core_ Permanent system identity; no Core service or lifecycle is queried.
+    /// @param core_ Deployed same-Kernel Core identity; its activity and enablement are not queried.
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
@@ -106,9 +107,8 @@ contract BurnerLoansRisk is
         uint48 maxAge_,
         address core_
     ) Policy(kernel_) ReEnablerGracePeriod(LoanParameters._REENABLE_GRACE_PERIOD) {
-        if (core_ == address(0)) revert IBurnerLoansErrors.BurnerLoans_ZeroAddress();
-        // Core may be a precomputed address with no code yet. Core.setRisk validates this Risk's
-        // reported Kernel and core() binding through _validateDependency before admitting it.
+        if (core_ == address(0)) revert BurnerLoansRisk_InvalidCore(core_);
+        _validateCore(core_);
         _CORE = core_;
         (bool validOhm, uint8 decimals) = LoanToken.readDecimals(address(ohm_));
         if (!validOhm) revert BurnerLoansRisk_InvalidOhm(address(ohm_));
@@ -714,7 +714,7 @@ contract BurnerLoansRisk is
     /// @inheritdoc EnablerV2
     /// @dev Reverts if:
     ///      - Payload is nonempty.
-    ///      - Risk is inactive or oracle/cache bindings are invalid.
+    ///      - Risk is inactive or Core/oracle/cache bindings are invalid.
     ///      An inactive/disabled optional cache is allowed: pricing falls back to PRICE.
     function _beforeEnable(bytes calldata data_) internal view override {
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
@@ -729,13 +729,22 @@ contract BurnerLoansRisk is
         if (data_.length != 0) revert IBurnerLoansErrors.BurnerLoans_InvalidEnablerData();
     }
 
-    /// @notice Validates Risk's own policy state and direct pricing bindings.
+    /// @dev Construction and activation require Core compatibility without operational readiness.
+    function _validateCore(address core_) private view {
+        if (!ERC165Checker.supportsInterface(core_, type(IBurnerLoansCore).interfaceId))
+            revert BurnerLoansRisk_InvalidCore(core_);
+        PolicyDependency.requireSameKernel(core_, address(kernel));
+    }
+
+    /// @notice Validates Risk's own policy state, Core compatibility and direct pricing bindings.
     /// @dev Reverts if:
     ///      - Risk is Kernel-inactive.
+    ///      - Core interface or Kernel compatibility is invalid.
     ///      - The backing oracle binding is incompatible.
     ///      - A nonzero price-cache binding is incompatible.
     function _validateActivation() private view {
         _requireActive();
+        _validateCore(_CORE);
         _validateBackingOracle(backingOracle);
         _validatePriceCache(priceCache);
     }
@@ -745,6 +754,7 @@ contract BurnerLoansRisk is
     ///      - The inclusive grace deadline exceeds uint48.
     ///      - The inclusive grace deadline has expired.
     ///      - Risk is Kernel-inactive.
+    ///      - Core interface or Kernel compatibility is invalid.
     ///      - The backing oracle binding is incompatible.
     ///      - A nonzero price-cache binding is incompatible.
     function _beforeReEnable() internal override {

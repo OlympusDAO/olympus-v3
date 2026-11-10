@@ -124,21 +124,47 @@ Caller is authorized and every prerequisite not varied below is valid. An incomp
 | --- | --- | --- | --- | --- | --- | --- |
 | BLCT-ENABLE-D07 | true | Fuzz false/true | Reject each consumed interface advertisement; seed every interface | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Unchanged | Covered: [test][test_givenMissingConsumedInterface_whenActivated_reverts] |
 
-[test_givenAdmin_whenEnabled_thenExactTransition]: enable.t.sol#L124
-[test_givenNonAdmin_whenEnabled_reverts]: enable.t.sol#L137
-[test_givenAdmin_whenNonemptyData_reverts]: enable.t.sol#L148
-[test_givenEnableI01Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L209
-[test_givenEnabled_whenNonemptyEnableData_thenStateError]: enable.t.sol#L160
-[test_givenEnableI02Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L222
-[test_givenNonAdmin_whenNonemptyData_thenRoleError]: enable.t.sol#L173
-[test_givenEnableI03Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L238
-[test_givenAlreadyEnabled_whenEnableCalled_thenStateError]: enable.t.sol#L188
-[test_givenConfigActiveFalse_givenConfigEnabledTrue_whenEnable_reverts]: enable.t.sol#L24
-[test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_thenEnabled]: enable.t.sol#L41
-[test_givenConfigActiveFalse_givenConfigEnabledFalse_whenEnable_reverts]: enable.t.sol#L57
-[test_givenForeignConfigKernel_whenEnable_reverts]: enable.t.sol#L74
-[test_givenOwnPolicyInactive_whenEnable_reverts]: enable.t.sol#L96
-[test_givenNeverActivated_whenEnabled_thenUnsetRolesCallReverts]: enable.t.sol#L201
-[test_givenRiskOperatorIndependent_whenEnable_thenEnabled]: enable.t.sol#L110
+## Core compatibility revalidation
 
-[test_givenMissingConsumedInterface_whenActivated_reverts]: enable.t.sol#L251
+The same compatibility predicate runs at construction, enable and reEnable. The consumer is active and paused, its caller is ADMIN, and all other prerequisites pass. Core Kernel metadata, membership and local enablement are not admission requirements here.
+
+| ID | Fault or state | Result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLCT-ENABLE-D12 | Core lacks IBurnerLoansCore | BurnerLoansConfigTimelock_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMissingCoreInterface_whenActivated_reverts] |
+| BLCT-ENABLE-D13 | Core interface probe reverts | BurnerLoansConfigTimelock_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenRevertingCoreInterface_whenActivated_reverts] |
+| BLCT-ENABLE-D14 | Core interface probe returns short data | BurnerLoansConfigTimelock_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_reverts] |
+| BLCT-ENABLE-D15 | Config.facility() reverts | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Remain paused; timestamp unchanged; restoring the binding permits retry | Covered: [test][test_givenRevertingCoreBinding_whenActivated_reverts] |
+| BLCT-ENABLE-D16 | Config.facility() returns short data | BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(Config) | Remain paused; timestamp unchanged; restoring the binding permits retry | Covered: [test][test_givenMalformedCoreBinding_whenActivated_reverts] |
+| BLCT-ENABLE-P10 | Compatible Core; active/enabled flags independently false/true; all four seeded | Success | Consumer becomes enabled | Covered: [test][test_givenCoreLifecycle_whenActivated]; [seeds][test_whenCoreLifecycleStatesSeeded_thenActivated] |
+
+[test_givenAdmin_whenEnabled_thenExactTransition]: enable.t.sol#L128
+[test_givenNonAdmin_whenEnabled_reverts]: enable.t.sol#L141
+[test_givenAdmin_whenNonemptyData_reverts]: enable.t.sol#L152
+[test_givenEnableI01Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L213
+[test_givenEnabled_whenNonemptyEnableData_thenStateError]: enable.t.sol#L164
+[test_givenEnableI02Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L226
+[test_givenNonAdmin_whenNonemptyData_thenRoleError]: enable.t.sol#L177
+[test_givenEnableI03Payloads_whenBoundarySeedsRun_thenScenarioHolds]: enable.t.sol#L242
+[test_givenAlreadyEnabled_whenEnableCalled_thenStateError]: enable.t.sol#L192
+[test_givenConfigActiveFalse_givenConfigEnabledTrue_whenEnable_reverts]: enable.t.sol#L28
+[test_givenConfigActiveTrue_givenConfigEnabledFalse_whenEnable_thenEnabled]: enable.t.sol#L45
+[test_givenConfigActiveFalse_givenConfigEnabledFalse_whenEnable_reverts]: enable.t.sol#L61
+[test_givenForeignConfigKernel_whenEnable_reverts]: enable.t.sol#L78
+[test_givenOwnPolicyInactive_whenEnable_reverts]: enable.t.sol#L100
+[test_givenNeverActivated_whenEnabled_thenUnsetRolesCallReverts]: enable.t.sol#L205
+[test_givenRiskOperatorIndependent_whenEnable_thenEnabled]: enable.t.sol#L114
+
+[test_givenMissingConsumedInterface_whenActivated_reverts]: enable.t.sol#L255
+
+[test_givenMissingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L288
+
+[test_givenRevertingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L311
+
+[test_givenMalformedCoreInterface_whenActivated_reverts]: ./enable.t.sol#L338
+
+[test_givenRevertingCoreBinding_whenActivated_reverts]: ./enable.t.sol#L361
+
+[test_givenMalformedCoreBinding_whenActivated_reverts]: ./enable.t.sol#L387
+
+[test_givenCoreLifecycle_whenActivated]: ./enable.t.sol#L409
+[test_whenCoreLifecycleStatesSeeded_thenActivated]: ./enable.t.sol#L420

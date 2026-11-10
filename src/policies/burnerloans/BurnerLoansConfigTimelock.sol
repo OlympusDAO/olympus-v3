@@ -91,6 +91,7 @@ contract BurnerLoansConfigTimelock is
     /// @dev Construction does not query target activity, enablement or operator selection.
     /// @dev Reverts if:
     ///      - The target is zero or lacks a consumed Config, ConfigOperator or Enabler interface.
+    ///      - The target Core binding is unreadable or Core lacks IBurnerLoansCore.
     ///      - The target Kernel getter fails or returns malformed data.
     ///      - The target reports a different Kernel.
     ///
@@ -686,12 +687,22 @@ contract BurnerLoansConfigTimelock is
 
     /// @dev Reverts if:
     ///      - The target lacks Config, ConfigOperator or Enabler interface support.
+    ///      - Its Core getter fails or returns a malformed address.
+    ///      - Core lacks IBurnerLoansCore.
     function _requireTargetInterfaces(address target_) private view {
         if (
             !ERC165Checker.supportsInterface(target_, type(IBurnerLoansConfig).interfaceId) ||
             !ERC165Checker.supportsInterface(target_, type(IConfigOperator).interfaceId) ||
             !ERC165Checker.supportsInterface(target_, type(IEnabler).interfaceId)
         ) revert BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(target_);
+        (bool validCore, address core) = SafeCallDecoder.safeReadAddress(
+            target_,
+            IBurnerLoansConfig.facility.selector
+        );
+        if (!validCore) revert BurnerLoansConfigTimelock_InvalidBurnerLoansConfig(target_);
+        // Queue validation reads Core.depositManager() directly for withdrawal-token changes.
+        if (!ERC165Checker.supportsInterface(core, type(IBurnerLoansCore).interfaceId))
+            revert BurnerLoansConfigTimelock_InvalidCore(core);
     }
 
     /// @dev Reverts if:

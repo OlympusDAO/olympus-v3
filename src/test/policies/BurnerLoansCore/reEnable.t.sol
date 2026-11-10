@@ -21,10 +21,11 @@ import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefini
 import {BurnerLoansCoreTest} from "./BurnerLoansCoreTest.sol";
 import {CoreCallbackToken} from "./fixtures/CoreCallbackToken.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
-import {Actions} from "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 import {BurnerLoansCore} from "src/policies/burnerloans/BurnerLoansCore.sol";
 
 contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
+    uint256 internal constant _ABI_WORD_BYTES = 32;
     using stdStorage for StdStorage;
 
     // Scenarios: BLCORE-REENABLE-P01.
@@ -183,16 +184,53 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
         _core.disable("");
-        vm.mockCall(
-            address(_inventory),
-            abi.encodeWithSignature("kernel()"),
-            abi.encode(address(0))
-        );
         bytes32 before = _state();
-        _expectDependencyKernelMismatch(address(_inventory), address(0));
+        uint48 transition = _core.lastTransitionAt();
+        Kernel other = new Kernel();
+        vm.prank(address(_kernel));
+        _inventory.changeKernel(other);
+        assertTrue(_kernel.isPolicyActive(_inventory), "Old Kernel retains stale membership");
+        _expectDependencyKernelMismatch(address(_inventory), address(other));
         vm.prank(caller_);
         _core.reEnable();
-        assertEq(_state(), before, "Wrong binding cannot transition");
+        assertFalse(_core.isEnabled(), "Foreign reported Kernel rejects stale active membership");
+        assertEq(_core.lastTransitionAt(), transition, "Rejection preserves transition history");
+        vm.prank(address(other));
+        _inventory.changeKernel(_kernel);
+        assertEq(_state(), before, "Rejection preserves accounting and selected services");
+        bytes32 ledger = _ledger();
+        vm.prank(caller_);
+        _core.reEnable();
+        assertTrue(_core.isEnabled(), "Restored Kernel permits retry");
+        assertEq(_ledger(), ledger, "Retry preserves accounting and custody");
+    }
+
+    // Scenarios: BLCORE-REENABLE-D35.
+    function test_givenInventoryMalformedStatus_whenEnabled_reverts(
+        bytes memory data_,
+        bool enabledGetter_
+    ) public {
+        vm.assume(data_.length != _ABI_WORD_BYTES);
+        _core.disable("");
+        vm.mockCall(
+            address(_inventory),
+            enabledGetter_
+                ? abi.encodeWithSignature("isEnabled()")
+                : abi.encodeWithSignature("kernel()"),
+            data_
+        );
+        bytes32 before = _state();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_inventory)
+            )
+        );
+        _core.reEnable();
+        assertEq(_state(), before, "Malformed status cannot change Core state");
+        vm.clearMockedCalls();
+        _core.reEnable();
+        assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
 
     // Scenarios: BLCORE-REENABLE-D07, BLCORE-REENABLE-D24, BLCORE-REENABLE-D26.
@@ -237,12 +275,53 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
         _core.disable("");
-        vm.mockCall(address(_payout), abi.encodeWithSignature("kernel()"), abi.encode(address(0)));
         bytes32 before = _state();
-        _expectDependencyKernelMismatch(address(_payout), address(0));
+        uint48 transition = _core.lastTransitionAt();
+        Kernel other = new Kernel();
+        vm.prank(address(_kernel));
+        _payout.changeKernel(other);
+        assertTrue(_kernel.isPolicyActive(_payout), "Old Kernel retains stale membership");
+        _expectDependencyKernelMismatch(address(_payout), address(other));
         vm.prank(caller_);
         _core.reEnable();
-        assertEq(_state(), before, "Wrong binding cannot transition");
+        assertFalse(_core.isEnabled(), "Foreign reported Kernel rejects stale active membership");
+        assertEq(_core.lastTransitionAt(), transition, "Rejection preserves transition history");
+        vm.prank(address(other));
+        _payout.changeKernel(_kernel);
+        assertEq(_state(), before, "Rejection preserves accounting and selected services");
+        bytes32 ledger = _ledger();
+        vm.prank(caller_);
+        _core.reEnable();
+        assertTrue(_core.isEnabled(), "Restored Kernel permits retry");
+        assertEq(_ledger(), ledger, "Retry preserves accounting and custody");
+    }
+
+    // Scenarios: BLCORE-REENABLE-D36.
+    function test_givenPayoutMalformedStatus_whenEnabled_reverts(
+        bytes memory data_,
+        bool enabledGetter_
+    ) public {
+        vm.assume(data_.length != _ABI_WORD_BYTES);
+        _core.disable("");
+        vm.mockCall(
+            address(_payout),
+            enabledGetter_
+                ? abi.encodeWithSignature("isEnabled()")
+                : abi.encodeWithSignature("kernel()"),
+            data_
+        );
+        bytes32 before = _state();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_payout)
+            )
+        );
+        _core.reEnable();
+        assertEq(_state(), before, "Malformed status cannot change Core state");
+        vm.clearMockedCalls();
+        _core.reEnable();
+        assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
 
     // Scenarios: BLCORE-REENABLE-D21, BLCORE-REENABLE-D20, BLCORE-REENABLE-D22.
@@ -287,12 +366,53 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
         _core.disable("");
-        vm.mockCall(address(_risk), abi.encodeWithSignature("kernel()"), abi.encode(address(0)));
         bytes32 before = _state();
-        _expectDependencyKernelMismatch(address(_risk), address(0));
+        uint48 transition = _core.lastTransitionAt();
+        Kernel other = new Kernel();
+        vm.prank(address(_kernel));
+        _risk.changeKernel(other);
+        assertTrue(_kernel.isPolicyActive(_risk), "Old Kernel retains stale membership");
+        _expectDependencyKernelMismatch(address(_risk), address(other));
         vm.prank(caller_);
         _core.reEnable();
-        assertEq(_state(), before, "Wrong binding cannot transition");
+        assertFalse(_core.isEnabled(), "Foreign reported Kernel rejects stale active membership");
+        assertEq(_core.lastTransitionAt(), transition, "Rejection preserves transition history");
+        vm.prank(address(other));
+        _risk.changeKernel(_kernel);
+        assertEq(_state(), before, "Rejection preserves accounting and selected services");
+        bytes32 ledger = _ledger();
+        vm.prank(caller_);
+        _core.reEnable();
+        assertTrue(_core.isEnabled(), "Restored Kernel permits retry");
+        assertEq(_ledger(), ledger, "Retry preserves accounting and custody");
+    }
+
+    // Scenarios: BLCORE-REENABLE-D37.
+    function test_givenRiskMalformedStatus_whenEnabled_reverts(
+        bytes memory data_,
+        bool enabledGetter_
+    ) public {
+        vm.assume(data_.length != _ABI_WORD_BYTES);
+        _core.disable("");
+        vm.mockCall(
+            address(_risk),
+            enabledGetter_
+                ? abi.encodeWithSignature("isEnabled()")
+                : abi.encodeWithSignature("kernel()"),
+            data_
+        );
+        bytes32 before = _state();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyDependency.PolicyDependency_InvalidDependency.selector,
+                address(_risk)
+            )
+        );
+        _core.reEnable();
+        assertEq(_state(), before, "Malformed status cannot change Core state");
+        vm.clearMockedCalls();
+        _core.reEnable();
+        assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
 
     // Scenarios: BLCORE-REENABLE-D11.

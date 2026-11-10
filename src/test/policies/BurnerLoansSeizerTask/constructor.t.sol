@@ -2,6 +2,8 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
 import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
 import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
@@ -135,35 +137,29 @@ contract BurnerLoansSeizerTaskConstructorTest is BurnerLoansSeizerTaskTest {
     }
 
     // Scenarios: BLSZC-P03.
-    function test_whenCoreMetadataUnreadable_thenDeploymentUsesSeizeBinding(
+    function test_whenCoreLifecycleUnreadable_thenDeploymentUsesSeizeBinding(
         address caller_
     ) public {
-        // Seize owns Core admission; Task only compares the shared Core identity with Lens.
         bytes memory kernelRead = abi.encodeCall(_core.kernel, ());
-        bytes memory interfaceRead = abi.encodeWithSignature("supportsInterface(bytes4)");
+        bytes memory enabledRead = abi.encodeCall(_core.isEnabled, ());
         vm.mockCallRevert(address(_core), kernelRead, hex"aabbccdd");
-        vm.mockCallRevert(address(_core), interfaceRead, hex"aabbccdd");
+        vm.mockCallRevert(address(_core), enabledRead, hex"aabbccdd");
         vm.expectCall(address(_core), kernelRead, uint64(0));
-        vm.expectCall(address(_core), interfaceRead, uint64(0));
+        vm.expectCall(address(_core), enabledRead, uint64(0));
+        vm.expectCall(
+            address(_kernel),
+            abi.encodeWithSignature("isPolicyActive(address)", address(_core)),
+            uint64(0)
+        );
         vm.prank(caller_);
-        BurnerLoansSeizerTask task = new BurnerLoansSeizerTask(
-            _kernel,
-            _liquidation,
-            _lens,
-            1,
-            1,
-            1
-        );
-        assertEq(
-            address(task.seize()),
-            address(_liquidation),
-            "Task binds its direct Seize dependency"
-        );
+        BurnerLoansSeizerTask task = _newTask();
+        assertEq(address(task.seize()), address(_liquidation), "Direct Seize binding");
         assertEq(
             IBurnerLoansCoreBound(address(task.seize())).core(),
             address(_core),
-            "Shared Core identity is still derived from Seize"
+            "Derived Core binding"
         );
+        assertFalse(task.isEnabled(), "Starts disabled");
     }
 
     // Scenarios: BLSZC-L01, BLSZC-L02, BLSZC-L03.
@@ -293,6 +289,108 @@ contract BurnerLoansSeizerTaskConstructorTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectRevert(BindingReadFailed.selector);
         new BurnerLoansSeizerTask(_kernel, _liquidation, _lens, 1, 1, 1);
+    }
+
+    function _newTask() private returns (BurnerLoansSeizerTask) {
+        return new BurnerLoansSeizerTask(_kernel, _liquidation, _lens, 1, 1, 1);
+    }
+
+    function _expectInvalidCore(address core_) private {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeizerTask.BurnerLoansSeizerTask_InvalidCore.selector,
+                core_
+            )
+        );
+    }
+
+    function _mockCoreBinding(address core_) private {
+        vm.mockCall(
+            address(_liquidation),
+            abi.encodeCall(IBurnerLoansCoreBound.core, ()),
+            abi.encode(core_)
+        );
+        vm.mockCall(
+            address(_lens),
+            abi.encodeCall(IBurnerLoansCoreBound.core, ()),
+            abi.encode(core_)
+        );
+    }
+
+    // Scenarios: BLSZC-D07.
+    function test_givenZeroCore_whenConstructed_reverts(address caller_) public {
+        _mockCoreBinding(address(0));
+        _expectInvalidCore(address(0));
+        vm.prank(caller_);
+        _newTask();
+    }
+
+    // Scenarios: BLSZC-D08.
+    function test_givenEoaCore_whenConstructed_reverts(address caller_, address core_) public {
+        vm.assume(core_ != address(0) && core_.code.length == 0);
+        _mockCoreBinding(core_);
+        _expectInvalidCore(core_);
+        vm.prank(caller_);
+        _newTask();
+    }
+
+    // Scenarios: BLSZC-D09.
+    function test_givenMissingCoreInterface_whenConstructed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(_core), probe, abi.encode(false));
+        _expectInvalidCore(address(_core));
+        vm.prank(caller_);
+        _newTask();
+    }
+
+    // Scenarios: BLSZC-D10.
+    function test_givenRevertingCoreInterface_whenConstructed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCallRevert(address(_core), probe, hex"deadbeef");
+        _expectInvalidCore(address(_core));
+        vm.prank(caller_);
+        _newTask();
+    }
+
+    // Scenarios: BLSZC-D11.
+    function test_givenMalformedCoreInterface_whenConstructed_reverts(address caller_) public {
+        bytes memory probe = abi.encodeCall(
+            IERC165.supportsInterface,
+            (type(IBurnerLoansCore).interfaceId)
+        );
+        vm.mockCall(address(_core), probe, hex"01");
+        _expectInvalidCore(address(_core));
+        vm.prank(caller_);
+        _newTask();
+    }
+
+    // Scenarios: BLSZC-P06.
+    function test_givenCoreLifecycle_whenConstructed(
+        address caller_,
+        bool active_,
+        bool enabled_
+    ) public {
+        _setCoreLifecycle(active_, enabled_);
+        test_whenBindingsMatch_thenCoreIsDerived(caller_, 1, 1, 1);
+    }
+
+    // Scenarios: BLSZC-P06.
+    function test_whenCoreLifecycleStatesSeeded_thenAccepted() public {
+        uint256 snapshot = vm.snapshotState();
+        test_givenCoreLifecycle_whenConstructed(_ALICE, false, false);
+        assertTrue(vm.revertToState(snapshot), "Restore disabled inactive Core");
+        test_givenCoreLifecycle_whenConstructed(_ALICE, false, true);
+        assertTrue(vm.revertToState(snapshot), "Restore enabled inactive Core");
+        test_givenCoreLifecycle_whenConstructed(_ALICE, true, false);
+        assertTrue(vm.revertToState(snapshot), "Restore disabled active Core");
+        test_givenCoreLifecycle_whenConstructed(_ALICE, true, true);
+        assertTrue(vm.revertToStateAndDelete(snapshot), "Restore enabled active Core");
     }
 }
 // forge-lint: disable-end(literal-instead-of-constant,unsafe-typecast)

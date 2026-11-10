@@ -55,18 +55,18 @@ contract BurnerLoansPayout is
     /// @notice	Pending fee, seized-collateral and keeper obligations with their token/recipient indexes.
     LoanPayouts.State internal _payouts;
 
-    /// @notice	Creates payout custody and routing bound to Core's Kernel.
+    /// @notice	Creates payout custody and routing for one immutable Core authority.
     /// @dev	Reverts if:
-    ///      - The already-deployed Core lacks its interface or reports another Kernel.
+    ///      - Core is zero, lacks its interface or reports another Kernel.
+    /// @dev Core validates Payout compatibility and readiness when selecting and activating it.
     /// @param	kernel_	Kernel providing Treasury and governance roles.
     /// @param	core_	Permanent Core allowed to credit received fees and liquidation proceeds.
     constructor(
         Kernel kernel_,
         address core_
     ) Policy(kernel_) ReEnablerGracePeriod(LoanParameters._REENABLE_GRACE_PERIOD) {
-        if (!ERC165Checker.supportsInterface(core_, type(IBurnerLoansCore).interfaceId))
-            revert IBurnerLoansCoreBound.BurnerLoansAction_InvalidCore(core_);
-        PolicyDependency.requireSameKernel(core_, address(kernel_));
+        if (core_ == address(0)) revert BurnerLoansPayout_InvalidCore(core_);
+        _validateCore(core_);
         _CORE = IBurnerLoansCore(core_);
     }
 
@@ -681,6 +681,7 @@ contract BurnerLoansPayout is
     ///      - Payout is reentered.
     ///      - Core is settling.
     ///      - Payout is Kernel-inactive.
+    ///      - Core lacks its required interface or reports another Kernel.
     ///
     /// @dev Core is an immutable authority reference; its lifecycle does not gate enablement.
     function _beforeEnable(bytes calldata data_) internal view override {
@@ -697,6 +698,13 @@ contract BurnerLoansPayout is
     /// @dev Own inactivity does not block pausing.
     function _beforeDisable(bytes calldata data_) internal view override {
         _checkTransition(data_);
+    }
+
+    /// @dev Lifecycle changes and recovery call Core.requireNotReentrant() to protect in-flight funds.
+    function _validateCore(address core_) private view {
+        if (!ERC165Checker.supportsInterface(core_, type(IBurnerLoansCore).interfaceId))
+            revert BurnerLoansPayout_InvalidCore(core_);
+        PolicyDependency.requireSameKernel(core_, address(kernel));
     }
 
     /// @notice	Validates the empty lifecycle payload and both settlement guards.
@@ -725,11 +733,13 @@ contract BurnerLoansPayout is
     ///      - Payout's settlement guard is entered.
     ///      - Core's settlement guard is entered.
     ///      - Payout is Kernel-inactive.
+    ///      - Core lacks its required interface or reports another Kernel.
     ///
     /// @dev Core is an authority reference; its activity and enablement are not prerequisites.
     function _validateActivation() private view {
         _checkSettlement();
         _requireActive();
+        _validateCore(address(_CORE));
     }
 
     /// @inheritdoc ReEnablerGracePeriod
@@ -739,6 +749,7 @@ contract BurnerLoansPayout is
     ///      - Payout's settlement guard is entered.
     ///      - Core's settlement guard is entered.
     ///      - Payout is Kernel-inactive.
+    ///      - Core lacks its required interface or reports another Kernel.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
         _validateActivation();

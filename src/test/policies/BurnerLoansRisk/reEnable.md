@@ -8,7 +8,7 @@ Scenario scope: `BLRISK-REENABLE`. ROLES is initialized through Kernel activatio
 
 ## Dependency validation contract
 
-Risk has an immutable Core identity only; do not call Core or gate Risk activation on Core/controller state. Backing oracle is an ordinary calculator with interface/version checks. Optional cache needs IPriceCache/IEnabler/IVersioned and a matching Kernel; no numeric cache version is queried but may be inactive or disabled because PRICE is the fallback. Kernel modules use module-version checks, not Policy lifecycle checks.
+Risk validates its immutable Core interface and matching Kernel; Core activity and enablement and controller readiness do not gate Risk activation. Backing oracle is an ordinary calculator with interface/version checks. Optional cache needs IPriceCache/IEnabler/IVersioned and a matching Kernel; no numeric cache version is queried but may be inactive or disabled because PRICE is the fallback. Kernel modules use module-version checks, not Policy lifecycle checks.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Invalid metadata uses the consumer-owned InvalidDependency error; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -36,7 +36,7 @@ For inactive rows, activate then Kernel-deactivate Risk so cached ROLES remains 
 
 ## Direct dependency compatibility
 
-The Core binding is identity-only; Core readiness, selected configOperator readiness and market population are not activation prerequisites. Modules are supplied by Kernel activation. Cache may be inactive or disabled because direct PRICE remains available.
+The Core binding must expose IBurnerLoansCore and report the same Kernel. Core readiness, selected configOperator readiness and market population are not activation prerequisites. Modules are supplied by Kernel activation. Cache may be inactive or disabled because direct PRICE remains available.
 
 | ID | Caller | Dependency / fault | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -59,92 +59,124 @@ L=lastTransitionAt, G=gracePeriod, D=L+G; local active=true, local enabled=false
 
 - [x] Complete focused tests and exact mappings.
 
-[test_givenAdminActive_whenAlreadyEnabled_reverts]: reEnable.t.sol#L67
+## Core compatibility acceptance criteria
 
-[test_givenAdminCache00_whenTransition]: reEnable.t.sol#L221
+Constructor and activation share the same interface and Kernel validator. Interface rejection precedes Kernel probing. Failed activation preserves lifecycle fields, configuration, accounting and events; restoring compatibility permits retry. Core need not be active or enabled. Existing authorization, settlement and grace guards retain their order. No numeric action inputs, new accounting or token transfers are introduced. Existing lifecycle, authorization and grace matrices remain applicable.
 
-[test_givenAdminCache01_whenTransition]: reEnable.t.sol#L206
+| ID | Core condition | Expected result | Effects | Test |
+| --- | --- | --- | --- | --- |
+| BLRISK-REENABLE-K03 | Kernel getter returns short, oversized or noncanonical ABI data; fuzz non-32-byte responses and seed lengths 0,1,31,33,64 plus MAX256 word | PolicyDependency_InvalidDependency(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMalformedCoreKernel_whenActivated_revertsThenRestored]; [test][test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored] |
+| BLRISK-REENABLE-K01 | Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,reportedKernel) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenDifferentCoreKernel_whenActivated_revertsThenRestored] |
+| BLRISK-REENABLE-K02 | Core Kernel getter reverts | PolicyDependency_InvalidDependency(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenRevertingCoreKernel_whenActivated_revertsThenRestored] |
+| BLRISK-REENABLE-I20 | Missing Core interface support/response | BurnerLoansRisk_InvalidCore(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMissingCoreInterface_whenActivated_revertsThenRestored] |
+| BLRISK-REENABLE-I21 | Reverting Core interface support/response | BurnerLoansRisk_InvalidCore(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenRevertingCoreInterface_whenActivated_revertsThenRestored] |
+| BLRISK-REENABLE-I22 | Malformed Core interface support/response | BurnerLoansRisk_InvalidCore(Core) | Paused state and history preserved; restoration permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_revertsThenRestored] |
+| BLRISK-REENABLE-K05 | Same-Kernel compatible Core; all four active/enabled combinations | Success without Core readiness probes | Exact normal success; other state preserved | Covered: [test][test_givenCoreLifecycle_whenCompatible]; [test][test_whenCoreLifecycleSeeds] |
 
-[test_givenAdminCache10_whenTransition]: reEnable.t.sol#L191
+[test_givenAdminActive_whenAlreadyEnabled_reverts]: reEnable.t.sol#L68
 
-[test_givenAdminCache11_whenTransition]: reEnable.t.sol#L176
+[test_givenAdminCache00_whenTransition]: reEnable.t.sol#L222
 
-[test_givenAdminCacheInterface_whenTransition_reverts]: reEnable.t.sol#L122
+[test_givenAdminCache01_whenTransition]: reEnable.t.sol#L207
 
-[test_givenAdminCacheKernel_whenTransition_reverts]: reEnable.t.sol#L150
+[test_givenAdminCache10_whenTransition]: reEnable.t.sol#L192
 
-[test_givenAdminInactive_whenAlreadyEnabled_reverts]: reEnable.t.sol#L76
+[test_givenAdminCache11_whenTransition]: reEnable.t.sol#L177
 
-[test_givenAdminInactive_whenTransition_reverts]: reEnable.t.sol#L87
+[test_givenAdminCacheInterface_whenTransition_reverts]: reEnable.t.sol#L123
 
-[test_givenAdminNeverEnabled_whenReEnabled_reverts]: reEnable.t.sol#L255
+[test_givenAdminCacheKernel_whenTransition_reverts]: reEnable.t.sol#L151
 
-[test_givenAdminOracleInterface_whenTransition_reverts]: reEnable.t.sol#L98
+[test_givenAdminInactive_whenAlreadyEnabled_reverts]: reEnable.t.sol#L77
 
-[test_givenAdmin_whenAfterDeadline_reverts]: reEnable.t.sol#L325
+[test_givenAdminInactive_whenTransition_reverts]: reEnable.t.sol#L88
 
-[test_givenAdmin_whenAtDeadline]: reEnable.t.sol#L300
+[test_givenAdminNeverEnabled_whenReEnabled_reverts]: reEnable.t.sol#L256
 
-[test_givenAdmin_whenAtDisable]: reEnable.t.sol#L291
+[test_givenAdminOracleInterface_whenTransition_reverts]: reEnable.t.sol#L99
 
-[test_givenAdmin_whenDeadlineOverflows_reverts]: reEnable.t.sol#L351
+[test_givenAdmin_whenAfterDeadline_reverts]: reEnable.t.sol#L326
 
-[test_givenAdmin_whenDependencyRestored]: reEnable.t.sol#L236
+[test_givenAdmin_whenAtDeadline]: reEnable.t.sol#L301
 
-[test_givenAdmin_whenGraceExpired_reverts]: reEnable.t.sol#L309
+[test_givenAdmin_whenAtDisable]: reEnable.t.sol#L292
 
-[test_givenAdmin_whenMaxTimestamp_reverts]: reEnable.t.sol#L338
+[test_givenAdmin_whenDeadlineOverflows_reverts]: reEnable.t.sol#L352
 
-[test_givenAdmin_whenOverflowEnd_reverts]: reEnable.t.sol#L393
+[test_givenAdmin_whenDependencyRestored]: reEnable.t.sol#L237
 
-[test_givenAdmin_whenOverflowStart_reverts]: reEnable.t.sol#L375
+[test_givenAdmin_whenGraceExpired_reverts]: reEnable.t.sol#L310
 
-[test_givenAdmin_whenTransition]: reEnable.t.sol#L60
+[test_givenAdmin_whenMaxTimestamp_reverts]: reEnable.t.sol#L339
 
-[test_givenAdmin_whenWithinGrace]: reEnable.t.sol#L273
+[test_givenAdmin_whenOverflowEnd_reverts]: reEnable.t.sol#L394
 
-[test_givenLoanAdminActive_whenAlreadyEnabled_reverts]: reEnable.t.sol#L418
+[test_givenAdmin_whenOverflowStart_reverts]: reEnable.t.sol#L376
 
-[test_givenLoanAdminCache00_whenTransition]: reEnable.t.sol#L572
+[test_givenAdmin_whenTransition]: reEnable.t.sol#L61
 
-[test_givenLoanAdminCache01_whenTransition]: reEnable.t.sol#L557
+[test_givenAdmin_whenWithinGrace]: reEnable.t.sol#L274
 
-[test_givenLoanAdminCache10_whenTransition]: reEnable.t.sol#L542
+[test_givenLoanAdminActive_whenAlreadyEnabled_reverts]: reEnable.t.sol#L419
 
-[test_givenLoanAdminCache11_whenTransition]: reEnable.t.sol#L527
+[test_givenLoanAdminCache00_whenTransition]: reEnable.t.sol#L573
 
-[test_givenLoanAdminCacheInterface_whenTransition_reverts]: reEnable.t.sol#L473
+[test_givenLoanAdminCache01_whenTransition]: reEnable.t.sol#L558
 
-[test_givenLoanAdminCacheKernel_whenTransition_reverts]: reEnable.t.sol#L501
+[test_givenLoanAdminCache10_whenTransition]: reEnable.t.sol#L543
 
-[test_givenLoanAdminInactive_whenAlreadyEnabled_reverts]: reEnable.t.sol#L427
+[test_givenLoanAdminCache11_whenTransition]: reEnable.t.sol#L528
 
-[test_givenLoanAdminInactive_whenTransition_reverts]: reEnable.t.sol#L438
+[test_givenLoanAdminCacheInterface_whenTransition_reverts]: reEnable.t.sol#L474
 
-[test_givenLoanAdminNeverEnabled_whenReEnabled_reverts]: reEnable.t.sol#L606
+[test_givenLoanAdminCacheKernel_whenTransition_reverts]: reEnable.t.sol#L502
 
-[test_givenLoanAdminOracleInterface_whenTransition_reverts]: reEnable.t.sol#L449
+[test_givenLoanAdminInactive_whenAlreadyEnabled_reverts]: reEnable.t.sol#L428
 
-[test_givenLoanAdmin_whenAfterDeadline_reverts]: reEnable.t.sol#L676
+[test_givenLoanAdminInactive_whenTransition_reverts]: reEnable.t.sol#L439
 
-[test_givenLoanAdmin_whenAtDeadline]: reEnable.t.sol#L651
+[test_givenLoanAdminNeverEnabled_whenReEnabled_reverts]: reEnable.t.sol#L607
 
-[test_givenLoanAdmin_whenAtDisable]: reEnable.t.sol#L642
+[test_givenLoanAdminOracleInterface_whenTransition_reverts]: reEnable.t.sol#L450
 
-[test_givenLoanAdmin_whenDeadlineOverflows_reverts]: reEnable.t.sol#L702
+[test_givenLoanAdmin_whenAfterDeadline_reverts]: reEnable.t.sol#L677
 
-[test_givenLoanAdmin_whenDependencyRestored]: reEnable.t.sol#L587
+[test_givenLoanAdmin_whenAtDeadline]: reEnable.t.sol#L652
 
-[test_givenLoanAdmin_whenGraceExpired_reverts]: reEnable.t.sol#L660
+[test_givenLoanAdmin_whenAtDisable]: reEnable.t.sol#L643
 
-[test_givenLoanAdmin_whenMaxTimestamp_reverts]: reEnable.t.sol#L689
+[test_givenLoanAdmin_whenDeadlineOverflows_reverts]: reEnable.t.sol#L703
 
-[test_givenLoanAdmin_whenOverflowEnd_reverts]: reEnable.t.sol#L744
+[test_givenLoanAdmin_whenDependencyRestored]: reEnable.t.sol#L588
 
-[test_givenLoanAdmin_whenOverflowStart_reverts]: reEnable.t.sol#L726
+[test_givenLoanAdmin_whenGraceExpired_reverts]: reEnable.t.sol#L661
 
-[test_givenLoanAdmin_whenTransition]: reEnable.t.sol#L411
+[test_givenLoanAdmin_whenMaxTimestamp_reverts]: reEnable.t.sol#L690
 
-[test_givenLoanAdmin_whenWithinGrace]: reEnable.t.sol#L624
+[test_givenLoanAdmin_whenOverflowEnd_reverts]: reEnable.t.sol#L745
 
-[test_whenUnauthorizedCaller_reverts]: reEnable.t.sol#L49
+[test_givenLoanAdmin_whenOverflowStart_reverts]: reEnable.t.sol#L727
+
+[test_givenLoanAdmin_whenTransition]: reEnable.t.sol#L412
+
+[test_givenLoanAdmin_whenWithinGrace]: reEnable.t.sol#L625
+
+[test_whenUnauthorizedCaller_reverts]: reEnable.t.sol#L50
+
+[test_givenMalformedCoreKernel_whenActivated_revertsThenRestored]: reEnable.t.sol#L763
+
+[test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored]: reEnable.t.sol#L780
+
+[test_givenDifferentCoreKernel_whenActivated_revertsThenRestored]: reEnable.t.sol#L806
+
+[test_givenRevertingCoreKernel_whenActivated_revertsThenRestored]: reEnable.t.sol#L823
+
+[test_givenMissingCoreInterface_whenActivated_revertsThenRestored]: reEnable.t.sol#L839
+
+[test_givenRevertingCoreInterface_whenActivated_revertsThenRestored]: reEnable.t.sol#L858
+
+[test_givenMalformedCoreInterface_whenActivated_revertsThenRestored]: reEnable.t.sol#L880
+
+[test_givenCoreLifecycle_whenCompatible]: reEnable.t.sol#L914
+
+[test_whenCoreLifecycleSeeds]: reEnable.t.sol#L923
