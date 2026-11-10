@@ -25,7 +25,7 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
         bool coreEnabled_
     ) public givenPendingBuckets {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(ADMIN_ROLE, caller_);
         _setState(_payout, true, enabled_);
         _setState(_core, coreActive_, coreEnabled_);
         address next = address(_config);
@@ -107,7 +107,7 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
         address caller_,
         bool enabled_
     ) public givenPendingBuckets {
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(ADMIN_ROLE, caller_);
         _setState(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
         _expectInactivePayout();
@@ -127,6 +127,11 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
         vm.prank(caller_);
         _payout.setConfigOperator(_controller);
         assertEq(_ledgerDigest(), state, "Inactivity rejects before authority or mutation");
+    }
+
+    // Scenarios: BLCU-CONFIGURATOR-P01, BLCU-CONFIGURATOR-A03.
+    function test_givenExistingAdmin_whenControllerInstalled_thenNoReverseReads() public {
+        test_whenAdminInstallsController_thenNoReverseReads(address(this), true, true, true);
     }
 }
 

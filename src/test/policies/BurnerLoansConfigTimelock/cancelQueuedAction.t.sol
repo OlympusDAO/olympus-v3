@@ -15,7 +15,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenCancel_thenCleared(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -28,7 +28,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenCancel_thenCleared(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -41,7 +41,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenCancel_thenCleared(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -54,7 +54,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenCancel_thenCleared(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -67,7 +67,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenCancel_thenCleared(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -80,7 +80,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenCancel_thenCleared(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -93,7 +93,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenCancel_thenCleared(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -106,7 +106,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledTrue_whenCancel_reverts(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -126,7 +126,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenCancel_reverts(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -146,7 +146,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenCancel_reverts(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -166,7 +166,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenCancel_reverts(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -186,7 +186,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenCancel_reverts(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -206,7 +206,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenCancel_reverts(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -226,7 +226,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenCancel_reverts(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -246,7 +246,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenCancel_reverts(
         address caller_
     ) public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         vm.assume(caller_ != address(0));
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
@@ -290,7 +290,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     // Scenarios: BLCT-CANCEL-A01.
     function test_givenReadyAction_whenCancel_thenComplete(address caller_) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
         _cancelAndAssert(id, caller_);
@@ -299,7 +299,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     // Scenarios: BLCT-CANCEL-P01.
     function test_givenAlreadyCancelled_whenCancelled_reverts(address caller_) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _timelock.cancelQueuedAction(id);
         _cancelReverts(
@@ -315,7 +315,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     // Scenarios: BLCT-CANCEL-P03.
     function test_givenAlreadyExecuted_whenCancelled_reverts(address caller_) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
         _executeAndAssert(id, address(this));
@@ -332,7 +332,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     // Scenarios: BLCT-CANCEL-P02.
     function test_givenPendingExpired_whenCancelled_thenAllKeysReleased(address caller_) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         uint64 id = _timelock.queueBatch(
             _pair(_capAction(address(_asset), 200000e9), _feeAction(address(_asset), _fees()))
         );
@@ -350,7 +350,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
         address caller_
     ) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         uint64 id = _timelock.queueBatch(
             _pair(_capAction(address(_asset), 200000e9), _feeAction(address(_asset), _fees()))
         );
@@ -368,7 +368,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
         uint48 now_
     ) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         uint64 id = _timelock.queueBatch(
             _pair(_capAction(address(_asset), 200000e9), _feeAction(address(_asset), _fees()))
         );
@@ -385,5 +385,10 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
             "Unresolved key remains held even after expiry"
         );
         _cancelAndAssert(id, caller_);
+    }
+
+    // Scenarios: BLCT-CANCEL-A01.
+    function test_givenExistingEmergency_whenReadyActionCancelled_thenComplete() public {
+        test_givenReadyAction_whenCancel_thenComplete(address(this));
     }
 }

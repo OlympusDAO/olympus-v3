@@ -178,4 +178,8 @@ abstract contract BurnerLoansModularTest is Test {
         }
         return keccak256(abi.encode(recipients, amounts));
     }
+
+    function _grantRoleIfMissing(bytes32 role_, address caller_) internal {
+        if (!_roles.hasRole(caller_, role_)) _rolesAdmin.grantRole(role_, caller_);
+    }
 }

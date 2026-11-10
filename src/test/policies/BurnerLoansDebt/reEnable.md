@@ -85,8 +85,8 @@ Action locally disabled and Kernel-active; same-Kernel Core active+enabled; sett
 
 | ID | Caller | Now / fuzz interval / seeds | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLDEBT-REENABLE-P01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz now in L..D-1; seed L,D-1; seed L=MAX48-G to reach maximum representable D | Success | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now) | Covered: [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition], [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition] |
-| BLDEBT-REENABLE-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | now=D; fuzz compatible L,G; seed D=MAX48 | Success | Same exact transition; inclusive deadline | Covered: [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition], [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition], [test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds][test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds] |
+| BLDEBT-REENABLE-P01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz now in L..D-1; seed L,D-1; seed L=MAX48-G to reach maximum representable D | Success | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now) | Covered: [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition], [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition], [test_givenExistingAdmin_whenReEnabled_thenExactTransition][test_givenExistingAdmin_whenReEnabled_thenExactTransition] |
+| BLDEBT-REENABLE-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | now=D; fuzz compatible L,G; seed D=MAX48 | Success | Same exact transition; inclusive deadline | Covered: [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition], [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition], [test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds][test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds], [test_givenExistingAdmin_whenReEnabled_thenExactTransition][test_givenExistingAdmin_whenReEnabled_thenExactTransition] |
 | BLDEBT-REENABLE-P03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | D<MAX48; fuzz now in D+1..MAX48; seed D+1,MAX48 | `GracePeriod_Expired(D)` | Unchanged; no committed logs | Covered: [test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError][test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError], [test_givenExpiredGrace_whenReEnabled_reverts][test_givenExpiredGrace_whenReEnabled_reverts] |
 
 ## Dependency compatibility
@@ -125,33 +125,35 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | BLDEBT-REENABLE-L05 | Fuzz all callers | false | false | 0 | 0 | `NeverEnabled()` before authorization; no ROLES call | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence][test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence] |
 
-[test_givenCoreDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L212
-[test_givenCoreInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L232
-[test_givenCoreInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L254
-[test_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L274
-[test_givenDisabled_whenUnauthorizedReEnables_reverts]: reEnable.t.sol#L149
-[test_givenEachPermittedRole_givenCoreDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L415
-[test_givenEachPermittedRole_givenCoreInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L439
-[test_givenEachPermittedRole_givenCoreInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L427
-[test_givenEachPermittedRole_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L511
-[test_givenEachPermittedRole_givenInactive_whenReEnabled_reverts]: reEnable.t.sol#L545
-[test_givenEachPermittedRole_givenInventoryDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L463
-[test_givenEachPermittedRole_givenInventoryInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L487
-[test_givenEachPermittedRole_givenInventoryInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L475
-[test_givenEachPermittedRole_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L535
-[test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError]: reEnable.t.sol#L590
-[test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition]: reEnable.t.sol#L555
-[test_givenEachPermittedRole_whenGraceOverflows_thenExactTypedError]: reEnable.t.sol#L609
-[test_givenEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L162
-[test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins]: reEnable.t.sol#L195
-[test_givenExpiredGrace_whenReEnabled_reverts]: reEnable.t.sol#L94
-[test_givenGraceDeadlineOverflow_whenReEnabled_reverts]: reEnable.t.sol#L122
-[test_givenGraceOverflowEndpoints_whenReEnabled_thenTypedOverflow]: reEnable.t.sol#L174
+[test_givenCoreDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L211
+[test_givenCoreInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L231
+[test_givenCoreInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L253
+[test_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L273
+[test_givenDisabled_whenUnauthorizedReEnables_reverts]: reEnable.t.sol#L148
+[test_givenEachPermittedRole_givenCoreDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L414
+[test_givenEachPermittedRole_givenCoreInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L438
+[test_givenEachPermittedRole_givenCoreInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L426
+[test_givenEachPermittedRole_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L510
+[test_givenEachPermittedRole_givenInactive_whenReEnabled_reverts]: reEnable.t.sol#L544
+[test_givenEachPermittedRole_givenInventoryDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L462
+[test_givenEachPermittedRole_givenInventoryInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L486
+[test_givenEachPermittedRole_givenInventoryInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L474
+[test_givenEachPermittedRole_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L534
+[test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError]: reEnable.t.sol#L589
+[test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition]: reEnable.t.sol#L554
+[test_givenEachPermittedRole_whenGraceOverflows_thenExactTypedError]: reEnable.t.sol#L608
+[test_givenEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L161
+[test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins]: reEnable.t.sol#L194
+[test_givenExpiredGrace_whenReEnabled_reverts]: reEnable.t.sol#L93
+[test_givenGraceDeadlineOverflow_whenReEnabled_reverts]: reEnable.t.sol#L121
+[test_givenGraceOverflowEndpoints_whenReEnabled_thenTypedOverflow]: reEnable.t.sol#L173
 [test_givenInactive_whenReEnabled_reverts]: reEnable.t.sol#L30
-[test_givenInventoryDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L301
-[test_givenInventoryInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L322
-[test_givenInventoryInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L345
-[test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds]: reEnable.t.sol#L81
-[test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence]: reEnable.t.sol#L403
-[test_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L385
+[test_givenInventoryDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L300
+[test_givenInventoryInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L321
+[test_givenInventoryInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L344
+[test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds]: reEnable.t.sol#L80
+[test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence]: reEnable.t.sol#L402
+[test_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L384
 [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition]: reEnable.t.sol#L49
+
+[test_givenExistingAdmin_whenReEnabled_thenExactTransition]: reEnable.t.sol#L623

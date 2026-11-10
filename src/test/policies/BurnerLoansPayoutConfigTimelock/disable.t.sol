@@ -21,8 +21,8 @@ contract BurnerLoansPayoutConfigTimelockDisableTest is BurnerLoansPayoutConfigTi
         bool active_
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(0) && caller_ != address(this) && caller_ != _recipient);
-        _rolesAdmin.grantRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_) _rolesAdmin.grantRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantRoleIfMissing(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
         _setState(_payoutTimelock, active_, true);
         _payout.setConfigOperator(_recipient);
         _rejectTargetReads();
@@ -77,8 +77,8 @@ contract BurnerLoansPayoutConfigTimelockDisableTest is BurnerLoansPayoutConfigTi
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(0));
         vm.assume(data_.length > 0 && data_.length <= 256);
-        _rolesAdmin.grantRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_) _rolesAdmin.grantRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantRoleIfMissing(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.disable, (data_)),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector),
@@ -118,5 +118,10 @@ contract BurnerLoansPayoutConfigTimelockDisableTest is BurnerLoansPayoutConfigTi
         _restore(checkpoint);
         test_whenNonemptyPayload_reverts(address(0x113), false, true, new bytes(256));
         _restore(checkpoint);
+    }
+
+    // Scenarios: BLCUCT-DISABLE-I02.
+    function test_givenExistingAdmin_whenNonemptyDisablePayload_reverts() public {
+        test_whenNonemptyPayload_reverts(address(this), false, true, hex"01");
     }
 }

@@ -22,7 +22,7 @@ Data is empty. Other dependencies do not gate a pause; enable requires own Kerne
 
 | ID | Caller | Local active | Local enabled | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCU-ENABLE-L01 | ADMIN_ROLE holder | true | false | Success | On success only isEnabled/lastTransitionAt and transition events change; otherwise unchanged | Covered: [test_givenPaused_whenEnabled_thenExactTransition][test_givenPaused_whenEnabled_thenExactTransition] |
+| BLCU-ENABLE-L01 | ADMIN_ROLE holder | true | false | Success | On success only isEnabled/lastTransitionAt and transition events change; otherwise unchanged | Covered: [test_givenPaused_whenEnabled_thenExactTransition][test_givenPaused_whenEnabled_thenExactTransition], [test_givenExistingAdmin_whenEnabled_thenExactTransition][test_givenExistingAdmin_whenEnabled_thenExactTransition] |
 | BLCU-ENABLE-L02 | ADMIN_ROLE holder | false | false | BurnerLoans_PolicyNotActive(Payout) | On success only isEnabled/lastTransitionAt and transition events change; otherwise unchanged | Covered: [test_givenInactiveDisabled_whenEnabled_reverts][test_givenInactiveDisabled_whenEnabled_reverts] |
 | BLCU-ENABLE-L03 | ADMIN_ROLE holder | true | true | NotDisabled() | On success only isEnabled/lastTransitionAt and transition events change; otherwise unchanged | Covered: [test_givenAlreadyEnabled_whenEnabled_reverts][test_givenAlreadyEnabled_whenEnabled_reverts] |
 | BLCU-ENABLE-L04 | ADMIN_ROLE holder | false | true | NotDisabled() | On success only isEnabled/lastTransitionAt and transition events change; otherwise unchanged | Covered: [test_givenAlreadyEnabled_whenEnabled_reverts][test_givenAlreadyEnabled_whenEnabled_reverts] |
@@ -96,3 +96,5 @@ Constructor and activation share the same interface and Kernel validator. Interf
 [test_givenRevertingCoreKernel_whenActivated_revertsThenRestored]: enable.t.sol#L311
 
 [test_givenCoreMigrated_whenActivated_revertsThenRestored]: enable.t.sol#L330
+
+[test_givenExistingAdmin_whenEnabled_thenExactTransition]: enable.t.sol#L353

@@ -24,7 +24,7 @@ Fixed for this table: Local active: true; Local enabled: true; Config active: tr
 
 | ID | Caller | Execution | Test |
 | --- | --- | --- | --- |
-| BLCT-CANCEL-A01 | EMERGENCY_ROLE holder | Cancel body | Covered: [test_givenReadyAction_whenCancel_thenComplete][test_givenReadyAction_whenCancel_thenComplete] |
+| BLCT-CANCEL-A01 | EMERGENCY_ROLE holder | Cancel body | Covered: [test_givenReadyAction_whenCancel_thenComplete][test_givenReadyAction_whenCancel_thenComplete], [test_givenExistingEmergency_whenReadyActionCancelled_thenComplete][test_givenExistingEmergency_whenReadyActionCancelled_thenComplete] |
 
 ## Lifecycle
 
@@ -114,3 +114,5 @@ EMERGENCY cancellation requires this timelock Kernel-active, regardless of local
 [test_givenAlreadyExecuted_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L316
 [test_givenPendingBeforeReady_whenCancelled_thenAllKeysReleased]: ./cancelQueuedAction.t.sol#L349
 [test_givenPendingWithinWindow_whenCancelled_thenAllKeysReleased]: ./cancelQueuedAction.t.sol#L366
+
+[test_givenExistingEmergency_whenReadyActionCancelled_thenComplete]: cancelQueuedAction.t.sol#L391

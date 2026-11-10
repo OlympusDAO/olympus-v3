@@ -37,7 +37,7 @@ Correct starting local state; caller authorized; all other prerequisites ready. 
 | ID | Caller | Payload | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLCUCT-DISABLE-I01 | Fuzz ADMIN-only, EMERGENCY-only, overlap | data=0x | Success with normal prerequisites | One transition and exact events | Covered: [test][test_givenPermittedCaller_whenDisabled_thenExactTransition], [test][test_whenRoleAndPayloadSeedsUsed] |
-| BLCUCT-DISABLE-I02 | Fuzz ADMIN-only, EMERGENCY-only, overlap | Fuzz nonempty length1..256; seed1,256 and encoded zero | BurnerLoans_InvalidEnablerData() | No transition/timestamp/events | Covered: [test][test_whenNonemptyPayload_reverts], [test][test_whenRoleAndPayloadSeedsUsed] |
+| BLCUCT-DISABLE-I02 | Fuzz ADMIN-only, EMERGENCY-only, overlap | Fuzz nonempty length1..256; seed1,256 and encoded zero | BurnerLoans_InvalidEnablerData() | No transition/timestamp/events | Covered: [test][test_whenNonemptyPayload_reverts], [test][test_whenRoleAndPayloadSeedsUsed], [test_givenExistingAdmin_whenNonemptyDisablePayload_reverts][test_givenExistingAdmin_whenNonemptyDisablePayload_reverts] |
 
 ## Broken-target independence
 
@@ -55,3 +55,5 @@ Local enabled=true; own active/inactive both seeded with cached ROLES.
 [test_givenUnauthorizedCaller_whenDisabled_reverts]: ./disable.t.sol#L45
 [test_whenNonemptyPayload_reverts]: ./disable.t.sol#L72
 [test_whenRoleAndPayloadSeedsUsed]: ./disable.t.sol#L90
+
+[test_givenExistingAdmin_whenNonemptyDisablePayload_reverts]: disable.t.sol#L124

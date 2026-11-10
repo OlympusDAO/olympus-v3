@@ -64,7 +64,7 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
     function test_givenDisabled_whenAdminEnables_thenExactTransition(address caller_) public {
         vm.assume(caller_ != address(0));
         _liquidation.disable("");
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(ADMIN_ROLE, caller_);
         vm.warp(456);
         _expectEnabledTransition(caller_);
         vm.prank(caller_);
@@ -289,6 +289,11 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
                 "Restore enabled state and roles between payload seeds"
             );
         }
+    }
+
+    // Scenarios: BLLIQ-ENABLE-A01.
+    function test_givenExistingAdmin_whenEnabled_thenExactTransition() public {
+        test_givenDisabled_whenAdminEnables_thenExactTransition(address(this));
     }
 }
 

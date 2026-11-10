@@ -22,7 +22,7 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
     // Scenarios: BLLIQGR-P01.
     function test_whenGraceSetToSameValue_thenStillEmits(uint32 grace_, address caller_) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(ADMIN_ROLE, caller_);
         grace_ = uint32(bound(grace_, 1, type(uint32).max));
         vm.prank(caller_);
         _liquidation.setGracePeriod(grace_);
@@ -89,7 +89,7 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
     // Scenarios: BLLIQGR-L07.
     function test_givenInactiveSubject_whenGraceSet_reverts(address caller_) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(ADMIN_ROLE, caller_);
         _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -144,6 +144,11 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
         );
         vm.prank(caller_);
         _liquidation.setGracePeriod(0);
+    }
+
+    // Scenarios: BLLIQGR-P01.
+    function test_givenExistingAdmin_whenGraceSetToSameValue_thenStillEmits() public {
+        test_whenGraceSetToSameValue_thenStillEmits(1, address(this));
     }
 }
 

@@ -18,7 +18,7 @@ After a successful cancellation, assert getQueuedAction retains its original pro
 
 | ID | Caller | Authority | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCUCT-CANCEL-A01 | Fuzz EMERGENCY holder | Exclusive EMERGENCY; seed overlap with ADMIN | Success | Cancel flag; payload/guards deleted; owned keys released; ActionCancelled | Covered: [test][test_givenEmergencyCaller_whenCancelled_thenExactCleanup], [test][test_whenCancellationBoundarySeedsUsed] |
+| BLCUCT-CANCEL-A01 | Fuzz EMERGENCY holder | Exclusive EMERGENCY; seed overlap with ADMIN | Success | Cancel flag; payload/guards deleted; owned keys released; ActionCancelled | Covered: [test][test_givenEmergencyCaller_whenCancelled_thenExactCleanup], [test][test_whenCancellationBoundarySeedsUsed], [test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup][test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup] |
 | BLCUCT-CANCEL-A02 | Fuzz outside every EMERGENCY holder | Seed ADMIN-only, BL admin-only, proposer-only and unrelated | ROLES_RequireRole(EMERGENCY_ROLE) | No cancellation/keys/events | Covered: [test][test_givenNoEmergencyRole_whenCancelled_reverts], [test][test_whenCancellationBoundarySeedsUsed] |
 
 ## Lifecycle
@@ -27,7 +27,7 @@ Pending action; cached ROLES retained for inactive fixtures.
 
 | ID | Caller | Local active | Local enabled | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCUCT-CANCEL-L01 | Fuzz EMERGENCY holder | true | true | Success | Exact cancellation effects | Covered: [test][test_givenEmergencyCaller_whenCancelled_thenExactCleanup] |
+| BLCUCT-CANCEL-L01 | Fuzz EMERGENCY holder | true | true | Success | Exact cancellation effects | Covered: [test][test_givenEmergencyCaller_whenCancelled_thenExactCleanup], [test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup][test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup] |
 | BLCUCT-CANCEL-L02 | Fuzz EMERGENCY holder | true | false | Success | Exact cancellation effects | Covered: [test][test_givenActiveDisabled_whenCancelled_thenExactCleanup] |
 | BLCUCT-CANCEL-L03 | Fuzz all callers | false | true | BurnerLoans_PolicyNotActive(BurnerLoansPayoutConfigTimelock) | Unchanged | Covered: [test][test_givenInactiveEnabled_whenCancelled_reverts] |
 | BLCUCT-CANCEL-L04 | Fuzz all callers | false | false | BurnerLoans_PolicyNotActive(TL) | Unchanged | Covered: [test][test_givenInactiveDisabled_whenCancelled_reverts] |
@@ -46,7 +46,7 @@ Timelock active/enabled; cancellation checks no target binding or current contro
 
 | ID | Caller | Condition | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCUCT-CANCEL-D01 | Fuzz EMERGENCY holder | Before ready, during window, after expiry; independent boundary seeds | Success | Expiry-held keys can be released and reused by a new proposal | Covered: [test][test_givenEmergencyCaller_whenCancelled_thenExactCleanup], [test][test_whenCancellationBoundarySeedsUsed] |
+| BLCUCT-CANCEL-D01 | Fuzz EMERGENCY holder | Before ready, during window, after expiry; independent boundary seeds | Success | Expiry-held keys can be released and reused by a new proposal | Covered: [test][test_givenEmergencyCaller_whenCancelled_thenExactCleanup], [test][test_whenCancellationBoundarySeedsUsed], [test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup][test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup] |
 | BLCUCT-CANCEL-D02 | Fuzz EMERGENCY holder | Payout deactivated/retired, different controller or Kernel; kernel()/configOperator() getters reject | Success | No target reads; no transfer or liability change | Covered: [test][test_givenBrokenRetiredTarget_whenCancelled_thenNoTargetReads] |
 
 - [x] Derive concrete acceptance criteria from the implemented call path.
@@ -66,3 +66,5 @@ EMERGENCY cancellation requires this timelock Kernel-active, regardless of local
 [test_whenCancellationBoundarySeedsUsed]: ./cancelQueuedAction.t.sol#L193
 [test_whenUnknownIdCancelled_reverts]: ./cancelQueuedAction.t.sol#L132
 [test_givenInactiveDisabled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L102
+
+[test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup]: cancelQueuedAction.t.sol#L224

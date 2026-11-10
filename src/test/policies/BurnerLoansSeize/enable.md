@@ -38,7 +38,7 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: fals
 
 | ID | Caller | Inputs / competing fault | Execution / return | Accounting / events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLLIQ-ENABLE-A01 | ADMIN_ROLE holder | data empty; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `Success` | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,data,now) | Covered: [test_givenDisabled_whenAdminEnables_thenExactTransition][test_givenDisabled_whenAdminEnables_thenExactTransition] |
+| BLLIQ-ENABLE-A01 | ADMIN_ROLE holder | data empty; ROLES initialized; every dependency not varied by the selected table satisfies its concrete hook checks. | `Success` | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,data,now) | Covered: [test_givenDisabled_whenAdminEnables_thenExactTransition][test_givenDisabled_whenAdminEnables_thenExactTransition], [test_givenExistingAdmin_whenEnabled_thenExactTransition][test_givenExistingAdmin_whenEnabled_thenExactTransition] |
 | BLLIQ-ENABLE-A02 | Fuzz caller excluding every ADMIN_ROLE holder | data empty; hook dependencies ready | `ROLES_RequireRole(ADMIN_ROLE)` | Unchanged; no hook executed | Covered: [test_givenDisabled_whenUnauthorizedEnables_reverts][test_givenDisabled_whenUnauthorizedEnables_reverts] |
 
 ## Local transition state
@@ -148,3 +148,5 @@ recovery callers and independently valid grace windows.
 [test_givenZeroTransitionHistory_whenAlreadyEnabled_thenStateWins]: enable.t.sol#L175
 [test_whenNonemptyEnableData_reverts]: enable.t.sol#L78
 [test_whenPayloadBoundarySeedsProvided_reverts]: enable.t.sol#L277
+
+[test_givenExistingAdmin_whenEnabled_thenExactTransition]: enable.t.sol#L295

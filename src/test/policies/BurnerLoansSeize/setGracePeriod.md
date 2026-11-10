@@ -69,7 +69,7 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 
 | ID | Caller | Proposed value | Execution | Effects | Test |
 | --- | --- | --- | --- | --- |--- |
-| BLLIQGR-P01 | Fuzz ADMIN_ROLE holder | period equals stored gracePeriod; fuzz 1..MAX32; seed 1,MAX32 | Success | GracePeriodSet(period) once; stored period unchanged; isEnabled and lastTransitionAt unchanged; positions/obligations/balances unchanged | Covered: [test_whenGraceSetToSameValue_thenStillEmits][test_whenGraceSetToSameValue_thenStillEmits], [test_whenPeriodIsOne_thenStoredAndEmitted][test_whenPeriodIsOne_thenStoredAndEmitted], [test_whenPeriodIsMaximum_thenStoredAndEmitted][test_whenPeriodIsMaximum_thenStoredAndEmitted], [test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted][test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted] |
+| BLLIQGR-P01 | Fuzz ADMIN_ROLE holder | period equals stored gracePeriod; fuzz 1..MAX32; seed 1,MAX32 | Success | GracePeriodSet(period) once; stored period unchanged; isEnabled and lastTransitionAt unchanged; positions/obligations/balances unchanged | Covered: [test_whenGraceSetToSameValue_thenStillEmits][test_whenGraceSetToSameValue_thenStillEmits], [test_whenPeriodIsOne_thenStoredAndEmitted][test_whenPeriodIsOne_thenStoredAndEmitted], [test_whenPeriodIsMaximum_thenStoredAndEmitted][test_whenPeriodIsMaximum_thenStoredAndEmitted], [test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted][test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted], [test_givenExistingAdmin_whenGraceSetToSameValue_thenStillEmits][test_givenExistingAdmin_whenGraceSetToSameValue_thenStillEmits] |
 
 [test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts]: setGracePeriod.t.sol#L136
 
@@ -83,3 +83,5 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 [test_whenPeriodIsOne_thenStoredAndEmitted]: setGracePeriod.t.sol#L106
 [test_whenPeriodUnchangedFromDefault_thenStoredAndEmitted]: setGracePeriod.t.sol#L131
 [test_whenUnauthorizedGraceSetter_revertsBeforeInput]: setGracePeriod.t.sol#L48
+
+[test_givenExistingAdmin_whenGraceSetToSameValue_thenStillEmits]: setGracePeriod.t.sol#L150

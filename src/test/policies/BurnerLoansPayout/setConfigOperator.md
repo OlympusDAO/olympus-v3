@@ -12,7 +12,7 @@ Implemented change: ADMIN installs a locally stored PayoutConfigTimelock address
 
 | ID | Caller | Local active | Local enabled | Core active | Core enabled | Candidate | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCU-CONFIGURATOR-P01 | Fuzz ADMIN_ROLE holder | true | Fuzz true/false independently | Fuzz true/false | Fuzz true/false | Distinct nonzero controller | Success without reverse getters | Store local authority; ConfigOperatorSet; balances/claims unchanged | Covered: [test_whenAdminInstallsController_thenNoReverseReads][test_whenAdminInstallsController_thenNoReverseReads] |
+| BLCU-CONFIGURATOR-P01 | Fuzz ADMIN_ROLE holder | true | Fuzz true/false independently | Fuzz true/false | Fuzz true/false | Distinct nonzero controller | Success without reverse getters | Store local authority; ConfigOperatorSet; balances/claims unchanged | Covered: [test_whenAdminInstallsController_thenNoReverseReads][test_whenAdminInstallsController_thenNoReverseReads], [test_givenExistingAdmin_whenControllerInstalled_thenNoReverseReads][test_givenExistingAdmin_whenControllerInstalled_thenNoReverseReads] |
 | BLCU-CONFIGURATOR-P02 | Fuzz ADMIN_ROLE holder | false | Fuzz true/false independently | Fuzz true/false | Fuzz true/false | Distinct nonzero controller | BurnerLoans_PolicyNotActive(Payout) | Unchanged; no committed logs | Covered: [test_givenPayoutInactive_whenCalled_reverts][test_givenPayoutInactive_whenCalled_reverts] |
 
 ## Pointer inputs
@@ -20,7 +20,7 @@ Implemented change: ADMIN installs a locally stored PayoutConfigTimelock address
 | ID | Caller | Input / fault | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLCU-CONFIGURATOR-A02 | Fuzz ADMIN_ROLE holder | Current controller address | IConfigOperator.ConfigOperator_Unchanged() | Unchanged; no validation or events | Covered: [test_whenOperatorUnchanged_reverts][test_whenOperatorUnchanged_reverts] |
-| BLCU-CONFIGURATOR-A03 | Fuzz ADMIN_ROLE holder | Distinct controller whose lifecycle/identity/interface getters reject | Success | No reverse getters called | Covered: [test_whenAdminInstallsController_thenNoReverseReads][test_whenAdminInstallsController_thenNoReverseReads] |
+| BLCU-CONFIGURATOR-A03 | Fuzz ADMIN_ROLE holder | Distinct controller whose lifecycle/identity/interface getters reject | Success | No reverse getters called | Covered: [test_whenAdminInstallsController_thenNoReverseReads][test_whenAdminInstallsController_thenNoReverseReads], [test_givenExistingAdmin_whenControllerInstalled_thenNoReverseReads][test_givenExistingAdmin_whenControllerInstalled_thenNoReverseReads] |
 | BLCU-CONFIGURATOR-A04 | Fuzz ADMIN_ROLE holder | Zero controller, previous nonzero | Success | Delegation revoked; ConfigOperatorSet(0) | Covered: [test_givenNonzeroOperator_whenCleared_thenDelegationRevoked][test_givenNonzeroOperator_whenCleared_thenDelegationRevoked] |
 
 ## Independent authority installation
@@ -50,3 +50,5 @@ Retired BLCU-CONFIGURATOR-A05 duplicated the unauthorized-caller family retained
 [test_whenAdminInstallsController_thenNoReverseReads]: ./setConfigOperator.t.sol#L21
 [test_whenCallerLacksAdmin_reverts]: ./setConfigOperator.t.sol#L49
 [test_whenOperatorUnchanged_reverts]: ./setConfigOperator.t.sol#L69
+
+[test_givenExistingAdmin_whenControllerInstalled_thenNoReverseReads]: setConfigOperator.t.sol#L133

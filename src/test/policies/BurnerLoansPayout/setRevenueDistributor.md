@@ -10,7 +10,7 @@ Valid distinct distributor. The public validator is permissionless and ignores s
 
 | ID | Caller | Execution | Validator | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCRD-A01 | ADMIN_ROLE holder | Success | Success | Pointer and RevenueDistributorSet | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] |
+| BLCRD-A01 | ADMIN_ROLE holder | Success | Success | Pointer and RevenueDistributorSet | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges], [test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges][test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges] |
 | BLCRD-A03 | Fuzz caller excluding every ADMIN holder; seed current config operator, timelock and former operator | ROLES_RequireRole(ADMIN_ROLE) | Same validation as ADMIN | Unchanged | Covered: [test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits][test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits]; [test_givenCurrentAndFormerOperators_whenSelectingDistributor_reverts][test_givenCurrentAndFormerOperators_whenSelectingDistributor_reverts] |
 
 ## Lifecycle and repair
@@ -19,8 +19,8 @@ Cached ROLES initialized; caller ADMIN; candidate is valid and distinct. Fuzz Co
 
 | ID | Caller | Local active | Local enabled | Execution | Validator | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCRD-L01 | ADMIN_ROLE holder | true | true | Success | Success | Pointer/event only | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] |
-| BLCRD-L02 | ADMIN_ROLE holder | true | false | Success | Success | Pointer/event only | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] |
+| BLCRD-L01 | ADMIN_ROLE holder | true | true | Success | Success | Pointer/event only | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges], [test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges][test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges] |
+| BLCRD-L02 | ADMIN_ROLE holder | true | false | Success | Success | Pointer/event only | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges], [test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges][test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges] |
 | BLCRD-L03 | ADMIN_ROLE holder | false | true | BurnerLoans_PolicyNotActive(Payout) | Success | Unchanged; no committed logs | Covered: [test_givenPayoutInactive_whenCalled_reverts][test_givenPayoutInactive_whenCalled_reverts] |
 | BLCRD-L04 | ADMIN_ROLE holder | false | false | BurnerLoans_PolicyNotActive(Payout) | Success | Unchanged; no committed logs | Covered: [test_givenPayoutInactive_whenCalled_reverts][test_givenPayoutInactive_whenCalled_reverts] |
 
@@ -45,7 +45,7 @@ ADMIN caller, idle guards; positive pending obligations may already exist. Routi
 
 | ID | Caller | Proposed address | Fee flag | Yield flag | Execution | Validator | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCRD-P01 | ADMIN_ROLE holder | Distinct active/enabled same-Kernel distributor | Fuzz false/true | Fuzz false/true | Success | Success | New pointer/event; pending fees follow new current route on retry | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] ; [test_givenFeeRouting_whenDistributorReplaced][test_givenFeeRouting_whenDistributorReplaced] |
+| BLCRD-P01 | ADMIN_ROLE holder | Distinct active/enabled same-Kernel distributor | Fuzz false/true | Fuzz false/true | Success | Success | New pointer/event; pending fees follow new current route on retry | Covered: [test_givenValidDistributor_whenSelected_thenOnlyPointerChanges][test_givenValidDistributor_whenSelected_thenOnlyPointerChanges] ; [test_givenFeeRouting_whenDistributorReplaced][test_givenFeeRouting_whenDistributorReplaced], [test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges][test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges] |
 | BLCRD-P02 | ADMIN_ROLE holder | Current nonzero valid distributor | Fuzz false/true | Fuzz false/true | BurnerLoans_UnchangedAddress(candidate) before dependency reads | Success | Unchanged | Covered: [test_givenCurrentDistributor_whenSelected_revertsBeforeReadiness][test_givenCurrentDistributor_whenSelected_revertsBeforeReadiness] |
 | BLCRD-P03 | ADMIN_ROLE holder | 0, previously nonzero | false | false | Success | BurnerLoans_RevenueDistributorRequired() | Pointer cleared/event; pending buckets preserved | Covered: [test_givenBothFlagsFalse_whenDistributorCleared_thenOnlyPointerChanges][test_givenBothFlagsFalse_whenDistributorCleared_thenOnlyPointerChanges] |
 | BLCRD-I05 | ADMIN_ROLE holder | 0, previously nonzero | true | false | BurnerLoans_RevenueDistributorRequired() | Same error | Unchanged | Covered: [test_givenFeeRouting_whenDistributorCleared_reverts][test_givenFeeRouting_whenDistributorCleared_reverts] |
@@ -79,3 +79,5 @@ ADMIN caller, idle guards; positive pending obligations may already exist. Routi
 [test_givenYieldRouting_whenDistributorCleared_reverts]: ./setRevenueDistributor.t.sol#L160
 [test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits]: ./setRevenueDistributor.t.sol#L81
 [test_whenDistributorEoa_reverts]: ./setRevenueDistributor.t.sol#L109
+
+[test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges]: setRevenueDistributor.t.sol#L365

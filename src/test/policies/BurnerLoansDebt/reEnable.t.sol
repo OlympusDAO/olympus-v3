@@ -58,9 +58,8 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         last_ = uint48(bound(last_, 1, type(uint48).max - grace_));
         now_ = uint48(bound(now_, last_, uint256(last_) + grace_));
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_)
-            _rolesAdmin.grantRole(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantRoleIfMissing(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.warp(last_);
         _debt.setGracePeriod(grace_);
         _debt.disable("");
@@ -618,6 +617,18 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
             );
             assertTrue(vm.revertToState(checkpoint), "Restore overflowing deadline for next role");
         }
+    }
+
+    // Scenarios: BLDEBT-REENABLE-P01, BLDEBT-REENABLE-P02.
+    function test_givenExistingAdmin_whenReEnabled_thenExactTransition() public {
+        test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition(
+            281474976710654,
+            3334,
+            1,
+            address(this),
+            false,
+            true
+        );
     }
 }
 

@@ -30,7 +30,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         bool yield_
     ) public givenPendingBuckets {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(ADMIN_ROLE, caller_);
         _bindDistributor();
         _payout.setSendFeesToDistributor(fee_);
         _payout.setSendYieldToDistributor(yield_);
@@ -339,7 +339,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         address caller_,
         bool enabled_
     ) public givenPendingBuckets {
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(ADMIN_ROLE, caller_);
         _setState(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
         _expectInactivePayout();
@@ -359,6 +359,18 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         vm.prank(caller_);
         _payout.setRevenueDistributor(address(0));
         assertEq(_ledgerDigest(), state, "Inactivity rejects before authority or mutation");
+    }
+
+    // Scenarios: BLCRD-A01, BLCRD-L01, BLCRD-L02, BLCRD-P01.
+    function test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges() public {
+        test_givenValidDistributor_whenSelected_thenOnlyPointerChanges(
+            address(this),
+            true,
+            true,
+            true,
+            true,
+            true
+        );
     }
 }
 

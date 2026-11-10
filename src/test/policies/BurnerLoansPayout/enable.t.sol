@@ -32,7 +32,7 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
         bool coreEnabled_
     ) public givenPendingBuckets {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(ADMIN_ROLE, caller_);
         _payout.disable("");
         _setState(_core, coreActive_, coreEnabled_);
         bytes32 state = _ledgerDigest();
@@ -347,6 +347,11 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
         _core.changeKernel(_kernel);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored Core permits activation");
+    }
+
+    // Scenarios: BLCU-ENABLE-L01.
+    function test_givenExistingAdmin_whenEnabled_thenExactTransition() public {
+        test_givenPaused_whenEnabled_thenExactTransition(address(this), true, true);
     }
 }
 

@@ -22,8 +22,8 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
         uint48 now_
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
-        if (overlap_) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
+        if (overlap_) _grantRoleIfMissing(ADMIN_ROLE, caller_);
         ITimelockBatchQueue.QueuedAction memory beforeAction = _payoutTimelock.getQueuedAction(
             _pendingId
         );
@@ -83,7 +83,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
         address caller_
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         _setState(_payoutTimelock, true, false);
         bytes32 funds = _payoutDigest();
         vm.expectEmit(address(_payoutTimelock));
@@ -179,7 +179,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
         bool enabled_
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
         _payout.setConfigOperator(_recipient);
         _setState(_payout, false, false);
         if (!enabled_) _payoutTimelock.disable("");
@@ -218,5 +218,10 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
             _recipient
         );
         _restore(checkpoint);
+    }
+
+    // Scenarios: BLCUCT-CANCEL-A01, BLCUCT-CANCEL-D01, BLCUCT-CANCEL-L01.
+    function test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup() public {
+        test_givenEmergencyCaller_whenCancelled_thenExactCleanup(address(this), true, 1);
     }
 }

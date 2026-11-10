@@ -27,8 +27,8 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
         bool active_
     ) public {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_) _rolesAdmin.grantRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
+        _grantRoleIfMissing(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantRoleIfMissing(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
         _setPolicyState(_debt, active_, true);
         vm.warp(123);
         vm.expectEmit(address(_debt));
@@ -179,6 +179,16 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
         assertTrue(vm.revertToState(checkpoint), "Restore for overlapping caller");
         test_givenEnabled_whenPermittedCallerDisables_thenExactTransition(
             address(0xabc3),
+            false,
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BLDEBT-DISABLE-A01, BLDEBT-DISABLE-L02.
+    function test_givenExistingAdmin_whenDisabled_thenExactTransition() public {
+        test_givenEnabled_whenPermittedCallerDisables_thenExactTransition(
+            address(this),
             false,
             true,
             true
