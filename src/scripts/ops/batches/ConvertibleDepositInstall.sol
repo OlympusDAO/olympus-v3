@@ -736,7 +736,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
-        address activator = _envAddressNotZero("olympus.periphery.ConvertibleDepositActivator");
+        address activator = _envAddressNotZero("olympus.proposals.ConvertibleDepositActivator");
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
 
         console2.log("=== Activator ===");
@@ -909,6 +909,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         for (uint256 i = 0; i < reclaimRatePeriods.length; i++) {
             uint8 period = SafeCast.encodeUInt8(reclaimRatePeriods[i]);
             uint16 desiredReclaimRate = SafeCast.encodeUInt16(reclaimRates[i]);
+            // Validate every configured period before proposing this finite setup batch.
+            // forge-lint: disable-next-item(calls-loop)
             uint16 currentReclaimRate = IDepositFacility(convertibleDepositFacility)
                 .getAssetPeriodReclaimRate(IERC20(usds), period);
 
@@ -1029,6 +1031,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         // Enable all desired periods that are not currently enabled
         for (uint256 i = 0; i < enabledPeriods.length; i++) {
             uint8 period = SafeCast.encodeUInt8(enabledPeriods[i]);
+            // This finite verification needs enabled state, not its ancillary period data.
+            // forge-lint: disable-next-item(calls-loop,unused-return)
             (bool isEnabled, ) = IConvertibleDepositAuctioneer(convertibleDepositAuctioneer)
                 .isDepositPeriodEnabled(period);
 

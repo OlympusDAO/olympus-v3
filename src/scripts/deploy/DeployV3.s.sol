@@ -162,6 +162,8 @@ contract DeployV3 is WithEnvironment {
         }
     }
 
+    // Sequence entries depend on prior deployments and must execute in order, aborting on failure.
+    // forge-lint: disable-next-item(calls-loop,require-revert-in-loop)
     function deploy(string calldata deployFilePath_) external {
         // Setup
         _setUp(deployFilePath_);
@@ -183,6 +185,8 @@ contract DeployV3 is WithEnvironment {
             console2.log("\n");
 
             // e.g. a deployment named CCIPBurnMintTokenPool would require the following function: deployCCIPBurnMintTokenPool()
+            // ABI selectors are exactly the leading four bytes of the signature hash.
+            // forge-lint: disable-next-line(unsafe-typecast)
             bytes4 selector = bytes4(keccak256(bytes(string.concat("deploy", name, "()"))));
 
             // Call the deploy function for the contract
@@ -212,6 +216,8 @@ contract DeployV3 is WithEnvironment {
         _saveDeployment(chain);
     }
 
+    // Off-chain persistence iterates saved results; cheatcode/FFI stdout is intentionally unused.
+    // forge-lint: disable-next-item(calls-loop,unused-return)
     function _saveDeployment(string memory chain_) internal {
         // Skip if broadcast is not enabled
         if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
@@ -425,6 +431,8 @@ contract DeployV3 is WithEnvironment {
     }
 
     function _getDeployer() internal returns (address) {
+        // Only the effective broadcaster is needed, not caller mode or transaction origin.
+        // forge-lint: disable-next-line(unused-return)
         (, address msgSender, ) = vm.readCallers();
 
         // Validate that the sender is not the default deployer (or else it can cause problems)
@@ -652,7 +660,7 @@ contract DeployV3 is WithEnvironment {
             daoMS
         );
 
-        return (address(checker), "olympus.periphery");
+        return (address(checker), "olympus.proposals");
     }
 
     function deployOlympusHeart() public returns (address, string memory) {
@@ -1247,7 +1255,7 @@ contract DeployV3 is WithEnvironment {
             reserveWrapper
         );
 
-        return (address(activator), "olympus.periphery");
+        return (address(activator), "olympus.proposals");
     }
 
     function deployConvertibleDepositAuctioneerLimitOrders()
@@ -1378,7 +1386,7 @@ contract DeployV3 is WithEnvironment {
             OHMv1ToMigrate
         );
 
-        return (address(helper), "olympus.periphery");
+        return (address(helper), "olympus.proposals");
     }
 
     function deployV1Migrator() public returns (address, string memory) {
