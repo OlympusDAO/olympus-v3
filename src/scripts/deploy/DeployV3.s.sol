@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 
 // Scripting
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
-import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
 import {stdJson} from "@forge-std-1.16.2/StdJson.sol";
 import {VmSafe} from "@forge-std-1.16.2/Vm.sol";
@@ -20,7 +19,41 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 // Contracts
+import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
+import {BackingOracle} from "src/policies/BackingOracle.sol";
+import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
+import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
+import {RevenueDistributorConfigTimelock} from "src/policies/RevenueDistributorConfigTimelock.sol";
+import {RevenueDistributorTask} from "src/policies/RevenueDistributorTask.sol";
 import {Kernel, Module} from "src/Kernel.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
+import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
+import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
+import {BurnerLoansAuth} from "src/policies/burnerloans/BurnerLoansAuth.sol";
+import {BurnerLoansCollateral} from "src/policies/burnerloans/BurnerLoansCollateral.sol";
+import {BurnerLoansConfig} from "src/policies/burnerloans/BurnerLoansConfig.sol";
+import {BurnerLoansConfigTimelock} from "src/policies/burnerloans/BurnerLoansConfigTimelock.sol";
+import {BurnerLoansCore} from "src/policies/burnerloans/BurnerLoansCore.sol";
+import {BurnerLoansDebt} from "src/policies/burnerloans/BurnerLoansDebt.sol";
+import {BurnerLoansInventory} from "src/policies/burnerloans/BurnerLoansInventory.sol";
+import {BurnerLoansInventoryConfigTimelock} from "src/policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol";
+import {BurnerLoansLens} from "src/policies/burnerloans/BurnerLoansLens.sol";
+import {BurnerLoansPayout} from "src/policies/burnerloans/BurnerLoansPayout.sol";
+import {BurnerLoansPayoutConfigTimelock} from "src/policies/burnerloans/BurnerLoansPayoutConfigTimelock.sol";
+import {BurnerLoansRisk} from "src/policies/burnerloans/BurnerLoansRisk.sol";
+import {BurnerLoansRiskConfigTimelock} from "src/policies/burnerloans/BurnerLoansRiskConfigTimelock.sol";
+import {BurnerLoansSeize} from "src/policies/burnerloans/BurnerLoansSeize.sol";
+import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerTask.sol";
+import {BurnerLoansYieldClaimerTask} from "src/policies/burnerloans/BurnerLoansYieldClaimerTask.sol";
+import {BurnerLoansActivator} from "src/proposals/BurnerLoansActivator.sol";
+import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 
 // Bridge
 import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
@@ -1172,6 +1205,7 @@ contract DeployV3 is WithEnvironment {
         );
         vm.stopBroadcast();
 
+        console2.log("PriceCache deployed at", address(cache));
         return (address(cache), "olympus.policies");
     }
 
@@ -1221,8 +1255,9 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address timelock = _getAddressNotZero("olympus.governance.Timelock");
-        address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
         address cdFacility = _getAddressNotZero("olympus.policies.ConvertibleDepositFacility");
+        // New facilities use the unversioned key; launch must configure the selected facility's manager.
+        address depositManager = address(ConvertibleDepositFacility(cdFacility).DEPOSIT_MANAGER());
         address cdAuctioneer = _getAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
         address depositRedemptionVault = _getAddressNotZero(
             "olympus.policies.DepositRedemptionVault"
@@ -1265,8 +1300,12 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address owner = _getAddressNotZero("olympus.multisig.dao");
-        address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
         address cdAuctioneer = _getAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
+        // New facilities use the unversioned DepositManager key; existing auctioneers retain v1.0.
+        // Follow the selected auctioneer's facility so limit-order approvals match its custody manager.
+        address depositManager = address(
+            ConvertibleDepositAuctioneer(cdAuctioneer).CD_FACILITY().DEPOSIT_MANAGER()
+        );
         address usds = _getAddressNotZero("external.tokens.USDS");
         address sUsds = _getAddressNotZero("external.tokens.sUSDS");
         address positionNft = _getAddressNotZero("olympus.modules.OlympusDepositPositionManager");
@@ -1568,6 +1607,609 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(lzBridgeAndDelegateConfig), "olympus.policies");
+    }
+
+    /// @notice Deploys FLOAN without installing it into the Kernel.
+    function deployOlympusFixedTermLoan() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+
+        // Log parameters
+        console2.log("OlympusFixedTermLoan parameters:");
+        console2.log("  kernel", address(kernel));
+
+        // Deploy
+        vm.broadcast();
+        OlympusFixedTermLoan olympusFixedTermLoan = new OlympusFixedTermLoan(kernel);
+        console2.log("OlympusFixedTermLoan deployed at", address(olympusFixedTermLoan));
+        return (address(olympusFixedTermLoan), "olympus.modules");
+    }
+
+    /// @notice Deploys Core bound permanently to OHM and dedicated custody.
+    function deployBurnerLoansCore() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IERC20 ohm = IERC20(_getAddressNotZero("olympus.legacy.OHM"));
+        IDepositManager manager = IDepositManager(
+            _getAddressNotZero("olympus.policies.DepositManager")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansCore parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  ohm", address(ohm));
+        console2.log("  depositManager", address(manager));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansCore burnerLoansCore = new BurnerLoansCore(kernel, ohm, manager);
+        console2.log("BurnerLoansCore deployed at", address(burnerLoansCore));
+        return (address(burnerLoansCore), "olympus.policies");
+    }
+
+    /// @notice Deploys the Core-bound OHM funding ledger with no initial capacity or supply.
+    function deployBurnerLoansInventory() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IERC20 ohm = IERC20(_getAddressNotZero("olympus.legacy.OHM"));
+        address core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
+
+        // Log parameters
+        console2.log("BurnerLoansInventory parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  ohm", address(ohm));
+        console2.log("  core", core);
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansInventory burnerLoansInventory = new BurnerLoansInventory(kernel, ohm, core);
+        console2.log("BurnerLoansInventory deployed at", address(burnerLoansInventory));
+        return (address(burnerLoansInventory), "olympus.policies");
+    }
+
+    /// @notice Deploys Core-bound payout custody with Treasury routing defaults.
+    function deployBurnerLoansPayout() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        address core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
+
+        // Log parameters
+        console2.log("BurnerLoansPayout parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  core", core);
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansPayout burnerLoansPayout = new BurnerLoansPayout(kernel, core);
+        console2.log("BurnerLoansPayout deployed at", address(burnerLoansPayout));
+        return (address(burnerLoansPayout), "olympus.policies");
+    }
+
+    /// @notice Deploys Risk with the supplied production oracle and direct PRICE reads.
+    /// @dev Governance binds and enables the cache after Kernel preparation.
+    function deployBurnerLoansRisk() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        uint48 maxAge = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("BurnerLoansRisk", "priceCacheMaxAge")
+        );
+        Kernel kernel = _getKernel();
+        IERC20 ohm = IERC20(_getAddressNotZero("olympus.legacy.OHM"));
+        address oracle = _getAddressNotZero("olympus.policies.BackingOracle");
+        address core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
+
+        // Log parameters
+        console2.log("BurnerLoansRisk parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  ohm", address(ohm));
+        console2.log("  backingOracle", oracle);
+        console2.log("  priceCache", address(0));
+        console2.log("  priceCacheMaxAge", maxAge);
+        console2.log("  core", core);
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansRisk burnerLoansRisk = new BurnerLoansRisk(
+            kernel,
+            ohm,
+            oracle,
+            address(0),
+            maxAge,
+            core
+        );
+        console2.log("BurnerLoansRisk deployed at", address(burnerLoansRisk));
+        return (address(burnerLoansRisk), "olympus.policies");
+    }
+
+    /// @notice Deploys the Core-bound market configuration policy.
+    function deployBurnerLoansConfig() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBurnerLoansCore core = IBurnerLoansCore(
+            _getAddressNotZero("olympus.policies.BurnerLoansCore")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansConfig parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  core", address(core));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansConfig burnerLoansConfig = new BurnerLoansConfig(kernel, core);
+        console2.log("BurnerLoansConfig deployed at", address(burnerLoansConfig));
+        return (address(burnerLoansConfig), "olympus.policies");
+    }
+
+    /// @notice Deploys the collateral action without granting settlement authority.
+    function deployBurnerLoansCollateral() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBurnerLoansCore core = IBurnerLoansCore(
+            _getAddressNotZero("olympus.policies.BurnerLoansCore")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansCollateral parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  core", address(core));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansCollateral burnerLoansCollateral = new BurnerLoansCollateral(kernel, core);
+        console2.log("BurnerLoansCollateral deployed at", address(burnerLoansCollateral));
+        return (address(burnerLoansCollateral), "olympus.policies");
+    }
+
+    /// @notice Deploys the debt action without granting settlement authority.
+    function deployBurnerLoansDebt() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBurnerLoansCore core = IBurnerLoansCore(
+            _getAddressNotZero("olympus.policies.BurnerLoansCore")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansDebt parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  core", address(core));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansDebt burnerLoansDebt = new BurnerLoansDebt(kernel, core);
+        console2.log("BurnerLoansDebt deployed at", address(burnerLoansDebt));
+        return (address(burnerLoansDebt), "olympus.policies");
+    }
+
+    /// @notice Deploys the seizure action without granting settlement authority.
+    function deployBurnerLoansSeize() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBurnerLoansCore core = IBurnerLoansCore(
+            _getAddressNotZero("olympus.policies.BurnerLoansCore")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansSeize parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  core", address(core));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansSeize burnerLoansSeize = new BurnerLoansSeize(kernel, core);
+        console2.log("BurnerLoansSeize deployed at", address(burnerLoansSeize));
+        return (address(burnerLoansSeize), "olympus.policies");
+    }
+
+    /// @notice Deploys the read-only Lens, which has no Kernel lifecycle.
+    function deployBurnerLoansLens() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
+
+        // Log parameters
+        console2.log("BurnerLoansLens parameters:");
+        console2.log("  core", core);
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansLens burnerLoansLens = new BurnerLoansLens(core);
+        console2.log("BurnerLoansLens deployed at", address(burnerLoansLens));
+        return (address(burnerLoansLens), "olympus.periphery");
+    }
+
+    /// @notice Deploys the immutable Config queue with its constructor-defined notice period.
+    function deployBurnerLoansConfigTimelock() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBurnerLoansConfig burnerLoansConfig = IBurnerLoansConfig(
+            _getAddressNotZero("olympus.policies.BurnerLoansConfig")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  burnerLoansConfig", address(burnerLoansConfig));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansConfigTimelock burnerLoansConfigTimelock = new BurnerLoansConfigTimelock(
+            kernel,
+            burnerLoansConfig
+        );
+        console2.log("BurnerLoansConfigTimelock deployed at", address(burnerLoansConfigTimelock));
+        return (address(burnerLoansConfigTimelock), "olympus.policies");
+    }
+
+    /// @notice Deploys the immutable Risk queue with its constructor-defined notice period.
+    function deployBurnerLoansRiskConfigTimelock() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBurnerLoansRisk target = IBurnerLoansRisk(
+            _getAddressNotZero("olympus.policies.BurnerLoansRisk")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansRiskConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  risk", address(target));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansRiskConfigTimelock burnerLoansRiskConfigTimelock = new BurnerLoansRiskConfigTimelock(
+                kernel,
+                target
+            );
+        console2.log(
+            "BurnerLoansRiskConfigTimelock deployed at",
+            address(burnerLoansRiskConfigTimelock)
+        );
+        return (address(burnerLoansRiskConfigTimelock), "olympus.policies");
+    }
+
+    /// @notice Deploys the immutable Payout queue with its constructor-defined notice period.
+    function deployBurnerLoansPayoutConfigTimelock() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBurnerLoansPayout target = IBurnerLoansPayout(
+            _getAddressNotZero("olympus.policies.BurnerLoansPayout")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansPayoutConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  payout", address(target));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansPayoutConfigTimelock burnerLoansPayoutConfigTimelock = new BurnerLoansPayoutConfigTimelock(
+                kernel,
+                target
+            );
+        console2.log(
+            "BurnerLoansPayoutConfigTimelock deployed at",
+            address(burnerLoansPayoutConfigTimelock)
+        );
+        return (address(burnerLoansPayoutConfigTimelock), "olympus.policies");
+    }
+
+    /// @notice Deploys the immutable Inventory recovery queue.
+    function deployBurnerLoansInventoryConfigTimelock() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBurnerLoansInventory target = IBurnerLoansInventory(
+            _getAddressNotZero("olympus.policies.BurnerLoansInventory")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansInventoryConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  inventory", address(target));
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansInventoryConfigTimelock burnerLoansInventoryConfigTimelock = new BurnerLoansInventoryConfigTimelock(
+                kernel,
+                target
+            );
+        console2.log(
+            "BurnerLoansInventoryConfigTimelock deployed at",
+            address(burnerLoansInventoryConfigTimelock)
+        );
+        return (address(burnerLoansInventoryConfigTimelock), "olympus.policies");
+    }
+
+    /// @notice Deploys bounded seizure automation using checked constructor argument widths.
+    function deployBurnerLoansSeizerTask() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        uint16 checks = SafeCast.encodeUInt16(
+            _readDeploymentArgUint256("BurnerLoansSeizerTask", "maxBorrowersToCheck")
+        );
+        uint8 seizures = SafeCast.encodeUInt8(
+            _readDeploymentArgUint256("BurnerLoansSeizerTask", "maxBorrowersToSeize")
+        );
+        uint32 gasLimit = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("BurnerLoansSeizerTask", "executionGasLimit")
+        );
+        Kernel kernel = _getKernel();
+        IBurnerLoansSeize seize = IBurnerLoansSeize(
+            _getAddressNotZero("olympus.policies.BurnerLoansSeize")
+        );
+        IBurnerLoansLens lens = IBurnerLoansLens(
+            _getAddressNotZero("olympus.periphery.BurnerLoansLens")
+        );
+
+        // Log parameters
+        console2.log("BurnerLoansSeizerTask parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  seize", address(seize));
+        console2.log("  lens", address(lens));
+        console2.log("  maxBorrowersToCheck", checks);
+        console2.log("  maxBorrowersToSeize", seizures);
+        console2.log("  executionGasLimit", gasLimit);
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansSeizerTask burnerLoansSeizerTask = new BurnerLoansSeizerTask(
+            kernel,
+            seize,
+            lens,
+            checks,
+            seizures,
+            gasLimit
+        );
+        console2.log("BurnerLoansSeizerTask deployed at", address(burnerLoansSeizerTask));
+        return (address(burnerLoansSeizerTask), "olympus.policies");
+    }
+
+    /// @notice Deploys yield automation using the supplied complete-task gas budget.
+    function deployBurnerLoansYieldClaimerTask() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        uint32 gasLimit = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("BurnerLoansYieldClaimerTask", "executionGasLimit")
+        );
+        Kernel kernel = _getKernel();
+        address core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
+
+        // Log parameters
+        console2.log("BurnerLoansYieldClaimerTask parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  core", core);
+        console2.log("  executionGasLimit", gasLimit);
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansYieldClaimerTask burnerLoansYieldClaimerTask = new BurnerLoansYieldClaimerTask(
+            kernel,
+            core,
+            gasLimit
+        );
+        console2.log(
+            "BurnerLoansYieldClaimerTask deployed at",
+            address(burnerLoansYieldClaimerTask)
+        );
+        return (address(burnerLoansYieldClaimerTask), "olympus.policies");
+    }
+
+    /// @notice Deploys Core-bound authorization; OCG selects it without Kernel policy activation.
+    function deployBurnerLoansAuth() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = address(_getKernel());
+        address core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
+
+        // Log parameters
+        console2.log("BurnerLoansAuth parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  core", core);
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansAuth burnerLoansAuth = new BurnerLoansAuth(kernel, core);
+        console2.log("BurnerLoansAuth deployed at", address(burnerLoansAuth));
+        return (address(burnerLoansAuth), "olympus.periphery");
+    }
+
+    // TODO: Add the replacement Burner Loans bundler.
+
+    /// @notice Deploys the one-use launch helper after every immutable dependency exists.
+    function deployBurnerLoansActivator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        IBurnerLoansActivator.Deployment memory d = _burnerLoansDeployment();
+        address owner = _getAddressNotZero("olympus.governance.Timelock");
+
+        // Log parameters
+        console2.log("BurnerLoansActivator parameters:");
+        console2.log("  timelock", owner);
+        console2.log("  kernel", d.kernel);
+        console2.log("  ohm", d.ohm);
+        console2.log("  floan", d.floan);
+        console2.log("  depositManager", d.depositManager);
+        console2.log("  core", d.core);
+        console2.log("  auth", d.auth);
+        console2.log("  config", d.config);
+        console2.log("  inventory", d.inventory);
+        console2.log("  payout", d.payout);
+        console2.log("  risk", d.risk);
+        console2.log("  collateral", d.collateral);
+        console2.log("  debt", d.debt);
+        console2.log("  seize", d.seize);
+        console2.log("  lens", d.lens);
+        console2.log("  seizerTask", d.seizerTask);
+        console2.log("  yieldClaimerTask", d.yieldClaimerTask);
+        console2.log("  configTimelock", d.configTimelock);
+        console2.log("  riskTimelock", d.riskTimelock);
+        console2.log("  payoutTimelock", d.payoutTimelock);
+        console2.log("  inventoryTimelock", d.inventoryTimelock);
+        console2.log("  priceConfig", d.priceConfig);
+        console2.log("  priceCache", d.priceCache);
+        console2.log("  revenueDistributor", d.revenueDistributor);
+        console2.log("  revenueDistributorTimelock", d.revenueDistributorTimelock);
+        console2.log("  revenueDistributorTask", d.revenueDistributorTask);
+        console2.log("  heart", d.heart);
+        console2.log("  usds", d.usds);
+        console2.log("  usde", d.usde);
+        console2.log("  susds", d.susds);
+        console2.log("  susde", d.susde);
+        console2.log("  backingOracle", d.backingOracle);
+
+        // Deploy
+        vm.broadcast();
+        BurnerLoansActivator burnerLoansActivator = new BurnerLoansActivator(owner, d);
+        console2.log("BurnerLoansActivator deployed at", address(burnerLoansActivator));
+        return (address(burnerLoansActivator), "olympus.proposals");
+    }
+
+    function _burnerLoansDeployment()
+        internal
+        view
+        returns (IBurnerLoansActivator.Deployment memory d)
+    {
+        d.kernel = _getAddressNotZero("olympus.Kernel");
+        d.ohm = _getAddressNotZero("olympus.legacy.OHM");
+        d.floan = _getAddressNotZero("olympus.modules.OlympusFixedTermLoan");
+        d.depositManager = _getAddressNotZero("olympus.policies.DepositManager");
+        d.core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
+        d.auth = _getAddressNotZero("olympus.periphery.BurnerLoansAuth");
+        d.config = _getAddressNotZero("olympus.policies.BurnerLoansConfig");
+        d.inventory = _getAddressNotZero("olympus.policies.BurnerLoansInventory");
+        d.payout = _getAddressNotZero("olympus.policies.BurnerLoansPayout");
+        d.risk = _getAddressNotZero("olympus.policies.BurnerLoansRisk");
+        d.collateral = _getAddressNotZero("olympus.policies.BurnerLoansCollateral");
+        d.debt = _getAddressNotZero("olympus.policies.BurnerLoansDebt");
+        d.seize = _getAddressNotZero("olympus.policies.BurnerLoansSeize");
+        d.lens = _getAddressNotZero("olympus.periphery.BurnerLoansLens");
+        d.seizerTask = _getAddressNotZero("olympus.policies.BurnerLoansSeizerTask");
+        d.yieldClaimerTask = _getAddressNotZero("olympus.policies.BurnerLoansYieldClaimerTask");
+        d.configTimelock = _getAddressNotZero("olympus.policies.BurnerLoansConfigTimelock");
+        d.riskTimelock = _getAddressNotZero("olympus.policies.BurnerLoansRiskConfigTimelock");
+        d.payoutTimelock = _getAddressNotZero("olympus.policies.BurnerLoansPayoutConfigTimelock");
+        d.inventoryTimelock = _getAddressNotZero(
+            "olympus.policies.BurnerLoansInventoryConfigTimelock"
+        );
+        d.priceConfig = _getAddressNotZero("olympus.policies.OlympusPriceConfigV2");
+        d.priceCache = _getAddressNotZero("olympus.policies.PriceCache");
+        d.revenueDistributor = _getAddressNotZero("olympus.policies.RevenueDistributor");
+        d.revenueDistributorTimelock = _getAddressNotZero(
+            "olympus.policies.RevenueDistributorConfigTimelock"
+        );
+        d.revenueDistributorTask = _getAddressNotZero("olympus.policies.RevenueDistributorTask");
+        d.heart = _getAddressNotZero("olympus.policies.OlympusHeart");
+        d.usds = _getAddressNotZero("external.tokens.USDS");
+        d.usde = _getAddressNotZero("external.tokens.USDe");
+        d.susds = _getAddressNotZero("external.tokens.sUSDS");
+        d.susde = _getAddressNotZero("external.tokens.sUSDe");
+        d.backingOracle = _getAddressNotZero("olympus.policies.BackingOracle");
+    }
+
+    function _getKernel() private view returns (Kernel) {
+        return Kernel(_getAddressNotZero("olympus.Kernel"));
+    }
+
+    /// @notice Deploys the shared backing oracle without an initial backing value.
+    function deployBackingOracle() public returns (address, string memory) {
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        console2.log("BackingOracle parameters:");
+        console2.log("  kernel", address(kernel));
+        vm.broadcast();
+        BackingOracle oracle = new BackingOracle(kernel);
+        console2.log("BackingOracle deployed at", address(oracle));
+        return (address(oracle), "olympus.policies");
+    }
+
+    /// @notice Deploys the immutable backing-update queue.
+    function deployBackingOracleConfigTimelock() public returns (address, string memory) {
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBackingOracle oracle = IBackingOracle(
+            _getAddressNotZero("olympus.policies.BackingOracle")
+        );
+        console2.log("BackingOracleConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  backingOracle", address(oracle));
+        vm.broadcast();
+        BackingOracleConfigTimelock queue = new BackingOracleConfigTimelock(kernel, oracle);
+        console2.log("BackingOracleConfigTimelock deployed at", address(queue));
+        return (address(queue), "olympus.policies");
+    }
+
+    /// @notice Deploys an unconfigured revenue distributor.
+    function deployRevenueDistributor() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+
+        // Log parameters
+        console2.log("RevenueDistributor parameters:");
+        console2.log("  kernel", address(kernel));
+
+        // Deploy
+        vm.broadcast();
+        RevenueDistributor revenueDistributor = new RevenueDistributor(kernel);
+        console2.log("RevenueDistributor deployed at", address(revenueDistributor));
+        return (address(revenueDistributor), "olympus.policies");
+    }
+
+    /// @notice Deploys the distributor's immutable configuration queue.
+    function deployRevenueDistributorConfigTimelock() public returns (address, string memory) {
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        RevenueDistributor distributor = RevenueDistributor(
+            _getAddressNotZero("olympus.policies.RevenueDistributor")
+        );
+        console2.log("RevenueDistributorConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  distributor", address(distributor));
+        vm.broadcast();
+        RevenueDistributorConfigTimelock queue = new RevenueDistributorConfigTimelock(
+            kernel,
+            distributor
+        );
+        console2.log("RevenueDistributorConfigTimelock deployed at", address(queue));
+        return (address(queue), "olympus.policies");
+    }
+
+    /// @notice Deploys bounded automation for the sequence's distributor.
+    function deployRevenueDistributorTask() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        address distributor = _getAddressNotZero("olympus.policies.RevenueDistributor");
+        uint32 gasLimit = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("RevenueDistributorTask", "executionGasLimit")
+        );
+
+        // Log parameters
+        console2.log("RevenueDistributorTask parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  distributor", distributor);
+        console2.log("  executionGasLimit", gasLimit);
+
+        // Deploy
+        vm.broadcast();
+        RevenueDistributorTask revenueDistributorTask = new RevenueDistributorTask(
+            kernel,
+            distributor,
+            gasLimit
+        );
+        console2.log("RevenueDistributorTask deployed at", address(revenueDistributorTask));
+        return (address(revenueDistributorTask), "olympus.policies");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

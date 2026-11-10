@@ -1,0 +1,18 @@
+{
+    "sequence": [
+        {
+            "name": "RevenueDistributor",
+            "args": {}
+        },
+        {
+            "name": "RevenueDistributorConfigTimelock",
+            "args": {}
+        },
+        {
+            "name": "RevenueDistributorTask",
+            "args": {
+                "executionGasLimit": 1000000
+            }
+        }
+    ]
+}
