@@ -41,7 +41,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         address depositPositionManager = _envAddressNotZero(
             "olympus.modules.OlympusDepositPositionManager"
         );
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );
@@ -267,7 +267,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
 
         console2.log("=== Configuring DepositManager ===");
         console2.log("Enabling DepositManager policy to accept deposits");
@@ -289,7 +289,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             "ConfigureConvertibleDepositFacility",
             "facilityName"
         );
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );
@@ -324,7 +324,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
         address usds = _envAddressNotZero("external.tokens.USDS");
         address usdsVault = _envAddressNotZero("external.tokens.sUSDS");
         uint256 maxCapacity = _readBatchArgUint256("ConfigureUSDS", "maxCapacity");
@@ -359,7 +359,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );
