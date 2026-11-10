@@ -70,7 +70,7 @@ ROLES initialized; retained caller roles after any Kernel deactivation; unrelate
 
 | ID | Caller | Prior transition / duration | Now | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| RDCT-REENABLE-N02 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | L in 1..MAX48-G; G in 1..MAX32; D=L+G; D>L | Independently fuzz L..D-1; seed L,D-1 | Success | Local transition and exact events; no accounting changes | Covered: [test][test_givenRepresentableDeadline_whenAuthorizedCallerReEnables], [test][test_givenReEnableBoundarySeeds] |
+| RDCT-REENABLE-N02 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | L in 1..MAX48-G; G in 1..MAX32; D=L+G; D>L | Independently fuzz L..D-1; seed L,D-1 | Success | Local transition and exact events; no accounting changes | Covered: [test][test_givenRepresentableDeadline_whenAuthorizedCallerReEnables], [test][test_givenReEnableBoundarySeeds]  [existing revenue role][test_givenExistingRevenueAdmin_whenPermittedCallerReEnables], [existing overlap][test_givenExistingOverlappingRoles_whenPermittedCallerReEnables] |
 | RDCT-REENABLE-N03 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | Same representable L,G; D=L+G | D | Success; deadline inclusive | Local transition and exact events | Covered: [test][test_givenRepresentableDeadline_whenAuthorizedCallerReEnables], [test][test_givenReEnableBoundarySeeds] |
 | RDCT-REENABLE-N04 | Fuzz ADMIN-only, REVENUE_DISTRIBUTOR_ADMIN-only and overlap holders; seed each | Same L,G; require D<MAX48 | Independently fuzz D+1..MAX48; seed D+1,MAX48 | GracePeriod_Expired(D) | Unchanged; no logs | Covered: [test][test_givenExpiredDeadline_whenAuthorizedCallerReEnables_reverts], [test][test_givenReEnableBoundarySeeds] |
 
@@ -128,20 +128,20 @@ Own policy is active and locally disabled; caller is permitted, payload is empty
 | RDCT-REENABLE-D16 | Canonical zero or different operator; fuzz every address except this timelock | ConfigOperator_Unauthorized(this timelock) | No lifecycle transition | Covered: [fuzz][test_givenUnselectedOperator_whenActivation_reverts], [zero][test_givenZeroOperator_whenActivation_reverts] |
 
 [test_whenUnauthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L90
-[test_givenNeverEnabledPolicy_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L268
-[test_givenDistributorKernelDrift_whenActivation_reverts]: ./reEnable.t.sol#L315
-[test_givenRestoredDistributor_whenActivation_succeeds]: ./reEnable.t.sol#L429
-[test_givenRepresentableDeadline_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L504
-[test_givenReEnableBoundarySeeds]: ./reEnable.t.sol#L633
-[test_givenEnabled_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L440
-[test_givenInactive_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L467
-[test_givenOverflowingDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L545
-[test_givenExpiredDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L589
-[test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L819
-[test_givenRestoredDistributor_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L857
-[test_givenDependencyAndRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L887
-[test_givenDistributorKernelDrift_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L970
-[test_givenKernelDriftRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L1007
+[test_givenNeverEnabledPolicy_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L294
+[test_givenDistributorKernelDrift_whenActivation_reverts]: ./reEnable.t.sol#L341
+[test_givenRestoredDistributor_whenActivation_succeeds]: ./reEnable.t.sol#L455
+[test_givenRepresentableDeadline_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L530
+[test_givenReEnableBoundarySeeds]: ./reEnable.t.sol#L659
+[test_givenEnabled_whenAnyCallerReEnables_reverts]: ./reEnable.t.sol#L466
+[test_givenInactive_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L493
+[test_givenOverflowingDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L571
+[test_givenExpiredDeadline_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L615
+[test_givenUnavailableDistributor_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L845
+[test_givenRestoredDistributor_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L883
+[test_givenDependencyAndRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L913
+[test_givenDistributorKernelDrift_whenAuthorizedCallerReEnables_reverts]: ./reEnable.t.sol#L996
+[test_givenKernelDriftRoleSeeds_whenReEnabled_reverts]: ./reEnable.t.sol#L1033
 [test_givenOwnPolicyInactive_whenPermittedCallerReEnables_reverts]: ./reEnable.t.sol#L135
 [test_whenPermittedCallerReEnablesWithinGrace_recordsTransition]: ./reEnable.t.sol#L37
 [test_whenNeverEnabled_reverts]: ./reEnable.t.sol#L78
@@ -149,11 +149,14 @@ Own policy is active and locally disabled; caller is permitted, payload is empty
 [test_whenDistributorKernelMismatches_reverts]: ./reEnable.t.sol#L155
 [test_whenAlreadyEnabled_revertsBeforeAuthorization]: ./reEnable.t.sol#L104
 [test_whenGracePeriodExpired_reverts]: ./reEnable.t.sol#L115
-[test_givenMissingConsumedInterface_whenActivation_reverts]: ./reEnable.t.sol#L1055
-[test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts]: ./reEnable.t.sol#L1091
-[test_givenOperatorReadReverts_whenActivation_reverts]: ./reEnable.t.sol#L1104
-[test_givenNoncanonicalOperator_whenActivation_reverts]: ./reEnable.t.sol#L1141
-[test_givenMalformedOperatorLength_whenActivation_reverts]: ./reEnable.t.sol#L1124
-[test_givenUnselectedOperator_whenActivation_reverts]: ./reEnable.t.sol#L1161
-[test_givenZeroOperator_whenActivation_reverts]: ./reEnable.t.sol#L1180
-[test_givenActivePausedDistributor_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L1018
+[test_givenMissingConsumedInterface_whenActivation_reverts]: ./reEnable.t.sol#L1081
+[test_givenMissingConsumedInterfaceSeeds_whenActivation_reverts]: ./reEnable.t.sol#L1117
+[test_givenOperatorReadReverts_whenActivation_reverts]: ./reEnable.t.sol#L1130
+[test_givenNoncanonicalOperator_whenActivation_reverts]: ./reEnable.t.sol#L1167
+[test_givenMalformedOperatorLength_whenActivation_reverts]: ./reEnable.t.sol#L1150
+[test_givenUnselectedOperator_whenActivation_reverts]: ./reEnable.t.sol#L1187
+[test_givenZeroOperator_whenActivation_reverts]: ./reEnable.t.sol#L1206
+[test_givenActivePausedDistributor_whenAuthorizedCallerReEnables]: ./reEnable.t.sol#L1044
+
+[test_givenExistingRevenueAdmin_whenPermittedCallerReEnables]: ./reEnable.t.sol#L176
+[test_givenExistingOverlappingRoles_whenPermittedCallerReEnables]: ./reEnable.t.sol#L188

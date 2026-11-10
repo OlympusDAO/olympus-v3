@@ -77,6 +77,18 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
     }
 
     // Scenarios: BLDEBT-REENABLE-P02.
+    function test_givenExistingFixtureAdmin_whenReEnabled() public {
+        test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition(
+            3284,
+            392188,
+            31536001,
+            address(this),
+            true,
+            true
+        );
+    }
+
+    // Scenarios: BLDEBT-REENABLE-P02.
     function test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds() public {
         test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition(
             type(uint48).max - 1,

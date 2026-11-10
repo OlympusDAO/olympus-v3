@@ -118,6 +118,8 @@ abstract contract RevenueDistributorTest is Test {
         distributor.disable("");
     }
 
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // forge-lint: disable-start(reentrancy-no-eth)
     function _setPolicyActive(address policy_, bool active_) internal {
         if (kernel.isPolicyActive(Policy(policy_)) != active_) {
             vm.prank(admin);
@@ -127,6 +129,8 @@ abstract contract RevenueDistributorTest is Test {
             );
         }
     }
+
+    // forge-lint: disable-end(reentrancy-no-eth)
 
     // forge-lint: disable-end(calls-loop)
 
@@ -175,8 +179,10 @@ abstract contract RevenueDistributorTest is Test {
         vm.assume(caller_ != admin);
         vm.assume(adminRole_ || revenueRole_);
         vm.startPrank(admin);
-        if (adminRole_) rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (revenueRole_) rolesAdmin.grantRole(REVENUE_DISTRIBUTOR_ADMIN_ROLE, caller_);
+        if (adminRole_ && !roles.hasRole(caller_, ADMIN_ROLE))
+            rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        if (revenueRole_ && !roles.hasRole(caller_, REVENUE_DISTRIBUTOR_ADMIN_ROLE))
+            rolesAdmin.grantRole(REVENUE_DISTRIBUTOR_ADMIN_ROLE, caller_);
         vm.stopPrank();
     }
 
@@ -317,6 +323,8 @@ abstract contract RevenueDistributorTest is Test {
         return keccak256(abi.encode(_revenueFundsDigest(), distributor.configOperator()));
     }
 
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // forge-lint: disable-start(reentrancy-no-eth)
     function _grantConfigurationAuthority(
         address caller_,
         bool operatorOnly_,
@@ -332,12 +340,16 @@ abstract contract RevenueDistributorTest is Test {
         vm.stopPrank();
     }
 
+    // forge-lint: disable-end(reentrancy-no-eth)
+
     address internal _configurationSeed;
 
     function _configurationCaller() internal view returns (address) {
         return _configurationSeed == address(0) ? address(configTimelock) : _configurationSeed;
     }
 
+    // These calls enumerate bounded test actors/assets, including fixture helpers called by the loops.
+    // forge-lint: disable-start(calls-loop)
     function _timelockControlDigest() internal view returns (bytes32) {
         return
             keccak256(
@@ -353,6 +365,8 @@ abstract contract RevenueDistributorTest is Test {
                 )
             );
     }
+
+    // forge-lint: disable-end(calls-loop)
 
     function _enablePolicy(address policy_) internal {
         vm.prank(admin);

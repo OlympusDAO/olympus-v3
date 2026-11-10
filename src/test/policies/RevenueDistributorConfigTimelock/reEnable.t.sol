@@ -2,20 +2,20 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
-import {IRevenueDistributorRescue} from "src/policies/interfaces/IRevenueDistributorRescue.sol";
-import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
+import {IRevenueDistributorRescue} from "src/policies/interfaces/IRevenueDistributorRescue.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
-import {REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {RevenueDistributorConfigTimelockTest} from "./RevenueDistributorConfigTimelockTest.sol";
@@ -170,6 +170,32 @@ contract RevenueDistributorConfigTimelockReEnableTest is RevenueDistributorConfi
 
         assertFalse(configTimelock.isEnabled(), "timelock remains disabled");
         assertEq(configTimelock.lastTransitionAt(), transitionAt, "timestamp unchanged");
+    }
+
+    // Scenarios: RDCT-REENABLE-N02.
+    function test_givenExistingRevenueAdmin_whenPermittedCallerReEnables() public {
+        test_givenRepresentableGrace_whenPermittedCallerReEnables(
+            alice,
+            false,
+            true,
+            16142,
+            4138,
+            9183
+        );
+    }
+
+    // Scenarios: RDCT-REENABLE-N02.
+    function test_givenExistingOverlappingRoles_whenPermittedCallerReEnables() public {
+        vm.prank(admin);
+        rolesAdmin.grantRole(ADMIN_ROLE, alice);
+        test_givenRepresentableGrace_whenPermittedCallerReEnables(
+            alice,
+            true,
+            true,
+            16142,
+            4138,
+            9183
+        );
     }
 
     function test_givenRepresentableGrace_whenPermittedCallerReEnables(

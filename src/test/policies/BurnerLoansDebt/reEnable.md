@@ -24,6 +24,8 @@ Initialization history matters independently of Kernel membership. Previously Ke
 
 Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each: independently fuzz a nonzero caller and grant ADMIN_ROLE or BURNER_LOANS_ADMIN_ROLE. Guarantee seeds with ADMIN_ROLE only, BURNER_LOANS_ADMIN_ROLE only and both roles; select the role independently from time and dependency inputs. These roles follow the same reEnable behavior, so each equivalent validation/time case has one row. Fuzz permitted callback caller uses a callback contract holding the selected role, with the outer operation initiated by its separately authorized caller.
 
+Preserve existing fixture roles instead of granting the same role twice. The fixture admin is also a deterministic permitted caller.
+
 Hook cases below isolate each activation dependency. Successful re-enablement is covered across the valid time interval.
 
 All concrete hook dependencies listed below satisfied; ROLES initialized. The permitted caller fuzz family above names every accepted role; unauthorized fuzzing excludes all holders of those roles. Unauthorized fuzzing excludes all holders of the named roles. `deadline=lastTransitionAt+gracePeriod`.
@@ -86,7 +88,7 @@ Action locally disabled and Kernel-active; same-Kernel Core active+enabled; sett
 | ID | Caller | Now / fuzz interval / seeds | Execution | Effects / events | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLDEBT-REENABLE-P01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz now in L..D-1; seed L,D-1; seed L=MAX48-G to reach maximum representable D | Success | isEnabled=true; lastTransitionAt=now; Enabled then Transition(caller,true,0x,now) | Covered: [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition], [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition], [test_givenExistingAdmin_whenReEnabled_thenExactTransition][test_givenExistingAdmin_whenReEnabled_thenExactTransition] |
-| BLDEBT-REENABLE-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | now=D; fuzz compatible L,G; seed D=MAX48 | Success | Same exact transition; inclusive deadline | Covered: [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition], [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition], [test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds][test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds], [test_givenExistingAdmin_whenReEnabled_thenExactTransition][test_givenExistingAdmin_whenReEnabled_thenExactTransition] |
+| BLDEBT-REENABLE-P02 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | now=D; fuzz compatible L,G; seed D=MAX48 | Success | Same exact transition; inclusive deadline | Covered: [test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition][test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition], [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition][test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition], [test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds][test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds], [test_givenExistingAdmin_whenReEnabled_thenExactTransition][test_givenExistingAdmin_whenReEnabled_thenExactTransition], [test_givenExistingFixtureAdmin_whenReEnabled][test_givenExistingFixtureAdmin_whenReEnabled] |
 | BLDEBT-REENABLE-P03 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | D<MAX48; fuzz now in D+1..MAX48; seed D+1,MAX48 | `GracePeriod_Expired(D)` | Unchanged; no committed logs | Covered: [test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError][test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError], [test_givenExpiredGrace_whenReEnabled_reverts][test_givenExpiredGrace_whenReEnabled_reverts] |
 
 ## Dependency compatibility
@@ -125,35 +127,35 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | BLDEBT-REENABLE-L05 | Fuzz all callers | false | false | 0 | 0 | `NeverEnabled()` before authorization; no ROLES call | No lifecycle/accounting change or committed logs | Covered: [test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence][test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence] |
 
-[test_givenCoreDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L211
-[test_givenCoreInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L231
-[test_givenCoreInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L253
-[test_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L273
-[test_givenDisabled_whenUnauthorizedReEnables_reverts]: reEnable.t.sol#L148
-[test_givenEachPermittedRole_givenCoreDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L414
-[test_givenEachPermittedRole_givenCoreInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L438
-[test_givenEachPermittedRole_givenCoreInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L426
-[test_givenEachPermittedRole_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L510
-[test_givenEachPermittedRole_givenInactive_whenReEnabled_reverts]: reEnable.t.sol#L544
-[test_givenEachPermittedRole_givenInventoryDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L462
-[test_givenEachPermittedRole_givenInventoryInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L486
-[test_givenEachPermittedRole_givenInventoryInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L474
-[test_givenEachPermittedRole_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L534
-[test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError]: reEnable.t.sol#L589
-[test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition]: reEnable.t.sol#L554
-[test_givenEachPermittedRole_whenGraceOverflows_thenExactTypedError]: reEnable.t.sol#L608
-[test_givenEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L161
-[test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins]: reEnable.t.sol#L194
-[test_givenExpiredGrace_whenReEnabled_reverts]: reEnable.t.sol#L93
-[test_givenGraceDeadlineOverflow_whenReEnabled_reverts]: reEnable.t.sol#L121
-[test_givenGraceOverflowEndpoints_whenReEnabled_thenTypedOverflow]: reEnable.t.sol#L173
+[test_givenCoreDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L223
+[test_givenCoreInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L243
+[test_givenCoreInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L265
+[test_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L285
+[test_givenDisabled_whenUnauthorizedReEnables_reverts]: reEnable.t.sol#L160
+[test_givenEachPermittedRole_givenCoreDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L426
+[test_givenEachPermittedRole_givenCoreInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L450
+[test_givenEachPermittedRole_givenCoreInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L438
+[test_givenEachPermittedRole_givenCoreReportedKernelChanges_whenReEnabled_thenKernelMismatch]: reEnable.t.sol#L522
+[test_givenEachPermittedRole_givenInactive_whenReEnabled_reverts]: reEnable.t.sol#L556
+[test_givenEachPermittedRole_givenInventoryDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L474
+[test_givenEachPermittedRole_givenInventoryInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L498
+[test_givenEachPermittedRole_givenInventoryInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L486
+[test_givenEachPermittedRole_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L546
+[test_givenEachPermittedRole_whenExpiredGraceEndpoints_thenExactError]: reEnable.t.sol#L601
+[test_givenEachPermittedRole_whenGraceEndpoints_thenExactTransition]: reEnable.t.sol#L566
+[test_givenEachPermittedRole_whenGraceOverflows_thenExactTypedError]: reEnable.t.sol#L620
+[test_givenEnabled_whenAnyCallerReEnables_reverts]: reEnable.t.sol#L173
+[test_givenExpiredGraceAndUnavailableCore_whenUnauthorizedReEnables_thenAuthWins]: reEnable.t.sol#L206
+[test_givenExpiredGrace_whenReEnabled_reverts]: reEnable.t.sol#L105
+[test_givenGraceDeadlineOverflow_whenReEnabled_reverts]: reEnable.t.sol#L133
+[test_givenGraceOverflowEndpoints_whenReEnabled_thenTypedOverflow]: reEnable.t.sol#L185
 [test_givenInactive_whenReEnabled_reverts]: reEnable.t.sol#L30
-[test_givenInventoryDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L300
-[test_givenInventoryInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L321
-[test_givenInventoryInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L344
-[test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds]: reEnable.t.sol#L80
-[test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence]: reEnable.t.sol#L402
-[test_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L384
+[test_givenInventoryDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L312
+[test_givenInventoryInactiveAndDisabled_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L333
+[test_givenInventoryInactive_whenReEnabled_thenRejectAndRetry]: reEnable.t.sol#L356
+[test_givenMaximumDeadline_whenAtDeadline_thenReEnableSucceeds]: reEnable.t.sol#L92
+[test_givenNeverActivated_whenReEnabled_thenInitializationPrecedence]: reEnable.t.sol#L414
+[test_givenSettlementRoleRevoked_whenReEnabled_reverts]: reEnable.t.sol#L396
 [test_givenWithinGrace_whenPermittedCallerReEnables_thenExactTransition]: reEnable.t.sol#L49
-
-[test_givenExistingAdmin_whenReEnabled_thenExactTransition]: reEnable.t.sol#L623
+[test_givenExistingAdmin_whenReEnabled_thenExactTransition]: reEnable.t.sol#L635
+[test_givenExistingFixtureAdmin_whenReEnabled]: reEnable.t.sol#L80
