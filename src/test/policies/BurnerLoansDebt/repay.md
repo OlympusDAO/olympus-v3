@@ -1,6 +1,6 @@
 # BurnerLoansDebt.repay coverage plan
 
-Source: [repay](../../../policies/burnerloans/BurnerLoansDebt.sol#L171). Scenarios specify the required behavior; mappings identify existing test proof.
+Source: [repay](../../../policies/burnerloans/BurnerLoansDebt.sol#L172). Scenarios specify the required behavior; mappings identify existing test proof.
 
 Coverage records implemented domains and assertions independently of execution results. `Partial` identifies missing proof, not a production failure. New required behavior remains `Unmapped` until corresponding tests assert it.
 

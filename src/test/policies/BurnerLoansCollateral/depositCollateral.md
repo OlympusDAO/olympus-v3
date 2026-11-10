@@ -1,6 +1,8 @@
 # BurnerLoansCollateral.depositCollateral coverage plan
 
-Source: [depositCollateral](../../../policies/burnerloans/BurnerLoansCollateral.sol#L49). Test mappings describe the verified scope of each named test.
+Authorization migration: grants now live on the selected BurnerLoansAuth. The public caller is the actual operator. Zero operator identities reject with `OperatorAuth_InvalidIdentity`; other absent/cancelled authority rejects with `OperatorAuth_InvalidContext`; expired accepted grants reject with `OperatorAuth_ExpiredGrant(deadline)`. An expired grant does not block permissionless previews. Cancelled-grant fixtures use nonzero operators because zero-operator grants cannot be created. Canonical permissions bind the explicit market asset, including custom callback tokens.
+
+Source: [depositCollateral](../../../policies/burnerloans/BurnerLoansCollateral.sol#L50). Test mappings describe the verified scope of each named test.
 
 Coverage records implemented domains and assertions independently of execution results. `Partial` identifies missing proof, not a production failure. New required behavior remains `Unmapped` until corresponding tests assert it.
 
@@ -64,10 +66,10 @@ Action and Core are active/enabled. Unauthorized caller fuzzing excludes borrowe
 | BLCOL-DEPOSIT-A03 | Delegated operator | caller=operator; now=deadline; grant nonzero | `Authorized` | Deadline equality accepted | Any viewer quotes the same economics; no borrower/operator authorization read | Covered: [test_givenOperatorGrant_whenAtDeadline_thenDepositSucceeds][test_givenOperatorGrant_whenAtDeadline_thenDepositSucceeds], [test_givenMaximumOperatorDeadline_whenDepositBoundaryTimesUsed][test_givenMaximumOperatorDeadline_whenDepositBoundaryTimesUsed], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenGrantDeadline_whenUnrelatedViewerQuotes][test_givenGrantDeadline_whenUnrelatedViewerQuotes] |
 | BLCOL-DEPOSIT-A04 | Delegated operator | caller=operator; deadline=MAX48; now<=deadline | `Authorized` | No deadline narrowing | Any viewer quotes the same economics; no borrower/operator authorization read | Covered: [test_givenMaximumOperatorDeadline_whenDepositBoundaryTimesUsed][test_givenMaximumOperatorDeadline_whenDepositBoundaryTimesUsed], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead] |
 | BLCOL-DEPOSIT-A05 | Fuzz all callers | borrower=0; actual caller arbitrary | `BurnerLoans_ZeroAddress()` | Unchanged; no committed logs | Same BurnerLoans_ZeroAddress() | Covered: [test_whenBorrowerIsZero_thenPreviewAndExecutionReject][test_whenBorrowerIsZero_thenPreviewAndExecutionReject] |
-| BLCOL-DEPOSIT-A06 | Fuzz callers excluding borrower | caller differs from borrower; no grant | `OperatorAuth_UnauthorizedOnBehalfOf()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_whenCallerIsUnauthorized_reverts][test_whenCallerIsUnauthorized_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenNoGrant_whenUnrelatedViewerQuotes][test_givenNoGrant_whenUnrelatedViewerQuotes] |
-| BLCOL-DEPOSIT-A07 | Fuzz callers excluding borrower | caller differs from borrower; grant cancelled to zero | `OperatorAuth_UnauthorizedOnBehalfOf()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_givenCancelledGrant_whenOperatorActs_reverts][test_givenCancelledGrant_whenOperatorActs_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenRevokedGrant_whenUnrelatedViewerQuotes][test_givenRevokedGrant_whenUnrelatedViewerQuotes] |
-| BLCOL-DEPOSIT-A08 | Delegated operator | caller=operator; grant nonzero; independently fuzz stored deadline D in 1..MAX48 and now in D+1..MAX256; seed D+1,MAX48+1,MAX256 | `OperatorAuth_UnauthorizedOnBehalfOf()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_givenAuthorizationExpired_whenOperatorDeposits_reverts][test_givenAuthorizationExpired_whenOperatorDeposits_reverts], [test_givenExpiredGrant_whenOperatorActs_reverts][test_givenExpiredGrant_whenOperatorActs_reverts], [test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized][test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenExpiredGrant_whenUnrelatedViewerQuotes][test_givenExpiredGrant_whenUnrelatedViewerQuotes] |
-| BLCOL-DEPOSIT-A11 | Fuzz unrelated caller X | Borrower B has a valid grant to O; O differs from B; X differs from B and O and has no grant; independently fuzz deadline D in 2..MAX48 and now in 1..D; seed now=1,D and D=MAX48 | `OperatorAuth_UnauthorizedOnBehalfOf()` | B→O grant unchanged; no position, balance or accounting change; no committed logs | X receives the same quote as B under equal economic state; the B→O grant does not restrict quoting | Covered: [test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts][test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts], [test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected][test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenValidGrant_whenUnrelatedViewerQuotes][test_givenValidGrant_whenUnrelatedViewerQuotes] |
+| BLCOL-DEPOSIT-A06 | Fuzz callers excluding borrower | caller differs from borrower; no grant | `OperatorAuth_InvalidContext()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_whenCallerIsUnauthorized_reverts][test_whenCallerIsUnauthorized_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenNoGrant_whenUnrelatedViewerQuotes][test_givenNoGrant_whenUnrelatedViewerQuotes] |
+| BLCOL-DEPOSIT-A07 | Fuzz callers excluding borrower | caller differs from borrower; grant cancelled to zero | `OperatorAuth_InvalidContext()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_givenCancelledGrant_whenOperatorActs_reverts][test_givenCancelledGrant_whenOperatorActs_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenRevokedGrant_whenUnrelatedViewerQuotes][test_givenRevokedGrant_whenUnrelatedViewerQuotes] |
+| BLCOL-DEPOSIT-A08 | Delegated operator | caller=operator; grant nonzero; independently fuzz stored deadline D in 1..MAX48 and now in D+1..MAX256; seed D+1,MAX48+1,MAX256 | `OperatorAuth_ExpiredGrant(D)` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_givenAuthorizationExpired_whenOperatorDeposits_reverts][test_givenAuthorizationExpired_whenOperatorDeposits_reverts], [test_givenExpiredGrant_whenOperatorActs_reverts][test_givenExpiredGrant_whenOperatorActs_reverts], [test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized][test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenExpiredGrant_whenUnrelatedViewerQuotes][test_givenExpiredGrant_whenUnrelatedViewerQuotes] |
+| BLCOL-DEPOSIT-A11 | Fuzz unrelated caller X | Borrower B has a valid grant to O; O differs from B; X differs from B and O and has no grant; independently fuzz deadline D in 2..MAX48 and now in 1..D; seed now=1,D and D=MAX48 | `OperatorAuth_InvalidContext()` | B→O grant unchanged; no position, balance or accounting change; no committed logs | X receives the same quote as B under equal economic state; the B→O grant does not restrict quoting | Covered: [test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts][test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts], [test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected][test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenValidGrant_whenUnrelatedViewerQuotes][test_givenValidGrant_whenUnrelatedViewerQuotes] |
 
 ## Core settlement authorization
 
@@ -217,61 +219,82 @@ Rejection preserves authoritative accounting, custody and emitted logs.
 | BLCOL-DEPOSIT-D05 | Debt=100e9; oracle disabled; change collateral by 1e6 | Preview/execution: PolicyDependency_NotActive(oracle); accounting/custody unchanged | Covered: [test][test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement] |
 | BLCOL-DEPOSIT-D06 | Debt-free collateral=100e6; oracle disabled; change collateral by 1e6 | Exact 1e6 credit/output and 101e6 deposit or 99e6 withdrawal remainder; uint256.max health | Covered: [test][test_givenDebtFreeAndBackingPaused_whenCollateralChanged] |
 
-[test_givenActionKernelGetterReverts_whenDeposited_thenGetterIsNotRead]: depositCollateral.t.sol#L1009
-[test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected]: depositCollateral.t.sol#L1398
+## Auth completion and delegated vault rounding
+
+| ID | Scenario | Expected behavior | Named test |
+| --- | --- | --- | --- |
+| BLCOL-DEPOSIT-AUTH-C01 | Account token callback cancels the captured operator pair during actual Core payer transfer | Original stamp is rejected on completion; custody, canonical state, wallet balances, callback state and pair epoch all roll back | [test][test_givenDelegatedDeposit_whenAccountCancelsDuringPayerPull_reverts] |
+| BLCOL-DEPOSIT-AUTH-C02 | Account token callback accepts identical permissions at the next pair epoch | Completion cannot adopt replacement authority; complete rollback | [test][test_givenDelegatedDeposit_whenIdenticalPermissionsReacceptedDuringPayerPull_reverts] |
+| BLCOL-DEPOSIT-AUTH-C03 | Unrelated callback token attempts to replace borrower authority and catches failure | Exact invalid-identity error; original grant epoch unchanged; one actual deposit settles | [test][test_givenUnauthorizedAuthCallback_whenFailureCaught_thenOriginalGrantCompletes] |
+| BLCOL-DEPOSIT-AUTH-C04 | Same unauthorized replacement failure propagates | Token callback error; full custody/accounting rollback and no epoch consumption | [test][test_givenUnauthorizedAuthCallback_whenFailurePropagated_thenFullRollback] |
+| BLCOL-DEPOSIT-AUTH-N01 | Nominal vault input 2000, actual credited collateral 1999, delegated resulting cap 1999 | Success; 666 custody shares and 1999 canonical liability | [test][test_givenDelegatedVaultDeposit_whenNominalExceedsGrantButActualCreditEqualsCap_thenAccepted] |
+| BLCOL-DEPOSIT-AUTH-N02 | Same rounding with delegated resulting cap 1998 | Exact Core result-limit error; payer transfer, vault backing/supply, custody and accounting roll back | [test][test_givenDelegatedVaultDeposit_whenActualCreditExceedsGrant_thenFullRollback] |
+
+## Auth rotation during preparation
+
+| ID | Setup | Expected result | Test |
+| --- | --- | --- | --- |
+| BLCOL-DEPOSIT-AUTH-C05 | Owner or delegated operator; real price callback rotates A to B to A | Original captured generation rejected before settlement; pointer/epochs/custody/accounting all roll back | [rotation][test_givenPreparationCallback_whenAuthRotatesAndReturns_reverts] |
+
+[test_givenActionKernelGetterReverts_whenDeposited_thenGetterIsNotRead]: depositCollateral.t.sol#L1002
+[test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected]: depositCollateral.t.sol#L1391
 [test_givenAssetNoLongerConfiguredInManager_whenDeposited_reverts]: depositCollateral.t.sol#L634
-[test_givenAuthorizationExpired_whenOperatorDeposits_reverts]: depositCollateral.t.sol#L466
-[test_givenCacheFullyRepays_whenTopUpSettles_thenActualDebtFreeHealthReturned]: depositCollateralPriceCallbacks.t.sol#L18
-[test_givenCancelledGrant_whenOperatorActs_reverts]: depositCollateral.t.sol#L910
-[test_givenCaughtUnauthorizedCacheAction_whenDepositing_thenOneCredit]: depositCollateralPriceCallbacks.t.sol#L70
+[test_givenAuthorizationExpired_whenOperatorDeposits_reverts]: depositCollateral.t.sol#L462
+[test_givenCacheFullyRepays_whenTopUpSettles_thenActualDebtFreeHealthReturned]: depositCollateralPriceCallbacks.t.sol#L58
+[test_givenCancelledGrant_whenOperatorActs_reverts]: depositCollateral.t.sol#L906
+[test_givenCaughtUnauthorizedCacheAction_whenDepositing_thenOneCredit]: depositCollateralPriceCallbacks.t.sol#L110
 [test_givenCoreDepositPeriodDisabled_whenDeposited_reverts]: depositCollateral.t.sol#L671
 [test_givenCoreIncomingPull_whenDepositManagerRejects_thenPullRollsBack]: depositCollateral.t.sol#L861
-[test_givenCoreUnavailable_whenInvoked_thenDependencyIdentified]: depositCollateral.t.sol#L971
-[test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition]: depositCollateral.t.sol#L1050
-[test_givenDebt_whenHealthBoundarySeedsUsed_thenNoCureThreshold]: depositCollateral.t.sol#L1026
-[test_givenDebt_whenRiskHealthFails_thenDepositRollsBack]: depositCollateral.t.sol#L434
+[test_givenCoreUnavailable_whenInvoked_thenDependencyIdentified]: depositCollateral.t.sol#L964
+[test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition]: depositCollateral.t.sol#L1043
+[test_givenDebt_whenHealthBoundarySeedsUsed_thenNoCureThreshold]: depositCollateral.t.sol#L1019
+[test_givenDebt_whenRiskHealthFails_thenDepositRollsBack]: depositCollateral.t.sol#L430
 [test_givenDebt_whenSnapshotRefreshFails_thenIndependentViewAndRollback]: depositCollateral.t.sol#L560
-[test_givenDepositCap_whenActualCreditExceedsCap_reverts]: depositCollateral.t.sol#L364
+[test_givenDepositCap_whenActualCreditExceedsCap_reverts]: depositCollateral.t.sol#L360
 [test_givenDepositManagerDisabled_whenDeposited_reverts]: depositCollateral.t.sol#L628
 [test_givenDepositManagerInactive_whenDeposited_reverts]: depositCollateral.t.sol#L616
-[test_givenDisabledAction_whenInvoked_thenLocalPauseWins]: depositCollateral.t.sol#L959
-[test_givenDisabled_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1277
+[test_givenDisabledAction_whenInvoked_thenLocalPauseWins]: depositCollateral.t.sol#L952
+[test_givenDisabled_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1270
 [test_givenExactDepositCapRoom_whenDeposited_thenCapReached]: depositCollateral.t.sol#L698
-[test_givenExistingCollateral_whenTopUpOverflowsUint128_thenBothPathsRollBack]: depositCollateral.t.sol#L1414
-[test_givenExistingVaultCollateral_whenToppedUpAcrossFullRange_thenActualCreditAddsOnce]: depositCollateralIntegration.t.sol#L286
-[test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized]: depositCollateral.t.sol#L1388
-[test_givenExpiredGrant_whenOperatorActs_reverts]: depositCollateral.t.sol#L924
-[test_givenExpiredGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1500
-[test_givenFirstUnrepresentableCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1375
-[test_givenGrantDeadline_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1491
-[test_givenInactiveAction_whenInvoked_thenOwnAddressIdentified]: depositCollateral.t.sol#L942
-[test_givenInactive_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1260
+[test_givenExistingCollateral_whenTopUpOverflowsUint128_thenBothPathsRollBack]: depositCollateral.t.sol#L1407
+[test_givenDelegatedDeposit_whenAccountCancelsDuringPayerPull_reverts]: depositCollateralCallbacks.t.sol#L210
+[test_givenDelegatedDeposit_whenIdenticalPermissionsReacceptedDuringPayerPull_reverts]: depositCollateralCallbacks.t.sol#L215
+[test_givenDelegatedVaultDeposit_whenActualCreditExceedsGrant_thenFullRollback]: depositCollateralIntegration.t.sol#L297
+[test_givenDelegatedVaultDeposit_whenNominalExceedsGrantButActualCreditEqualsCap_thenAccepted]: depositCollateralIntegration.t.sol#L268
+[test_givenExistingVaultCollateral_whenToppedUpAcrossFullRange_thenActualCreditAddsOnce]: depositCollateralIntegration.t.sol#L364
+[test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized]: depositCollateral.t.sol#L1381
+[test_givenExpiredGrant_whenOperatorActs_reverts]: depositCollateral.t.sol#L917
+[test_givenExpiredGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1493
+[test_givenFirstUnrepresentableCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1368
+[test_givenGrantDeadline_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1484
+[test_givenInactiveAction_whenInvoked_thenOwnAddressIdentified]: depositCollateral.t.sol#L935
+[test_givenInactive_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1253
 [test_givenIncomingOverReceipt_whenDeposited_thenExactTransferBoundaryRejects]: depositCollateral.t.sol#L520
-[test_givenInexactCoreReceipt_whenDeposited_reverts]: depositCollateral.t.sol#L389
-[test_givenManagerPullCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L58
-[test_givenManagerPullCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L74
-[test_givenManagerPullCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L66
-[test_givenManagerPullCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L83
-[test_givenMaximumActualCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1241
+[test_givenInexactCoreReceipt_whenDeposited_reverts]: depositCollateral.t.sol#L385
+[test_givenManagerPullCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L59
+[test_givenManagerPullCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L75
+[test_givenManagerPullCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L67
+[test_givenManagerPullCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L84
+[test_givenMaximumActualCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1234
 [test_givenMaximumCollateral_whenAnotherUnitDeposited_thenSameOverflowAndRollback]: depositCollateral.t.sol#L483
-[test_givenMaximumOperatorDeadline_whenDepositBoundaryTimesUsed]: depositCollateral.t.sol#L1130
+[test_givenMaximumOperatorDeadline_whenDepositBoundaryTimesUsed]: depositCollateral.t.sol#L1123
 [test_givenMaximumVaultCredit_whenFullyWithdrawn_thenFullWidthUnitsPreserved]: withdrawCollateralIntegration.t.sol#L219
 [test_givenMaximumVaultCredit_whenUnderlyingFullyWithdrawn]: withdrawCollateralIntegration.t.sol#L516
-[test_givenMinimumDeposit_whenExactMinimum_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1211
-[test_givenMinimumDeposit_whenImmediatelyBelowMinimum_reverts]: depositCollateral.t.sol#L1195
+[test_givenMinimumDeposit_whenExactMinimum_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1204
+[test_givenMinimumDeposit_whenImmediatelyBelowMinimum_reverts]: depositCollateral.t.sol#L1188
 [test_givenMinimumDeposit_whenInputBelowMinimum_reverts]: depositCollateral.t.sol#L677
-[test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached]: depositCollateral.t.sol#L1083
-[test_givenNoGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1472
-[test_givenNonUnitVaultRate_whenCreditIsMaximum_thenAllReturnsAndCustodyAgree]: depositCollateralIntegration.t.sol#L303
-[test_givenNonUnitVaultRate_whenCreditIsOne_thenAllReturnsAndCustodyAgree]: depositCollateralIntegration.t.sol#L296
-[test_givenNonUnitVaultRate_whenDepositedAcrossFullRange_thenActualCreditAndCustodyAgree]: depositCollateralIntegration.t.sol#L274
+[test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached]: depositCollateral.t.sol#L1076
+[test_givenNoGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1465
+[test_givenNonUnitVaultRate_whenCreditIsMaximum_thenAllReturnsAndCustodyAgree]: depositCollateralIntegration.t.sol#L381
+[test_givenNonUnitVaultRate_whenCreditIsOne_thenAllReturnsAndCustodyAgree]: depositCollateralIntegration.t.sol#L374
+[test_givenNonUnitVaultRate_whenDepositedAcrossFullRange_thenActualCreditAndCustodyAgree]: depositCollateralIntegration.t.sol#L352
 [test_givenOneRawVaultUnit_whenWithdrawn_thenExactOutput]: withdrawCollateralIntegration.t.sol#L224
 [test_givenOneVaultUnit_whenSharesWithdrawn]: withdrawCollateralIntegration.t.sol#L521
 [test_givenOnlyAnotherOperatorPeriod_whenDeposited_reverts]: depositCollateral.t.sol#L648
-[test_givenOperatorFundedDeposit_whenCallbackCaught]: depositCollateralCallbacks.t.sol#L126
-[test_givenOperatorFundedDeposit_whenCallbackPropagated]: depositCollateralCallbacks.t.sol#L134
-[test_givenOperatorGrant_whenAtDeadline_thenDepositSucceeds]: depositCollateral.t.sol#L1122
-[test_givenOperatorGrant_whenBeforeDeadline_thenAllDepositEffectsAgree]: depositCollateral.t.sol#L1109
+[test_givenOperatorFundedDeposit_whenCallbackCaught]: depositCollateralCallbacks.t.sol#L127
+[test_givenOperatorFundedDeposit_whenCallbackPropagated]: depositCollateralCallbacks.t.sol#L135
+[test_givenOperatorGrant_whenAtDeadline_thenDepositSucceeds]: depositCollateral.t.sol#L1115
+[test_givenOperatorGrant_whenBeforeDeadline_thenAllDepositEffectsAgree]: depositCollateral.t.sol#L1102
 [test_givenOriginationsDisabled_givenDebtFreePosition_whenTopUpQuoted_thenCreditReturned]: depositCollateral.t.sol#L160
 [test_givenOriginationsDisabled_givenDebtFreePosition_whenToppedUp_thenExistingPositionCredited]: depositCollateral.t.sol#L170
 [test_givenOriginationsDisabled_givenEmptyPosition_whenTopUpQuoted_thenExistenceAllowsDeposit]: depositCollateral.t.sol#L180
@@ -284,63 +307,64 @@ Rejection preserves authoritative accounting, custody and emitted logs.
 [test_givenOriginationsDisabled_whenFirstDepositAmountSeeds]: depositCollateral.t.sol#L104
 [test_givenOriginationsDisabled_whenOperatorFirstDeposits]: depositCollateral.t.sol#L92
 [test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts]: depositCollateral.t.sol#L888
-[test_givenOversizedActualCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1220
-[test_givenPayerPullCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L24
-[test_givenPayerPullCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L40
-[test_givenPayerPullCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L32
-[test_givenPayerPullCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L49
-[test_givenPreexistingCoreSurplus_whenIncomingReceiptIsShort_reverts]: depositCollateral.t.sol#L1167
-[test_givenProjectedCreditEndpoints_whenPreviewed_reverts]: depositCollateral.t.sol#L1380
+[test_givenOversizedActualCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1213
+[test_givenPayerPullCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L25
+[test_givenPayerPullCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L41
+[test_givenPayerPullCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L33
+[test_givenPayerPullCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L50
+[test_givenPreexistingCoreSurplus_whenIncomingReceiptIsShort_reverts]: depositCollateral.t.sol#L1160
+[test_givenPreparationCallback_whenAuthRotatesAndReturns_reverts]: depositCollateralPriceCallbacks.t.sol#L24
+[test_givenProjectedCreditEndpoints_whenPreviewed_reverts]: depositCollateral.t.sol#L1373
 [test_givenProjectedZeroCredit_whenPreviewed_reverts]: depositCollateral.t.sol#L820
-[test_givenPropagatedUnauthorizedCacheAction_whenDepositing_thenRollback]: depositCollateralPriceCallbacks.t.sol#L88
-[test_givenReEnabledAction_whenDeposited_thenOperational]: depositCollateral.t.sol#L1246
-[test_givenReactivatedAction_whenDeposited_thenOperational]: depositCollateral.t.sol#L1253
-[test_givenRealCacheRefresh_whenFinalHealthReportFails_thenCacheAndSettlementRollBack]: depositCollateralIntegration.t.sol#L337
-[test_givenRealStaleCache_whenToppedUp_thenRefreshAndCanonicalHealthAgree]: depositCollateralIntegration.t.sol#L153
-[test_givenRealStalePrice_whenDepositQuotedOrExecuted_thenRejectsBeforeTransfers]: depositCollateralIntegration.t.sol#L197
-[test_givenReceiptApprovalCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L143
-[test_givenReceiptApprovalCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L166
-[test_givenReceiptApprovalCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L184
-[test_givenReceiptApprovalCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L199
+[test_givenPropagatedUnauthorizedCacheAction_whenDepositing_thenRollback]: depositCollateralPriceCallbacks.t.sol#L128
+[test_givenReEnabledAction_whenDeposited_thenOperational]: depositCollateral.t.sol#L1239
+[test_givenReactivatedAction_whenDeposited_thenOperational]: depositCollateral.t.sol#L1246
+[test_givenRealCacheRefresh_whenFinalHealthReportFails_thenCacheAndSettlementRollBack]: depositCollateralIntegration.t.sol#L415
+[test_givenRealStaleCache_whenToppedUp_thenRefreshAndCanonicalHealthAgree]: depositCollateralIntegration.t.sol#L158
+[test_givenRealStalePrice_whenDepositQuotedOrExecuted_thenRejectsBeforeTransfers]: depositCollateralIntegration.t.sol#L202
+[test_givenReceiptApprovalCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L144
+[test_givenReceiptApprovalCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L167
+[test_givenReceiptApprovalCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L185
+[test_givenReceiptApprovalCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L200
 [test_givenReceiptBurnApprovalRejected_whenDeposited_thenFullRollback]: depositCollateral.t.sol#L780
-[test_givenReportedKernelMismatch_whenDeposited_thenGetterIsNotRead]: depositCollateral.t.sol#L997
-[test_givenRevokedGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1513
-[test_givenRoundedVaultCredit_whenHealthExactlyOne_thenAccepted]: depositCollateralIntegration.t.sol#L130
-[test_givenRoundedVaultCredit_whenHealthyTopUp_thenRealHealthUsesActualCredit]: depositCollateralIntegration.t.sol#L28
-[test_givenRoundedVaultCredit_whenPartialTopUp_thenRealHealthUsesActualCredit]: depositCollateralIntegration.t.sol#L34
-[test_givenSettlementRoleRevoked_whenDepositing_thenBothPathsReject]: depositCollateral.t.sol#L1157
-[test_givenStaleRealCache_whenPriceFeedFails_thenQuoteAndExecutionRollBack]: depositCollateralIntegration.t.sol#L314
+[test_givenReportedKernelMismatch_whenDeposited_thenGetterIsNotRead]: depositCollateral.t.sol#L990
+[test_givenRevokedGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1506
+[test_givenRoundedVaultCredit_whenHealthExactlyOne_thenAccepted]: depositCollateralIntegration.t.sol#L135
+[test_givenRoundedVaultCredit_whenHealthyTopUp_thenRealHealthUsesActualCredit]: depositCollateralIntegration.t.sol#L33
+[test_givenRoundedVaultCredit_whenPartialTopUp_thenRealHealthUsesActualCredit]: depositCollateralIntegration.t.sol#L39
+[test_givenSettlementRoleRevoked_whenDepositing_thenBothPathsReject]: depositCollateral.t.sol#L1150
+[test_givenStaleRealCache_whenPriceFeedFails_thenQuoteAndExecutionRollBack]: depositCollateralIntegration.t.sol#L392
 [test_givenSynchronousVault_whenSharesWithdrawn]: withdrawCollateralIntegration.t.sol#L508
 [test_givenSynchronousVault_whenUnderlyingWithdrawn]: withdrawCollateralIntegration.t.sol#L500
-[test_givenUnavailableCore_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1293
-[test_givenUnhealthyDebt_whenPartialTopUpIsDeposited_thenUnhealthyHealthIsReturned]: depositCollateralIntegration.t.sol#L226
+[test_givenUnauthorizedAuthCallback_whenFailureCaught_thenOriginalGrantCompletes]: depositCollateralCallbacks.t.sol#L262
+[test_givenUnauthorizedAuthCallback_whenFailurePropagated_thenFullRollback]: depositCollateralCallbacks.t.sol#L305
+[test_givenUnavailableCore_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1286
+[test_givenUnhealthyDebt_whenPartialTopUpIsDeposited_thenUnhealthyHealthIsReturned]: depositCollateralIntegration.t.sol#L231
 [test_givenUnrepresentableProjectedCredit_whenPreviewed_reverts]: depositCollateral.t.sol#L838
-[test_givenValidGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1483
-[test_givenVariableDebtAndCollateral_whenToppedUp_thenExactHealthHandoff]: depositCollateral.t.sol#L1309
-[test_givenVaultCapZero_whenMaximumCredit_thenBothPathsReject]: depositCollateralIntegration.t.sol#L145
-[test_givenVaultCap_whenOneOverRoom_thenBothPathsReject]: depositCollateralIntegration.t.sol#L137
-[test_givenVaultDepositCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L92
-[test_givenVaultDepositCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L108
-[test_givenVaultDepositCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L100
-[test_givenVaultDepositCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L117
-[test_givenVaultDepositCap_whenActualCreditExceedsRoom_thenFullRollback]: depositCollateralIntegration.t.sol#L85
-[test_givenVaultMisreportsShares_whenDeposited_thenReceiptDeltaEnforced]: depositCollateralIntegration.t.sol#L40
-[test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted]: depositCollateralIntegration.t.sol#L256
-[test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted]: depositCollateralIntegration.t.sol#L249
-[test_givenZeroDepositManagerCredit_whenDeposited_reverts]: depositCollateral.t.sol#L416
+[test_givenValidGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1476
+[test_givenVariableDebtAndCollateral_whenToppedUp_thenExactHealthHandoff]: depositCollateral.t.sol#L1302
+[test_givenVaultCapZero_whenMaximumCredit_thenBothPathsReject]: depositCollateralIntegration.t.sol#L150
+[test_givenVaultCap_whenOneOverRoom_thenBothPathsReject]: depositCollateralIntegration.t.sol#L142
+[test_givenVaultDepositCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L93
+[test_givenVaultDepositCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L109
+[test_givenVaultDepositCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L101
+[test_givenVaultDepositCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L118
+[test_givenVaultDepositCap_whenActualCreditExceedsRoom_thenFullRollback]: depositCollateralIntegration.t.sol#L90
+[test_givenVaultMisreportsShares_whenDeposited_thenReceiptDeltaEnforced]: depositCollateralIntegration.t.sol#L45
+[test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted]: depositCollateralIntegration.t.sol#L261
+[test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted]: depositCollateralIntegration.t.sol#L254
+[test_givenZeroDepositManagerCredit_whenDeposited_reverts]: depositCollateral.t.sol#L412
 [test_whenAmountIsZero_reverts]: depositCollateral.t.sol#L43
-[test_whenAnyViewerQuotesWithoutAuthorizationRead]: depositCollateral.t.sol#L1437
+[test_whenAnyViewerQuotesWithoutAuthorizationRead]: depositCollateral.t.sol#L1430
 [test_whenAssetIsUnregistered_reverts]: depositCollateral.t.sol#L52
-[test_whenBorrowerIsZero_thenPreviewAndExecutionReject]: depositCollateral.t.sol#L1141
+[test_whenBorrowerIsZero_thenPreviewAndExecutionReject]: depositCollateral.t.sol#L1134
 [test_whenCallerIsUnauthorized_reverts]: depositCollateral.t.sol#L354
-[test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1091
-[test_whenMaximumDeposited_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1104
-[test_whenOneUnitDeposited_thenFullCredit]: depositCollateral.t.sol#L1099
+[test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1084
+[test_whenMaximumDeposited_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1097
+[test_whenOneUnitDeposited_thenFullCredit]: depositCollateral.t.sol#L1092
 [test_whenTransferFromReturnsFalse_thenNoCredit]: depositCollateral.t.sol#L720
 [test_whenTransferFromReverts_thenExactErrorAndNoCredit]: depositCollateral.t.sol#L751
-[test_whenViewerHasAnotherPosition_thenSpecifiedBorrowerQuoted]: depositCollateral.t.sol#L1527
-[test_whenZeroAsset_thenExactRegistrationError]: depositCollateral.t.sol#L1432
-
-[test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement]: ./depositCollateral.t.sol#L1544
-
-[test_givenDebtFreeAndBackingPaused_whenCollateralChanged]: ./depositCollateral.t.sol#L1571
+[test_whenViewerHasAnotherPosition_thenSpecifiedBorrowerQuoted]: depositCollateral.t.sol#L1520
+[test_whenZeroAsset_thenExactRegistrationError]: depositCollateral.t.sol#L1425
+[test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement]: ./depositCollateral.t.sol#L1537
+[test_givenDebtFreeAndBackingPaused_whenCollateralChanged]: ./depositCollateral.t.sol#L1564

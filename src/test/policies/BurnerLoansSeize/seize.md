@@ -138,11 +138,9 @@ Treasury allocation is actual integer output minus the already-rounded keeper re
 
 The modular campaign retains the removed legacy share invariant's multi-borrower scope. It uses three
 borrowers, an 18-decimal asset and a separate 6-decimal share token. Deposits span 1..100,000 asset
-units; oracle prices span $0.50..$2; time advances span 1 second..31 days. Yield, direct and composite
-withdrawals, repayments, nonzero origination fees, permissionless and periodic seizure, Inventory supply/withdrawal, origination
-pauses, withdrawal-mode changes and asynchronous-redemption drift are interleaved. Partial composite
-exits conservatively retain five collateral units per remaining OHM within this price range. Deterministic setup
-exercises each restored settlement path before fuzzing. Assertions and unexpected execution reverts fail
+units; oracle prices span $0.50..$2; time advances span 1 second..31 days. Yield, direct withdrawals, repayments, nonzero origination fees, permissionless and periodic seizure, Inventory supply/withdrawal, origination
+pauses, withdrawal-mode changes and asynchronous-redemption drift are interleaved. Deterministic setup exercises partial and full repayment with share withdrawals between them,
+then each remaining settlement path before fuzzing. Assertions and unexpected execution reverts fail
 the campaign; empty balances or unavailable modeled inputs may skip an operation.
 
 | ID | Caller | Sequence | Required properties | Test |
@@ -238,7 +236,7 @@ The Lens maturity predicate remains true independently of backing readiness.
 | BLLIQ-SEIZE-D13 | true | false | Public keeper / HEART_ROLE keeper, guarantee both | PolicyDependency_NotActive(oracle); debt, custody and payouts unchanged | Covered: [test][test_givenMaturedDebtAndBackingPaused_whenSeized_reverts] |
 
 [invariant_modelMatchesEveryAuthoritativeLedger]: accounting.invariants.t.sol#L39
-[invariant_shareCustodyAndPositionAccountingConserve]: seizeShares.invariant.t.sol#L197
+[invariant_shareCustodyAndPositionAccountingConserve]: seizeShares.invariant.t.sol#L203
 [test_givenActionKernelGetterReverts_whenAnyKeeperSeizes]: seize.t.sol#L433
 [test_givenActionKernelGetterReverts_whenSeized_thenGetterIsNotRead]: seize.t.sol#L407
 [test_givenActionReEnabled_whenSeized_thenDefaultSucceeds]: seize.t.sol#L541
@@ -293,6 +291,7 @@ The Lens maturity predicate remains true independently of backing readiness.
 [test_givenUnhealthyDebt_whenSeized_thenDefaultAndPayoutConserveOutput]: seize.t.sol#L115
 [test_givenZeroBorrowerAtAnyIndex_whenSeized_reverts]: seize.t.sol#L277
 [test_givenZeroCollateralDebt_whenSeized_thenDebtDefaultsWithoutRedemption]: seizeIntegration.t.sol#L147
+[test_givenZeroReward_whenKeeperDestinationUnused]: seizePayout.t.sol#L155
 [test_whenAdjacentDuplicate_reverts]: seize.t.sol#L166
 [test_whenBatchEmpty_reverts]: seize.t.sol#L135
 [test_whenBatchFiftyOneContainsZeroBorrower_reverts]: seize.t.sol#L341
@@ -307,11 +306,9 @@ The Lens maturity predicate remains true independently of backing readiness.
 [test_whenLargeBatchContainsZeroBorrower_reverts]: seize.t.sol#L144
 [test_whenMaxUint8BorrowersSeized_thenEveryPositionSettledOnce]: seizeBatch.t.sol#L123
 [test_whenNonAdjacentDuplicate_reverts]: seize.t.sol#L181
+[test_whenPayoutKeeperSeizes_reverts]: seizePayout.t.sol#L139
 [test_whenPermissionlessKeeperSeizes_thenForwardsKeeperAndCoreResult]: seize.t.sol#L62
 [test_whenValidBatchSeized_thenEveryPositionSettledOnce]: seizeBatch.t.sol#L22
-[test_whenZeroBorrowerAtFirstMiddleAndLast_reverts]: seize.t.sol#L346
 [test_whenZeroAddressKeeperSeizes_reverts]: seizePayout.t.sol#L123
-[test_whenPayoutKeeperSeizes_reverts]: seizePayout.t.sol#L139
-[test_givenZeroReward_whenKeeperDestinationUnused]: seizePayout.t.sol#L155
-
 [test_givenMaturedDebtAndBackingPaused_whenSeized_reverts]: ./seizeIntegration.t.sol#L231
+[test_whenZeroBorrowerAtFirstMiddleAndLast_reverts]: seize.t.sol#L346

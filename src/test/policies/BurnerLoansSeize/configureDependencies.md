@@ -1,6 +1,6 @@
 # BurnerLoansSeize.configureDependencies coverage plan
 
-Source: [configureDependencies](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L123). Coverage mappings below identify the implemented Foundry proofs.
+Source: [configureDependencies](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L128). Coverage mappings below identify the implemented Foundry proofs.
 
 ## Domains and notation
 

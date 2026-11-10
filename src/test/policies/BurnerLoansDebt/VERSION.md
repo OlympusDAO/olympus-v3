@@ -1,6 +1,6 @@
 # BurnerLoansDebt.VERSION coverage plan
 
-Source: [VERSION](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L208). Implemented and mapped to the focused Foundry suite.
+Source: [VERSION](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L213). Implemented and mapped to the focused Foundry suite.
 
 ## Domains and notation
 

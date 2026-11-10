@@ -1,6 +1,6 @@
 # BurnerLoansDebt.configureDependencies coverage plan
 
-Source: [configureDependencies](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L123). Implemented and mapped to the focused Foundry suite.
+Source: [configureDependencies](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L128). Implemented and mapped to the focused Foundry suite.
 
 ## Domains and notation
 

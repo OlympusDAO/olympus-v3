@@ -1,6 +1,6 @@
 # BurnerLoansCore.settleRepay coverage plan
 
-Source: [settleRepay](../../../policies/burnerloans/BurnerLoansCore.sol#L355). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleRepay](../../../policies/burnerloans/BurnerLoansCore.sol#L467). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -129,4 +129,4 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 [test_whenOverpaymentMaximumSeed_reverts]: settleRepay.t.sol#L415
 [test_whenRepaymentBoundarySeeds]: settleRepay.t.sol#L237
 
-[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L963
+[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L987

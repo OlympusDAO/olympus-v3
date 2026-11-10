@@ -115,7 +115,7 @@ contract BurnerLoansDebtRepayPriceCallbacksTest is BurnerLoansDebtPriceCallbackT
         assertEq(_inventory.activePrincipalOhm(), 100e9 - 1, "Only outer repayment");
         assertEq(
             _cache.rejection(),
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             "Exact caught failure"
         );
     }
@@ -125,7 +125,7 @@ contract BurnerLoansDebtRepayPriceCallbacksTest is BurnerLoansDebtPriceCallbackT
         _prepareDebtAndCacheRepayer();
         _armUnauthorizedBorrow(true);
         bytes32 rollbackBefore = _priceStateDigest();
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
         vm.prank(_borrower);
         _debt.repay(address(_asset), 1, _borrower);
         assertEq(_inventory.activePrincipalOhm(), 100e9, "No repayment after refresh failure");

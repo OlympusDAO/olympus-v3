@@ -4,7 +4,7 @@ Ordinary mutations apply existing reentrancy guards, own Kernel activity, requir
 
 ## Purpose
 
-This reference describes the modular contracts and their current authority checks. The [main guide](burner_loans.md) covers the execution graph and deployment order.
+This reference describes the modular contracts and their current authority checks. The [main guide](burner_loans.md) covers the execution graph and deployment order. The [OperatorAuth guide](operator_auth.md) defines grant/signature formats, lifetimes and cancellation scope.
 
 `admin` means the Kernel role. OCG governance is its expected holder, but these contracts do not add an OCG delay to a direct admin call. A selected config operator is an address-level delegation. Its own implementation determines whether it adds a delay.
 
@@ -37,15 +37,18 @@ A queue does not remove direct ADMIN authority. Revoking a queue as config opera
 | Risk's local config operator | RiskConfigTimelock for delayed referral and cache-age settings; Config remains an alternative for cache-age forwarding |
 | Payout's local config operator | Usually PayoutConfigTimelock for flags and recovery |
 | Inventory's local config operator | Independently selected surplus-recovery authority |
-| Borrower-authorized operator | May act for that borrower until the Core-stored grant expires |
+| Borrower-authorized operator | May perform selected actions under a live grant on Core's selected Auth, subject to resulting-position limits |
 
 Settlement roles authenticate the caller directly. Core does not additionally require the caller to be an active Policy or report the same Kernel. Assign those roles only to reviewed settlement callers.
+
+Core also validates the original user authorization before and after protected settlement. It trusts admitted actions to forward their actual public caller, and selected Auth to authenticate that account/operator and interpret permissions. ADMIN selecting malicious Auth can compromise authorization; interface and Core-binding checks establish compatibility rather than honesty. Auth holds no custody or Kernel module write authority.
 
 ## Configuration matrix
 
 | Contract | Function | Authorized caller | Required state or validation |
 | --- | --- | --- | --- |
 | Core | `setRisk`, `setInventory`, `setPayout` | ADMIN | Core active and idle; compatible candidate active/enabled, same Core and Kernel; additional OHM/accounting checks apply |
+| Core | `setAuth` | ADMIN | Core active and settlement idle; local disablement permitted; nonzero changed compatible Auth with immutable Core binding; successful selection advances global epoch |
 | Core | `setConfigOperator` | ADMIN | Core active and idle; nonzero, changed authority; atomic registered-market manager handoff |
 | Config | `setConfigOperator` | ADMIN | Config active and enabled; zero revokes delegation |
 | Config | `addAsset` | ADMIN | Config active/enabled and downstream custody, price and registration checks pass |
@@ -68,6 +71,8 @@ Settlement roles authenticate the caller directly. Core does not additionally re
 | YieldClaimerTask | Gas limit, attempt threshold, reserve and cursor setters | ADMIN or `burner_loans_admin` | Task Kernel-active; valid limits/index; local disablement permitted |
 
 Core rejects a zero or unchanged config operator. Its operator setter does not inspect the upstream operator's code, interface, Kernel or lifecycle. Config validates its own binding when activated. Risk, Inventory and Payout controllers do not change when Core's controller changes.
+
+Auth is an ordinary Core-bound contract, not a Kernel Policy. It records an independently supplied immutable Kernel and checks that Core reports the same Kernel at construction. Auth uses no Kernel roles or module permissions, so no Policy installation/activation is needed. It has no independent enable/disable, re-enable grace or config operator. Grant creation and operative authorization require Auth selected and Core active/enabled in that Kernel. Runtime checks verify Core's reported Kernel and actual registry membership; Core migration requires selecting a new Auth bound to the new Kernel. Local cancellation deliberately bypasses Core lifecycle/selection checks. Selecting Auth does not require the candidate already to be selected, and Core cannot enable/re-enable with no Auth.
 
 Contract pointers generally reject unchanged values. Numeric no-ops retain each setter's existing validation order. Do not assume an unchanged request bypasses authorization or dependency checks.
 
@@ -123,7 +128,10 @@ Payout uses a seven-day default grace window measured from its last transition. 
 
 | Contract | Entry point | Caller |
 | --- | --- | --- |
-| Core | Authorization grant/cancellation | Borrower; a valid signed grant can be relayed |
+| Auth | `approveGrant` | The account itself, including a Safe executing its own transaction |
+| Auth | `acceptGrant` | Designated operator only; valid account EOA/ERC-1271 signature required |
+| Auth | `cancelGrant`, `cancelAllGrants` | The account itself; local Auth cancellation remains available while retired or Core disabled/inactive |
+| Auth | Stored-grant, capture and validation views | Any caller; a returned context does not authorize its holder to settle |
 | Collateral | Deposit/withdraw | Borrower or an authorized operator |
 | Debt | Borrow/extend | Borrower or an authorized operator |
 | Debt | Repay | Any payer using its own OHM |
@@ -138,6 +146,12 @@ Payout uses a seven-day default grace window measured from its last transition. 
 | Either task | `selfExecuteTask` | The task itself |
 
 Action previews and Lens reads are permissionless. They retain their applicable input, lifecycle and economic checks. A preview is not a borrower authorization or an executable commitment.
+
+An account's intrinsic authority needs no self-grant. Delegation uses deposit/borrow/withdraw/extend bits `0x01/0x02/0x04/0x08`; unsupported single-action checks fail before owner bypass. Temporary grants permit repeated selected actions only in the accepting transaction. Reusable grants remain live through their deadline until replacement, cancellation or context invalidation. Repayment and seizure do not acquire borrower-grant requirements.
+
+Account/pair epochs belong to each Auth instance and are independent of its custom storage-key context. Account-wide cancellation invalidates old local account epochs, including future pair/global requests within that Auth. It does not cancel independently signed requests for another Auth. Clients must distinguish cancellation on retired A from cancellation on current B.
+
+Core changing Auth invalidates previous installation grants and contexts through its private monotonic epoch, returned with the selected Auth by `authConfig()`, even for A to B to A selection. EOAs/Safes must reapprove. Core's shared guard blocks pointer rotation during settlement; narrow Auth cancellation/replacement calls can still invalidate the original grant during callbacks, causing completion to reject and roll back that settlement.
 
 ## Limits of each authority
 

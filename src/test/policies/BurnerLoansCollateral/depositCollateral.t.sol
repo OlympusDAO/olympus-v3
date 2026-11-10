@@ -16,7 +16,9 @@ import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTok
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {Actions} from "src/Kernel.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 import {BL_COLLATERAL_POLICY_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
@@ -25,8 +27,6 @@ import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.so
 // Contracts
 import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {BurnerLoansCollateralActionTest} from "./fixtures/BurnerLoansCollateralActionTest.sol";
-import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
-import {Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 
@@ -352,12 +352,8 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-A06.
     function test_whenCallerIsUnauthorized_reverts(address caller_) public {
-        vm.assume(!_core.isSenderAuthorized(caller_, _borrower));
-        _expectDepositExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
-            caller_,
-            1
-        );
+        vm.assume(!_isSenderAuthorized(caller_, _borrower));
+        _expectDepositExecutionRevert(_unauthorizedOperatorError(caller_), caller_, 1);
     }
 
     // Scenarios: BLCOL-DEPOSIT-N06.
@@ -464,12 +460,16 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-A08.
     function test_givenAuthorizationExpired_whenOperatorDeposits_reverts(uint48 elapsed_) public {
-        elapsed_ = uint48(bound(elapsed_, 1, type(uint48).max - block.timestamp - 1));
+        uint256 timestamp = vm.getBlockTimestamp();
+        elapsed_ = uint48(bound(elapsed_, 1, type(uint48).max - timestamp - 1));
+        uint48 deadline = uint48(timestamp + 1);
         vm.prank(_borrower);
-        _core.setAuthorization(_recipient, uint48(block.timestamp + 1));
-        vm.warp(block.timestamp + 1 + elapsed_);
+        _approveOperator(_borrower, _recipient, deadline);
+        vm.warp(timestamp + 1 + elapsed_);
         bytes32 rollbackState = _accountingDigest(address(_asset));
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_ExpiredGrant.selector, deadline)
+        );
         vm.prank(_recipient);
         _collateral.depositCollateral(address(_asset), 1e6, _borrower);
         assertEq(
@@ -894,13 +894,9 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         deadline_ = uint48(bound(deadline_, 2, type(uint48).max));
         _grantOperator(deadline_);
         vm.warp(bound(now_, 1, deadline_));
-        _expectDepositExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
-            caller_,
-            1
-        );
+        _expectDepositExecutionRevert(_unauthorizedOperatorError(caller_), caller_, 1);
         assertEq(
-            _core.authorizationDeadlines(_borrower, _recipient),
+            _authorizationDeadline(_borrower, _recipient),
             deadline_,
             "Unrelated caller preserves valid grant"
         );
@@ -908,16 +904,13 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-A07.
     function test_givenCancelledGrant_whenOperatorActs_reverts(address caller_) public {
+        vm.assume(caller_ != address(0));
         vm.assume(caller_ != _borrower);
         vm.startPrank(_borrower);
-        _core.setAuthorization(caller_, type(uint48).max);
-        _core.cancelAuthorization(caller_);
+        _approveOperator(_borrower, caller_, type(uint48).max);
+        _auth.cancelGrant(caller_);
         vm.stopPrank();
-        _expectDepositExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
-            caller_,
-            1
-        );
+        _expectDepositExecutionRevert(_unauthorizedOperatorError(caller_), caller_, 1);
     }
 
     // Scenarios: BLCOL-DEPOSIT-A08.
@@ -928,11 +921,11 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         deadline_ = uint48(bound(deadline_, 1, type(uint48).max));
         vm.warp(1);
         vm.prank(_borrower);
-        _core.setAuthorization(_recipient, deadline_);
+        _approveOperator(_borrower, _recipient, deadline_);
         now_ = bound(now_, uint256(deadline_) + 1, type(uint256).max);
         vm.warp(now_);
         _expectDepositExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_ExpiredGrant.selector, deadline_),
             _recipient,
             1
         );
@@ -1441,9 +1434,9 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         // Poison the complete authorization selector: neither viewer nor borrower grants may be read.
         vm.mockCallRevert(
-            address(_core),
-            abi.encodeWithSelector(IOperatorAuth.isSenderAuthorized.selector),
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector)
+            address(_auth),
+            abi.encodeWithSelector(IOperatorAuth.captureAuthorization.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector)
         );
         _assertPermissionlessQuote(viewer_, amount_);
     }
@@ -1473,7 +1466,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer, 7);
         _expectDepositExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             _recipient,
             7
         );
@@ -1503,7 +1496,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer, 7);
         _expectDepositExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_ExpiredGrant.selector, uint48(10)),
             _recipient,
             7
         );
@@ -1513,11 +1506,11 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     function test_givenRevokedGrant_whenUnrelatedViewerQuotes() public {
         _grantOperator(10);
         vm.prank(_borrower);
-        _core.cancelAuthorization(_recipient);
+        _auth.cancelGrant(_recipient);
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer, 7);
         _expectDepositExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             _recipient,
             7
         );

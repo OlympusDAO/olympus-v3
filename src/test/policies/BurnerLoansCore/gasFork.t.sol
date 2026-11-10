@@ -26,6 +26,7 @@ import {Actions, Kernel, toKeycode} from "src/Kernel.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {BurnerLoansAuth} from "src/policies/burnerloans/BurnerLoansAuth.sol";
 import {BurnerLoansCollateral} from "src/policies/burnerloans/BurnerLoansCollateral.sol";
 import {BurnerLoansConfig} from "src/policies/burnerloans/BurnerLoansConfig.sol";
 import {BurnerLoansCore} from "src/policies/burnerloans/BurnerLoansCore.sol";
@@ -490,6 +491,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         _inventory.setConfigOperator(address(_burnerLoansConfig));
         _inventory.enable("");
         _core.setInventory(address(_inventory));
+        _core.setAuth(address(new BurnerLoansAuth(address(_kernel), address(_core))));
 
         _depositManager.enable("");
         _depositManager.setOperatorName(address(_core), "brn");

@@ -1,6 +1,6 @@
 # BurnerLoansSeize.VERSION coverage plan
 
-Source: [VERSION](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L208). Coverage mappings below identify the implemented Foundry proofs.
+Source: [VERSION](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L213). Coverage mappings below identify the implemented Foundry proofs.
 
 ## Domains and notation
 

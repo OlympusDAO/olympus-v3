@@ -2,9 +2,11 @@
 
 > Referral scenarios below supplement the retained baseline. Their mappings identify the additional assertions for the extended API.
 
-Source: [settleExtend](../../../policies/burnerloans/BurnerLoansCore.sol#L381). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleExtend](../../../policies/burnerloans/BurnerLoansCore.sol#L496). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
+
+The settlement ABI uses `ExtendRequest`, which carries asset, borrower, payer, maturity, protocolFee, referrer and referralFee. Operator and original authorization context remain separate arguments. Existing scenario outcomes, numeric domains, identity distinctions, callbacks and rollback assertions are unchanged.
 
 ## Domains and notation
 
@@ -29,7 +31,7 @@ Fixed for this table: Local active: true; Local enabled: true.
 | ID | Caller | Required role held | Execution | Test |
 | --- | --- | --- | --- | --- |
 | BLCORE-SETTLE-EXTEND-A01 | BL_DEBT_POLICY_ROLE holder | true | Body executes | Covered: [test][test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer] |
-| BLCORE-SETTLE-EXTEND-A02 | Fuzz EOA/contracts excluding every BL_DEBT_POLICY_ROLE holder | false | ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | Covered: [test][test_whenCallerLacksSettlementRole_reverts] |
+| BLCORE-SETTLE-EXTEND-A02 | Fuzz EOA/contracts excluding every BL_DEBT_POLICY_ROLE holder | false | ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | Covered: [test][test_whenCallerLacksSettlementRole_reverts]  [valid captured authority][test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts] |
 | BLCORE-SETTLE-EXTEND-A03 | Policy holding only sibling operation role | false | ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | Covered: [test][test_givenOnlySiblingRole_whenSettled_reverts] |
 | BLCORE-SETTLE-EXTEND-A04 | Role-holding policy reporting another Kernel | true | Body executes; no caller Kernel or membership query | Covered: [test][test_givenWrongKernelCaller_whenSettled] |
 
@@ -125,38 +127,58 @@ Caller holds BL_DEBT_POLICY_ROLE. P and R are independent uint256 raw collateral
 
 The owner argument is accrual-event context only. Core already has asset/borrower; no new Risk call, position lookup or stored referral relationship is required to obtain it.
 
-[test_givenAdminMutationCallback_whenCaught]: settleExtend.t.sol#L414
-[test_givenAdminMutationCallback_whenPropagated]: settleExtend.t.sol#L451
-[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleExtend.t.sol#L112
-[test_givenCallerInactive_whenSettled]: settleExtend.t.sol#L99
-[test_givenCoreDisabled_whenSettled_reverts]: settleExtend.t.sol#L74
-[test_givenCoreInactive_whenSettled_reverts]: settleExtend.t.sol#L84
-[test_givenExpiredNewMaturity_whenExtended_reverts]: settleExtend.t.sol#L200
-[test_givenHorizonExceeded_whenExtended_reverts]: settleExtend.t.sol#L215
-[test_givenMandatoryFeeFailure_whenExtended_reverts]: settleExtend.t.sol#L251
-[test_givenMissingPosition_whenExtended_reverts]: settleExtend.t.sol#L234
-[test_givenNoDebt_whenExtended_reverts]: settleExtend.t.sol#L167
-[test_givenNotLater_whenExtended_reverts]: settleExtend.t.sol#L185
-[test_givenOnlySiblingRole_whenSettled_reverts]: settleExtend.t.sol#L49
-[test_givenOptionalFeeCallback_whenCaught]: settleExtend.t.sol#L568
-[test_givenOptionalFeeCallback_whenPropagated]: settleExtend.t.sol#L610
-[test_givenOptionalPayoutFailure_whenExtended]: settleExtend.t.sol#L308
-[test_givenOriginationsDisabled_whenExtended_reverts]: settleExtend.t.sol#L142
-[test_givenPayoutRecoveryCallback_whenCaught]: settleExtend.t.sol#L487
-[test_givenPayoutRecoveryCallback_whenPropagated]: settleExtend.t.sol#L528
-[test_givenRoleHoldingEOA_whenSettled]: settleExtend.t.sol#L105
-[test_givenSettlementCallback_whenCaught]: settleExtend.t.sol#L331
-[test_givenSettlementCallback_whenPropagated]: settleExtend.t.sol#L373
-[test_givenValidMaturity_whenExtended]: settleExtend.t.sol#L275
-[test_givenWrongKernelCaller_whenSettled]: settleExtend.t.sol#L60
-[test_whenCallerLacksSettlementRole_reverts]: settleExtend.t.sol#L37
-[test_whenMaturityMaximumSeed_reverts]: settleExtend.t.sol#L658
-[test_whenFeeComponentsForwarded]: settleExtend.t.sol#L663
-[test_whenLiteralComponentFunding]: settleExtend.t.sol#L760
-[test_whenOnlyReferralFunded]: settleExtend.t.sol#L765
-[test_whenOnlyProtocolFunded]: settleExtend.t.sol#L770
-[test_whenMaximumFundableProtocolComponent]: settleExtend.t.sol#L785
-[test_whenMaximumFundableReferralComponent]: settleExtend.t.sol#L791
-[test_whenFeeComponentSumOverflows_reverts]: settleExtend.t.sol#L716
-[test_whenMinimumProtocolOverflows_reverts]: settleExtend.t.sol#L775
-[test_whenMaximumProtocolOverflows_reverts]: settleExtend.t.sol#L780
+## Delegated completion
+
+Core, the selected Auth and the admitted Debt action are active/enabled. Account A has a reusable extension grant for O and existing debt. M is the current canonical maturity; all timestamps are absolute seconds and fees are zero.
+
+| ID | Caller | Current maturity | Requested maturity | maxMaturity | Execution / effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-EXTEND-N90 | Debt action forwarding O | M | M+86401 | M+86400 | ResultOutsideGrant: one second above the cap; position and fee accounting roll back | Covered: [test][test_givenDelegatedGrant_whenActualMaturityExceedsLimit_reverts] |
+| BLCORE-SETTLE-EXTEND-P90 | Debt action forwarding O | M | M+86400 | M+86400 | Success; canonical maturity equals the inclusive cap | Covered: [test][test_givenDelegatedGrant_whenActualMaturityEqualsLimit] |
+
+## Request ABI validation
+
+| ID | Caller | Raw economic field | Execution | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-EXTEND-I05 | Unadmitted recipient account | maturity > uint48 maximum | Compiler ABI rejection before role checks; empty returndata | Custody and positions unchanged | Covered: [test][test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck] |
+
+[test_givenAdminMutationCallback_whenCaught]: settleExtend.t.sol#L624
+[test_givenAdminMutationCallback_whenPropagated]: settleExtend.t.sol#L653
+[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleExtend.t.sol#L234
+[test_givenCallerInactive_whenSettled]: settleExtend.t.sol#L221
+[test_givenCoreDisabled_whenSettled_reverts]: settleExtend.t.sol#L172
+[test_givenCoreInactive_whenSettled_reverts]: settleExtend.t.sol#L194
+[test_givenDelegatedGrant_whenActualMaturityEqualsLimit]: authorizationLifecycleExtend.t.sol#L45
+[test_givenDelegatedGrant_whenActualMaturityExceedsLimit_reverts]: authorizationLifecycleExtend.t.sol#L15
+[test_givenExpiredNewMaturity_whenExtended_reverts]: settleExtend.t.sol#L358
+[test_givenHorizonExceeded_whenExtended_reverts]: settleExtend.t.sol#L387
+[test_givenMandatoryFeeFailure_whenExtended_reverts]: settleExtend.t.sol#L447
+[test_givenMissingPosition_whenExtended_reverts]: settleExtend.t.sol#L422
+[test_givenNoDebt_whenExtended_reverts]: settleExtend.t.sol#L307
+[test_givenNotLater_whenExtended_reverts]: settleExtend.t.sol#L331
+[test_givenOnlySiblingRole_whenSettled_reverts]: settleExtend.t.sol#L135
+[test_givenOptionalFeeCallback_whenCaught]: settleExtend.t.sol#L746
+[test_givenOptionalFeeCallback_whenPropagated]: settleExtend.t.sol#L780
+[test_givenOptionalPayoutFailure_whenExtended]: settleExtend.t.sol#L520
+[test_givenOriginationsDisabled_whenExtended_reverts]: settleExtend.t.sol#L274
+[test_givenPayoutRecoveryCallback_whenCaught]: settleExtend.t.sol#L681
+[test_givenPayoutRecoveryCallback_whenPropagated]: settleExtend.t.sol#L714
+[test_givenRoleHoldingEOA_whenSettled]: settleExtend.t.sol#L227
+[test_givenSettlementCallback_whenCaught]: settleExtend.t.sol#L557
+[test_givenSettlementCallback_whenPropagated]: settleExtend.t.sol#L591
+[test_givenValidMaturity_whenExtended]: settleExtend.t.sol#L479
+[test_givenWrongKernelCaller_whenSettled]: settleExtend.t.sol#L158
+[test_whenCallerLacksSettlementRole_reverts]: settleExtend.t.sol#L111
+[test_whenFeeComponentSumOverflows_reverts]: settleExtend.t.sol#L888
+[test_whenFeeComponentsForwarded]: settleExtend.t.sol#L827
+[test_whenLiteralComponentFunding]: settleExtend.t.sol#L938
+[test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck]: ./settleExtend.t.sol#L40
+[test_whenMaturityMaximumSeed_reverts]: settleExtend.t.sol#L820
+[test_whenMaximumFundableProtocolComponent]: settleExtend.t.sol#L963
+[test_whenMaximumFundableReferralComponent]: settleExtend.t.sol#L969
+[test_whenMaximumProtocolOverflows_reverts]: settleExtend.t.sol#L958
+[test_whenMinimumProtocolOverflows_reverts]: settleExtend.t.sol#L953
+[test_whenOnlyProtocolFunded]: settleExtend.t.sol#L948
+[test_whenOnlyReferralFunded]: settleExtend.t.sol#L943
+
+[test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts]: ./settleExtend.t.sol#L65

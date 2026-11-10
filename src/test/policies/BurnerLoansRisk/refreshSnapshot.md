@@ -1,6 +1,6 @@
 # BurnerLoansRisk.refreshSnapshot coverage plan
 
-Source: [refreshSnapshot](../../../policies/burnerloans/BurnerLoansRisk.sol#L232). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [refreshSnapshot](../../../policies/burnerloans/BurnerLoansRisk.sol#L227). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 

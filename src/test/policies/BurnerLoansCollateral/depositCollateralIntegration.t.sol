@@ -2,13 +2,18 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IBurnerLoansAuth} from "src/policies/interfaces/burnerloans/IBurnerLoansAuth.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
+
+// Libraries
+import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 
 // Contracts
 import {BurnerLoansCollateralVaultTest} from "./fixtures/BurnerLoansCollateralVaultTest.sol";
@@ -257,6 +262,79 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         public
     {
         _assertRoundedDepositFitsCap(3);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-AUTH-N01.
+    function test_givenDelegatedVaultDeposit_whenNominalExceedsGrantButActualCreditEqualsCap_thenAccepted()
+        public
+    {
+        (MockERC20 token, MockERC4626 vault) = _seedRoundedVault(6);
+        _grantRoundedDeposit(token, 1999);
+        vm.prank(_recipient);
+        (uint128 credit, uint128 total, ) = _collateral.depositCollateral(
+            address(token),
+            2000,
+            _borrower
+        );
+        // floor(2000 * 2 / 6) = 666 minted shares. After deposit:
+        // floor(666 * 2006 / 668) = 1999 actual assets (6 decimal raw units).
+        assertEq(credit, 1999, "Delegated cap uses actual credit rather than nominal 2000");
+        assertEq(total, 1999, "Canonical resulting collateral equals grant cap");
+        assertEq(
+            vault.balanceOf(address(_depositManager)),
+            666,
+            "Custody holds actual minted shares"
+        );
+        assertEq(token.balanceOf(_recipient), 0, "Operator funds nominal deposit once");
+        assertEq(
+            _depositManager.getOperatorLiabilities(IERC20(address(token)), address(_core)),
+            1999,
+            "Liability books actual credit"
+        );
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-AUTH-N02.
+    function test_givenDelegatedVaultDeposit_whenActualCreditExceedsGrant_thenFullRollback()
+        public
+    {
+        (MockERC20 token, MockERC4626 vault) = _seedRoundedVault(6);
+        _grantRoundedDeposit(token, 1998);
+        bytes32 beforeAccounting = _accountingDigest(address(token));
+        uint256 beforeBacking = token.balanceOf(address(vault));
+        uint256 beforeSupply = vault.totalSupply();
+        vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_ResultOutsideGrant.selector);
+        vm.prank(_recipient);
+        _collateral.depositCollateral(address(token), 2000, _borrower);
+        assertEq(
+            _accountingDigest(address(token)),
+            beforeAccounting,
+            "Cap rejection restores full accounting"
+        );
+        assertEq(token.balanceOf(_recipient), 2000, "Nominal payer transfer restored");
+        assertEq(token.balanceOf(address(vault)), beforeBacking, "Vault backing restored");
+        assertEq(vault.totalSupply(), beforeSupply, "Vault mint restored");
+        assertEq(vault.balanceOf(address(_depositManager)), 0, "No custody shares survive");
+    }
+
+    function _grantRoundedDeposit(MockERC20 token_, uint128 cap_) internal {
+        token_.mint(_recipient, 2000);
+        vm.prank(_recipient);
+        token_.approve(address(_core), 2000);
+        IOperatorAuth.Grant memory grant = _operatorGrantForAsset(
+            _borrower,
+            _recipient,
+            type(uint48).max,
+            address(token_)
+        );
+        grant.actions = 1;
+        IBurnerLoansAuth.Permissions memory permissions = abi.decode(
+            grant.permissions,
+            (IBurnerLoansAuth.Permissions)
+        );
+        permissions.maxCollateral = cap_;
+        grant.permissions = abi.encode(permissions);
+        vm.prank(_borrower);
+        _auth.approveGrant(grant);
     }
 
     function _assertRoundedDepositFitsCap(uint256 cap_) internal {

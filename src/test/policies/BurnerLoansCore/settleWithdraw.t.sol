@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
@@ -28,6 +31,71 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
     }
 
+    // Scenarios: BLCORE-SETTLE-WITHDRAW-I03.
+    function test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck() public {
+        bytes32 beforeState = _state();
+        // A static request tuple has the same word order as these flat ABI values.
+        // A uint256 word deliberately exceeds the request's narrower field type.
+        bytes memory instruction = abi.encodeWithSelector(
+            IBurnerLoansCore.settleWithdraw.selector,
+            address(_asset),
+            uint256(type(uint128).max) + 1,
+            _borrower,
+            _recipient,
+            _borrower,
+            _ownerAuthContext()
+        );
+        vm.prank(_recipient);
+        (bool success, bytes memory result) = address(_core).call(instruction);
+        assertFalse(success, "Malformed economic request cannot settle");
+        // The pinned compiler's ABI decoder rejects before entering role-guarded code.
+        assertEq(result.length, 0, "Malformed request fails in the ABI decoder");
+        assertEq(_state(), beforeState, "Malformed request leaves custody and positions unchanged");
+    }
+
+    // Scenarios: BLCORE-SETTLE-WITHDRAW-A02.
+    function test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts(
+        address caller_,
+        bool owner_
+    ) public {
+        vm.assume(!_roles.hasRole(caller_, BL_COLLATERAL_POLICY_ROLE));
+        vm.assume(caller_ != _borrower && caller_ != _recipient);
+        _deposit(2000e6);
+        _borrow(100e9);
+        _approveOperator(_borrower, _recipient, type(uint48).max);
+        address operator = owner_ ? _borrower : _recipient;
+        // The attacker can read a real stamp; the view result is not settlement authority.
+        vm.prank(caller_);
+        IBurnerLoansCore.AuthorizationContext memory original = _operatorAuthContext(
+            _borrower,
+            operator,
+            4
+        );
+        IBurnerLoansCore.WithdrawRequest memory request = IBurnerLoansCore.WithdrawRequest({
+            asset: address(_asset),
+            amount: 1,
+            borrower: _borrower,
+            recipient: _recipient
+        });
+        bytes32 beforeState = _ledger();
+        uint256 pairEpoch = _auth.pairEpochs(_borrower, _recipient);
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
+        );
+        vm.prank(caller_);
+        _core.settleWithdraw(request, operator, original);
+        assertEq(
+            _ledger(),
+            beforeState,
+            "Publicly readable authority cannot move custody or change a position"
+        );
+        assertEq(
+            _auth.pairEpochs(_borrower, _recipient),
+            pairEpoch,
+            "Rejected impersonation preserves the genuine grant"
+        );
+    }
+
     // Scenarios: BLCORE-SETTLE-WITHDRAW-A02.
     function test_whenCallerLacksSettlementRole_reverts(address caller_) public {
         vm.assume(!_roles.hasRole(caller_, BL_COLLATERAL_POLICY_ROLE));
@@ -36,7 +104,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
         );
         vm.prank(caller_);
-        _core.settleWithdraw(address(0), 0, address(0), address(0));
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(0),
+                amount: 0,
+                borrower: address(0),
+                recipient: address(0)
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Unauthorized instruction has no effects");
     }
 
@@ -48,7 +125,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
         );
         vm.prank(address(sibling));
-        _core.settleWithdraw(address(0), 0, address(0), address(0));
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(0),
+                amount: 0,
+                borrower: address(0),
+                recipient: address(0)
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
     }
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-A04.
@@ -71,7 +157,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(0), 0, address(0), address(0));
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(0),
+                amount: 0,
+                borrower: address(0),
+                recipient: address(0)
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Disabled Core rejects before inputs");
     }
 
@@ -86,7 +181,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(0), 0, address(0), address(0));
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(0),
+                amount: 0,
+                borrower: address(0),
+                recipient: address(0)
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Own inactivity precedes local state and inputs");
     }
 
@@ -116,7 +220,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
     function _settleAsCaller(address caller_) internal {
         _deposit(2);
         vm.prank(caller_);
-        _core.settleWithdraw(address(_asset), 1, _borrower, _recipient);
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: 1,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_position().depositedCollateral, 1, "Role-holding caller withdraws collateral");
     }
 
@@ -126,27 +239,58 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(_asset), 0, _borrower, _recipient);
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: 0,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Failed redemption rolls back collateral and custody");
     }
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-N02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenAboveCollateral_whenWithdrawn_reverts(uint128 amount_) public {
         _deposit(2);
         amount_ = uint128(bound(amount_, 3, type(uint128).max));
         bytes32 before = _ledger();
         vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(_asset), amount_, _borrower, _recipient);
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: amount_,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Failed redemption rolls back collateral and custody");
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-P01.
     function test_givenMissingPosition_whenWithdrawn_reverts() public {
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector);
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(_asset), 1, _borrower, _recipient);
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: 1,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Failed redemption rolls back collateral and custody");
     }
 
@@ -161,7 +305,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_ZeroCollateralWithdrawal.selector);
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(_asset), 1, _borrower, _recipient);
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: 1,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Failed redemption rolls back collateral and custody");
     }
 
@@ -176,11 +329,22 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector);
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(_asset), 1, _borrower, _recipient);
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: 1,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Failed redemption rolls back collateral and custody");
     }
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-P02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenActualOutputDifferentFromDebit_whenWithdrawn(
         uint128 debit_,
         uint256 output_
@@ -195,10 +359,14 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         );
         vm.prank(address(_actor));
         (address token, uint256 output, uint128 remaining) = _core.settleWithdraw(
-            address(_asset),
-            debit_,
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: debit_,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
             _borrower,
-            _recipient
+            _ownerAuthContext()
         );
         assertEq(token, address(_asset), "Actual output token returned");
         assertEq(
@@ -210,7 +378,11 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         assertEq(_position().depositedCollateral, 0, "Stored collateral agrees with return");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-WITHDRAW-P02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenRealCustody_whenWithdrawn(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         _deposit(amount_);
@@ -221,10 +393,14 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         );
         vm.prank(address(_actor));
         (address token, uint256 output, uint128 remaining) = _core.settleWithdraw(
-            address(_asset),
-            amount_,
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: amount_,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
             _borrower,
-            _recipient
+            _ownerAuthContext()
         );
         assertEq(token, address(_asset), "Raw-asset output");
         assertEq(output, amount_, "No vault conversion in raw-asset fixture");
@@ -237,6 +413,8 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-WITHDRAW-D03.
     function test_givenPayoutRecipientAndInexactDelta_whenWithdrawn_reverts() public {
         _deposit(2);
@@ -248,7 +426,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector);
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(_asset), 1, _borrower, address(_payout));
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: 1,
+                borrower: _borrower,
+                recipient: address(_payout)
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Old balance cannot substitute for new receipt");
     }
 
@@ -286,7 +473,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(_asset), 1, _borrower, _recipient);
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: 1,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -320,7 +516,16 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleWithdraw(address(_asset), 1, _borrower, _recipient);
+        _core.settleWithdraw(
+            IBurnerLoansCore.WithdrawRequest({
+                asset: address(_asset),
+                amount: 1,
+                borrower: _borrower,
+                recipient: _recipient
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -333,3 +538,4 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
         test_givenAboveCollateral_whenWithdrawn_reverts(type(uint128).max);
     }
 }
+// forge-lint: disable-end(unused-return)

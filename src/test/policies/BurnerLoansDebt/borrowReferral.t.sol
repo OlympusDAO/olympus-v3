@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
@@ -92,6 +95,8 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
     }
 
     // Scenarios: BLDEBT-BORROW-A15.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_whenRiskReturnsComponents(
         uint256 protocol_,
         uint256 referral_,
@@ -130,12 +135,18 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
         );
         vm.mockCall(
             address(_core),
-            abi.encodeCall(IBurnerLoansCore.settleBorrow, (instruction)),
+            abi.encodeCall(
+                IBurnerLoansCore.settleBorrow,
+                (instruction, payer, _operatorAuthContext(_borrower, payer, 2))
+            ),
             abi.encode(uint128(100e9), maturity)
         );
         vm.expectCall(
             address(_core),
-            abi.encodeCall(IBurnerLoansCore.settleBorrow, (instruction)),
+            abi.encodeCall(
+                IBurnerLoansCore.settleBorrow,
+                (instruction, payer, _operatorAuthContext(_borrower, payer, 2))
+            ),
             uint64(1)
         );
         vm.expectCall(address(_risk), _feeCall(100e9, 1, _referrer), uint64(2));
@@ -186,6 +197,8 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
             "Debt unit forwards settlement without collecting tokens"
         );
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLDEBT-BORROW-I08.
     function test_whenMaxFeeExcludesReferral_reverts(
@@ -273,6 +286,8 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
     }
 
     // Scenarios: BLDEBT-BORROW-A16.
+    // Controlled test bindings/callers intentionally retain zero-address cases where applicable.
+    // forge-lint: disable-start(missing-zero-check)
     function test_givenOnlyOtherOperatorAuthorized_whenReferrerBorrows_reverts(
         address caller_
     ) public {
@@ -288,7 +303,7 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
         _mockFeeComponents(76, 25);
         _debt.previewBorrow(address(_asset), 100e9, _borrower, _recipient, 101, _referrer);
         bytes32 beforeState = _stateDigest(caller_);
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
         vm.prank(_referrer);
         _debt.borrow(address(_asset), 100e9, _borrower, _recipient, 101, _referrer);
         assertEq(
@@ -297,6 +312,8 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
             "Whitelist membership grants no borrower authority"
         );
     }
+
+    // forge-lint: disable-end(missing-zero-check)
 
     // Scenarios: BLDEBT-BORROW-A15, BLDEBT-BORROW-P20.
     function test_whenZeroComponents() public {
@@ -367,11 +384,15 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
     }
 
     // Scenarios: BLDEBT-BORROW-A15.
+    // Controlled test bindings/callers intentionally retain zero-address cases where applicable.
+    // forge-lint: disable-start(missing-zero-check)
     function test_whenReferrerVaries(address referrer_, bool operator_) public {
         vm.assume(referrer_ != address(0) && referrer_ != address(_payout));
         _referrer = referrer_;
         test_whenRiskReturnsComponents(76, 25, operator_);
     }
+
+    // forge-lint: disable-end(missing-zero-check)
 
     // Scenarios: BLDEBT-BORROW-I08.
     function test_whenFeeLimitEqualsProtocol_reverts() public {
@@ -398,3 +419,4 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
         test_whenComponentSumOverflows_reverts(type(uint256).max, 1);
     }
 }
+// forge-lint: disable-end(unused-return)

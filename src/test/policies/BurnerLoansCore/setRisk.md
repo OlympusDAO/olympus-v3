@@ -1,6 +1,6 @@
 # BurnerLoansCore.setRisk coverage plan
 
-Source: [setRisk](../../../policies/burnerloans/BurnerLoansCore.sol#L653). Acceptance plan; coverage and execution results are recorded separately.
+Source: [setRisk](../../../policies/burnerloans/BurnerLoansCore.sol#L836). Acceptance plan; coverage and execution results are recorded separately.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -132,43 +132,43 @@ Core active; fuzz Core enabled true/false with both seeds. Candidate has valid i
 
 Retire BLCORE-RISK-D05: selecting a disabled replacement is no longer permitted. Compatibility rows keep earlier checks satisfied; missing, malformed or reverting validation responses use BurnerLoansCore_InvalidRisk(candidate); no dependency revert data is bubbled.
 
-[test_givenBadBindingAndUnavailable_whenSelected_reverts]: setRisk.t.sol#L650
-[test_givenBoundInterface_whenSelected_reverts]: setRisk.t.sol#L423
-[test_givenBusyCore_whenSelected_reverts]: setRisk.t.sol#L716
+[test_givenBadBindingAndUnavailable_whenSelected_reverts]: setRisk.t.sol#L651
+[test_givenBoundInterface_whenSelected_reverts]: setRisk.t.sol#L424
+[test_givenBusyCore_whenSelected_reverts]: setRisk.t.sol#L717
 [test_givenCompatibleReadyService_whenSelected]: setRisk.t.sol#L89
 [test_givenCoreInactive_whenSelected_reverts]: setRisk.t.sol#L43
-[test_givenDirtyCore_whenSelected_reverts]: setRisk.t.sol#L445
-[test_givenDirtyKernelPadding_whenSelected_reverts]: setRisk.t.sol#L773
+[test_givenDirtyCore_whenSelected_reverts]: setRisk.t.sol#L446
+[test_givenDirtyKernelPadding_whenSelected_reverts]: setRisk.t.sol#L774
 [test_givenEOA_whenSelected_reverts]: setRisk.t.sol#L148
-[test_givenEnabledInterface_whenSelected_reverts]: setRisk.t.sol#L205
-[test_givenIndependentRiskOperator_whenSelected]: setRisk.t.sol#L674
-[test_givenLyingERC165_whenSelected_reverts]: setRisk.t.sol#L624
-[test_givenMalformedAuthorityGetters_whenSelected]: setRisk.t.sol#L706
-[test_givenMalformedCore_whenSelected_reverts]: setRisk.t.sol#L322
-[test_givenMalformedERC165_whenSelected_reverts]: setRisk.t.sol#L401
-[test_givenMalformedEnabled_whenSelected_reverts]: setRisk.t.sol#L551
-[test_givenMalformedKernel_whenSelected_reverts]: setRisk.t.sol#L498
-[test_givenMissingCore_whenSelected_reverts]: setRisk.t.sol#L300
-[test_givenNoncanonicalERC165_whenSelected_reverts]: setRisk.t.sol#L573
-[test_givenOtherCore_whenSelected_reverts]: setRisk.t.sol#L272
-[test_givenOtherOhm_whenSelected_reverts]: setRisk.t.sol#L249
-[test_givenRevertingAuthorityGetters_whenSelected]: setRisk.t.sol#L696
-[test_givenRevertingCore_whenSelected_reverts]: setRisk.t.sol#L349
-[test_givenRevertingERC165_whenSelected_reverts]: setRisk.t.sol#L375
-[test_givenRevertingEnabled_whenSelected_reverts]: setRisk.t.sol#L525
-[test_givenRevertingKernel_whenSelected_reverts]: setRisk.t.sol#L472
-[test_givenServiceInterface_whenSelected_reverts]: setRisk.t.sol#L183
+[test_givenEnabledInterface_whenSelected_reverts]: setRisk.t.sol#L206
+[test_givenIndependentRiskOperator_whenSelected]: setRisk.t.sol#L675
+[test_givenLyingERC165_whenSelected_reverts]: setRisk.t.sol#L625
+[test_givenMalformedAuthorityGetters_whenSelected]: setRisk.t.sol#L707
+[test_givenMalformedCore_whenSelected_reverts]: setRisk.t.sol#L323
+[test_givenMalformedERC165_whenSelected_reverts]: setRisk.t.sol#L402
+[test_givenMalformedEnabled_whenSelected_reverts]: setRisk.t.sol#L552
+[test_givenMalformedKernel_whenSelected_reverts]: setRisk.t.sol#L499
+[test_givenMissingCore_whenSelected_reverts]: setRisk.t.sol#L301
+[test_givenNoncanonicalERC165_whenSelected_reverts]: setRisk.t.sol#L574
+[test_givenOtherCore_whenSelected_reverts]: setRisk.t.sol#L273
+[test_givenOtherOhm_whenSelected_reverts]: setRisk.t.sol#L250
+[test_givenRevertingAuthorityGetters_whenSelected]: setRisk.t.sol#L697
+[test_givenRevertingCore_whenSelected_reverts]: setRisk.t.sol#L350
+[test_givenRevertingERC165_whenSelected_reverts]: setRisk.t.sol#L376
+[test_givenRevertingEnabled_whenSelected_reverts]: setRisk.t.sol#L526
+[test_givenRevertingKernel_whenSelected_reverts]: setRisk.t.sol#L473
+[test_givenServiceInterface_whenSelected_reverts]: setRisk.t.sol#L184
 [test_givenServiceUnavailable_whenSelected_reverts]: setRisk.t.sol#L111
-[test_givenSingleDirtyCorePaddingBit_whenSelected_reverts]: setRisk.t.sol#L809
-[test_givenVersionInterface_whenSelected_reverts]: setRisk.t.sol#L227
-[test_givenWritingCore_whenSelected_reverts]: setRisk.t.sol#L602
+[test_givenSingleDirtyCorePaddingBit_whenSelected_reverts]: setRisk.t.sol#L810
+[test_givenVersionInterface_whenSelected_reverts]: setRisk.t.sol#L228
+[test_givenWritingCore_whenSelected_reverts]: setRisk.t.sol#L603
 [test_givenWrongKernel_whenSelected_reverts]: setRisk.t.sol#L164
-[test_givenZeroCoreBinding_whenSelected_reverts]: setRisk.t.sol#L295
+[test_givenZeroCoreBinding_whenSelected_reverts]: setRisk.t.sol#L296
 [test_givenZero_whenSelected_reverts]: setRisk.t.sol#L133
 [test_whenCallerIsNotAdmin_reverts]: setRisk.t.sol#L33
-[test_whenCoreReturnLengthSeeds_reverts]: setRisk.t.sol#L743
+[test_whenCoreReturnLengthSeeds_reverts]: setRisk.t.sol#L744
 [test_whenCurrentAddressIsSelected_reverts]: setRisk.t.sol#L63
-[test_whenEnabledReturnShapeSeeds_reverts]: setRisk.t.sol#L789
-[test_whenIndependentOperatorSeeds]: setRisk.t.sol#L825
-[test_whenKernelReturnLengthSeeds_reverts]: setRisk.t.sol#L758
-[test_whenUnavailableServiceStatesSeeded_reverts]: setRisk.t.sol#L732
+[test_whenEnabledReturnShapeSeeds_reverts]: setRisk.t.sol#L790
+[test_whenIndependentOperatorSeeds]: setRisk.t.sol#L826
+[test_whenKernelReturnLengthSeeds_reverts]: setRisk.t.sol#L759
+[test_whenUnavailableServiceStatesSeeded_reverts]: setRisk.t.sol#L733

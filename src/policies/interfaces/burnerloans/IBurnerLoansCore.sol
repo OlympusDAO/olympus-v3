@@ -5,6 +5,12 @@ pragma solidity >=0.8.24;
 interface IBurnerLoansCore {
     // ========== EVENTS ========== //
 
+    /// @notice A new verifier was selected and the previous installation's authority was revoked.
+    /// @param previousAuth Previous verifier, or zero before initial selection.
+    /// @param auth New Core-bound verifier.
+    /// @param globalAuthEpoch New monotonic installation/cancellation epoch.
+    event AuthSet(address indexed previousAuth, address indexed auth, uint256 globalAuthEpoch);
+
     /// @notice The full unreserved balance was sent to a rescue destination.
     /// @param token Recovered token.
     /// @param destination Rescue recipient.
@@ -63,6 +69,18 @@ interface IBurnerLoansCore {
     );
 
     // ========== ERRORS ========== //
+
+    /// @notice Auth lacks a consumed interface or is bound to another Core.
+    error BurnerLoansCore_InvalidAuth(address auth);
+
+    /// @notice The global Auth epoch cannot advance without wrapping.
+    error BurnerLoansCore_AuthEpochExhausted();
+
+    /// @notice Settlement received a context captured under another Auth installation.
+    error BurnerLoansCore_InvalidAuthorizationContext();
+
+    /// @notice The canonical resulting position exceeds the authenticated action's bound.
+    error BurnerLoansCore_ResultOutsideGrant();
 
     /// @notice OHM has no code or does not report supported token decimals.
     error BurnerLoansCore_InvalidOhm(address ohm);
@@ -214,6 +232,48 @@ interface IBurnerLoansCore {
         uint256 keeperReward;
     }
 
+    /// @notice Deposit inputs supplied by the admitted collateral action.
+    /// @param asset Configured underlying collateral token.
+    /// @param amount Requested deposit in raw underlying token units.
+    /// @param payer Account funding the deposit; independent of the position owner and operator.
+    /// @param borrower Account receiving actual DepositManager collateral credit.
+    struct DepositRequest {
+        address asset;
+        uint128 amount;
+        address payer;
+        address borrower;
+    }
+
+    /// @notice Withdrawal inputs supplied by the admitted collateral action.
+    /// @param asset Configured underlying collateral token identifying the position.
+    /// @param amount Collateral credit to debit, in raw underlying token units.
+    /// @param borrower Account whose collateral is withdrawn.
+    /// @param recipient Account receiving underlying tokens or vault shares.
+    struct WithdrawRequest {
+        address asset;
+        uint128 amount;
+        address borrower;
+        address recipient;
+    }
+
+    /// @notice Extension inputs, including separate protocol and referral fee allocations.
+    /// @param asset Configured underlying collateral token identifying the position.
+    /// @param borrower Account whose debt maturity is updated.
+    /// @param payer Account paying the total extension fee in raw underlying token units.
+    /// @param maturity Policy-approved new absolute maturity timestamp in seconds.
+    /// @param protocolFee Protocol allocation in raw underlying token units.
+    /// @param referrer Referral recipient; zero requires a zero referralFee.
+    /// @param referralFee Referrer allocation in raw underlying token units.
+    struct ExtendRequest {
+        address asset;
+        address borrower;
+        address payer;
+        uint48 maturity;
+        uint256 protocolFee;
+        address referrer;
+        uint256 referralFee;
+    }
+
     /// @notice A complete borrow instruction, including the actual payer and policy-approved protocol and referral fees.
     /// @param asset Configured underlying collateral token identifying the market.
     /// @param borrower Account whose position incurs debt.
@@ -236,43 +296,60 @@ interface IBurnerLoansCore {
         uint256 referralFee;
     }
 
+    /// @notice Original authority captured before public-action preparation.
+    /// @param auth Verifier selected when the action began.
+    /// @param globalAuthEpoch Core installation epoch captured with that verifier.
+    /// @param grantContext Auth's original grant stamp, or its intrinsic-owner sentinel.
+    struct AuthorizationContext {
+        address auth;
+        uint256 globalAuthEpoch;
+        bytes32 grantContext;
+    }
+
     // ========== FUNCTIONS ========== //
 
+    /// @notice Reads the selected verifier and its installation epoch atomically.
+    function authConfig() external view returns (address auth, uint256 globalAuthEpoch);
+
+    /// @notice ADMIN selects compatible Core-bound Auth, revoking previous-installation grants.
+    /// @param auth New verifier; existing account approvals require reauthorization afterward.
+    function setAuth(address auth) external;
+
     /// @notice Credits only the collateral actually recorded by DepositManager.
-    /// @param asset Configured underlying collateral token.
-    /// @param amount Requested deposit in underlying token units.
-    /// @param payer Actual action caller funding the deposit.
-    /// @param borrower Account receiving collateral credit.
+    /// @param request Deposit asset, requested amount and actual payer/borrower identities.
+    /// @param operator Actual public caller forwarded by the admitted action.
+    /// @param authContext Original authority captured before external preparation.
     /// @return credit Actual collateral credit in underlying units.
     /// @return collateral Borrower collateral after settlement in underlying units.
     function settleDeposit(
-        address asset,
-        uint128 amount,
-        address payer,
-        address borrower
+        DepositRequest calldata request,
+        address operator,
+        AuthorizationContext calldata authContext
     ) external returns (uint128 credit, uint128 collateral);
 
     /// @notice Debits collateral and completes the custody exit atomically.
-    /// @param asset Configured underlying collateral token.
-    /// @param amount Collateral credit to debit, in underlying units.
-    /// @param borrower Account whose collateral is withdrawn.
-    /// @param recipient Account receiving underlying tokens or vault shares.
+    /// @param request Withdrawal asset, collateral debit and actual borrower/recipient identities.
+    /// @param operator Actual public caller forwarded by the admitted action.
+    /// @param authContext Original authority captured before external preparation.
     /// @return token Underlying collateral or vault share output token.
     /// @return output Actual amount returned in output token units.
     /// @return remaining Borrower collateral remaining in underlying units.
     function settleWithdraw(
-        address asset,
-        uint128 amount,
-        address borrower,
-        address recipient
+        WithdrawRequest calldata request,
+        address operator,
+        AuthorizationContext calldata authContext
     ) external returns (address token, uint256 output, uint128 remaining);
 
     /// @notice Increases principal, collects protocolFee + referralFee and funds the recipient atomically.
     /// @param request Policy-approved principal, maturity, separate fee allocations and actual payer/recipient identities.
+    /// @param operator Actual public caller forwarded by the admitted action.
+    /// @param authContext Original authority captured before external preparation.
     /// @return principal Outstanding borrower principal in OHM units.
     /// @return maturity Resulting maturity timestamp in seconds.
     function settleBorrow(
-        BorrowRequest calldata request
+        BorrowRequest calldata request,
+        address operator,
+        AuthorizationContext calldata authContext
     ) external returns (uint128 principal, uint48 maturity);
 
     /// @notice Collects exact OHM into Inventory and decreases principal atomically; no price read is required.
@@ -289,22 +366,14 @@ interface IBurnerLoansCore {
     ) external returns (uint128 principal);
 
     /// @notice Applies the policy-selected maturity and collects the total extension fee (protocolFee + referralFee).
-    /// @param asset Configured collateral token identifying the market.
-    /// @param borrower Account whose debt maturity is updated.
-    /// @param payer Actual action caller paying the total extension fee (protocolFee + referralFee).
-    /// @param maturity Policy-approved new maturity timestamp in seconds.
-    /// @param protocolFee Protocol fee allocation in underlying collateral units.
-    /// @param referrer Referral recipient; zero requires a zero referralFee, while a nonzero address may receive zero.
-    /// @param referralFee Referrer allocation in underlying collateral units.
+    /// @param request Policy-approved maturity, fee allocations and actual payer/borrower identities.
     /// @return newMaturity Applied maturity timestamp in seconds.
+    /// @param operator Actual public caller forwarded by the admitted action.
+    /// @param authContext Original authority captured before external preparation.
     function settleExtend(
-        address asset,
-        address borrower,
-        address payer,
-        uint48 maturity,
-        uint256 protocolFee,
-        address referrer,
-        uint256 referralFee
+        ExtendRequest calldata request,
+        address operator,
+        AuthorizationContext calldata authContext
     ) external returns (uint48 newMaturity);
 
     /// @notice Defaults and redeems a complete batch, allocating only actual received collateral.

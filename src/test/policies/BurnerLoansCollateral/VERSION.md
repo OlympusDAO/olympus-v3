@@ -1,6 +1,6 @@
 # BurnerLoansCollateral.VERSION coverage plan
 
-Source: [VERSION](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L208). Test mappings name the passing proofs.
+Source: [VERSION](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L213). Test mappings name the passing proofs.
 
 ## Domains and notation
 

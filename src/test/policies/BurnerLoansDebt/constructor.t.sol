@@ -5,8 +5,6 @@ pragma solidity >=0.8.24;
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
-import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
-import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
@@ -21,23 +19,6 @@ import {BurnerLoansDebtLifecycleTest} from "src/test/policies/BurnerLoansDebt/fi
 // forge-lint: disable-start(calls-loop)
 
 contract BurnerLoansDebtConstructorTest is BurnerLoansDebtLifecycleTest {
-    // Scenarios: BLDEBT-CONSTRUCTOR-I12.
-    function test_givenMissingOperatorAuthInterface_whenDeployed_reverts(address deployer_) public {
-        vm.mockCall(
-            address(_core),
-            abi.encodeWithSignature("supportsInterface(bytes4)", type(IOperatorAuth).interfaceId),
-            abi.encode(false)
-        );
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansCoreBound.BurnerLoansAction_InvalidCore.selector,
-                address(_core)
-            )
-        );
-        vm.prank(deployer_);
-        new BurnerLoansDebt(_kernel, _core);
-    }
-
     // Scenarios: BLDEBT-CONSTRUCTOR-I01.
     function test_whenCoreZero_reverts() public {
         _expectInvalidCore(address(0));

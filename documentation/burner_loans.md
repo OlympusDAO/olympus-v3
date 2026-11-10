@@ -6,7 +6,7 @@ Burner Loans lends OHM against approved collateral for a fixed term. It charges 
 
 Borrowers repay OHM. Anyone can seize a position after maturity or when its health factor falls below `1e18`. Seizure defaults its principal, pays any permitted keeper reward and sends the remaining collateral to Treasury.
 
-This guide describes the modular contracts in this branch, not a deployed configuration or activation approval. See the [access-control reference](burner_loans_access_control.md) for permissions and the [Inventory reference](burner_loans_inventory.md) for OHM accounting.
+This guide describes the modular contracts in this branch, not a deployed configuration or activation approval. See the [access-control reference](burner_loans_access_control.md) for permissions, the [OperatorAuth guide](operator_auth.md) for grants/signatures and the [Inventory reference](burner_loans_inventory.md) for OHM accounting.
 
 ## Architecture
 
@@ -37,7 +37,8 @@ flowchart LR
 
 | Component | Responsibility |
 | --- | --- |
-| `BurnerLoansCore` | Permanent FLOAN facility and DepositManager operator; authorization grants, asset registry, transfers and accounting settlement |
+| `BurnerLoansCore` | Permanent FLOAN facility and DepositManager operator; selected Auth/global epoch, mandatory authorization enforcement, asset registry, transfers and accounting settlement |
+| `BurnerLoansAuth` | Core-bound ordinary contract; operator grants, signatures, local account/pair epochs and lending-permission validation |
 | `BurnerLoansCollateral` | Deposit and withdrawal validation, quotes and execution |
 | `BurnerLoansDebt` | Borrowing, repayment and extension validation, quotes and execution |
 | `BurnerLoansSeize` | Permissionless batch liquidation and keeper validation |
@@ -52,11 +53,22 @@ flowchart LR
 | `BurnerLoansLens` | Position views and bounded seizure scans; no independent policy lifecycle |
 | `BurnerLoansSeizerTask` | One managed asset visit per Heart execution |
 | `BurnerLoansYieldClaimerTask` | Direct yield claims and bounded iteration over Core's asset registry |
-| `BurnerLoansComposites` | Combined public actions in one transaction |
 
 FLOAN stores positions, market configuration and principal indexes. DepositManager stores collateral liabilities, vault shares and receipt accounting. Core stores the selected market ID and withdrawal mode for each registered asset. Actions and Lens use that record rather than discovering a market by token-pair order.
 
 Core grants no economic guarantee merely because a caller has a settlement role. It authenticates the operation-specific role and settles the supplied request. Governance must grant those roles only to reviewed action contracts. Core does not require a role holder to report a Kernel or have active-policy membership.
+
+Core also enforces the selected Auth's original grant and resulting-position bounds. Public actions capture Auth, global epoch and grant context before external preparation, and forward their actual caller. Core checks that original authority before and after effects, then compares the selected bound with canonical FLOAN state while its guard remains held. Auth holds no token custody or FLOAN write authority. The diagram shows settlement/economic calls; authorization calls use the separate Core-bound Auth.
+
+## Operator authorization
+
+Grant transactions target the Auth address returned by `Core.authConfig()`. `BurnerLoansAuth` inherits the generic `OperatorAuth` engine and has an immutable Core target and independently supplied trusted Kernel. It verifies Core's reported Kernel, actual membership and enabled state against that trust anchor. Its signatures use the chain/Auth domain. Core exposes its selected Auth and global epoch together through `authConfig()`; Auth owns its account/pair epochs and permission records.
+
+Temporary grants are usable repeatedly only in the accepting transaction, even when the next transaction shares a block. Reusable grants support prior Safe approvals and later operator transactions through their inclusive deadline. The four action bits are deposit `0x01`, borrow `0x02`, withdraw `0x04` and extend `0x08`. Repayment remains permissionless; seizure keeps its independent rules.
+
+Selected per-action records bind explicit collateral assets. Borrow and withdraw can constrain independent recipients. Limits apply to resulting credited collateral, principal due, remaining collateral or absolute maturity, not per-call transfer amounts or a transaction budget. Owners need no self-grant and bypass delegated bounds; ordinary lending rules remain.
+
+Cancellation is local to an Auth instance and remains available while that Auth is retired or Core is paused/inactive. `A.cancelAllGrants()` does not cancel a request deliberately signed for B. Core changing Auth increments the global epoch and revokes authority from earlier installations, including when returning to an old Auth address. Accounts and Safes must reapprove afterward. See [OperatorAuth](operator_auth.md) for exact schemas, signing fields, custom extension hooks and rollback examples.
 
 ## Position lifecycle
 
@@ -161,13 +173,13 @@ ADMIN or Risk's selected operator can change the percentage and whitelist. RiskC
 
 ## Collateral custody
 
-Core is the DepositManager operator and spender for settlement. User authorization remains on Core when an action contract is replaced. FLOAN records the underlying-denominated credit returned by DepositManager, including vault rounding.
+Core is the DepositManager operator and spender for settlement. Replacing an action does not change the selected Auth or its user grants. FLOAN records the underlying-denominated credit returned by DepositManager, including vault rounding.
 
 The market's `withdrawAsShares` setting selects underlying or share output for withdrawals, seizures and yield claims. DepositManager validates that the selected mode is supported. Configure routes for the actual output token, including share tokens, rather than assuming that every payout uses the underlying asset.
 
 Governance must review token and vault behavior before asset admission. Fee-on-transfer and rebasing collateral are unsupported. Core, Inventory and DepositManager enforce exact receipt at their respective mandatory incoming boundaries. Outgoing transfers still depend on the admitted token moving the requested amount when it reports success.
 
-Token-moving entry points use reentrancy guards. Composites execute complete settlements in sequence; a later failure rolls back the entire transaction.
+Token-moving entry points use reentrancy guards. Sequential complete settlements share ordinary transaction rollback. Bundler3 transaction routing remains separate integration work.
 
 See [Deposit Manager](deposit_manager.md) for custody modes and [Inventory](burner_loans_inventory.md) for OHM accounting and MINTR failure handling.
 
@@ -218,7 +230,7 @@ Configure Heart to warm prices before seizure, then claim yield before RevenueDi
 
 ## Configuration model
 
-ADMIN selects Core's Risk, Inventory, Payout and config operator. Risk, Inventory, Payout and Config each have separate delegated controllers. Rotating Core's controller does not rotate those other controllers.
+ADMIN selects Core's Auth, Risk, Inventory, Payout and config operator. Auth selection requires active Core and an idle settlement guard but permits local Core disablement for recovery. Auth has no independent Kernel lifecycle or controller. Risk, Inventory, Payout and Config each have separate delegated controllers. Rotating Core's controller does not rotate those other controllers.
 
 Config manages complete risk and fee structs, asset caps, withdrawal mode and origination state. New assets are ADMIN-only and start with originations enabled. The facility-wide debt cap is an ADMIN-only Inventory setter. Config has no `setGlobalDebtCap`, routing-flag setter or `setFacility` wiring step.
 
@@ -249,10 +261,10 @@ This is a dependency order, not a reviewed production deployment script. Confirm
 
 1. Install the required ROLES, FLOAN, MINTR, PRICE and TRSRY modules. Deploy and activate DepositManager and its receipt infrastructure.
 2. Deploy Core with its permanent OHM and DepositManager identities, then activate it while disabled.
-3. Deploy Core-bound Inventory, Payout, Config and Risk, plus Lens and the required actions and tasks.
+3. Deploy Auth with the independently trusted Kernel and already deployed Core addresses, then Inventory, Payout, Config and Risk, plus Lens and the required actions and tasks. Auth validates Core's ERC165 authorization-target interface and same-Kernel binding without requiring Core enabled or Auth already selected. Auth records the Kernel but uses no Kernel roles or module permissions, so it needs no Policy installation/activation or Enabler call.
 4. Activate the policies and grant their operation-specific roles. Prepare the independent Risk, Inventory and Payout controllers.
 5. Verify DepositManager and the backing oracle are active and enabled in the same Kernel. Enable Inventory, Payout and Risk, then select those services on Core using ADMIN.
-6. Select Config on Core. Enable Core, then Config and the public actions after their dependency checks pass. After enabling Config, select its local config operator.
+6. Select Auth and Config on Core. Core cannot enable/re-enable with Auth unset. Enable Core, then Config and the public actions after their dependency checks pass. After enabling Config, select its local config operator.
 7. Grant Core `deposit_operator` and register its DepositManager operator name. Configure custody and enabled period-1 routes for Core, plus required prices. Add each asset through Config and set Inventory capacity.
 8. Configure RevenueDistributor routes and Payout flags before relying on routed fee or yield receipts.
 9. Enable each required queue and task after its own target/binding checks pass, then configure Heart ordering.
@@ -263,7 +275,11 @@ For delayed Risk settings, deploy RiskConfigTimelock with the deployed Risk addr
 
 ## Policy replacement and wind-down
 
-Replacing an action preserves FLOAN positions, Core authorizations and DepositManager's operator namespace. Grant the replacement its settlement role, enable it after dependency checks, then revoke the old role. Update immutable Composites and task bindings when their actions change.
+Replacing an action preserves FLOAN positions, selected Auth grants and DepositManager's operator namespace. Grant the replacement its settlement role, enable it after dependency checks, then revoke the old role. Update immutable task bindings when their actions change.
+
+Auth replacement changes authorization code without moving custody. ADMIN selects a compatible contract bound to this Core. Core advances its checked global epoch, invalidating old installation contexts and grants without enumerating accounts. No permission migration or historical fallback is performed. Each Auth keeps its local counters; a returned Auth cannot revive earlier-global-epoch records. Reusable approvals require account/Safe reapproval. If Auth's cancellation code is broken, governance replacement provides global recovery; there is no independent account-cancellation endpoint on Core.
+
+Core Kernel migration also requires Auth replacement: reinstall migrated modules and activate Core in the new Kernel, then select Auth deployed with that Kernel and the existing Core. The old Auth rejects Core's changed Kernel even if the old registry retains membership. Its cancellation functions remain available and affect only its own namespace.
 
 Risk replacement selects new pricing and economic code for existing positions. It requires a compatible, active, enabled, same-Kernel, same-Core Risk with the same OHM token. It does not copy controller settings from the old Risk.
 
@@ -306,3 +322,11 @@ The run used solc 0.8.36, optimizer 400, Prague, transaction isolation and snaps
 The fork tests pin mainnet block `25_894_485`. They verify the deployed PRICEv1.2 version, feeds and exact prices, then override VERSION metadata to satisfy Risk's major-version admission. Pricing calls, storage and tokens remain fork code. This fixture does not prove that Risk activates unchanged against the deployed module.
 
 First borrowing measures 1,513,683 gas with direct fork PRICE and 618,763 with fresh PriceCache. A healthy 500-position scan measures 21,966,410 gas in the scan fixture. The recovery test reduces the page to 100 positions to make progress within a ten-million-gas task budget. Estimate limits against the actual deployed state.
+
+## Protected settlement ABI
+
+Public lending action signatures are unchanged. Core settlement calls use `DepositRequest`,
+`WithdrawRequest`, `BorrowRequest` and `ExtendRequest` for economic inputs. Each protected call keeps
+the actual operator and the original authorization context separate. See
+[Operator authorization](operator_auth.md#protected-settlement-requests) for the field order and
+binding rules. Repayment remains permissionless through Debt and has no grant envelope.

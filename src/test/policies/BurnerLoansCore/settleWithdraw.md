@@ -1,8 +1,10 @@
 # BurnerLoansCore.settleWithdraw coverage plan
 
-Source: [settleWithdraw](../../../policies/burnerloans/BurnerLoansCore.sol#L301). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleWithdraw](../../../policies/burnerloans/BurnerLoansCore.sol#L372). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
+
+The settlement ABI uses `WithdrawRequest`, which carries asset, amount, borrower and recipient. Operator and original authorization context remain separate arguments. Existing scenario outcomes, numeric domains, identity distinctions, callbacks and rollback assertions are unchanged.
 
 ## Domains and notation
 
@@ -27,7 +29,7 @@ Fixed for this table: Local active: true; Local enabled: true.
 | ID | Caller | Required role held | Execution | Test |
 | --- | --- | --- | --- | --- |
 | BLCORE-SETTLE-WITHDRAW-A01 | BL_COLLATERAL_POLICY_ROLE holder | true | Body executes | Covered: [test][test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer] |
-| BLCORE-SETTLE-WITHDRAW-A02 | Fuzz EOA/contracts excluding every BL_COLLATERAL_POLICY_ROLE holder | false | ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE) | Covered: [test][test_whenCallerLacksSettlementRole_reverts] |
+| BLCORE-SETTLE-WITHDRAW-A02 | Fuzz EOA/contracts excluding every BL_COLLATERAL_POLICY_ROLE holder | false | ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE) | Covered: [test][test_whenCallerLacksSettlementRole_reverts]  [valid captured authority][test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts] |
 | BLCORE-SETTLE-WITHDRAW-A03 | Policy holding only sibling operation role | false | ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE) | Covered: [test][test_givenOnlySiblingRole_whenSettled_reverts] |
 | BLCORE-SETTLE-WITHDRAW-A04 | Role-holding policy reporting another Kernel | true | Body executes; no caller Kernel or membership query | Covered: [test][test_givenWrongKernelCaller_whenSettled] |
 
@@ -106,25 +108,44 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 | BLCORE-SETTLE-WITHDRAW-C01 | Selected same-Kernel active action with the matching settlement role | DM redemption and direct underlying/share delivery to recipient | Otherwise-valid authorized public action reaching guarded Core settlement; callback catches the guard rejection | Nested call rejects ReentrancyGuardReentrantCall(); outer operation succeeds | One collateral debit and recipient output; actual remaining collateral and WAD health agree; unrelated positions unchanged | Covered: [test][test_givenSettlementCallback_whenCaught] |
 | BLCORE-SETTLE-WITHDRAW-C02 | Selected same-Kernel active action with the matching settlement role | DM redemption and direct underlying/share delivery to recipient | Otherwise-valid authorized public action reaching guarded Core settlement; token propagates the guard rejection | Exact propagated token/dependency error rejects outer operation | Full pre-call rollback of affected positions, debt, claims, token/receipt balances, allowances, reserves, indexes, approvals and committed logs, including earlier subcalls | Covered: [test][test_givenSettlementCallback_whenPropagated] |
 
-[test_givenAboveCollateral_whenWithdrawn_reverts]: settleWithdraw.t.sol#L134
-[test_givenActualOutputDifferentFromDebit_whenWithdrawn]: settleWithdraw.t.sol#L184
-[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleWithdraw.t.sol#L107
-[test_givenCallerInactive_whenSettled]: settleWithdraw.t.sol#L94
-[test_givenCoreDisabled_whenSettled_reverts]: settleWithdraw.t.sol#L69
-[test_givenCoreInactive_whenSettled_reverts]: settleWithdraw.t.sol#L79
-[test_givenMissingPosition_whenWithdrawn_reverts]: settleWithdraw.t.sol#L145
-[test_givenOnlySiblingRole_whenSettled_reverts]: settleWithdraw.t.sol#L44
-[test_givenPayoutRecipientAndInexactDelta_whenWithdrawn_reverts]: settleWithdraw.t.sol#L241
-[test_givenRealCustody_whenWithdrawn]: settleWithdraw.t.sol#L214
-[test_givenRoleHoldingEOA_whenSettled]: settleWithdraw.t.sol#L100
-[test_givenSettlementCallback_whenCaught]: settleWithdraw.t.sol#L267
-[test_givenSettlementCallback_whenPropagated]: settleWithdraw.t.sol#L300
-[test_givenUnexpectedOutputToken_whenWithdrawn_reverts]: settleWithdraw.t.sol#L169
-[test_givenWrongKernelCaller_whenSettled]: settleWithdraw.t.sol#L55
-[test_givenZeroAmount_whenWithdrawn_reverts]: settleWithdraw.t.sol#L124
-[test_givenZeroOutput_whenWithdrawn_reverts]: settleWithdraw.t.sol#L154
-[test_whenCallerLacksSettlementRole_reverts]: settleWithdraw.t.sol#L32
-[test_whenCollateralDebitMaximumSeed_reverts]: settleWithdraw.t.sol#L332
-[test_whenWithdrawalBoundarySeeds]: settleWithdraw.t.sol#L256
+## Delegated completion
 
-[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L963
+Core, the selected Auth and the admitted Collateral action are active/enabled. Account A has a reusable withdrawal grant for O with its fixed recipient. All collateral values below are raw units; the floor applies to the remaining canonical position.
+
+| ID | Caller | Existing collateral | Withdrawal | minCollateral | Execution / effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-WITHDRAW-N90 | Collateral action forwarding O | 1000 | 100 | 901 | ResultOutsideGrant: remaining 900 is one raw unit below the floor; custody and position roll back | Covered: [test][test_givenDelegatedGrant_whenRemainingCollateralBelowFloor_reverts] |
+| BLCORE-SETTLE-WITHDRAW-P90 | Collateral action forwarding O | 1000 | 100 | 900 | Success: remaining collateral 900; recipient receives 100 | Covered: [test][test_givenDelegatedGrant_whenRemainingCollateralEqualsFloor] |
+
+## Request ABI validation
+
+| ID | Caller | Raw economic field | Execution | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-WITHDRAW-I03 | Unadmitted recipient account | amount > uint128 maximum | Compiler ABI rejection before role checks; empty returndata | Custody and positions unchanged | Covered: [test][test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck] |
+
+[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L987
+[test_givenAboveCollateral_whenWithdrawn_reverts]: settleWithdraw.t.sol#L258
+[test_givenActualOutputDifferentFromDebit_whenWithdrawn]: settleWithdraw.t.sol#L348
+[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleWithdraw.t.sol#L211
+[test_givenCallerInactive_whenSettled]: settleWithdraw.t.sol#L198
+[test_givenCoreDisabled_whenSettled_reverts]: settleWithdraw.t.sol#L155
+[test_givenCoreInactive_whenSettled_reverts]: settleWithdraw.t.sol#L174
+[test_givenDelegatedGrant_whenRemainingCollateralBelowFloor_reverts]: authorizationLifecycleWithdraw.t.sol#L15
+[test_givenDelegatedGrant_whenRemainingCollateralEqualsFloor]: authorizationLifecycleWithdraw.t.sol#L40
+[test_givenMissingPosition_whenWithdrawn_reverts]: settleWithdraw.t.sol#L280
+[test_givenOnlySiblingRole_whenSettled_reverts]: settleWithdraw.t.sol#L121
+[test_givenPayoutRecipientAndInexactDelta_whenWithdrawn_reverts]: settleWithdraw.t.sol#L419
+[test_givenRealCustody_whenWithdrawn]: settleWithdraw.t.sol#L386
+[test_givenRoleHoldingEOA_whenSettled]: settleWithdraw.t.sol#L204
+[test_givenSettlementCallback_whenCaught]: settleWithdraw.t.sol#L454
+[test_givenSettlementCallback_whenPropagated]: settleWithdraw.t.sol#L496
+[test_givenUnexpectedOutputToken_whenWithdrawn_reverts]: settleWithdraw.t.sol#L322
+[test_givenWrongKernelCaller_whenSettled]: settleWithdraw.t.sol#L141
+[test_givenZeroAmount_whenWithdrawn_reverts]: settleWithdraw.t.sol#L237
+[test_givenZeroOutput_whenWithdrawn_reverts]: settleWithdraw.t.sol#L298
+[test_whenCallerLacksSettlementRole_reverts]: settleWithdraw.t.sol#L100
+[test_whenCollateralDebitMaximumSeed_reverts]: settleWithdraw.t.sol#L537
+[test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck]: ./settleWithdraw.t.sol#L35
+[test_whenWithdrawalBoundarySeeds]: settleWithdraw.t.sol#L443
+
+[test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts]: ./settleWithdraw.t.sol#L57

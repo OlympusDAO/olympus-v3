@@ -1,6 +1,6 @@
 # BurnerLoansCore.requireNotReentrant coverage plan
 
-Source: [requireNotReentrant](../../../policies/burnerloans/BurnerLoansCore.sol#L965). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [requireNotReentrant](../../../policies/burnerloans/BurnerLoansCore.sol#L1149). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 

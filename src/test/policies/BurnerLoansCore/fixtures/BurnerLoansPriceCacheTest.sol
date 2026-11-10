@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
+
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+// Interfaces
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+
+// Contracts
 import {Policy} from "src/Kernel.sol";
 import {BurnerLoansCallbackCache} from "src/test/mocks/BurnerLoansCallbackCache.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
@@ -29,9 +35,10 @@ abstract contract BurnerLoansPriceCacheTest is BurnerLoansModularTest {
             abi.encode(uint256(0), uint256(0))
         );
         vm.prank(_borrower);
-        _core.setAuthorization(address(_cache), type(uint48).max);
+        _approveOperator(_borrower, address(_cache), type(uint48).max);
         _asset.mint(address(_cache), 100e6);
         vm.prank(address(_cache));
         _asset.approve(address(_core), type(uint256).max);
     }
 }
+// forge-lint: disable-end(unused-return)

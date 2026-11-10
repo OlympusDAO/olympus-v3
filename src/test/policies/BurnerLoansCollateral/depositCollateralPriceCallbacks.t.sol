@@ -2,10 +2,16 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
+// Libraries
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
 // Contracts
-import {BurnerLoansCollateralPriceCallbackTest} from "./fixtures/BurnerLoansCollateralPriceCallbackTest.sol";
+import {BurnerLoansAuth} from "src/policies/burnerloans/BurnerLoansAuth.sol";
+import {BurnerLoansCollateralPriceCallbackTest} from "src/test/policies/BurnerLoansCollateral/fixtures/BurnerLoansCollateralPriceCallbackTest.sol";
+import {CollateralPreparationAuthRotation} from "src/test/policies/BurnerLoansCollateral/fixtures/CollateralPreparationAuthRotation.sol";
 
 // Fixed boundary values, bound-checked casts and unused revert-path returns are intentional.
 // Fixture/seed loops call real dependencies; sequential setup calls are completed before reuse.
@@ -14,6 +20,40 @@ import {BurnerLoansCollateralPriceCallbackTest} from "./fixtures/BurnerLoansColl
 contract BurnerLoansCollateralDepositCollateralPriceCallbacksTest is
     BurnerLoansCollateralPriceCallbackTest
 {
+    // Scenarios: BLCOL-DEPOSIT-AUTH-C05.
+    function test_givenPreparationCallback_whenAuthRotatesAndReturns_reverts(
+        bool delegated_
+    ) public {
+        _openDebt();
+        address operator = delegated_ ? _recipient : _borrower;
+        if (delegated_) _approveOperator(_borrower, operator, type(uint48).max);
+        _asset.mint(operator, 1);
+        vm.prank(operator);
+        _asset.approve(address(_core), type(uint256).max);
+        CollateralPreparationAuthRotation callback = new CollateralPreparationAuthRotation();
+        _rolesAdmin.grantRole(ADMIN_ROLE, address(callback));
+        BurnerLoansAuth next = new BurnerLoansAuth(address(_kernel), address(_core));
+        _cache.arm(
+            address(callback),
+            abi.encodeCall(callback.rotate, (IBurnerLoansCore(address(_core)), address(next))),
+            true
+        );
+        bytes32 beforeState = _accountingDigest(address(_asset));
+        uint256 epoch = _currentAuthEpoch();
+        (address originalAuth, ) = _core.authConfig();
+        vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidAuthorizationContext.selector);
+        vm.prank(operator);
+        _collateral.depositCollateral(address(_asset), 1, _borrower);
+        assertEq(
+            _accountingDigest(address(_asset)),
+            beforeState,
+            "Stale preparation restores all custody and accounting"
+        );
+        assertEq(_currentAuthEpoch(), epoch, "Failed outer action rolls back both rotations");
+        (address selected, ) = _core.authConfig();
+        assertEq(selected, originalAuth, "Failed outer action restores the selected verifier");
+    }
+
     // Scenarios: BLCOL-DEPOSIT-C01.
     function test_givenCacheFullyRepays_whenTopUpSettles_thenActualDebtFreeHealthReturned() public {
         _openDebt();
@@ -79,7 +119,7 @@ contract BurnerLoansCollateralDepositCollateralPriceCallbacksTest is
         );
         assertEq(
             _cache.rejection(),
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             "Exact caught auth failure"
         );
     }
@@ -92,7 +132,7 @@ contract BurnerLoansCollateralDepositCollateralPriceCallbacksTest is
         bytes32 beforeCache = keccak256(
             abi.encode(_cache.getCachedPrice(address(_ohm), address(_asset)))
         );
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
         vm.prank(_borrower);
         _collateral.depositCollateral(address(_asset), 1, _borrower);
         assertEq(

@@ -2,7 +2,7 @@
 
 > Referral scenarios supplement the retained baseline. Their mappings identify the assertions for the extended API.
 
-Source: [constructor](../../../policies/burnerloans/BurnerLoansRisk.sol#L97).
+Source: [constructor](../../../policies/burnerloans/BurnerLoansRisk.sol#L98).
 
 ## Domains and notation
 

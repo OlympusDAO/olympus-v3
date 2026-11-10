@@ -2,7 +2,7 @@
 
 > Referral scenarios below supplement the retained baseline. Their mappings identify the additional assertions for the extended API.
 
-Source: [settleBorrow](../../../policies/burnerloans/BurnerLoansCore.sol#L326). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleBorrow](../../../policies/burnerloans/BurnerLoansCore.sol#L420). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -29,9 +29,10 @@ Fixed for this table: Local active: true; Local enabled: true.
 | ID | Caller | Required role held | Execution | Test |
 | --- | --- | --- | --- | --- |
 | BLCORE-SETTLE-BORROW-A01 | BL_DEBT_POLICY_ROLE holder | true | Body executes | Covered: [test][test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer] |
-| BLCORE-SETTLE-BORROW-A02 | Fuzz EOA/contracts excluding every BL_DEBT_POLICY_ROLE holder | false | ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | Covered: [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent], [test][test_whenCallerLacksSettlementRole_reverts] |
+| BLCORE-SETTLE-BORROW-A02 | Fuzz EOA/contracts excluding every BL_DEBT_POLICY_ROLE holder | false | ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | Covered: [invariant_lifecycleAuthorizationAndCustodyStayIndependent][invariant_lifecycleAuthorizationAndCustodyStayIndependent], [test][test_whenCallerLacksSettlementRole_reverts]  [valid captured authority][test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts] |
 | BLCORE-SETTLE-BORROW-A03 | Policy holding only sibling operation role | false | ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | Covered: [test][test_givenOnlySiblingRole_whenSettled_reverts] |
 | BLCORE-SETTLE-BORROW-A04 | Role-holding policy reporting another Kernel | true | Body executes; no caller Kernel or membership query | Covered: [test][test_givenWrongKernelCaller_whenSettled] |
+| BLCORE-SETTLE-BORROW-A05 | Unadmitted caller; raw request amount exceeds uint128 | false | ROLES_RequireRole(BL_DEBT_POLICY_ROLE) before lazy request field decoding | Covered: [test][test_whenUnauthorizedCallerAndMalformedRequest_thenRoleErrorPrecedesFieldDecoding] |
 
 ## Lifecycle
 
@@ -127,48 +128,82 @@ Caller holds BL_DEBT_POLICY_ROLE. P and R are independent uint256 raw collateral
 
 The owner argument is accrual-event context only. Core already has asset/borrower; no new Risk call, position lookup or stored referral relationship is required to obtain it.
 
-[test_givenAdminMutationCallback_whenCaught]: settleBorrow.t.sol#L506
-[test_givenAdminMutationCallback_whenPropagated]: settleBorrow.t.sol#L534
-[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleBorrow.t.sol#L162
-[test_givenCallerInactive_whenSettled]: settleBorrow.t.sol#L149
-[test_givenCapExceeded_whenBorrowed_reverts]: settleBorrow.t.sol#L298
-[test_givenChangedActiveMaturity_whenBorrowed_reverts]: settleBorrow.t.sol#L244
-[test_givenCoreDisabled_whenSettled_reverts]: settleBorrow.t.sol#L100
-[test_givenCoreInactive_whenSettled_reverts]: settleBorrow.t.sol#L122
-[test_givenExcessIncomingReceipt_whenSettled_reverts]: settleBorrow.t.sol#L796
-[test_givenHorizonExceeded_whenBorrowed_reverts]: settleBorrow.t.sol#L276
-[test_givenInventoryFailureAfterFee_whenBorrowed_reverts]: settleBorrow.t.sol#L351
-[test_givenMandatoryFeeFailure_whenBorrowed_reverts]: settleBorrow.t.sol#L332
-[test_givenMissingPosition_whenBorrowed_reverts]: settleBorrow.t.sol#L319
-[test_givenOhmCallback_whenCaught]: settleBorrow.t.sol#L696
-[test_givenOhmCallback_whenPropagated]: settleBorrow.t.sol#L730
-[test_givenOnlySiblingRole_whenSettled_reverts]: settleBorrow.t.sol#L63
-[test_givenOptionalFeeCallback_whenCaught]: settleBorrow.t.sol#L624
-[test_givenOptionalFeeCallback_whenPropagated]: settleBorrow.t.sol#L657
-[test_givenOptionalPayoutFailure_whenBorrowed]: settleBorrow.t.sol#L398
-[test_givenOriginationsDisabled_whenBorrowed_reverts]: settleBorrow.t.sol#L191
-[test_givenPastMaturity_whenBorrowed_reverts]: settleBorrow.t.sol#L211
-[test_whenPastMaturityBoundarySeeds_reverts]: settleBorrow.t.sol#L232
-[test_givenPayoutRecoveryCallback_whenCaught]: settleBorrow.t.sol#L561
-[test_givenPayoutRecoveryCallback_whenPropagated]: settleBorrow.t.sol#L593
-[test_givenRoleHoldingEOA_whenSettled]: settleBorrow.t.sol#L155
-[test_givenSettlementCallback_whenCaught]: settleBorrow.t.sol#L441
-[test_givenSettlementCallback_whenPropagated]: settleBorrow.t.sol#L474
-[test_givenShortIncomingReceipt_whenSettled_reverts]: settleBorrow.t.sol#L764
-[test_givenWrongKernelCaller_whenSettled]: settleBorrow.t.sol#L86
-[test_givenZeroAmount_whenBorrowed_reverts]: settleBorrow.t.sol#L262
-[test_givenZeroFee_whenBorrowed]: settleBorrow.t.sol#L370
-[test_whenCallerLacksSettlementRole_reverts]: settleBorrow.t.sol#L39
-[test_whenOnePrincipalSeed]: settleBorrow.t.sol#L828
-[test_whenPrincipalBoundarySeeds]: settleBorrow.t.sol#L393
-[test_whenFeeComponentsForwarded]: settleBorrow.t.sol#L833
-[test_whenLiteralComponentFunding]: settleBorrow.t.sol#L929
-[test_whenOnlyReferralFunded]: settleBorrow.t.sol#L934
-[test_whenOnlyProtocolFunded]: settleBorrow.t.sol#L939
-[test_whenMaximumFundableProtocolComponent]: settleBorrow.t.sol#L954
-[test_whenMaximumFundableReferralComponent]: settleBorrow.t.sol#L960
-[test_whenFeeComponentSumOverflows_reverts]: settleBorrow.t.sol#L886
-[test_whenMinimumProtocolOverflows_reverts]: settleBorrow.t.sol#L944
-[test_whenMaximumProtocolOverflows_reverts]: settleBorrow.t.sol#L949
-[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L963
-[invariant_lifecycleAuthorizationAndCustodyStayIndependent]: setAuthorization.t.sol#L193
+## Delegated completion
+
+Core, the selected Auth and the admitted Debt action are active/enabled. Account A grants O reusable
+borrowing authority with a fixed recipient. Principal uses raw 9-decimal OHM. Each use must satisfy
+the cap on total resulting principal; it is not a fresh per-call allowance.
+
+| ID | Caller | Prior grant uses | Existing principal | Additional principal | maxDebt | Execution / effects | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-BORROW-N90 | Debt action forwarding O | 0 | 100e9 | 50e9 | 150e9-1 | ResultOutsideGrant: result 150e9 exceeds cap by one raw OHM unit; complete ledger rolls back | Covered: [test][test_givenExistingPrincipal_whenCanonicalDebtExceedsBound_reverts] |
+| BLCORE-SETTLE-BORROW-P90 | Debt action forwarding O | 0 | 100e9 | 50e9 | 150e9 | Success; resulting principal 150e9 and recipient delivery 50e9 | Covered: [test][test_givenExistingPrincipal_whenCanonicalDebtEqualsBound] |
+| BLCORE-SETTLE-BORROW-P91 | Debt action forwarding O | 1 | 125e9 | 25e9 | 150e9 | Success at the same cap; exact grant and stamp retained; pair/account epochs stay 1/0 | Covered: [test][test_givenUsedReusableGrant_whenBorrowedAgainAtCap] |
+| BLCORE-SETTLE-BORROW-N91 | Debt action forwarding O | 2 | 150e9 | 1 | 150e9 | ResultOutsideGrant; no further funding, recipient delivery or principal; grant/stamp/epoch unchanged | Covered: [test][test_givenReusableGrantAtCap_whenBorrowedAgain_reverts] |
+
+### Reusable-grant caller isolation
+
+An A→O grant has already funded one legitimate 25e9 borrow, bringing principal from 100e9 to 125e9.
+The attempted extra borrow is one raw OHM unit with otherwise valid inputs. X has no grant from A.
+
+| ID | Caller / route | Claimed operator | Execution | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-BORROW-A91 | Fuzz nonzero X≠A,O through public Debt.borrow | X, captured from msg.sender | OperatorAuth_InvalidContext | Ledger, complete A→O grant and original stamp unchanged; A→X pair remains absent | Covered: [test][test_givenUsedReusableGrant_whenUnrelatedPublicCallerBorrows_reverts] |
+| BLCORE-SETTLE-BORROW-A92 | Zero caller through public Debt.borrow | Zero | OperatorAuth_InvalidIdentity | Ledger and genuine grant stamp unchanged | Covered: [test][test_givenUsedReusableGrant_whenZeroPublicCallerBorrows_reverts] |
+| BLCORE-SETTLE-BORROW-A93 | Fuzz X≠A,O without BL_DEBT_POLICY_ROLE, including zero; direct Core call copies the public original snapshot | O | ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | No funds or epoch changes; real grant stays live | Covered: [test][test_givenUsedReusableGrant_whenUnadmittedCallerCopiesStamp_reverts] |
+
+[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L987
+[invariant_lifecycleAuthorizationAndCustodyStayIndependent]: authorization.invariants.t.sol#L9
+[test_givenAdminMutationCallback_whenCaught]: settleBorrow.t.sol#L695
+[test_givenAdminMutationCallback_whenPropagated]: settleBorrow.t.sol#L731
+[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleBorrow.t.sol#L251
+[test_givenCallerInactive_whenSettled]: settleBorrow.t.sol#L238
+[test_givenCapExceeded_whenBorrowed_reverts]: settleBorrow.t.sol#L423
+[test_givenChangedActiveMaturity_whenBorrowed_reverts]: settleBorrow.t.sol#L355
+[test_givenCoreDisabled_whenSettled_reverts]: settleBorrow.t.sol#L185
+[test_givenCoreInactive_whenSettled_reverts]: settleBorrow.t.sol#L209
+[test_givenExcessIncomingReceipt_whenSettled_reverts]: settleBorrow.t.sol#L1057
+[test_givenExistingPrincipal_whenCanonicalDebtEqualsBound]: authorizationLifecycleBorrow.t.sol#L46
+[test_givenExistingPrincipal_whenCanonicalDebtExceedsBound_reverts]: authorizationLifecycleBorrow.t.sol#L20
+[test_givenUsedReusableGrant_whenBorrowedAgainAtCap]: authorizationLifecycleBorrow.t.sol#L79
+[test_givenReusableGrantAtCap_whenBorrowedAgain_reverts]: authorizationLifecycleBorrow.t.sol#L110
+[test_givenUsedReusableGrant_whenUnrelatedPublicCallerBorrows_reverts]: authorizationLifecycleBorrow.t.sol#L143
+[test_givenUsedReusableGrant_whenZeroPublicCallerBorrows_reverts]: authorizationLifecycleBorrow.t.sol#L172
+[test_givenUsedReusableGrant_whenUnadmittedCallerCopiesStamp_reverts]: authorizationLifecycleBorrow.t.sol#L187
+[test_givenHorizonExceeded_whenBorrowed_reverts]: settleBorrow.t.sol#L397
+[test_givenInventoryFailureAfterFee_whenBorrowed_reverts]: settleBorrow.t.sol#L500
+[test_givenMandatoryFeeFailure_whenBorrowed_reverts]: settleBorrow.t.sol#L473
+[test_givenMissingPosition_whenBorrowed_reverts]: settleBorrow.t.sol#L452
+[test_givenOhmCallback_whenCaught]: settleBorrow.t.sol#L933
+[test_givenOhmCallback_whenPropagated]: settleBorrow.t.sol#L975
+[test_givenOnlySiblingRole_whenSettled_reverts]: settleBorrow.t.sol#L146
+[test_givenOptionalFeeCallback_whenCaught]: settleBorrow.t.sol#L845
+[test_givenOptionalFeeCallback_whenPropagated]: settleBorrow.t.sol#L886
+[test_givenOptionalPayoutFailure_whenBorrowed]: settleBorrow.t.sol#L563
+[test_givenOriginationsDisabled_whenBorrowed_reverts]: settleBorrow.t.sol#L288
+[test_givenPastMaturity_whenBorrowed_reverts]: settleBorrow.t.sol#L316
+[test_givenPayoutRecoveryCallback_whenCaught]: settleBorrow.t.sol#L766
+[test_givenPayoutRecoveryCallback_whenPropagated]: settleBorrow.t.sol#L806
+[test_givenRoleHoldingEOA_whenSettled]: settleBorrow.t.sol#L244
+[test_givenSettlementCallback_whenCaught]: settleBorrow.t.sol#L614
+[test_givenSettlementCallback_whenPropagated]: settleBorrow.t.sol#L655
+[test_givenShortIncomingReceipt_whenSettled_reverts]: settleBorrow.t.sol#L1017
+[test_givenWrongKernelCaller_whenSettled]: settleBorrow.t.sol#L171
+[test_givenZeroAmount_whenBorrowed_reverts]: settleBorrow.t.sol#L375
+[test_givenZeroFee_whenBorrowed]: settleBorrow.t.sol#L527
+[test_whenCallerLacksSettlementRole_reverts]: settleBorrow.t.sol#L120
+[test_whenFeeComponentSumOverflows_reverts]: settleBorrow.t.sol#L1159
+[test_whenFeeComponentsForwarded]: settleBorrow.t.sol#L1102
+[test_whenLiteralComponentFunding]: settleBorrow.t.sol#L1204
+[test_whenMaximumFundableProtocolComponent]: settleBorrow.t.sol#L1229
+[test_whenMaximumFundableReferralComponent]: settleBorrow.t.sol#L1235
+[test_whenMaximumProtocolOverflows_reverts]: settleBorrow.t.sol#L1224
+[test_whenMinimumProtocolOverflows_reverts]: settleBorrow.t.sol#L1219
+[test_whenOnePrincipalSeed]: settleBorrow.t.sol#L1095
+[test_whenOnlyProtocolFunded]: settleBorrow.t.sol#L1214
+[test_whenOnlyReferralFunded]: settleBorrow.t.sol#L1209
+[test_whenPastMaturityBoundarySeeds_reverts]: settleBorrow.t.sol#L341
+[test_whenPrincipalBoundarySeeds]: settleBorrow.t.sol#L556
+[test_whenUnauthorizedCallerAndMalformedRequest_thenRoleErrorPrecedesFieldDecoding]: ./settleBorrow.t.sol#L42
+
+[test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts]: ./settleBorrow.t.sol#L72

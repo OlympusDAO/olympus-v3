@@ -41,7 +41,7 @@ abstract contract BurnerLoansCollateralActionTest is BurnerLoansModularTest {
     function _grantOperator(uint48 deadline_) internal {
         vm.warp(1);
         vm.prank(_borrower);
-        _core.setAuthorization(_recipient, deadline_);
+        _approveOperator(_borrower, _recipient, deadline_);
     }
 
     function _accountingDigest(address asset_) internal view returns (bytes32) {

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
@@ -107,7 +110,19 @@ contract BurnerLoansDebtExtendReferralTest is BurnerLoansReferralTest {
         uint48 maturity = _position().maturity + 60 days;
         bytes memory instruction = abi.encodeCall(
             IBurnerLoansCore.settleExtend,
-            (address(_asset), _borrower, payer, maturity, protocol_, _referrer, referral_)
+            (
+                IBurnerLoansCore.ExtendRequest({
+                    asset: address(_asset),
+                    borrower: _borrower,
+                    payer: payer,
+                    maturity: maturity,
+                    protocolFee: protocol_,
+                    referrer: _referrer,
+                    referralFee: referral_
+                }),
+                payer,
+                _operatorAuthContext(_borrower, payer, 8)
+            )
         );
         vm.mockCall(address(_core), instruction, abi.encode(maturity));
         vm.expectCall(address(_core), instruction, uint64(1));
@@ -230,6 +245,8 @@ contract BurnerLoansDebtExtendReferralTest is BurnerLoansReferralTest {
     }
 
     // Scenarios: BLEXT-EXTEND-A16.
+    // Controlled test bindings/callers intentionally retain zero-address cases where applicable.
+    // forge-lint: disable-start(missing-zero-check)
     function test_givenOnlyOtherOperatorAuthorized_whenReferrerExtends_reverts(
         address caller_
     ) public {
@@ -245,7 +262,7 @@ contract BurnerLoansDebtExtendReferralTest is BurnerLoansReferralTest {
         _mockFeeComponents(76, 25);
         _debt.previewExtend(address(_asset), _borrower, 1, 101, _referrer);
         bytes32 beforeState = _stateDigest(caller_);
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
         vm.prank(_referrer);
         _debt.extend(address(_asset), _borrower, 1, 101, _referrer);
         assertEq(
@@ -254,6 +271,8 @@ contract BurnerLoansDebtExtendReferralTest is BurnerLoansReferralTest {
             "Whitelist membership grants no borrower authority"
         );
     }
+
+    // forge-lint: disable-end(missing-zero-check)
 
     // Scenarios: BLEXT-EXTEND-A15, BLEXT-EXTEND-P12.
     function test_whenZeroComponents() public {
@@ -324,11 +343,15 @@ contract BurnerLoansDebtExtendReferralTest is BurnerLoansReferralTest {
     }
 
     // Scenarios: BLEXT-EXTEND-A15.
+    // Controlled test bindings/callers intentionally retain zero-address cases where applicable.
+    // forge-lint: disable-start(missing-zero-check)
     function test_whenReferrerVaries(address referrer_, bool operator_) public {
         vm.assume(referrer_ != address(0) && referrer_ != address(_payout));
         _referrer = referrer_;
         test_whenRiskReturnsComponents(76, 25, operator_);
     }
+
+    // forge-lint: disable-end(missing-zero-check)
 
     // Scenarios: BLEXT-EXTEND-I07.
     function test_whenFeeLimitEqualsProtocol_reverts() public {
@@ -355,3 +378,4 @@ contract BurnerLoansDebtExtendReferralTest is BurnerLoansReferralTest {
         test_whenComponentSumOverflows_reverts(type(uint256).max, 1);
     }
 }
+// forge-lint: disable-end(unused-return)

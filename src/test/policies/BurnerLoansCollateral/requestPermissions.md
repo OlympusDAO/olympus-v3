@@ -1,6 +1,6 @@
 # BurnerLoansCollateral.requestPermissions coverage plan
 
-Source: [requestPermissions](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L132). Test mappings name the passing proofs.
+Source: [requestPermissions](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L137). Test mappings name the passing proofs.
 
 ## Domains and notation
 

@@ -1,6 +1,6 @@
 # BurnerLoansCore.requestPermissions coverage plan
 
-Source: [requestPermissions](../../../policies/burnerloans/BurnerLoansCore.sol#L159). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [requestPermissions](../../../policies/burnerloans/BurnerLoansCore.sol#L170). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 

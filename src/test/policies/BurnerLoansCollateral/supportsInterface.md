@@ -1,6 +1,6 @@
 # BurnerLoansCollateral.supportsInterface coverage plan
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansCollateral.sol#L145). Test mappings name the passing proofs.
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansCollateral.sol#L165). Test mappings name the passing proofs.
 
 ## Domains and notation
 

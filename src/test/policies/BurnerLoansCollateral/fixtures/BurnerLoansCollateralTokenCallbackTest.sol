@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
-// Interfaces
-import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
-
 // Libraries
+import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
@@ -46,8 +44,8 @@ abstract contract BurnerLoansCollateralTokenCallbackTest is BurnerLoansCollatera
         vm.prank(address(_token));
         _token.approve(address(_core), type(uint256).max);
         vm.startPrank(_borrower);
-        _core.setAuthorization(address(_token), type(uint48).max);
-        _core.setAuthorization(_recipient, type(uint48).max);
+        _approveOperatorForAsset(_borrower, address(_token), type(uint48).max, address(_token));
+        _approveOperatorForAsset(_borrower, _recipient, type(uint48).max, address(_token));
         vm.stopPrank();
     }
 

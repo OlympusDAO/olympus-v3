@@ -1,8 +1,10 @@
 # BurnerLoansDebt.extend coverage plan
 
+Authorization migration: grants now live on the selected BurnerLoansAuth. The public caller is the actual operator. Zero operator identities reject with `OperatorAuth_InvalidIdentity`; other absent/cancelled authority rejects with `OperatorAuth_InvalidContext`; expired accepted grants reject with `OperatorAuth_ExpiredGrant(deadline)`. An expired grant does not block permissionless previews. Cancelled-grant fixtures use nonzero operators because zero-operator grants cannot be created. Canonical permissions bind the explicit market asset, including custom callback tokens.
+
 > Referral scenarios below supplement the retained baseline. Their mappings identify the additional assertions for the extended API.
 
-Source: [extend](../../../policies/burnerloans/BurnerLoansDebt.sol#L281). Scenarios specify the required behavior; mappings identify existing test proof.
+Source: [extend](../../../policies/burnerloans/BurnerLoansDebt.sol#L282). Scenarios specify the required behavior; mappings identify existing test proof.
 
 Coverage records implemented domains and assertions independently of execution results. `Partial` identifies missing proof, not a production failure. New required behavior remains `Unmapped` until corresponding tests assert it.
 
@@ -66,10 +68,10 @@ Action and Core are active/enabled. Unauthorized caller fuzzing excludes borrowe
 | BLEXT-EXTEND-A03 | Delegated operator | caller=operator; now=deadline; grant nonzero | `Authorized` | Deadline equality accepted | Any viewer quotes the same economics; no borrower/operator authorization read | Covered: [test_givenValidOperatorGrant_whenExtended_thenActualOperatorPays][test_givenValidOperatorGrant_whenExtended_thenActualOperatorPays], [test_whenAuthorizationEndpoints_thenAdmissionIsInclusive][test_whenAuthorizationEndpoints_thenAdmissionIsInclusive], [test_givenRiskFee_whenOperatorExtends_thenExactFeeIsSettled][test_givenRiskFee_whenOperatorExtends_thenExactFeeIsSettled], [test_givenValidGrant_whenOperatorAdmitted_thenInputValidationReached][test_givenValidGrant_whenOperatorAdmitted_thenInputValidationReached], [test_givenMaximumDeadline_whenAtEquality_thenOperatorAdmitted][test_givenMaximumDeadline_whenAtEquality_thenOperatorAdmitted], [test_givenAtDeadline_whenOperatorExtended_thenSuccessfulSettlement][test_givenAtDeadline_whenOperatorExtended_thenSuccessfulSettlement], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenGrantDeadline_whenUnrelatedViewerQuotes][test_givenGrantDeadline_whenUnrelatedViewerQuotes] |
 | BLEXT-EXTEND-A04 | Delegated operator | caller=operator; deadline=MAX48; now<=deadline | `Authorized` | No deadline narrowing | Any viewer quotes the same economics; no borrower/operator authorization read | Covered: [test_givenValidOperatorGrant_whenExtended_thenActualOperatorPays][test_givenValidOperatorGrant_whenExtended_thenActualOperatorPays], [test_whenAuthorizationEndpoints_thenAdmissionIsInclusive][test_whenAuthorizationEndpoints_thenAdmissionIsInclusive], [test_givenRiskFee_whenOperatorExtends_thenExactFeeIsSettled][test_givenRiskFee_whenOperatorExtends_thenExactFeeIsSettled], [test_givenValidGrant_whenOperatorAdmitted_thenInputValidationReached][test_givenValidGrant_whenOperatorAdmitted_thenInputValidationReached], [test_givenMaximumDeadline_whenAtEquality_thenOperatorAdmitted][test_givenMaximumDeadline_whenAtEquality_thenOperatorAdmitted], [test_givenMaximumDeadline_whenOperatorExtended_thenSuccessfulSettlement][test_givenMaximumDeadline_whenOperatorExtended_thenSuccessfulSettlement], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead] |
 | BLEXT-EXTEND-A05 | Fuzz all callers | borrower=0; actual caller arbitrary | `BurnerLoans_ZeroAddress()` | Unchanged; no committed logs | Same BurnerLoans_ZeroAddress() | Covered: [test_whenBorrowerZero_thenExplicitError][test_whenBorrowerZero_thenExplicitError] |
-| BLEXT-EXTEND-A06 | Fuzz callers excluding borrower | caller differs from borrower; no grant | `OperatorAuth_UnauthorizedOnBehalfOf()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts][test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts], [test_givenNoGrant_whenUnrelatedCallerActs_reverts][test_givenNoGrant_whenUnrelatedCallerActs_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenNoGrant_whenUnrelatedViewerQuotes][test_givenNoGrant_whenUnrelatedViewerQuotes] |
-| BLEXT-EXTEND-A07 | Fuzz callers excluding borrower | caller differs from borrower; grant cancelled to zero | `OperatorAuth_UnauthorizedOnBehalfOf()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_givenCancelledGrant_whenOperatorActs_reverts][test_givenCancelledGrant_whenOperatorActs_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenRevokedGrant_whenUnrelatedViewerQuotes][test_givenRevokedGrant_whenUnrelatedViewerQuotes] |
-| BLEXT-EXTEND-A08 | Delegated operator | caller=operator; grant nonzero; independently fuzz stored deadline D in 1..MAX48 and now in D+1..MAX256; seed D+1,MAX48+1,MAX256 | `OperatorAuth_UnauthorizedOnBehalfOf()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_whenAuthorizationEndpoints_thenAdmissionIsInclusive][test_whenAuthorizationEndpoints_thenAdmissionIsInclusive], [test_givenExpiredGrant_whenOperatorActs_reverts][test_givenExpiredGrant_whenOperatorActs_reverts], [test_givenMaximumTimestamp_whenGrantExpired_reverts][test_givenMaximumTimestamp_whenGrantExpired_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenExpiredGrant_whenUnrelatedViewerQuotes][test_givenExpiredGrant_whenUnrelatedViewerQuotes] |
-| BLEXT-EXTEND-A11 | Fuzz unrelated caller X | Borrower B has a valid grant to O; O differs from B; X differs from B and O and has no grant; independently fuzz deadline D in 2..MAX48 and now in 1..D; seed now=1,D and D=MAX48 | `OperatorAuth_UnauthorizedOnBehalfOf()` | B→O grant unchanged; no position, balance or accounting change; no committed logs | X receives the same quote as B under equal economic state; the B→O grant does not restrict quoting | Covered: [test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts][test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts], [test_givenAnotherValidOperator_whenUnrelatedCallerActs_reverts][test_givenAnotherValidOperator_whenUnrelatedCallerActs_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenValidGrant_whenUnrelatedViewerQuotes][test_givenValidGrant_whenUnrelatedViewerQuotes] |
+| BLEXT-EXTEND-A06 | Fuzz callers excluding borrower | caller differs from borrower; no grant | `OperatorAuth_InvalidContext()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts][test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts], [test_givenNoGrant_whenUnrelatedCallerActs_reverts][test_givenNoGrant_whenUnrelatedCallerActs_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenNoGrant_whenUnrelatedViewerQuotes][test_givenNoGrant_whenUnrelatedViewerQuotes] |
+| BLEXT-EXTEND-A07 | Fuzz callers excluding borrower | caller differs from borrower; grant cancelled to zero | `OperatorAuth_InvalidContext()` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_givenCancelledGrant_whenOperatorActs_reverts][test_givenCancelledGrant_whenOperatorActs_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenRevokedGrant_whenUnrelatedViewerQuotes][test_givenRevokedGrant_whenUnrelatedViewerQuotes] |
+| BLEXT-EXTEND-A08 | Delegated operator | caller=operator; grant nonzero; independently fuzz stored deadline D in 1..MAX48 and now in D+1..MAX256; seed D+1,MAX48+1,MAX256 | `OperatorAuth_ExpiredGrant(D)` | Unchanged; no committed logs | Permissionless: ignore the grant and evaluate current input/economic checks; valid inputs return the quote | Covered: [test_whenAuthorizationEndpoints_thenAdmissionIsInclusive][test_whenAuthorizationEndpoints_thenAdmissionIsInclusive], [test_givenExpiredGrant_whenOperatorActs_reverts][test_givenExpiredGrant_whenOperatorActs_reverts], [test_givenMaximumTimestamp_whenGrantExpired_reverts][test_givenMaximumTimestamp_whenGrantExpired_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenExpiredGrant_whenUnrelatedViewerQuotes][test_givenExpiredGrant_whenUnrelatedViewerQuotes] |
+| BLEXT-EXTEND-A11 | Fuzz unrelated caller X | Borrower B has a valid grant to O; O differs from B; X differs from B and O and has no grant; independently fuzz deadline D in 2..MAX48 and now in 1..D; seed now=1,D and D=MAX48 | `OperatorAuth_InvalidContext()` | B→O grant unchanged; no position, balance or accounting change; no committed logs | X receives the same quote as B under equal economic state; the B→O grant does not restrict quoting | Covered: [test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts][test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts], [test_givenAnotherValidOperator_whenUnrelatedCallerActs_reverts][test_givenAnotherValidOperator_whenUnrelatedCallerActs_reverts], [test_whenAnyViewerQuotesWithoutAuthorizationRead][test_whenAnyViewerQuotesWithoutAuthorizationRead], [test_givenValidGrant_whenUnrelatedViewerQuotes][test_givenValidGrant_whenUnrelatedViewerQuotes] |
 
 ## Core settlement authorization
 
@@ -80,7 +82,7 @@ The action retains its own active/enabled gates; Core retains its own lifecycle 
 | ID | Caller | Input / pre-state | Execution / return | Accounting / events | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
 | BLEXT-EXTEND-A09 | Borrower | Action settlement role revoked after public enablement | `ROLES_RequireRole(BL_DEBT_POLICY_ROLE)` | Unchanged; no committed logs | Same ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | Covered: [test_givenDebtRoleRevoked_whenExtended_reverts][test_givenDebtRoleRevoked_whenExtended_reverts] |
-| BLEXT-EXTEND-A10 | Borrower or authorized operator | Required settlement role retained; own activity/enabled state unchanged; external action `kernel()` reports another Kernel or reverts; seed both | Return ExtendPreview(fee,oldMaturity+termLength*terms,H) | Advance maturity once and collect the exact accepted fee; principal and collateral unchanged; no caller `kernel()` read | Same economic quote under unchanged prices/conversion; no caller metadata read, writes or logs | Covered: [test_givenReportedKernelMismatch_whenExtended_thenGetterIsNotRead][test_givenReportedKernelMismatch_whenExtended_thenGetterIsNotRead], [test_givenActionKernelGetterReverts_whenExtended_thenGetterIsNotRead][test_givenActionKernelGetterReverts_whenExtended_thenGetterIsNotRead] |
+| BLEXT-EXTEND-A10 | Borrower or authorized operator | Required settlement role retained; own activity/enabled state unchanged; external action `kernel()` reports another Kernel or reverts; seed both | Return ExtendPreview(fee,oldMaturity+termLength\*terms,H) | Advance maturity once and collect the exact accepted fee; principal and collateral unchanged; no caller `kernel()` read | Same economic quote under unchanged prices/conversion; no caller metadata read, writes or logs | Covered: [test_givenReportedKernelMismatch_whenExtended_thenGetterIsNotRead][test_givenReportedKernelMismatch_whenExtended_thenGetterIsNotRead], [test_givenActionKernelGetterReverts_whenExtended_thenGetterIsNotRead][test_givenActionKernelGetterReverts_whenExtended_thenGetterIsNotRead] |
 
 ## Dependency lifecycle
 
@@ -237,7 +239,7 @@ All economic checks otherwise pass. Vary caller and attribution independently; e
 | ID | Caller | Referrer | Operator grant | Preview | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BLEXT-EXTEND-A15 | Borrower B or O; guarantee each | Allowed R, including R=B/O and unrelated frontend | B direct or valid B→O | Permissionless viewer quotes same total F without split fields | Success | Core instruction has payer=actual caller and the exact P,r,R returned by Risk; unit mock performs no transfers | Covered: [test_whenRiskReturnsComponents][test_whenRiskReturnsComponents], [test_whenZeroComponents][test_whenZeroComponents], [test_whenOneProtocolUnit][test_whenOneProtocolUnit], [test_whenOneReferralUnit][test_whenOneReferralUnit], [test_whenLiteralSplit][test_whenLiteralSplit], [test_whenMaximumProtocolComponent][test_whenMaximumProtocolComponent], [test_whenMaximumReferralComponent][test_whenMaximumReferralComponent], [test_whenReferrerIsBorrower][test_whenReferrerIsBorrower], [test_whenReferrerIsOperator][test_whenReferrerIsOperator], [test_whenReferrerVaries][test_whenReferrerVaries], [test_givenBorrowReferrer_whenOperatorExtendsWithAnotherReferrer][test_givenBorrowReferrer_whenOperatorExtendsWithAnotherReferrer] |
-| BLEXT-EXTEND-A16 | Unrelated X≠B,O | Allowed R≠Payout; seed X=R | Only B→O valid; no B→X | X may quote B without authorization reads | IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf() | Unchanged; whitelist grants no execution authority | Covered: [test_givenOnlyOtherOperatorAuthorized_whenReferrerExtends_reverts][test_givenOnlyOtherOperatorAuthorized_whenReferrerExtends_reverts] |
+| BLEXT-EXTEND-A16 | Unrelated X≠B,O | Allowed R≠Payout; seed X=R | Only B→O valid; no B→X | X may quote B without authorization reads | IOperatorAuth.OperatorAuth_InvalidContext() | Unchanged; whitelist grants no execution authority | Covered: [test_givenOnlyOtherOperatorAuthorized_whenReferrerExtends_reverts][test_givenOnlyOtherOperatorAuthorized_whenReferrerExtends_reverts] |
 
 ### Risk results and combined fee limit
 
@@ -301,56 +303,65 @@ Earlier borrower/action/health admission passes. Configure the reached Risk.fee 
 
 - [x] Review the referral cases before writing tests.
 
-[test_givenActionKernelGetterReverts_whenExtended_thenGetterIsNotRead]: extend.t.sol#L717
-[test_givenAnotherValidOperator_whenUnrelatedCallerActs_reverts]: extend.t.sol#L1092
-[test_givenAtDeadline_whenOperatorExtended_thenSuccessfulSettlement]: extend.t.sol#L1288
-[test_givenBeforeDeadline_whenOperatorExtended_thenSuccessfulSettlement]: extend.t.sol#L1283
+## Authorization completion callbacks
+
+| ID | Trigger | Expected result | Test |
+| --- | --- | --- | --- |
+| BLEXT-EXTEND-AUTH-C20 | Actual token transfer callback | Cancel or accept identical permissions at a newer epoch; original captured authority fails completion and restores all accounting/token/epoch changes | [test_givenFeeCollectionCallback_whenOriginalGrantCancelled_reverts][test_givenFeeCollectionCallback_whenOriginalGrantCancelled_reverts] |
+| BLEXT-EXTEND-AUTH-C21 | Actual token transfer callback | Cancel or accept identical permissions at a newer epoch; original captured authority fails completion and restores all accounting/token/epoch changes | [test_givenFeeCollectionCallback_whenIdenticalGrantReaccepted_reverts][test_givenFeeCollectionCallback_whenIdenticalGrantReaccepted_reverts] |
+
+[test_givenActionKernelGetterReverts_whenExtended_thenGetterIsNotRead]: extend.t.sol#L747
+[test_givenAnotherValidOperator_whenUnrelatedCallerActs_reverts]: extend.t.sol#L1125
+[test_givenAtDeadline_whenOperatorExtended_thenSuccessfulSettlement]: extend.t.sol#L1316
+[test_givenBeforeDeadline_whenOperatorExtended_thenSuccessfulSettlement]: extend.t.sol#L1311
 [test_givenBorrowReferrer_whenOperatorExtendsWithAnotherReferrer]: extendReferralIntegration.t.sol#L94
 [test_givenCacheFullyRepays_whenExtensionReloads_thenNoDebtAndRollback]: extendPriceCallbacks.t.sol#L18
-[test_givenCancelledGrant_whenOperatorActs_reverts]: extend.t.sol#L1065
+[test_givenCancelledGrant_whenOperatorActs_reverts]: extend.t.sol#L1103
 [test_givenCaughtUnauthorizedCacheBorrow_whenExtending_thenOneExtension]: extendPriceCallbacks.t.sol#L39
-[test_givenClampedHorizon_whenExpiryIsMaximum_thenNoTruncation]: extend.t.sol#L1230
-[test_givenCollateralCallback_whenExtended_revertsAtomically]: extend.t.sol#L555
-[test_givenCollateralWithNoDebt_whenExtended_reverts]: extend.t.sol#L996
-[test_givenCoreUnavailable_whenCalled_thenDependencyIdentified]: extend.t.sol#L1163
-[test_givenCustodyInsolvent_whenExtended_reverts]: extend.t.sol#L784
-[test_givenDebtDisabled_whenExtended_reverts]: extend.t.sol#L509
-[test_givenDebtInactive_whenExtended_reverts]: extend.t.sol#L525
+[test_givenClampedHorizon_whenExpiryIsMaximum_thenNoTruncation]: extend.t.sol#L1258
+[test_givenCollateralCallback_whenExtended_revertsAtomically]: extend.t.sol#L592
+[test_givenCollateralWithNoDebt_whenExtended_reverts]: extend.t.sol#L1026
+[test_givenCoreUnavailable_whenCalled_thenDependencyIdentified]: extend.t.sol#L1191
+[test_givenCustodyInsolvent_whenExtended_reverts]: extend.t.sol#L814
+[test_givenDebtDisabled_whenExtended_reverts]: extend.t.sol#L521
+[test_givenDebtInactive_whenExtended_reverts]: extend.t.sol#L537
 [test_givenDebtRoleRevoked_whenExtended_reverts]: extend.t.sol#L339
-[test_givenDisabledDebtAction_whenCalled_thenPauseWins]: extend.t.sol#L1146
-[test_givenExactHealthAndExpiryThresholds_whenExtended_thenAccepted]: extend.t.sol#L873
+[test_givenDisabledDebtAction_whenCalled_thenPauseWins]: extend.t.sol#L1174
+[test_givenExactHealthAndExpiryThresholds_whenExtended_thenAccepted]: extend.t.sol#L903
 [test_givenExpiredCacheAndChangedPrice_whenExtended]: extendIntegration.t.sol#L85
 [test_givenExpiredCacheAndChangedPrice_whenOldFeeLimitUsed_reverts]: extendIntegration.t.sol#L105
-[test_givenExpiredGrant_whenOperatorActs_reverts]: extend.t.sol#L1037
-[test_givenExpiredGrant_whenUnrelatedViewerQuotes]: extend.t.sol#L1424
-[test_givenFeeAboveMaximum_whenExtended_reverts]: extend.t.sol#L414
+[test_givenExpiredGrant_whenOperatorActs_reverts]: extend.t.sol#L1067
+[test_givenExpiredGrant_whenUnrelatedViewerQuotes]: extend.t.sol#L1452
+[test_givenFeeAboveMaximum_whenExtended_reverts]: extend.t.sol#L426
 [test_givenFeeAllowanceOneBelow_whenOperatorExtends_reverts]: extend.t.sol#L125
 [test_givenFeeBalanceOneBelow_whenOperatorExtends_reverts]: extend.t.sol#L135
-[test_givenFloanRejectsExtension_whenExtended_thenNoFeeOrExpiryChange]: extend.t.sol#L733
-[test_givenGrantDeadline_whenUnrelatedViewerQuotes]: extend.t.sol#L1414
-[test_givenInactiveDebtAction_whenCalled_thenSubjectIdentified]: extend.t.sol#L1125
-[test_givenInactiveSubject_whenAdmissionAxesSeeded_thenExactError]: extend.t.sol#L1298
+[test_givenFeeCollectionCallback_whenIdenticalGrantReaccepted_reverts]: extendAuthorizationCallbacks.t.sol#L21
+[test_givenFeeCollectionCallback_whenOriginalGrantCancelled_reverts]: extendAuthorizationCallbacks.t.sol#L16
+[test_givenFloanRejectsExtension_whenExtended_thenNoFeeOrExpiryChange]: extend.t.sol#L763
+[test_givenGrantDeadline_whenUnrelatedViewerQuotes]: extend.t.sol#L1442
+[test_givenInactiveDebtAction_whenCalled_thenSubjectIdentified]: extend.t.sol#L1153
+[test_givenInactiveSubject_whenAdmissionAxesSeeded_thenExactError]: extend.t.sol#L1326
 [test_givenInsufficientFeeAllowance_whenExtended_reverts]: extend.t.sol#L40
 [test_givenInsufficientFeeBalance_whenExtended_reverts]: extend.t.sol#L64
 [test_givenInventoryDisabled_whenExtended_thenSucceeds]: extend.t.sol#L298
-[test_givenMaximumDeadline_whenAtEquality_thenOperatorAdmitted]: extend.t.sol#L1029
-[test_givenMaximumDeadline_whenOperatorExtended_thenSuccessfulSettlement]: extend.t.sol#L1293
-[test_givenMaximumFundableUint256Fee_whenExtended_thenExactReceipt]: extend.t.sol#L697
-[test_givenMaximumTimestamp_whenGrantExpired_reverts]: extend.t.sol#L1060
+[test_givenMaximumDeadline_whenAtEquality_thenOperatorAdmitted]: extend.t.sol#L1059
+[test_givenMaximumDeadline_whenOperatorExtended_thenSuccessfulSettlement]: extend.t.sol#L1321
+[test_givenMaximumFundableUint256Fee_whenExtended_thenExactReceipt]: extend.t.sol#L727
+[test_givenMaximumTimestamp_whenGrantExpired_reverts]: extend.t.sol#L1098
 [test_givenMaximumUint128Fee_whenOperatorExtends_thenExactFeeIsSettled]: extend.t.sol#L293
 [test_givenMaximumUint256Fee_givenUnfundedOperator_whenExtended_reverts]: extend.t.sol#L140
-[test_givenNoDebt_whenExtended_reverts]: extend.t.sol#L400
-[test_givenNoGrant_whenUnrelatedCallerActs_reverts]: extend.t.sol#L1079
-[test_givenNoGrant_whenUnrelatedViewerQuotes]: extend.t.sol#L1393
+[test_givenNoDebt_whenExtended_reverts]: extend.t.sol#L412
+[test_givenNoGrant_whenUnrelatedCallerActs_reverts]: extend.t.sol#L1117
+[test_givenNoGrant_whenUnrelatedViewerQuotes]: extend.t.sol#L1421
 [test_givenOldQuote_whenShareChangesBeforeExtension]: extendReferralIntegration.t.sol#L212
-[test_givenOneSecondTerm_whenMaximumTermsExtended_thenNoTruncation]: extend.t.sol#L904
+[test_givenOneSecondTerm_whenMaximumTermsExtended_thenNoTruncation]: extend.t.sol#L934
 [test_givenOneUnitFee_whenExtended_thenExactFeeIsSettled]: extend.t.sol#L288
-[test_givenOnlyOtherOperatorAuthorized_whenReferrerExtends_reverts]: extendReferral.t.sol#L233
-[test_givenOriginationsDisabled_whenExtended_reverts]: extend.t.sol#L770
+[test_givenOnlyOtherOperatorAuthorized_whenReferrerExtends_reverts]: extendReferral.t.sol#L250
+[test_givenOriginationsDisabled_whenExtended_reverts]: extend.t.sol#L800
 [test_givenOtherOperatorGrant_whenUnrelatedCallerExtends_reverts]: extend.t.sol#L320
-[test_givenPausedSubject_whenAdmissionAxesSeeded_thenExactError]: extend.t.sol#L1322
-[test_givenPayoutUnavailable_whenFeeBearingOperation_reverts]: extend.t.sol#L1268
-[test_givenPolicyReactivated_whenExtendExecuted_thenSucceeds]: extend.t.sol#L1343
+[test_givenPausedSubject_whenAdmissionAxesSeeded_thenExactError]: extend.t.sol#L1350
+[test_givenPayoutUnavailable_whenFeeBearingOperation_reverts]: extend.t.sol#L1296
+[test_givenPolicyReactivated_whenExtendExecuted_thenSucceeds]: extend.t.sol#L1371
 [test_givenPropagatedUnauthorizedCacheBorrow_whenExtending_thenRollback]: extendPriceCallbacks.t.sol#L55
 [test_givenRealRisk_whenExtended_thenPerTermRoundingIsIndependent]: extendIntegration.t.sol#L19
 [test_givenRealRisk_whenOneTermExtended_then314063Fee]: extendIntegration.t.sol#L27
@@ -359,12 +370,12 @@ Earlier borrower/action/health admission passes. Configure the reached Risk.fee 
 [test_givenRealTopUp_whenExtended]: extendIntegration.t.sol#L38
 [test_givenReferralDeliveryRejected_whenExtended]: extendReferralIntegration.t.sol#L260
 [test_givenReferrerRemovedAfterQuote_whenExtended_reverts]: extendReferralIntegration.t.sol#L186
-[test_givenReportedKernelMismatch_whenExtended_thenGetterIsNotRead]: extend.t.sol#L705
-[test_givenResultingExpiryEqualsNow_whenExtended_reverts]: extend.t.sol#L827
-[test_givenResultingExpiryNotFuture_whenExtended_reverts]: extend.t.sol#L809
-[test_givenRevokedGrant_whenUnrelatedViewerQuotes]: extend.t.sol#L1438
+[test_givenReportedKernelMismatch_whenExtended_thenGetterIsNotRead]: extend.t.sol#L735
+[test_givenResultingExpiryEqualsNow_whenExtended_reverts]: extend.t.sol#L857
+[test_givenResultingExpiryNotFuture_whenExtended_reverts]: extend.t.sol#L839
+[test_givenRevokedGrant_whenUnrelatedViewerQuotes]: extend.t.sol#L1466
 [test_givenRiskFee_whenExtended_thenExactFeeIsSettled]: extend.t.sol#L160
-[test_givenRiskFee_whenLimitBelowFee_reverts]: extend.t.sol#L853
+[test_givenRiskFee_whenLimitBelowFee_reverts]: extend.t.sol#L883
 [test_givenRiskFee_whenOperatorExtends_thenExactFeeIsSettled]: extend.t.sol#L168
 [test_givenRiskOperatorChanged_whenExtended]: extendReferralIntegration.t.sol#L325
 [test_givenRiskQueueInactivePaused_whenExtended]: extendReferralIntegration.t.sol#L480
@@ -373,52 +384,52 @@ Earlier borrower/action/health admission passes. Configure the reached Risk.fee 
 [test_givenRiskQueueOperational_whenExtended]: extendReferralIntegration.t.sol#L465
 [test_givenRiskQueuePaused_whenExtended]: extendReferralIntegration.t.sol#L470
 [test_givenStaleCache_whenRiskFeeFails_reverts]: extendReferralIntegration.t.sol#L294
-[test_givenUnhealthyPosition_whenExtended_reverts]: extend.t.sol#L832
-[test_givenValidGrant_whenOperatorAdmitted_thenInputValidationReached]: extend.t.sol#L1011
-[test_givenValidGrant_whenUnrelatedViewerQuotes]: extend.t.sol#L1405
-[test_givenValidOperatorGrant_whenExtended_thenActualOperatorPays]: extend.t.sol#L1183
+[test_givenUnhealthyPosition_whenExtended_reverts]: extend.t.sol#L862
+[test_givenValidGrant_whenOperatorAdmitted_thenInputValidationReached]: extend.t.sol#L1041
+[test_givenValidGrant_whenUnrelatedViewerQuotes]: extend.t.sol#L1433
+[test_givenValidOperatorGrant_whenExtended_thenActualOperatorPays]: extend.t.sol#L1211
+[test_givenWhitelistedPayout_whenPositiveReferral_reverts]: extendReferralIntegration.t.sol#L36
+[test_givenWhitelistedPayout_whenReferralShareZero]: extendReferralIntegration.t.sol#L57
 [test_givenZeroFeeAllowance_whenBorrowerExtends_reverts]: extend.t.sol#L120
-[test_givenZeroFeeAndMaximumLimit_whenExtended_thenNoCollection]: extend.t.sol#L951
-[test_givenZeroFeeAndMaximumLimit_whenOperatorExtends_thenNoCollection]: extend.t.sol#L956
-[test_givenZeroFeeAndNoWalletFunds_whenBorrowerExtends_thenNoCollection]: extend.t.sol#L943
-[test_givenZeroFeeAndNoWalletFunds_whenOperatorExtends_thenNoCollection]: extend.t.sol#L934
+[test_givenZeroFeeAndMaximumLimit_whenExtended_thenNoCollection]: extend.t.sol#L981
+[test_givenZeroFeeAndMaximumLimit_whenOperatorExtends_thenNoCollection]: extend.t.sol#L986
+[test_givenZeroFeeAndNoWalletFunds_whenBorrowerExtends_thenNoCollection]: extend.t.sol#L973
+[test_givenZeroFeeAndNoWalletFunds_whenOperatorExtends_thenNoCollection]: extend.t.sol#L964
 [test_givenZeroFeeBalance_whenBorrowerExtends_reverts]: extend.t.sol#L130
 [test_givenZeroFee_whenExtended_thenNoFeeHandoff]: extend.t.sol#L263
 [test_givenZeroGrossFee_whenAllowedReferrerExtended]: extendReferralIntegration.t.sol#L349
-[test_whenAnyViewerQuotesWithoutAuthorizationRead]: extend.t.sol#L1357
-[test_whenAuthorizationEndpoints_thenAdmissionIsInclusive]: extend.t.sol#L1208
-[test_whenBorrowerZero_thenExplicitError]: extend.t.sol#L1112
-[test_whenComponentSumOverflows_reverts]: extendReferral.t.sol#L190
-[test_whenEmptyRiskError_reverts]: extendReferral.t.sol#L295
-[test_whenFeeLimitEqualsProtocol_reverts]: extendReferral.t.sol#L334
-[test_whenFeeLimitImmediatelyBelowTotal_reverts]: extendReferral.t.sol#L339
-[test_whenLiteralSplit]: extendReferral.t.sol#L274
-[test_whenMaxFeeExcludesReferral_reverts]: extendReferral.t.sol#L162
-[test_whenMaximumProtocolComponent]: extendReferral.t.sol#L279
-[test_whenMaximumProtocolOverflows_reverts]: extendReferral.t.sol#L354
-[test_whenMaximumReferralComponent]: extendReferral.t.sol#L284
-[test_whenMaximumTermsExceedHorizon_reverts]: extend.t.sol#L463
-[test_whenMaximumTotalExceedsFeeLimit_reverts]: extendReferral.t.sol#L344
-[test_whenMinimumProtocolOverflows_reverts]: extendReferral.t.sol#L349
-[test_whenOneProtocolUnit]: extendReferral.t.sol#L264
-[test_whenOneReferralUnit]: extendReferral.t.sol#L269
-[test_whenPanicRiskError_reverts]: extendReferral.t.sol#L310
-[test_whenReferrerIsBorrower]: extendReferral.t.sol#L315
-[test_whenReferrerIsOperator]: extendReferral.t.sol#L321
-[test_whenReferrerVaries]: extendReferral.t.sol#L327
-[test_whenRiskFeeReverts_reverts]: extendReferral.t.sol#L202
-[test_whenRiskReturnsComponents]: extendReferral.t.sol#L83
-[test_whenTermsAreZero_reverts]: extend.t.sol#L386
-[test_whenTermsExceedHorizon_reverts]: extend.t.sol#L442
-[test_whenTypedRiskError_reverts]: extendReferral.t.sol#L300
-[test_whenViewerHasNoPosition_thenSpecifiedBorrowerQuoted]: extend.t.sol#L1453
-[test_whenZeroComponents]: extendReferral.t.sol#L259
-[test_whenZeroReferrer]: extendReferral.t.sol#L289
-[test_whenReferrerIsPayout_whenAllocationPositive_reverts]: extendReferral.t.sol#L24
-[test_whenOneUnitSelfReferral_reverts]: extendReferral.t.sol#L54
-[test_whenMaximumSelfReferral_reverts]: extendReferral.t.sol#L59
-[test_givenWhitelistedPayout_whenPositiveReferral_reverts]: extendReferralIntegration.t.sol#L36
-[test_whenReferrerIsPayout_whenAllocationZero]: extendReferral.t.sol#L64
-[test_whenSelfReferrerZeroFee]: extendReferral.t.sol#L73
-[test_whenSelfReferrerMaximumProtocolFee]: extendReferral.t.sol#L78
-[test_givenWhitelistedPayout_whenReferralShareZero]: extendReferralIntegration.t.sol#L57
+[test_whenAnyViewerQuotesWithoutAuthorizationRead]: extend.t.sol#L1385
+[test_whenAuthorizationEndpoints_thenAdmissionIsInclusive]: extend.t.sol#L1236
+[test_whenBorrowerZero_thenExplicitError]: extend.t.sol#L1140
+[test_whenComponentSumOverflows_reverts]: extendReferral.t.sol#L205
+[test_whenEmptyRiskError_reverts]: extendReferral.t.sol#L314
+[test_whenFeeLimitEqualsProtocol_reverts]: extendReferral.t.sol#L357
+[test_whenFeeLimitImmediatelyBelowTotal_reverts]: extendReferral.t.sol#L362
+[test_whenLiteralSplit]: extendReferral.t.sol#L293
+[test_whenMaxFeeExcludesReferral_reverts]: extendReferral.t.sol#L177
+[test_whenMaximumProtocolComponent]: extendReferral.t.sol#L298
+[test_whenMaximumProtocolOverflows_reverts]: extendReferral.t.sol#L377
+[test_whenMaximumReferralComponent]: extendReferral.t.sol#L303
+[test_whenMaximumSelfReferral_reverts]: extendReferral.t.sol#L62
+[test_whenMaximumTermsExceedHorizon_reverts]: extend.t.sol#L475
+[test_whenMaximumTotalExceedsFeeLimit_reverts]: extendReferral.t.sol#L367
+[test_whenMinimumProtocolOverflows_reverts]: extendReferral.t.sol#L372
+[test_whenOneProtocolUnit]: extendReferral.t.sol#L283
+[test_whenOneReferralUnit]: extendReferral.t.sol#L288
+[test_whenOneUnitSelfReferral_reverts]: extendReferral.t.sol#L57
+[test_whenPanicRiskError_reverts]: extendReferral.t.sol#L329
+[test_whenReferrerIsBorrower]: extendReferral.t.sol#L334
+[test_whenReferrerIsOperator]: extendReferral.t.sol#L340
+[test_whenReferrerIsPayout_whenAllocationPositive_reverts]: extendReferral.t.sol#L27
+[test_whenReferrerIsPayout_whenAllocationZero]: extendReferral.t.sol#L67
+[test_whenReferrerVaries]: extendReferral.t.sol#L348
+[test_whenRiskFeeReverts_reverts]: extendReferral.t.sol#L217
+[test_whenRiskReturnsComponents]: extendReferral.t.sol#L86
+[test_whenSelfReferrerMaximumProtocolFee]: extendReferral.t.sol#L81
+[test_whenSelfReferrerZeroFee]: extendReferral.t.sol#L76
+[test_whenTermsAreZero_reverts]: extend.t.sol#L398
+[test_whenTermsExceedHorizon_reverts]: extend.t.sol#L454
+[test_whenTypedRiskError_reverts]: extendReferral.t.sol#L319
+[test_whenViewerHasNoPosition_thenSpecifiedBorrowerQuoted]: extend.t.sol#L1481
+[test_whenZeroComponents]: extendReferral.t.sol#L278
+[test_whenZeroReferrer]: extendReferral.t.sol#L308

@@ -1,6 +1,6 @@
 # BurnerLoansCore.rescue coverage plan
 
-Source: [rescue](../../../policies/burnerloans/BurnerLoansCore.sol#L1060). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [rescue](../../../policies/burnerloans/BurnerLoansCore.sol#L1248). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 

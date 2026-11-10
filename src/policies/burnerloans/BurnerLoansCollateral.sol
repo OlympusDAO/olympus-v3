@@ -12,6 +12,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {BL_COLLATERAL_POLICY_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
+import {BL_ACTION_DEPOSIT, BL_ACTION_WITHDRAW} from "src/policies/burnerloans/libraries/LoanActions.sol";
 import {LoanCustody} from "src/policies/burnerloans/libraries/LoanCustody.sol";
 import {LoanMarket} from "src/policies/burnerloans/libraries/LoanMarket.sol";
 import {LoanParameters} from "src/policies/burnerloans/libraries/LoanParameters.sol";
@@ -56,12 +57,24 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
         onlyOperational
         returns (uint128 credit, uint128 collateral, uint256 resultingHealthFactor)
     {
-        _authorizeBorrower(borrower_);
+        IBurnerLoansCore.AuthorizationContext memory authContext = _captureBorrower(
+            borrower_,
+            BL_ACTION_DEPOSIT
+        );
         IFLOANv1.Position memory beforePosition = _validateDeposit(asset_, amount_, borrower_);
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
         IBurnerLoansCore.PriceSnapshot memory snapshot;
         if (beforePosition.principalDue != 0) snapshot = evaluator.refreshSnapshot(asset_);
-        (credit, collateral) = _CORE.settleDeposit(asset_, amount_, msg.sender, borrower_);
+        (credit, collateral) = _CORE.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: asset_,
+                amount: amount_,
+                payer: msg.sender,
+                borrower: borrower_
+            }),
+            msg.sender,
+            authContext
+        );
         (, , IFLOANv1.Position memory afterPosition) = LoanPositions.forCore(
             _CORE,
             asset_,
@@ -99,7 +112,10 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
         onlyOperational
         returns (IBurnerLoansCollateral.WithdrawPreview memory result)
     {
-        _authorizeBorrower(borrower_);
+        IBurnerLoansCore.AuthorizationContext memory authContext = _captureBorrower(
+            borrower_,
+            BL_ACTION_WITHDRAW
+        );
         IFLOANv1.Position memory position = _validateWithdrawal(
             asset_,
             amount_,
@@ -112,10 +128,14 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
         if (position.principalDue != 0) snapshot = evaluator.refreshSnapshot(asset_);
         uint128 remaining;
         (result.returnToken, result.returnAmount, remaining) = _CORE.settleWithdraw(
-            asset_,
-            amount_,
-            borrower_,
-            recipient_
+            IBurnerLoansCore.WithdrawRequest({
+                asset: asset_,
+                amount: amount_,
+                borrower: borrower_,
+                recipient: recipient_
+            }),
+            msg.sender,
+            authContext
         );
         // Validate actual post-settlement state with the operation's captured prices. Failure
         // reverts Core's collateral debit, DepositManager redemption and recipient transfer.

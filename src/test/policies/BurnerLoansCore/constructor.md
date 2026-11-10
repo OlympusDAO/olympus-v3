@@ -1,6 +1,6 @@
 # BurnerLoansCore.constructor coverage plan
 
-Source: [constructor](../../../policies/burnerloans/BurnerLoansCore.sol#L105). Acceptance plan; coverage and execution results are recorded separately.
+Source: [constructor](../../../policies/burnerloans/BurnerLoansCore.sol#L115). Acceptance plan; coverage and execution results are recorded separately.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -63,16 +63,16 @@ Co-located API assertions: `ohm`, `depositManager`, `payout`. These must be asse
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to implemented tests.
 
-[test_givenDecimalsGetterReverts_whenDeployed_reverts]: constructor.t.sol#L220
-[test_givenEOADepositManager_whenDeployed_reverts]: constructor.t.sol#L98
-[test_givenKernelGetterReverts_whenDeployed_reverts]: constructor.t.sol#L199
-[test_givenMalformedERC165_whenDeployed_reverts]: constructor.t.sol#L155
-[test_givenMissingInterface_whenDeployed_reverts]: constructor.t.sol#L110
-[test_givenRevertingERC165_whenDeployed_reverts]: constructor.t.sol#L134
-[test_givenUnsupportedDecimals_whenDeployed_reverts]: constructor.t.sol#L236
-[test_givenWrongKernel_whenDeployed_reverts]: constructor.t.sol#L176
-[test_givenZeroDepositManager_whenDeployed_reverts]: constructor.t.sol#L86
-[test_givenZeroOhm_whenDeployed_reverts]: constructor.t.sol#L79
-[test_whenDecimalsBoundarySeeds]: constructor.t.sol#L62
-[test_whenDeployed]: constructor.t.sol#L25
-[test_whenUnsupportedDecimalSeeds_reverts]: constructor.t.sol#L248
+[test_givenDecimalsGetterReverts_whenDeployed_reverts]: constructor.t.sol#L228
+[test_givenEOADepositManager_whenDeployed_reverts]: constructor.t.sol#L106
+[test_givenKernelGetterReverts_whenDeployed_reverts]: constructor.t.sol#L207
+[test_givenMalformedERC165_whenDeployed_reverts]: constructor.t.sol#L163
+[test_givenMissingInterface_whenDeployed_reverts]: constructor.t.sol#L118
+[test_givenRevertingERC165_whenDeployed_reverts]: constructor.t.sol#L142
+[test_givenUnsupportedDecimals_whenDeployed_reverts]: constructor.t.sol#L246
+[test_givenWrongKernel_whenDeployed_reverts]: constructor.t.sol#L184
+[test_givenZeroDepositManager_whenDeployed_reverts]: constructor.t.sol#L94
+[test_givenZeroOhm_whenDeployed_reverts]: constructor.t.sol#L87
+[test_whenDecimalsBoundarySeeds]: constructor.t.sol#L70
+[test_whenDeployed]: constructor.t.sol#L30
+[test_whenUnsupportedDecimalSeeds_reverts]: constructor.t.sol#L260

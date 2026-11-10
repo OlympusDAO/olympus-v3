@@ -4,10 +4,10 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansAuth} from "src/policies/interfaces/burnerloans/IBurnerLoansAuth.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
-import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
@@ -24,8 +24,9 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 
 /// @notice Shared action admission, version/lifecycle support and time-bound user authentication.
-/// @dev State-changing public callers are checked against Core's authorization registry. Core trusts
-///      these checks when settling and never authenticates the forwarded borrower a second time.
+/// @dev Public actions capture authority through Core’s selected authorization service before
+///      external preparation, then forward the actual caller and original context to settlement.
+///      Core authenticates that same authority again before and after its effects.
 ///      The base owns no custody or position state. Local guards enforce pauses at public entry.
 abstract contract BaseBurnerLoansAction is
     Policy,
@@ -41,7 +42,7 @@ abstract contract BaseBurnerLoansAction is
 
     /// @notice Binds deployment dependencies and initializes the local contract state.
     /// @dev Reverts if:
-    ///      - Core does not advertise IBurnerLoansCore, IEnabler and IOperatorAuth through ERC165.
+    ///      - Core does not advertise IBurnerLoansCore and IEnabler through ERC165.
     ///      - Core reports a Kernel different from this action’s Kernel.
     /// @param kernel_ Kernel supplying modules and governance authority.
     /// @param core_ Permanent accounting and DepositManager operator contract.
@@ -51,10 +52,9 @@ abstract contract BaseBurnerLoansAction is
         IBurnerLoansCore core_,
         bytes32 role_
     ) Policy(kernel_) ReEnablerGracePeriod(LoanParameters._REENABLE_GRACE_PERIOD) {
-        bytes4[] memory interfaces = new bytes4[](3);
+        bytes4[] memory interfaces = new bytes4[](2);
         interfaces[0] = type(IBurnerLoansCore).interfaceId;
         interfaces[1] = type(IEnabler).interfaceId;
-        interfaces[2] = type(IOperatorAuth).interfaceId;
         if (!ERC165Checker.supportsAllInterfaces(address(core_), interfaces))
             revert BurnerLoansAction_InvalidCore(address(core_));
         _requireCoreSameKernel(core_);
@@ -105,12 +105,17 @@ abstract contract BaseBurnerLoansAction is
     ///      - The borrower is zero.
     ///      - The actual caller is neither the borrower nor a currently authorized operator.
     /// @param borrower_ Account whose canonical position is queried or changed.
-    function _authorizeBorrower(address borrower_) internal view {
-        // Grants are stored by Core for all actions. Forward the actual caller, never tx.origin or
-        // a keeper/recipient supplied as a parameter, so delegated borrower authority stays consistent.
+    function _captureBorrower(
+        address borrower_,
+        uint8 action_
+    ) internal view returns (IBurnerLoansCore.AuthorizationContext memory original) {
         _validateBorrower(borrower_);
-        if (!IOperatorAuth(address(_CORE)).isSenderAuthorized(msg.sender, borrower_))
-            revert IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf();
+        (original.auth, original.globalAuthEpoch) = _CORE.authConfig();
+        original.grantContext = IBurnerLoansAuth(original.auth).captureAuthorization(
+            borrower_,
+            msg.sender,
+            action_
+        );
     }
 
     /// @notice Resolves this policy's declared Kernel module dependencies.

@@ -8,14 +8,32 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansAuthTarget} from "src/policies/interfaces/burnerloans/IBurnerLoansAuthTarget.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
-import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Contracts
 import {BurnerLoansCoreTest} from "./BurnerLoansCoreTest.sol";
 
 contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
+    // Scenarios: BLCORE-ERC165-P13.
+    function test_whenIBurnerLoansAuthTargetQueried(
+        address caller_,
+        bool active_,
+        bool enabled_
+    ) public {
+        _setCoreLifecycle(active_, enabled_);
+        bytes32 before = _state();
+        vm.recordLogs();
+        vm.prank(caller_);
+        assertTrue(
+            _core.supportsInterface(type(IBurnerLoansAuthTarget).interfaceId),
+            "Core advertises Auth's read interface independently of readiness"
+        );
+        assertEq(_state(), before, "Target-interface discovery has no effects");
+        assertEq(vm.getRecordedLogs().length, 0, "Target-interface discovery emits no logs");
+    }
+
     // Scenarios: BLCORE-ERC165-P01.
     function test_whenIBurnerLoansCoreQueried(address caller_, bool active_, bool enabled_) public {
         _setCoreLifecycle(active_, enabled_);
@@ -24,20 +42,6 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         assertTrue(
             _core.supportsInterface(type(IBurnerLoansCore).interfaceId),
-            "Declared interface supported"
-        );
-        assertEq(_state(), before, "ERC165 has no effects");
-        assertEq(vm.getRecordedLogs().length, 0, "ERC165 emits no logs");
-    }
-
-    // Scenarios: BLCORE-ERC165-P02.
-    function test_whenIOperatorAuthQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
-        bytes32 before = _state();
-        vm.recordLogs();
-        vm.prank(caller_);
-        assertTrue(
-            _core.supportsInterface(type(IOperatorAuth).interfaceId),
             "Declared interface supported"
         );
         assertEq(_state(), before, "ERC165 has no effects");
@@ -164,7 +168,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
         bool enabled_
     ) public {
         vm.assume(id_ != type(IBurnerLoansCore).interfaceId);
-        vm.assume(id_ != type(IOperatorAuth).interfaceId);
+        vm.assume(id_ != type(IBurnerLoansAuthTarget).interfaceId);
         vm.assume(id_ != type(IConfigOperator).interfaceId);
         vm.assume(id_ != type(IVersioned).interfaceId);
         vm.assume(id_ != type(IERC165).interfaceId);

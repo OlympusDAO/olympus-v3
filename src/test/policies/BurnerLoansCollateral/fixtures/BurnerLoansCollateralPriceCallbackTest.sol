@@ -20,7 +20,7 @@ abstract contract BurnerLoansCollateralPriceCallbackTest is BurnerLoansPriceCach
 
     function _armUnauthorized(bool propagate_) internal {
         vm.prank(_borrower);
-        _core.cancelAuthorization(address(_cache));
+        _auth.cancelGrant(address(_cache));
         _cache.arm(
             address(_debt),
             abi.encodeCall(

@@ -1,6 +1,6 @@
 # BurnerLoansDebt.supportsInterface coverage plan
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansDebt.sol#L195). Implemented and mapped to the focused Foundry suite.
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansDebt.sol#L196). Implemented and mapped to the focused Foundry suite.
 
 ## Domains and notation
 
@@ -36,6 +36,6 @@ Compile the exact IDs listed above. Imported interfaces do not add advertised su
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to passing tests.
 
-[test_whenInterfaceQueried_thenMergedDebtIsAdvertised]: extend.t.sol#L546
+[test_whenInterfaceQueried_thenMergedDebtIsAdvertised]: extend.t.sol#L558
 [test_whenInterfacesQueried_thenOnlyAdvertisedSet]: supportsInterface.t.sol#L23
 [test_whenReadAcrossAllLifecycleStates_thenStable]: supportsInterface.t.sol#L58

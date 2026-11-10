@@ -1,6 +1,6 @@
 # BurnerLoansSeize.requestPermissions coverage plan
 
-Source: [requestPermissions](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L132). Coverage mappings below identify the implemented Foundry proofs.
+Source: [requestPermissions](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L137). Coverage mappings below identify the implemented Foundry proofs.
 
 ## Domains and notation
 

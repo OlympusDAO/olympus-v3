@@ -67,13 +67,15 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
 
         _heart = makeAddr("gasHeart");
         vm.startPrank(address(this));
+        // Measure completed batches even with unoptimized local bytecode. The scanGas suite
+        // separately tests failure and recovery under a ten-million-gas task budget.
         _seizer = new BurnerLoansSeizerTask(
             _kernel,
             IBurnerLoansSeize(address(_liquidation)),
             IBurnerLoansLens(address(_lens)),
             _MAX_BORROWERS_TO_CHECK,
             _MAX_BORROWERS_TO_SEIZE,
-            10_000_000
+            100_000_000
         );
         _kernel.executeAction(Actions.ActivatePolicy, address(_seizer));
         _rolesAdmin.grantRole(HEART_ROLE, _heart);

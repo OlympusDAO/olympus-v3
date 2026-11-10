@@ -1,8 +1,10 @@
 # BurnerLoansCore.settleDeposit coverage plan
 
-Source: [settleDeposit](../../../policies/burnerloans/BurnerLoansCore.sol#L254). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleDeposit](../../../policies/burnerloans/BurnerLoansCore.sol#L307). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
+
+The settlement ABI uses `DepositRequest`, which carries asset, amount, payer and borrower. Operator and original authorization context remain separate arguments. Existing scenario outcomes, numeric domains, identity distinctions, callbacks and rollback assertions are unchanged.
 
 ## Domains and notation
 
@@ -27,7 +29,7 @@ Fixed for this table: Local active: true; Local enabled: true.
 | ID | Caller | Required role held | Execution | Test |
 | --- | --- | --- | --- | --- |
 | BLCORE-SETTLE-DEPOSIT-A01 | BL_COLLATERAL_POLICY_ROLE holder | true | Body executes | Covered: [test][test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer] |
-| BLCORE-SETTLE-DEPOSIT-A02 | Fuzz EOA/contracts excluding every BL_COLLATERAL_POLICY_ROLE holder | false | ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE) | Covered: [test][test_whenCallerLacksSettlementRole_reverts] |
+| BLCORE-SETTLE-DEPOSIT-A02 | Fuzz EOA/contracts excluding every BL_COLLATERAL_POLICY_ROLE holder | false | ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE) | Covered: [test][test_whenCallerLacksSettlementRole_reverts]  [valid captured authority][test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts] |
 | BLCORE-SETTLE-DEPOSIT-A03 | Policy holding only sibling operation role | false | ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE) | Covered: [test][test_givenOnlySiblingRole_whenSettled_reverts] |
 | BLCORE-SETTLE-DEPOSIT-A04 | Role-holding policy reporting another Kernel | true | Body executes; no caller Kernel or membership query | Covered: [test][test_givenWrongKernelCaller_whenSettled] |
 
@@ -108,32 +110,53 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 | BLCORE-SETTLE-DEPOSIT-C01 | Selected same-Kernel active action with the matching settlement role | Collateral token transferFrom from payer into Core | Otherwise-valid authorized public action reaching guarded Core settlement; callback catches the guard rejection | Nested call rejects ReentrancyGuardReentrantCall(); outer operation succeeds | One outer deposit only; actual Q credited once to FLOAN and Core DM liabilities/receipts; payer funds debited once; unrelated borrower/operator unchanged | Covered: [test][test_givenSettlementCallback_whenCaught] |
 | BLCORE-SETTLE-DEPOSIT-C02 | Selected same-Kernel active action with the matching settlement role | Collateral token transferFrom from payer into Core | Otherwise-valid authorized public action reaching guarded Core settlement; token propagates the guard rejection | Exact propagated token/dependency error rejects outer operation | Full pre-call rollback of affected positions, debt, claims, token/receipt balances, allowances, reserves, indexes, approvals and committed logs, including earlier subcalls | Covered: [test][test_givenSettlementCallback_whenPropagated] |
 
-[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleDeposit.t.sol#L108
-[test_givenCallerInactive_whenSettled]: settleDeposit.t.sol#L95
-[test_givenCollateralOnlyPosition_whenOriginationsArePaused]: settleDeposit.t.sol#L159
-[test_givenCoreDisabled_whenSettled_reverts]: settleDeposit.t.sol#L70
-[test_givenCoreInactive_whenSettled_reverts]: settleDeposit.t.sol#L80
-[test_givenCreditExceedsUint128_whenDeposited_reverts]: settleDeposit.t.sol#L255
-[test_givenDebtBearingPosition_whenOriginationsArePaused]: settleDeposit.t.sol#L179
-[test_givenExcessIncomingReceipt_whenSettled_reverts]: settleDeposit.t.sol#L462
-[test_givenExistingReceiptApproval_whenDeposited]: settleDeposit.t.sol#L297
-[test_givenFreshReceiptApproval_whenDeposited]: settleDeposit.t.sol#L324
-[test_givenNoReceiptManager_whenDeposited]: settleDeposit.t.sol#L285
-[test_givenOnlySiblingRole_whenSettled_reverts]: settleDeposit.t.sol#L45
-[test_givenOriginationsDisabledAndNoPosition_whenDeposited]: settleDeposit.t.sol#L216
-[test_givenPreexistingDonation_whenDeposited]: settleDeposit.t.sol#L276
-[test_givenRejectedReceiptApproval_whenDeposited_reverts]: settleDeposit.t.sol#L346
-[test_givenRoleHoldingEOA_whenSettled]: settleDeposit.t.sol#L101
-[test_givenSettlementCallback_whenCaught]: settleDeposit.t.sol#L369
-[test_givenSettlementCallback_whenPropagated]: settleDeposit.t.sol#L400
-[test_givenShortIncomingReceipt_whenSettled_reverts]: settleDeposit.t.sol#L431
-[test_givenWrongKernelCaller_whenSettled]: settleDeposit.t.sol#L56
-[test_givenZeroActualCredit_whenDeposited_reverts]: settleDeposit.t.sol#L241
-[test_whenCallerLacksSettlementRole_reverts]: settleDeposit.t.sol#L33
-[test_whenCollateralOnlyTopUpOriginationStatesSeeded]: settleDeposit.t.sol#L200
-[test_whenCreditOverflowBoundarySeeds_reverts]: settleDeposit.t.sol#L493
-[test_whenCreditedDepositIsPositive]: settleDeposit.t.sol#L124
-[test_whenDebtBearingTopUpOriginationStatesSeeded]: settleDeposit.t.sol#L208
-[test_whenDepositAmountSeeds]: settleDeposit.t.sol#L151
+## Delegated completion
 
-[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L963
+Core, the selected Auth and the admitted Collateral action are active/enabled. Account A has a reusable deposit grant for O. All collateral values below are raw credited units; the cap applies to the resulting FLOAN collateral, not the nominal transfer.
+
+| ID | Caller | Existing collateral | Actual credit | maxCollateral | Execution / effects | Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-DEPOSIT-N90 | Collateral action forwarding O | 0 | 100 | 99 | ResultOutsideGrant; transfers, receipts and FLOAN roll back | Covered: [test][test_givenDelegatedGrant_whenResultExceedsCollateralBound_reverts] |
+| BLCORE-SETTLE-DEPOSIT-P90 | Collateral action forwarding O | 0 | 100 | 100 | Success; credit and resulting collateral both equal 100 | Covered: [test][test_givenDelegatedGrant_whenResultEqualsCollateralBound] |
+| BLCORE-SETTLE-DEPOSIT-C90 | Collateral action forwarding O; grant cancelled after capture | 0 | Not reached (requested amount 100) | 100 | OperatorAuth_InvalidContext; ledger unchanged | Covered: [test][test_givenCapturedGrant_whenCancelledBeforeSettlement_reverts] |
+
+## Request ABI validation
+
+| ID | Caller | Raw economic field | Execution | Effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLCORE-SETTLE-DEPOSIT-I04 | Unadmitted recipient account | amount > uint128 maximum | Compiler ABI rejection before role checks; empty returndata | Custody and positions unchanged | Covered: [test][test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck] |
+
+[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L987
+[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleDeposit.t.sol#L212
+[test_givenCallerInactive_whenSettled]: settleDeposit.t.sol#L199
+[test_givenCapturedGrant_whenCancelledBeforeSettlement_reverts]: authorizationLifecycleDeposit.t.sol#L182
+[test_givenCollateralOnlyPosition_whenOriginationsArePaused]: settleDeposit.t.sol#L280
+[test_givenCoreDisabled_whenSettled_reverts]: settleDeposit.t.sol#L156
+[test_givenCoreInactive_whenSettled_reverts]: settleDeposit.t.sol#L175
+[test_givenCreditExceedsUint128_whenDeposited_reverts]: settleDeposit.t.sol#L397
+[test_givenDebtBearingPosition_whenOriginationsArePaused]: settleDeposit.t.sol#L304
+[test_givenDelegatedGrant_whenResultEqualsCollateralBound]: authorizationLifecycleDeposit.t.sol#L162
+[test_givenDelegatedGrant_whenResultExceedsCollateralBound_reverts]: authorizationLifecycleDeposit.t.sol#L137
+[test_givenExcessIncomingReceipt_whenSettled_reverts]: settleDeposit.t.sol#L685
+[test_givenExistingReceiptApproval_whenDeposited]: settleDeposit.t.sol#L466
+[test_givenFreshReceiptApproval_whenDeposited]: settleDeposit.t.sol#L502
+[test_givenNoReceiptManager_whenDeposited]: settleDeposit.t.sol#L445
+[test_givenOnlySiblingRole_whenSettled_reverts]: settleDeposit.t.sol#L122
+[test_givenOriginationsDisabledAndNoPosition_whenDeposited]: settleDeposit.t.sol#L345
+[test_givenPreexistingDonation_whenDeposited]: settleDeposit.t.sol#L427
+[test_givenRejectedReceiptApproval_whenDeposited_reverts]: settleDeposit.t.sol#L533
+[test_givenRoleHoldingEOA_whenSettled]: settleDeposit.t.sol#L205
+[test_givenSettlementCallback_whenCaught]: settleDeposit.t.sol#L565
+[test_givenSettlementCallback_whenPropagated]: settleDeposit.t.sol#L605
+[test_givenShortIncomingReceipt_whenSettled_reverts]: settleDeposit.t.sol#L645
+[test_givenWrongKernelCaller_whenSettled]: settleDeposit.t.sol#L142
+[test_givenZeroActualCredit_whenDeposited_reverts]: settleDeposit.t.sol#L374
+[test_whenCallerLacksSettlementRole_reverts]: settleDeposit.t.sol#L101
+[test_whenCollateralOnlyTopUpOriginationStatesSeeded]: settleDeposit.t.sol#L329
+[test_whenCreditOverflowBoundarySeeds_reverts]: settleDeposit.t.sol#L725
+[test_whenCreditedDepositIsPositive]: settleDeposit.t.sol#L239
+[test_whenDebtBearingTopUpOriginationStatesSeeded]: settleDeposit.t.sol#L337
+[test_whenDepositAmountSeeds]: settleDeposit.t.sol#L272
+[test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck]: ./settleDeposit.t.sol#L36
+
+[test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts]: ./settleDeposit.t.sol#L58

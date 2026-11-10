@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -33,6 +36,77 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(_actor));
     }
 
+    // Scenarios: BLCORE-SETTLE-EXTEND-I05.
+    function test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck() public {
+        bytes32 beforeState = _state();
+        // A static request tuple has the same word order as these flat ABI values.
+        // A uint256 word deliberately exceeds the request's narrower field type.
+        bytes memory instruction = abi.encodeWithSelector(
+            IBurnerLoansCore.settleExtend.selector,
+            address(_asset),
+            _borrower,
+            _borrower,
+            uint256(type(uint48).max) + 1,
+            uint256(0),
+            address(0),
+            uint256(0),
+            _borrower,
+            _ownerAuthContext()
+        );
+        vm.prank(_recipient);
+        (bool success, bytes memory result) = address(_core).call(instruction);
+        assertFalse(success, "Malformed economic request cannot settle");
+        // The pinned compiler's ABI decoder rejects before entering role-guarded code.
+        assertEq(result.length, 0, "Malformed request fails in the ABI decoder");
+        assertEq(_state(), beforeState, "Malformed request leaves custody and positions unchanged");
+    }
+
+    // Scenarios: BLCORE-SETTLE-EXTEND-A02.
+    function test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts(
+        address caller_,
+        bool owner_
+    ) public {
+        vm.assume(!_roles.hasRole(caller_, BL_DEBT_POLICY_ROLE));
+        vm.assume(caller_ != _borrower && caller_ != _recipient);
+        _deposit(2000e6);
+        _borrow(100e9);
+        _approveOperator(_borrower, _recipient, type(uint48).max);
+        address operator = owner_ ? _borrower : _recipient;
+        // The attacker can read a real stamp; the view result is not settlement authority.
+        vm.prank(caller_);
+        IBurnerLoansCore.AuthorizationContext memory original = _operatorAuthContext(
+            _borrower,
+            operator,
+            8
+        );
+        IBurnerLoansCore.ExtendRequest memory request = IBurnerLoansCore.ExtendRequest({
+            asset: address(_asset),
+            borrower: _borrower,
+            payer: _borrower,
+            maturity: _position().maturity + 30 days,
+            protocolFee: 0,
+            referrer: address(0),
+            referralFee: 0
+        });
+        bytes32 beforeState = _ledger();
+        uint256 pairEpoch = _auth.pairEpochs(_borrower, _recipient);
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
+        );
+        vm.prank(caller_);
+        _core.settleExtend(request, operator, original);
+        assertEq(
+            _ledger(),
+            beforeState,
+            "Publicly readable authority cannot move custody or change a position"
+        );
+        assertEq(
+            _auth.pairEpochs(_borrower, _recipient),
+            pairEpoch,
+            "Rejected impersonation preserves the genuine grant"
+        );
+    }
+
     // Scenarios: BLCORE-SETTLE-EXTEND-A02.
     function test_whenCallerLacksSettlementRole_reverts(address caller_) public {
         vm.assume(!_roles.hasRole(caller_, BL_DEBT_POLICY_ROLE));
@@ -41,7 +115,19 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
         );
         vm.prank(caller_);
-        _core.settleExtend(address(0), address(0), address(0), 0, 0, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(0),
+                borrower: address(0),
+                payer: address(0),
+                maturity: 0,
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Unauthorized instruction has no effects");
     }
 
@@ -53,7 +139,19 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
         );
         vm.prank(address(sibling));
-        _core.settleExtend(address(0), address(0), address(0), 0, 0, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(0),
+                borrower: address(0),
+                payer: address(0),
+                maturity: 0,
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
     }
 
     // Scenarios: BLCORE-SETTLE-EXTEND-A04.
@@ -76,7 +174,19 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(address(_actor));
-        _core.settleExtend(address(0), address(0), address(0), 0, 0, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(0),
+                borrower: address(0),
+                payer: address(0),
+                maturity: 0,
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Disabled Core rejects before inputs");
     }
 
@@ -91,7 +201,19 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleExtend(address(0), address(0), address(0), 0, 0, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(0),
+                borrower: address(0),
+                payer: address(0),
+                maturity: 0,
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Own inactivity precedes local state and inputs");
     }
 
@@ -118,18 +240,24 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         _settleAsCaller(address(_actor));
     }
 
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function _settleAsCaller(address caller_) internal {
         _deposit(2000e6);
         _borrow(2);
         vm.prank(caller_);
         _core.settleExtend(
-            address(_asset),
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: uint48(vm.getBlockTimestamp() + 31 days),
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
             _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            0,
-            address(0),
-            0
+            _ownerAuthContext()
         );
         assertEq(
             _position().maturity,
@@ -138,7 +266,11 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-EXTEND-D03.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOriginationsDisabled_whenExtended_reverts() public {
         _deposit(2000e6);
         _borrow(1);
@@ -152,34 +284,48 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         );
         vm.prank(address(_actor));
         _core.settleExtend(
-            address(_asset),
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: uint48(vm.getBlockTimestamp() + 31 days),
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
             _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            0,
-            address(0),
-            0
+            _ownerAuthContext()
         );
         assertEq(_ledger(), before, "Extension failure preserves prior maturity, fees and debt");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-EXTEND-I01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenNoDebt_whenExtended_reverts() public {
         _deposit(1);
         bytes32 before = _ledger();
         vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
         vm.prank(address(_actor));
         _core.settleExtend(
-            address(_asset),
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: uint48(vm.getBlockTimestamp() + 31 days),
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
             _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            0,
-            address(0),
-            0
+            _ownerAuthContext()
         );
         assertEq(_ledger(), before, "Extension failure preserves prior maturity, fees and debt");
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-SETTLE-EXTEND-I02.
     function test_givenNotLater_whenExtended_reverts(uint48 maturity_) public {
@@ -192,7 +338,19 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMaturity.selector, old, maturity_)
         );
         vm.prank(address(_actor));
-        _core.settleExtend(address(_asset), _borrower, _borrower, maturity_, 0, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: maturity_,
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Extension failure preserves prior maturity, fees and debt");
     }
 
@@ -207,11 +365,25 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMaturity.selector, old, old + 1)
         );
         vm.prank(address(_actor));
-        _core.settleExtend(address(_asset), _borrower, _borrower, old + 1, 0, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: old + 1,
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Extension failure preserves prior maturity, fees and debt");
     }
 
     // Scenarios: BLCORE-SETTLE-EXTEND-N01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenHorizonExceeded_whenExtended_reverts(uint48 maturity_) public {
         _deposit(2000e6);
         _borrow(1);
@@ -226,28 +398,52 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleExtend(address(_asset), _borrower, _borrower, maturity_, 0, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: maturity_,
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Extension failure preserves prior maturity, fees and debt");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-EXTEND-P01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenMissingPosition_whenExtended_reverts() public {
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector);
         vm.prank(address(_actor));
         _core.settleExtend(
-            address(_asset),
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: uint48(vm.getBlockTimestamp() + 31 days),
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
             _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            0,
-            address(0),
-            0
+            _ownerAuthContext()
         );
         assertEq(_ledger(), before, "Extension failure preserves prior maturity, fees and debt");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-EXTEND-P03.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenMandatoryFeeFailure_whenExtended_reverts() public {
         _deposit(2000e6);
         _borrow(1);
@@ -260,18 +456,26 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         vm.expectRevert(DependencyFailed.selector);
         vm.prank(address(_actor));
         _core.settleExtend(
-            address(_asset),
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: uint48(vm.getBlockTimestamp() + 31 days),
+                protocolFee: 1,
+                referrer: address(0),
+                referralFee: 0
+            }),
             _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            1,
-            address(0),
-            0
+            _ownerAuthContext()
         );
         assertEq(_ledger(), before, "Extension failure preserves prior maturity, fees and debt");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-EXTEND-I04, BLCORE-SETTLE-EXTEND-P02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenValidMaturity_whenExtended(uint48 maturity_, uint128 fee_) public {
         _deposit(2000e6);
         _borrow(1);
@@ -289,13 +493,17 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             );
         vm.prank(address(_actor));
         uint48 result = _core.settleExtend(
-            address(_asset),
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: maturity_,
+                protocolFee: fee_,
+                referrer: address(0),
+                referralFee: 0
+            }),
             _borrower,
-            _borrower,
-            maturity_,
-            fee_,
-            address(0),
-            0
+            _ownerAuthContext()
         );
         assertEq(result, maturity_, "Exact new maturity returned");
         assertEq(_position().maturity, maturity_, "Stored maturity agrees");
@@ -304,7 +512,11 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         assertEq(_asset.balanceOf(_borrower), payerBefore - fee_, "Mandatory fee paid once");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-EXTEND-P04.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOptionalPayoutFailure_whenExtended() public {
         _deposit(2000e6);
         _borrow(1);
@@ -315,7 +527,19 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         );
         uint48 maturity = uint48(vm.getBlockTimestamp() + 31 days);
         vm.prank(address(_actor));
-        _core.settleExtend(address(_asset), _borrower, _borrower, maturity, 17, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: maturity,
+                protocolFee: 17,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         (uint256 fee, , , , uint256 total) = _payout.pendingAmounts(address(_asset));
         assertEq(fee, 17, "Pending fee retained");
         assertEq(total, 17, "Reserve aggregate backed");
@@ -326,6 +550,8 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             "Optional delivery failure does not cancel extension"
         );
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-SETTLE-EXTEND-C01.
     function test_givenSettlementCallback_whenCaught() public {
@@ -351,15 +577,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleExtend(
-            address(_asset),
-            _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            17,
-            address(0),
-            0
-        );
+        _core.settleExtend(_callbackExtendRequest(), _borrower, _ownerAuthContext());
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -394,15 +612,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleExtend(
-            address(_asset),
-            _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            17,
-            address(0),
-            0
-        );
+        _core.settleExtend(_callbackExtendRequest(), _borrower, _ownerAuthContext());
         assertEq(
             _ledger(),
             before,
@@ -429,15 +639,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleExtend(
-            address(_asset),
-            _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            17,
-            address(0),
-            0
-        );
+        _core.settleExtend(_callbackExtendRequest(), _borrower, _ownerAuthContext());
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -467,15 +669,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleExtend(
-            address(_asset),
-            _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            17,
-            address(0),
-            0
-        );
+        _core.settleExtend(_callbackExtendRequest(), _borrower, _ownerAuthContext());
         assertEq(
             _ledger(),
             before,
@@ -506,15 +700,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleExtend(
-            address(_asset),
-            _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            17,
-            address(0),
-            0
-        );
+        _core.settleExtend(_callbackExtendRequest(), _borrower, _ownerAuthContext());
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -548,15 +734,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleExtend(
-            address(_asset),
-            _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            17,
-            address(0),
-            0
-        );
+        _core.settleExtend(_callbackExtendRequest(), _borrower, _ownerAuthContext());
         assertEq(
             _ledger(),
             before,
@@ -587,15 +765,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         token.setCallbackTransferRecipient(_payout.treasury());
         token.setBubbleCallbackFailure(false);
         vm.prank(address(_actor));
-        _core.settleExtend(
-            address(_asset),
-            _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            17,
-            address(0),
-            0
-        );
+        _core.settleExtend(_callbackExtendRequest(), _borrower, _ownerAuthContext());
         uint256 expected = 17;
         uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(
@@ -629,15 +799,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         token.setCallbackTransferRecipient(_payout.treasury());
         token.setBubbleCallbackFailure(true);
         vm.prank(address(_actor));
-        _core.settleExtend(
-            address(_asset),
-            _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            17,
-            address(0),
-            0
-        );
+        _core.settleExtend(_callbackExtendRequest(), _borrower, _ownerAuthContext());
         uint256 expected = 17;
         uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(pending, expected, "Optional callback propagation defers exactly one entitlement");
@@ -660,6 +822,8 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
     }
 
     // Scenarios: BLCORE-SETTLE-EXTEND-P05.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_whenFeeComponentsForwarded(uint256 total_, uint256 protocol_) public {
         _deposit(2000e6);
         _borrow(1);
@@ -691,13 +855,17 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         uint256 coreBalance = _asset.balanceOf(address(_core));
         vm.prank(address(_actor));
         _core.settleExtend(
-            address(_asset),
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _recipient,
+                maturity: uint48(vm.getBlockTimestamp() + 31 days),
+                protocolFee: protocol_,
+                referrer: referrer,
+                referralFee: referral
+            }),
             _borrower,
-            _recipient,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            protocol_,
-            referrer,
-            referral
+            _ownerAuthContext()
         );
         assertEq(
             _asset.balanceOf(_recipient),
@@ -712,7 +880,11 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         assertEq(_asset.balanceOf(address(_core)), coreBalance, "Core retains no fee tokens");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-EXTEND-N02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_whenFeeComponentSumOverflows_reverts(
         uint256 protocol_,
         uint256 referral_
@@ -741,13 +913,17 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         );
         vm.prank(address(_actor));
         _core.settleExtend(
-            address(_asset),
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: uint48(vm.getBlockTimestamp() + 31 days),
+                protocolFee: protocol_,
+                referrer: address(0xFEED),
+                referralFee: referral
+            }),
             _borrower,
-            _borrower,
-            uint48(vm.getBlockTimestamp() + 31 days),
-            protocol_,
-            address(0xFEED),
-            referral
+            _ownerAuthContext()
         );
         assertEq(
             _ledger(),
@@ -755,6 +931,8 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
             "Overflow restores position and all settlement accounting"
         );
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-SETTLE-EXTEND-P05.
     function test_whenLiteralComponentFunding() public {
@@ -792,4 +970,24 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         uint256 maximum = type(uint256).max - _asset.totalSupply() - 2000e6;
         test_whenFeeComponentsForwarded(maximum, 0);
     }
+
+    function _callbackExtendRequest()
+        internal
+        view
+        returns (IBurnerLoansCore.ExtendRequest memory)
+    {
+        return
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                // The controlled fixture clock plus 31 days fits within uint48.
+                // forge-lint: disable-next-line(unsafe-typecast)
+                maturity: uint48(vm.getBlockTimestamp() + 31 days),
+                protocolFee: 17,
+                referrer: address(0),
+                referralFee: 0
+            });
+    }
 }
+// forge-lint: disable-end(unused-return)

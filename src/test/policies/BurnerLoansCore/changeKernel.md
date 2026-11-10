@@ -18,6 +18,7 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 | --- | --- | --- | --- | --- | --- |
 | BLCORE-KERNEL-P01 | Current Kernel | Same/distinct/zero new Kernel across lifecycle | Pointer updates without other checks | Only kernel pointer changes; no role/module/Core rebinding | Covered: [test][test_givenCurrentKernel_whenChanged], [test][test_whenKernelBoundarySeeds], [test][test_givenNewKernel_whenChanged_thenMembershipIsIndependent] |
 | BLCORE-KERNEL-P02 | Fuzz except current Kernel | Any new pointer including same/zero | KernelAdapter_OnlyKernel(caller) | Unchanged | Covered: [test][test_givenOtherCaller_whenChanged_reverts] |
+| BLCORE-KERNEL-D01 | Current Kernel executor then ADMIN/account | Actual MigrateKernel; reinstall modules and activate Core; select new Auth bound to new Kernel | Old Auth rejects foreign Kernel despite retained old membership; new Auth accepts/captures/validates grant; retired cancellation succeeds | Epoch +1; custody/positions unchanged; old cancellation does not affect new Auth | Covered: [migration][test_givenKernelMigration_whenAuthReplaced_newKernelAdmitsGrants] |
 
 ## Shared assertions
 
@@ -33,7 +34,9 @@ Co-located API assertions: `kernel`, `isActive`. These must be asserted independ
 
 No dedicated same-name legacy suite exists. Use related custody, arithmetic and lifecycle regression families in the suite index; this API needs new direct tests.
 
-[test_givenCurrentKernel_whenChanged]: changeKernel.t.sol#L13
-[test_givenNewKernel_whenChanged_thenMembershipIsIndependent]: changeKernel.t.sol#L54
-[test_givenOtherCaller_whenChanged_reverts]: changeKernel.t.sol#L33
-[test_whenKernelBoundarySeeds]: changeKernel.t.sol#L48
+[test_givenCurrentKernel_whenChanged]: changeKernel.t.sol#L97
+[test_givenNewKernel_whenChanged_thenMembershipIsIndependent]: changeKernel.t.sol#L138
+[test_givenOtherCaller_whenChanged_reverts]: changeKernel.t.sol#L117
+[test_whenKernelBoundarySeeds]: changeKernel.t.sol#L132
+
+[test_givenKernelMigration_whenAuthReplaced_newKernelAdmitsGrants]: ./changeKernel.t.sol#L23

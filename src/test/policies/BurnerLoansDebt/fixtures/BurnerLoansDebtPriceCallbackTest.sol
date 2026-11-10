@@ -33,7 +33,7 @@ abstract contract BurnerLoansDebtPriceCallbackTest is
 
     function _armUnauthorizedBorrow(bool propagate_) internal {
         vm.prank(_borrower);
-        _core.cancelAuthorization(address(_cache));
+        _auth.cancelGrant(address(_cache));
         _cache.arm(
             address(_debt),
             abi.encodeCall(

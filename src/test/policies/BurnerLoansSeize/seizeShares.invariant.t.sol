@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
-import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
+import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {Actions} from "src/Kernel.sol";
 import {BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
 import {ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Actions} from "src/Kernel.sol";
-import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerTask.sol";
 import {BurnerLoansYieldClaimerTask} from "src/policies/burnerloans/BurnerLoansYieldClaimerTask.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
@@ -24,17 +26,18 @@ import {BurnerLoansShareHandler} from "src/test/policies/BurnerLoansSeize/fixtur
 
 /// @notice Restores the legacy multi-borrower external-share conservation campaign on the modular stack.
 /// @dev Scope: one asset18/share6 vault, three borrowers, variable prices/time/yield, both supported
-///      custody modes, asynchronous-redemption drift, Inventory, composites and periodic seizure.
+///      custody modes, asynchronous-redemption drift, Inventory and periodic seizure.
 /// forge-config: default.invariant.fail-on-revert = true
 contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
     BurnerLoansShareHandler internal _handler;
     MockERC20 internal _shareAsset;
     MockERC7540ExternalShareVault internal _vault;
     IERC20 internal _share;
-    BurnerLoansComposites internal _composites;
     BurnerLoansSeizerTask internal _seizer;
     BurnerLoansYieldClaimerTask internal _claimer;
 
+    // These calls enumerate bounded test actors/assets, including fixture helpers called by the loops.
+    // forge-lint: disable-start(calls-loop)
     function setUp() public override {
         super.setUp();
         _shareAsset = new MockERC20("Share collateral", "SC", 18);
@@ -60,7 +63,6 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
             IBurnerLoansRisk.AssetFeeConfig(25, 8000, 100, 900),
             true
         );
-        _composites = new BurnerLoansComposites(address(_core), address(_ohm), _collateral, _debt);
         _seizer = new BurnerLoansSeizerTask(_kernel, _liquidation, _lens, 3, 3, 10_000_000);
         _claimer = new BurnerLoansYieldClaimerTask(_kernel, address(_core), 2_000_000);
         _kernel.executeAction(Actions.ActivatePolicy, address(_seizer));
@@ -77,7 +79,6 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
                 seize: _liquidation,
                 config: _config,
                 lens: _lens,
-                composites: _composites,
                 seizer: _seizer,
                 claimer: _claimer
             }),
@@ -113,23 +114,25 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
             1975e18,
             "Seeded share withdrawal executes"
         );
-        _handler.compositeRepayAndWithdraw(1, 10e9, 25e18);
+        _handler.repay(1, 10e9);
+        _handler.withdraw(1, 25e18);
         assertEq(
             _handler.principal(_handler.actors(1)),
             90e9,
-            "Seeded partial composite preserves debt"
+            "Seeded partial repayment preserves debt"
         );
         assertEq(
             _handler.collateral(_handler.actors(1)),
             1975e18,
-            "Seeded partial composite withdraws shares"
+            "Seeded withdrawal after partial repayment returns shares"
         );
-        _handler.compositeRepayAndWithdraw(1, 90e9, 50e18);
-        assertEq(_handler.principal(_handler.actors(1)), 0, "Seeded composite clears debt");
+        _handler.repay(1, 90e9);
+        _handler.withdraw(1, 50e18);
+        assertEq(_handler.principal(_handler.actors(1)), 0, "Seeded full repayment clears debt");
         assertEq(
             _handler.collateral(_handler.actors(1)),
             1925e18,
-            "Seeded composite withdraws shares"
+            "Seeded withdrawal after full repayment returns shares"
         );
         _handler.setAsyncRedeem(false);
         _handler.setWithdrawAsShares(false);
@@ -172,28 +175,31 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
         _handler.executePeriodicSeizer();
         assertEq(_handler.defaulted(), 290e9, "Seeded periodic seizure executes");
 
-        bytes4[] memory selectors = new bytes4[](16);
+        bytes4[] memory selectors = new bytes4[](15);
         selectors[0] = _handler.deposit.selector;
         selectors[1] = _handler.borrow.selector;
         selectors[2] = _handler.repay.selector;
         selectors[3] = _handler.withdraw.selector;
-        selectors[4] = _handler.compositeRepayAndWithdraw.selector;
-        selectors[5] = _handler.seize.selector;
-        selectors[6] = _handler.executePeriodicSeizer.selector;
-        selectors[7] = _handler.claimYield.selector;
-        selectors[8] = _handler.addYield.selector;
-        selectors[9] = _handler.movePrices.selector;
-        selectors[10] = _handler.moveTime.selector;
-        selectors[11] = _handler.setAsyncRedeem.selector;
-        selectors[12] = _handler.setWithdrawAsShares.selector;
-        selectors[13] = _handler.supplyInventory.selector;
-        selectors[14] = _handler.withdrawInventory.selector;
-        selectors[15] = _handler.setOriginations.selector;
+        selectors[4] = _handler.seize.selector;
+        selectors[5] = _handler.executePeriodicSeizer.selector;
+        selectors[6] = _handler.claimYield.selector;
+        selectors[7] = _handler.addYield.selector;
+        selectors[8] = _handler.movePrices.selector;
+        selectors[9] = _handler.moveTime.selector;
+        selectors[10] = _handler.setAsyncRedeem.selector;
+        selectors[11] = _handler.setWithdrawAsShares.selector;
+        selectors[12] = _handler.supplyInventory.selector;
+        selectors[13] = _handler.withdrawInventory.selector;
+        selectors[14] = _handler.setOriginations.selector;
         targetContract(address(_handler));
         targetSelector(FuzzSelector({addr: address(_handler), selectors: selectors}));
     }
 
+    // forge-lint: disable-end(calls-loop)
+
     // Scenarios: BLLIQ-SEIZE-S01.
+    // These calls enumerate bounded test actors/assets, including fixture helpers called by the loops.
+    // forge-lint: disable-start(calls-loop)
     function invariant_shareCustodyAndPositionAccountingConserve() public view {
         uint256 collateral;
         uint256 principal;
@@ -278,13 +284,12 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
                 _ohm.balanceOf(address(_handler)),
             "OHM funding and default conservation"
         );
-        address[8] memory periphery = [
+        address[7] memory periphery = [
             address(_core),
             address(_payout),
             address(_collateral),
             address(_debt),
             address(_liquidation),
-            address(_composites),
             address(_seizer),
             address(_claimer)
         ];
@@ -298,6 +303,7 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
         assertEq(fees + seized + pending, 0, "Successful share payouts leave no obligations");
         (fees, , seized, , pending) = _payout.pendingAmounts(address(_shareAsset));
         assertEq(fees + seized + pending, 0, "Successful underlying payouts leave no obligations");
-        assertEq(_ohm.balanceOf(address(_composites)), 0, "Composite refunds all transient OHM");
     }
+    // forge-lint: disable-end(calls-loop)
 }
+// forge-lint: disable-end(unused-return)

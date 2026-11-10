@@ -56,7 +56,7 @@ contract BurnerLoansDebtExtendPriceCallbacksTest is BurnerLoansDebtPriceCallback
         _prepareDebtAndCacheRepayer();
         _armUnauthorizedBorrow(true);
         bytes32 rollbackBefore = _priceStateDigest();
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
         vm.prank(_borrower);
         _debt.extend(address(_asset), _borrower, 1, 0, address(0));
         assertEq(

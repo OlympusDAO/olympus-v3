@@ -4,16 +4,13 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoansCollateral} from "src/policies/interfaces/burnerloans/IBurnerLoansCollateral.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/burnerloans/IBurnerLoansYieldClaim.sol";
-import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Contracts
 import {Test} from "@forge-std-1.16.2/Test.sol";
-import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansCollateral} from "src/policies/burnerloans/BurnerLoansCollateral.sol";
 import {BurnerLoansConfig} from "src/policies/burnerloans/BurnerLoansConfig.sol";
 import {BurnerLoansDebt} from "src/policies/burnerloans/BurnerLoansDebt.sol";
@@ -38,7 +35,6 @@ contract BurnerLoansShareHandler is Test {
         BurnerLoansSeize seize;
         BurnerLoansConfig config;
         BurnerLoansLens lens;
-        BurnerLoansComposites composites;
         BurnerLoansSeizerTask seizer;
         BurnerLoansYieldClaimerTask claimer;
     }
@@ -67,6 +63,9 @@ contract BurnerLoansShareHandler is Test {
     uint256 public defaulted;
     bool public asyncRedeem = true;
 
+    // These calls enumerate bounded test actors/assets, including fixture helpers called by the loops.
+    // Controlled test bindings/callers intentionally retain zero-address cases where applicable.
+    // forge-lint: disable-start(calls-loop, missing-zero-check)
     constructor(
         Services memory services_,
         MockERC7540ExternalShareVault vault_,
@@ -94,18 +93,15 @@ contract BurnerLoansShareHandler is Test {
                 "Actor approves collateral"
             );
             assertTrue(_OHM.approve(address(_CORE), type(uint256).max), "Actor approves repayment");
-            assertTrue(
-                _OHM.approve(address(services_.composites), type(uint256).max),
-                "Actor approves composite"
-            );
-            IOperatorAuth(address(_CORE)).setAuthorization(
-                address(services_.composites),
-                type(uint48).max
-            );
             vm.stopPrank();
         }
     }
 
+    // forge-lint: disable-end(calls-loop, missing-zero-check)
+
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(reentrancy-no-eth, unsafe-typecast)
     function deposit(uint256 actorSeed_, uint128 amountSeed_) external {
         address actor = actors[actorSeed_ % actors.length];
         uint128 amount = uint128(bound(amountSeed_, 1e18, 100_000e18));
@@ -147,6 +143,10 @@ contract BurnerLoansShareHandler is Test {
         }
     }
 
+    // forge-lint: disable-end(reentrancy-no-eth, unsafe-typecast)
+
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function borrow(uint256 actorSeed_, uint128 amountSeed_) external {
         address actor = actors[actorSeed_ % actors.length];
         uint128 amount = uint128(bound(amountSeed_, 1, 1000e9));
@@ -201,6 +201,11 @@ contract BurnerLoansShareHandler is Test {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(reentrancy-no-eth, unsafe-typecast)
     function repay(uint256 actorSeed_, uint128 amountSeed_) external {
         address actor = actors[actorSeed_ % actors.length];
         uint256 available = _OHM.balanceOf(actor);
@@ -228,6 +233,11 @@ contract BurnerLoansShareHandler is Test {
         );
     }
 
+    // forge-lint: disable-end(reentrancy-no-eth, unsafe-typecast)
+
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(reentrancy-no-eth, unsafe-typecast)
     function withdraw(uint256 actorSeed_, uint128 amountSeed_) external {
         address actor = actors[actorSeed_ % actors.length];
         if (collateral[actor] == 0) return;
@@ -257,52 +267,10 @@ contract BurnerLoansShareHandler is Test {
         _assertExit(expected, actor, result.returnToken, result.returnAmount);
     }
 
-    function compositeRepayAndWithdraw(
-        uint256 actorSeed_,
-        uint128 repaySeed_,
-        uint128 amountSeed_
-    ) external {
-        address actor = actors[actorSeed_ % actors.length];
-        uint128 debt = principal[actor];
-        if (collateral[actor] == 0 || _OHM.balanceOf(actor) < debt || !_modeUsable()) return;
-        uint128 repayment = uint128(bound(repaySeed_, 0, debt));
-        // Prices span $0.50..$2 and the backing multiplier is 1.25. Retain at least
-        // 5 asset18 units per OHM9 unit of remaining debt, independently of Risk's quote.
-        uint256 retained = uint256(debt - repayment) * 5e9;
-        if (collateral[actor] <= retained) return;
-        uint128 amount = uint128(bound(amountSeed_, 1, collateral[actor] - retained));
-        Exit memory expected = _exit(amount, actor);
-        if (expected.amount == 0) return;
-        vm.roll(block.number + 1);
-        uint256 walletBefore = _OHM.balanceOf(actor);
-        vm.prank(actor);
-        IBurnerLoansComposites.RepayAndWithdrawResult memory result = _services
-            .composites
-            .repayAndWithdraw(
-                IOperatorAuth.Authorization(address(0), address(0), 0, 0, 0),
-                IOperatorAuth.Signature(0, bytes32(0), bytes32(0)),
-                IBurnerLoansComposites.RepayAndWithdrawParams(
-                    address(_ASSET),
-                    repayment,
-                    amount,
-                    actor
-                )
-            );
-        principal[actor] -= repayment;
-        collateral[actor] -= amount;
-        assertEq(result.repaidOhm, repayment, "Composite repays modeled amount");
-        assertEq(result.resultingDebtOhm, principal[actor], "Composite preserves remaining debt");
-        if (principal[actor] != 0)
-            assertGe(result.healthFactor, 1e18, "Partial composite exit stays healthy");
-        assertEq(result.remainingCollateral, collateral[actor], "Composite collateral debit");
-        assertEq(
-            _OHM.balanceOf(actor),
-            walletBefore - repayment,
-            "Composite charges only actual repayment"
-        );
-        _assertExit(expected, actor, result.tokenOut, result.amountOut);
-    }
+    // forge-lint: disable-end(reentrancy-no-eth, unsafe-typecast)
 
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // forge-lint: disable-start(reentrancy-no-eth)
     function seize() external {
         if (!_modeUsable()) return;
         (address[] memory borrowers, , ) = _services.lens.getSeizableBorrowersFor(
@@ -346,6 +314,10 @@ contract BurnerLoansShareHandler is Test {
         _closeSelected(borrowers);
     }
 
+    // forge-lint: disable-end(reentrancy-no-eth)
+
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // forge-lint: disable-start(reentrancy-no-eth)
     function executePeriodicSeizer() external {
         if (!_modeUsable()) return;
         (address[] memory borrowers, , ) = _services.lens.getSeizableBorrowersFor(
@@ -359,6 +331,8 @@ contract BurnerLoansShareHandler is Test {
         _assertExit(expected, _TREASURY, expected.token, expected.amount);
         _closeSelected(borrowers);
     }
+
+    // forge-lint: disable-end(reentrancy-no-eth)
 
     function claimYield() external {
         if (!_modeUsable()) {
@@ -404,11 +378,15 @@ contract BurnerLoansShareHandler is Test {
         _PRICE.setPrice(address(_OHM), bound(ohmSeed_, 0.5e18, 2e18));
     }
 
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function moveTime(uint32 elapsed_) external {
         vm.warp(vm.getBlockTimestamp() + bound(elapsed_, 1, 31 days));
         vm.roll(block.number + 1);
         _PRICE.setTimestamp(uint48(vm.getBlockTimestamp()));
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     function setAsyncRedeem(bool enabled_) external {
         _VAULT.setCapabilities(false, enabled_, true, true);
@@ -438,12 +416,18 @@ contract BurnerLoansShareHandler is Test {
         _services.config.setAssetOriginationsEnabled(address(_ASSET), enabled_);
     }
 
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function supplyInventory(uint128 amountSeed_) external {
         uint128 amount = uint128(bound(amountSeed_, 1, 1000e9));
         _OHM.mint(address(this), amount);
         _INVENTORY.supply(amount);
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function withdrawInventory(uint128 amountSeed_) external {
         uint256 available = _INVENTORY.suppliedIdleOhm();
         if (available > _INVENTORY.providerClaimOhm(address(this)))
@@ -452,10 +436,14 @@ contract BurnerLoansShareHandler is Test {
         _INVENTORY.withdraw(uint128(bound(amountSeed_, 1, available)), address(this));
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     function _modeUsable() private view returns (bool) {
         return !asyncRedeem || _services.config.getAssetConfig(address(_ASSET)).withdrawAsShares;
     }
 
+    // These calls enumerate bounded test actors/assets, including fixture helpers called by the loops.
+    // forge-lint: disable-start(calls-loop)
     function _selectedCollateral(address[] memory borrowers_) private view returns (uint256 total) {
         for (uint256 i; i < borrowers_.length; ++i) {
             assertTrue(
@@ -466,6 +454,10 @@ contract BurnerLoansShareHandler is Test {
         }
     }
 
+    // forge-lint: disable-end(calls-loop)
+
+    // These calls enumerate bounded test actors/assets, including fixture helpers called by the loops.
+    // forge-lint: disable-start(calls-loop)
     function _closeSelected(address[] memory borrowers_) private {
         for (uint256 i; i < borrowers_.length; ++i) {
             defaulted += principal[borrowers_[i]];
@@ -481,6 +473,8 @@ contract BurnerLoansShareHandler is Test {
             assertEq(position.lastBorrowBlock, 0, "Seizure clears the debt episode block");
         }
     }
+
+    // forge-lint: disable-end(calls-loop)
 
     function _exit(uint256 assets_, address recipient_) private view returns (Exit memory result) {
         result.shares = _sharesForAssets(assets_);

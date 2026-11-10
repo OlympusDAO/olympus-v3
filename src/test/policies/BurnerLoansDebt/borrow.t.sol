@@ -15,12 +15,12 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+import {Actions, toKeycode} from "src/Kernel.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 import {BL_DEBT_POLICY_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
 
 // Contracts
-import {Actions, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BurnerLoansDebtTest} from "src/test/policies/BurnerLoansDebt/BurnerLoansDebtTest.sol";
@@ -461,13 +461,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     ) public {
         vm.assume(caller_ != _borrower && caller_ != _recipient);
         _authorizeOperator(_recipient, type(uint48).max);
-        _expectBorrowExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
-            1,
-            caller_,
-            0,
-            caller_
-        );
+        _expectBorrowExecutionRevert(_unauthorizedOperatorError(caller_), 1, caller_, 0, caller_);
     }
 
     // Scenarios: BLDEBT-BORROW-P02.
@@ -948,16 +942,24 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         _authorizeOperator(_recipient, deadline_);
         vm.warp(now_);
         _expectBorrowExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_ExpiredGrant.selector, deadline_),
             0,
             _recipient,
             0,
             _recipient
         );
         assertEq(
-            _core.authorizationDeadlines(_borrower, _recipient),
+            _authorizationDeadline(_borrower, _recipient),
+            0,
+            "Expired authority is hidden by the live-only getter"
+        );
+        // Read again at the inclusive deadline to prove the failed operation did not erase
+        // permission data or advance cancellation epochs; only the clock made it unavailable.
+        vm.warp(deadline_);
+        assertEq(
+            _authorizationDeadline(_borrower, _recipient),
             deadline_,
-            "Failed use does not cancel grant"
+            "Failed use preserves the accepted grant"
         );
     }
 
@@ -969,11 +971,11 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     // Scenarios: BLDEBT-BORROW-A07.
     function test_givenCancelledGrant_whenOperatorActs_reverts() public {
         vm.startPrank(_borrower);
-        _core.setAuthorization(_recipient, type(uint48).max);
-        _core.cancelAuthorization(_recipient);
+        _approveOperator(_borrower, _recipient, type(uint48).max);
+        _auth.cancelGrant(_recipient);
         vm.stopPrank();
         _expectBorrowExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             0,
             _recipient,
             0,
@@ -983,9 +985,9 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-BORROW-A06.
     function test_givenNoGrant_whenUnrelatedCallerActs_reverts(address caller_) public {
-        vm.assume(!_core.isSenderAuthorized(caller_, _borrower));
+        vm.assume(!_isSenderAuthorized(caller_, _borrower));
         _expectBorrowExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            _unauthorizedOperatorError(caller_),
             0,
             _recipient,
             0,
@@ -1006,7 +1008,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         _authorizeOperator(_recipient, deadline_);
         vm.warp(now_);
         _expectBorrowExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            _unauthorizedOperatorError(caller_),
             0,
             _recipient,
             0,
@@ -1153,7 +1155,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         vm.warp(now_);
         _assertBorrowFeeHandoff(_recipient, 7, 8);
         assertEq(
-            _core.authorizationDeadlines(_borrower, _recipient),
+            _authorizationDeadline(_borrower, _recipient),
             deadline_,
             "Borrow preserves grant"
         );
@@ -1441,9 +1443,9 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         // Poison the complete authorization selector: neither viewer nor borrower grants may be read.
         vm.mockCallRevert(
-            address(_core),
-            abi.encodeWithSelector(IOperatorAuth.isSenderAuthorized.selector),
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector)
+            address(_auth),
+            abi.encodeWithSelector(IOperatorAuth.captureAuthorization.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector)
         );
         _assertPermissionlessQuote(viewer_, amount_);
     }
@@ -1473,7 +1475,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer, 7);
         _expectBorrowExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             7,
             _recipient,
             0,
@@ -1507,7 +1509,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer, 7);
         _expectBorrowExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_ExpiredGrant.selector, uint48(10)),
             7,
             _recipient,
             0,
@@ -1519,11 +1521,11 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     function test_givenRevokedGrant_whenUnrelatedViewerQuotes() public {
         _authorizeOperator(_recipient, 10);
         vm.prank(_borrower);
-        _core.cancelAuthorization(_recipient);
+        _auth.cancelGrant(_recipient);
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer, 7);
         _expectBorrowExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             7,
             _recipient,
             0,

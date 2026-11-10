@@ -1,6 +1,6 @@
 # BurnerLoansPayout.setConfigOperator coverage plan
 
-Source: [setConfigOperator](../../../policies/burnerloans/BurnerLoansPayout.sol#L145). Shared setter semantics are inherited from ConfigOperatorSingleStep. Apply [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md).
+Source: [setConfigOperator](../../../policies/burnerloans/BurnerLoansPayout.sol#L167). Shared setter semantics are inherited from ConfigOperatorSingleStep. Apply [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md).
 
 Payout business actions, recovery and routing/authority changes require own Kernel activity before caller authorization. Local pause or Core replacement does not block existing claims or recovery while Payout remains active. Core lifecycle is independent; framework hooks, ordinary accounting getters and disable retain their documented behavior.
 

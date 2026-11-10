@@ -1,6 +1,6 @@
 # BurnerLoansCore.registerMarket coverage plan
 
-Source: [registerMarket](../../../policies/burnerloans/BurnerLoansCore.sol#L753). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [registerMarket](../../../policies/burnerloans/BurnerLoansCore.sol#L936). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 

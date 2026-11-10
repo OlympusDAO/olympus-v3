@@ -1,6 +1,6 @@
 # BurnerLoansDebt.requestPermissions coverage plan
 
-Source: [requestPermissions](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L132). Implemented and mapped to the focused Foundry suite.
+Source: [requestPermissions](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L137). Implemented and mapped to the focused Foundry suite.
 
 ## Domains and notation
 

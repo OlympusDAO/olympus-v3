@@ -2,7 +2,7 @@
 
 > Referral scenarios supplement the retained gross-fee cases. The API accepts referrer and returns protocolFee/referralFee; mappings identify both calculation and allocation proof.
 
-Source: [fee](../../../policies/burnerloans/BurnerLoansRisk.sol#L412). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [fee](../../../policies/burnerloans/BurnerLoansRisk.sol#L409). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 

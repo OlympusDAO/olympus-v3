@@ -1,6 +1,6 @@
 # BurnerLoansRisk.keeperReward coverage plan
 
-Source: [keeperReward](../../../policies/burnerloans/BurnerLoansRisk.sol#L457). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [keeperReward](../../../policies/burnerloans/BurnerLoansRisk.sol#L454). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 

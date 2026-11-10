@@ -151,7 +151,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
     // Scenarios: BLDEBT-BORROW-C03.
     function test_givenUnauthorizedCacheAction_whenCaught_thenOuterSucceeds() public {
         vm.prank(_borrower);
-        _core.cancelAuthorization(address(_cache));
+        _auth.cancelGrant(address(_cache));
         _cache.arm(
             address(_debt),
             abi.encodeCall(
@@ -164,7 +164,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
         _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         assertEq(
             _cache.rejection(),
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             "Exact caught auth failure, not a Core guard"
         );
         assertEq(_inventory.activePrincipalOhm(), 100e9, "Only outer funding");
@@ -173,7 +173,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
     // Scenarios: BLDEBT-BORROW-C04.
     function test_givenUnauthorizedCacheAction_whenPropagated_thenOuterRollsBack() public {
         vm.prank(_borrower);
-        _core.cancelAuthorization(address(_cache));
+        _auth.cancelGrant(address(_cache));
         _cache.arm(
             address(_debt),
             abi.encodeCall(
@@ -183,7 +183,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
             true
         );
         bytes32 rollbackBefore = _priceStateDigest();
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
         vm.prank(_borrower);
         _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         assertEq(_inventory.activePrincipalOhm(), 0, "No funding after refresh callback failure");

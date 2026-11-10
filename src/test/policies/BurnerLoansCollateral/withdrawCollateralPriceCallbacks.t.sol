@@ -66,7 +66,7 @@ contract BurnerLoansCollateralWithdrawCollateralPriceCallbacksTest is
         assertEq(_asset.balanceOf(_recipient), 1, "One output");
         assertEq(
             _cache.rejection(),
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             "Cache caught the specified authorization error"
         );
         _assertDirectCollateral(2000e6 - 1);
@@ -80,7 +80,7 @@ contract BurnerLoansCollateralWithdrawCollateralPriceCallbacksTest is
         bytes32 beforeCache = keccak256(
             abi.encode(_cache.getCachedPrice(address(_ohm), address(_asset)))
         );
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
         vm.prank(_borrower);
         _collateral.withdrawCollateral(address(_asset), 1, _borrower, _recipient);
         assertEq(

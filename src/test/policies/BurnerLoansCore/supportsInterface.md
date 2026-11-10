@@ -12,12 +12,11 @@ Permissionless view, all lifecycle states; bytes4 input. Advertised interfaces d
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
-## Supported interfaces
+## Interface responses
 
 | ID | Caller | interfaceId input | Return | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLCORE-ERC165-P01 | Fuzz all callers | type(IBurnerLoansCore).interfaceId | true | No state, token, event or dependency changes | Covered: [test][test_whenIBurnerLoansCoreQueried] |
-| BLCORE-ERC165-P02 | Fuzz all callers | type(IOperatorAuth).interfaceId | true | No state, token, event or dependency changes | Covered: [test][test_whenIOperatorAuthQueried] |
 | BLCORE-ERC165-P03 | Fuzz all callers | type(IVersioned).interfaceId | true | No state, token, event or dependency changes | Covered: [test][test_whenIVersionedQueried] |
 | BLCORE-ERC165-P04 | Fuzz all callers | type(IERC165).interfaceId | true | No state, token, event or dependency changes | Covered: [test][test_whenIERC165Queried] |
 | BLCORE-ERC165-P05 | Fuzz all callers | type(IEnabler).interfaceId | true | No state, token, event or dependency changes | Covered: [test][test_whenIEnablerQueried] |
@@ -27,6 +26,7 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 | BLCORE-ERC165-P09 | Fuzz all callers | 0xffffffff | false | No state, token, event or dependency changes | Covered: [test][test_whenInvalidInterfaceQueried] |
 | BLCORE-ERC165-P10 | Fuzz all callers | 0x00000000 | false | No state, token, event or dependency changes | Covered: [test][test_whenZeroInterfaceQueried] |
 | BLCORE-ERC165-P12 | Fuzz all callers | type(IConfigOperator).interfaceId | true | No state, token, event or dependency changes | Covered: [test][test_whenIConfigOperatorQueried] |
+| BLCORE-ERC165-P13 | Fuzz all callers; independently fuzz active/enabled | type(IBurnerLoansAuthTarget).interfaceId | true | No state, token, event or dependency changes | Covered: [target][test_whenIBurnerLoansAuthTargetQueried] |
 | BLCORE-ERC165-P11 | Fuzz all callers | Fuzz bytes4 excluding the complete supported set listed above, zero and 0xffffffff | false | No state, token, event or dependency changes | Covered: [test][test_whenOtherInterfaceQueried] |
 
 ## Shared assertions
@@ -37,16 +37,15 @@ Compile the exact IDs listed above. Imported interfaces do not add advertised su
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to implemented tests.
 
-[test_whenIBurnerLoansCoreQueried]: supportsInterface.t.sol#L20
-[test_whenIERC165Queried]: supportsInterface.t.sol#L62
-[test_whenIEnablerQueried]: supportsInterface.t.sol#L76
-[test_whenIEnablerV2Queried]: supportsInterface.t.sol#L90
-[test_whenIGracePeriodQueried]: supportsInterface.t.sol#L118
-[test_whenIOperatorAuthQueried]: supportsInterface.t.sol#L34
-[test_whenIReEnablerQueried]: supportsInterface.t.sol#L104
-[test_whenIVersionedQueried]: supportsInterface.t.sol#L48
-[test_whenInvalidInterfaceQueried]: supportsInterface.t.sol#L146
-[test_whenOtherInterfaceQueried]: supportsInterface.t.sol#L160
-[test_whenZeroInterfaceQueried]: supportsInterface.t.sol#L153
-
-[test_whenIConfigOperatorQueried]: supportsInterface.t.sol#L132
+[test_whenIBurnerLoansCoreQueried]: supportsInterface.t.sol#L38
+[test_whenIBurnerLoansAuthTargetQueried]: supportsInterface.t.sol#L20
+[test_whenIConfigOperatorQueried]: supportsInterface.t.sol#L136
+[test_whenIERC165Queried]: supportsInterface.t.sol#L66
+[test_whenIEnablerQueried]: supportsInterface.t.sol#L80
+[test_whenIEnablerV2Queried]: supportsInterface.t.sol#L94
+[test_whenIGracePeriodQueried]: supportsInterface.t.sol#L122
+[test_whenIReEnablerQueried]: supportsInterface.t.sol#L108
+[test_whenIVersionedQueried]: supportsInterface.t.sol#L52
+[test_whenInvalidInterfaceQueried]: supportsInterface.t.sol#L150
+[test_whenOtherInterfaceQueried]: supportsInterface.t.sol#L164
+[test_whenZeroInterfaceQueried]: supportsInterface.t.sol#L157

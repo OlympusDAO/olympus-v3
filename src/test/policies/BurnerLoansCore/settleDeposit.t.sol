@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -29,6 +32,71 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
     }
 
+    // Scenarios: BLCORE-SETTLE-DEPOSIT-I04.
+    function test_whenMalformedEconomicRequest_thenAbiDecodingRejectsBeforeRoleCheck() public {
+        bytes32 beforeState = _state();
+        // A static request tuple has the same word order as these flat ABI values.
+        // A uint256 word deliberately exceeds the request's narrower field type.
+        bytes memory instruction = abi.encodeWithSelector(
+            IBurnerLoansCore.settleDeposit.selector,
+            address(_asset),
+            uint256(type(uint128).max) + 1,
+            _borrower,
+            _borrower,
+            _borrower,
+            _ownerAuthContext()
+        );
+        vm.prank(_recipient);
+        (bool success, bytes memory result) = address(_core).call(instruction);
+        assertFalse(success, "Malformed economic request cannot settle");
+        // The pinned compiler's ABI decoder rejects before entering role-guarded code.
+        assertEq(result.length, 0, "Malformed request fails in the ABI decoder");
+        assertEq(_state(), beforeState, "Malformed request leaves custody and positions unchanged");
+    }
+
+    // Scenarios: BLCORE-SETTLE-DEPOSIT-A02.
+    function test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts(
+        address caller_,
+        bool owner_
+    ) public {
+        vm.assume(!_roles.hasRole(caller_, BL_COLLATERAL_POLICY_ROLE));
+        vm.assume(caller_ != _borrower && caller_ != _recipient);
+        _deposit(2000e6);
+        _borrow(100e9);
+        _approveOperator(_borrower, _recipient, type(uint48).max);
+        address operator = owner_ ? _borrower : _recipient;
+        // The attacker can read a real stamp; the view result is not settlement authority.
+        vm.prank(caller_);
+        IBurnerLoansCore.AuthorizationContext memory original = _operatorAuthContext(
+            _borrower,
+            operator,
+            1
+        );
+        IBurnerLoansCore.DepositRequest memory request = IBurnerLoansCore.DepositRequest({
+            asset: address(_asset),
+            amount: 1,
+            payer: _borrower,
+            borrower: _borrower
+        });
+        bytes32 beforeState = _ledger();
+        uint256 pairEpoch = _auth.pairEpochs(_borrower, _recipient);
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
+        );
+        vm.prank(caller_);
+        _core.settleDeposit(request, operator, original);
+        assertEq(
+            _ledger(),
+            beforeState,
+            "Publicly readable authority cannot move custody or change a position"
+        );
+        assertEq(
+            _auth.pairEpochs(_borrower, _recipient),
+            pairEpoch,
+            "Rejected impersonation preserves the genuine grant"
+        );
+    }
+
     // Scenarios: BLCORE-SETTLE-DEPOSIT-A02.
     function test_whenCallerLacksSettlementRole_reverts(address caller_) public {
         vm.assume(!_roles.hasRole(caller_, BL_COLLATERAL_POLICY_ROLE));
@@ -37,7 +105,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
         );
         vm.prank(caller_);
-        _core.settleDeposit(address(0), 0, address(0), address(0));
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(0),
+                amount: 0,
+                payer: address(0),
+                borrower: address(0)
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Unauthorized instruction has no effects");
     }
 
@@ -49,7 +126,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
         );
         vm.prank(address(sibling));
-        _core.settleDeposit(address(0), 0, address(0), address(0));
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(0),
+                amount: 0,
+                payer: address(0),
+                borrower: address(0)
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
     }
 
     // Scenarios: BLCORE-SETTLE-DEPOSIT-A04.
@@ -72,7 +158,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(address(_actor));
-        _core.settleDeposit(address(0), 0, address(0), address(0));
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(0),
+                amount: 0,
+                payer: address(0),
+                borrower: address(0)
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Disabled Core rejects before inputs");
     }
 
@@ -87,7 +182,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleDeposit(address(0), 0, address(0), address(0));
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(0),
+                amount: 0,
+                payer: address(0),
+                borrower: address(0)
+            }),
+            address(0),
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Own inactivity precedes local state and inputs");
     }
 
@@ -116,21 +220,36 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
 
     function _settleAsCaller(address caller_) internal {
         vm.prank(caller_);
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_position().depositedCollateral, 1, "Role-holding caller credits collateral");
     }
 
     // Scenarios: BLCORE-SETTLE-DEPOSIT-P01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_whenCreditedDepositIsPositive(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         _asset.mint(_borrower, amount_);
         uint256 payerBefore = _asset.balanceOf(_borrower);
         vm.prank(address(_actor));
         (uint128 credit, uint128 collateral) = _core.settleDeposit(
-            address(_asset),
-            amount_,
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: amount_,
+                payer: _borrower,
+                borrower: _borrower
+            }),
             _borrower,
-            _borrower
+            _ownerAuthContext()
         );
         assertEq(credit, amount_, "Idle custody credits exact incoming amount");
         assertEq(collateral, amount_, "Canonical collateral uses actual credit");
@@ -146,6 +265,8 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             "Aggregate collateral matches position"
         );
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-SETTLE-DEPOSIT-P01.
     function test_whenDepositAmountSeeds() public {
@@ -163,10 +284,14 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         uint64 count = _floan.getPositionCount();
         vm.prank(address(_actor));
         (uint128 credit, uint128 collateral) = _core.settleDeposit(
-            address(_asset),
-            1,
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
             _borrower,
-            _borrower
+            _ownerAuthContext()
         );
         assertEq(credit, 1, "Top-up credits actual output");
         assertEq(collateral, previous.depositedCollateral + 1, "Existing collateral increases");
@@ -184,10 +309,14 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         uint64 count = _floan.getPositionCount();
         vm.prank(address(_actor));
         (uint128 credit, uint128 collateral) = _core.settleDeposit(
-            address(_asset),
-            1,
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
             _borrower,
-            _borrower
+            _ownerAuthContext()
         );
         assertEq(credit, 1, "Top-up credits actual output");
         assertEq(collateral, previous.depositedCollateral + 1, "Existing collateral increases");
@@ -219,10 +348,14 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         uint256 custody = _asset.balanceOf(address(_depositManager));
         vm.prank(address(_actor));
         (uint128 credit, uint128 collateral) = _core.settleDeposit(
-            address(_asset),
-            1,
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
             _borrower,
-            _borrower
+            _ownerAuthContext()
         );
         assertEq(credit, 1, "Origination pause permits actual deposit credit");
         assertEq(collateral, 1, "First deposit initializes collateral");
@@ -247,7 +380,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         bytes32 before = _state();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_ZeroCollateralCredit.selector);
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Zero credit rolls back incoming transfer and approval");
     }
 
@@ -268,7 +410,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_state(), before, "Oversized credit never creates collateral");
     }
 
@@ -276,7 +427,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
     function test_givenPreexistingDonation_whenDeposited() public {
         _asset.mint(address(_core), 17);
         vm.prank(address(_actor));
-        (uint128 credit, ) = _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        (uint128 credit, ) = _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(credit, 1, "Donation is not fresh credited collateral");
         assertEq(_asset.balanceOf(address(_core)), 17, "Old donation stays separate");
     }
@@ -289,7 +449,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             abi.encode(address(0))
         );
         vm.prank(address(_actor));
-        (uint128 credit, ) = _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        (uint128 credit, ) = _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(credit, 1, "Optional receipt approval is skipped");
     }
 
@@ -317,7 +486,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             uint64(0)
         );
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
     }
 
     // Scenarios: BLCORE-SETTLE-DEPOSIT-D04.
@@ -339,7 +517,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             uint64(1)
         );
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
     }
 
     // Scenarios: BLCORE-SETTLE-DEPOSIT-P04.
@@ -362,7 +549,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
     }
 
     // Scenarios: BLCORE-SETTLE-DEPOSIT-C01.
@@ -387,7 +583,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -419,7 +624,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -448,7 +662,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Inexact mandatory receipt rolls back custody and accounting");
         assertEq(
             token.allowance(_borrower, address(_core)),
@@ -479,7 +702,16 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleDeposit(address(_asset), 1, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Inexact mandatory receipt rolls back custody and accounting");
         assertEq(
             token.allowance(_borrower, address(_core)),
@@ -495,3 +727,4 @@ contract BurnerLoansCoreSettleDepositTest is BurnerLoansCoreTest {
         test_givenCreditExceedsUint128_whenDeposited_reverts(type(uint256).max);
     }
 }
+// forge-lint: disable-end(unused-return)

@@ -1,6 +1,6 @@
 # BurnerLoansCollateral.configureDependencies coverage plan
 
-Source: [configureDependencies](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L123). Test mappings name the passing proofs.
+Source: [configureDependencies](../../../policies/burnerloans/abstracts/BaseBurnerLoansAction.sol#L128). Test mappings name the passing proofs.
 
 ## Domains and notation
 

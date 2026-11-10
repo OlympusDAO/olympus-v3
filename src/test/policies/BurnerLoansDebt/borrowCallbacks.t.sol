@@ -119,7 +119,7 @@ contract BurnerLoansDebtBorrowCallbacksTest is BurnerLoansDebtTest {
         token.mint(address(token), 7);
         vm.startPrank(_borrower);
         token.approve(address(_core), type(uint256).max);
-        _core.setAuthorization(address(token), type(uint48).max);
+        _approveOperatorForAsset(_borrower, address(token), type(uint48).max, address(token));
         _collateral.depositCollateral(address(token), 2000e18, _borrower);
         vm.stopPrank();
         vm.prank(address(token));

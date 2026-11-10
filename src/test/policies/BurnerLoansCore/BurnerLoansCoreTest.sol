@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
@@ -80,9 +83,20 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
     function _deposit(uint128 amount_) internal {
         _asset.mint(_borrower, amount_);
         vm.prank(address(_collateral));
-        _core.settleDeposit(address(_asset), amount_, _borrower, _borrower);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: amount_,
+                payer: _borrower,
+                borrower: _borrower
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
     }
 
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function _borrow(uint128 amount_) internal {
         vm.prank(address(_debt));
         _core.settleBorrow(
@@ -96,9 +110,13 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
                 0,
                 address(0),
                 0
-            )
+            ),
+            _borrower,
+            _ownerAuthContext()
         );
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     function _position() internal view returns (IBurnerLoansCore.Position memory) {
         return _lens.getPosition(address(_asset), _borrower);
@@ -193,46 +211,57 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
             );
     }
 
-    function _setNonce(address account_, uint256 nonce_) internal {
+    function _setPairEpoch(address account_, address operator_, uint256 epoch_) internal {
         stdstore
-            .target(address(_core))
-            .sig(IOperatorAuth.authorizationNonces.selector)
+            .target(address(_auth))
+            .sig(IOperatorAuth.pairEpochs.selector)
             .with_key(account_)
-            .checked_write(nonce_);
+            .with_key(operator_)
+            .checked_write(epoch_);
     }
 
     function _sign(
-        IOperatorAuth.Authorization memory auth_,
+        IOperatorAuth.Grant memory grant_,
         uint256 key_,
         bytes32 domain_
-    ) internal pure returns (IOperatorAuth.Signature memory sig) {
+    ) internal pure returns (bytes memory) {
         bytes32 typeHash = keccak256(
-            "Authorization(address account,address authorized,uint48 authorizationDeadline,uint256 nonce,uint48 signatureDeadline)"
+            "Grant(address account,address operator,uint256 accountEpoch,uint256 pairEpoch,uint48 deadline,bool multiple,uint8 actions,bytes32 context,bytes32 permissionsHash,bytes32 signatureDataHash)"
         );
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", domain_, keccak256(abi.encode(typeHash, auth_)))
+        bytes32 hash = keccak256(
+            abi.encode(
+                typeHash,
+                grant_.account,
+                grant_.operator,
+                grant_.accountEpoch,
+                grant_.pairEpoch,
+                grant_.deadline,
+                grant_.multiple,
+                grant_.actions,
+                grant_.context,
+                keccak256(grant_.permissions),
+                keccak256("")
+            )
         );
-        (sig.v, sig.r, sig.s) = vm.sign(key_, digest);
+        (uint8 v, bytes32 r, bytes32 ss) = vm.sign(
+            key_,
+            keccak256(abi.encodePacked("\x19\x01", domain_, hash))
+        );
+        return abi.encodePacked(r, ss, v);
     }
 
-    function _grant()
-        internal
-        view
-        returns (IOperatorAuth.Authorization memory auth, IOperatorAuth.Signature memory sig)
-    {
-        auth = IOperatorAuth.Authorization(
-            vm.addr(_SIGNER_KEY),
-            _recipient,
-            type(uint48).max,
-            _core.authorizationNonces(vm.addr(_SIGNER_KEY)),
-            type(uint48).max
-        );
-        sig = _sign(auth, _SIGNER_KEY, _core.DOMAIN_SEPARATOR());
+    function _grant() internal view returns (IOperatorAuth.Grant memory grant, bytes memory sig) {
+        grant = _operatorGrant(vm.addr(_SIGNER_KEY), _recipient, type(uint48).max);
+        sig = _sign(grant, _SIGNER_KEY, _auth.DOMAIN_SEPARATOR());
     }
 
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function _bounds48(uint48 value_, uint48 min_, uint48 max_) internal pure returns (uint48) {
         return uint48(bound(value_, min_, max_));
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     function _armRescue(
         bytes memory data_,
@@ -258,9 +287,10 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
 
     function _authorizeCollateralCallback(CoreService actor_) internal {
         vm.prank(_recipient);
-        _core.setAuthorization(address(actor_), type(uint48).max);
+        _approveOperator(_recipient, address(actor_), type(uint48).max);
         _asset.mint(address(actor_), 1);
         vm.prank(address(actor_));
         _asset.approve(address(_core), 1);
     }
 }
+// forge-lint: disable-end(unused-return)

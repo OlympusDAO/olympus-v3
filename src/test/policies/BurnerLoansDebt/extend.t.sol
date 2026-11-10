@@ -14,13 +14,13 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {Actions} from "src/Kernel.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {BL_DEBT_POLICY_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
 import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
 
 // Contracts
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
-import {Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 import {BurnerLoansDebtTest} from "src/test/policies/BurnerLoansDebt/BurnerLoansDebtTest.sol";
@@ -323,7 +323,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         vm.assume(caller_ != _borrower && caller_ != _recipient);
         _authorizeOperator(_recipient, type(uint48).max);
         bytes32 rollbackBefore = _stateDigest(_borrower);
-        vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
+        vm.expectRevert(_unauthorizedOperatorError(caller_));
         vm.prank(caller_);
         // Expected revert: no result exists to assert.
         // forge-lint: disable-next-line(unused-return)
@@ -374,7 +374,19 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         vm.prank(address(_collateral));
         // Expected revert: no result exists to assert.
         // forge-lint: disable-next-line(unused-return)
-        _core.settleExtend(address(_asset), _borrower, _borrower, maturity, 0, address(0), 0);
+        _core.settleExtend(
+            IBurnerLoansCore.ExtendRequest({
+                asset: address(_asset),
+                borrower: _borrower,
+                payer: _borrower,
+                maturity: maturity,
+                protocolFee: 0,
+                referrer: address(0),
+                referralFee: 0
+            }),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _stateDigest(_borrower),
             rollbackBefore,
@@ -552,6 +564,31 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
 
     // Scenarios: BLEXT-EXTEND-C06.
     // Scenarios: BLEXT-EXTEND-T02.
+    function _nestedExtendInstruction(
+        address token_,
+        uint48 maturity_,
+        uint256 fee_
+    ) internal view returns (bytes memory) {
+        return
+            abi.encodeCall(
+                IBurnerLoansCore.settleExtend,
+                (
+                    IBurnerLoansCore.ExtendRequest({
+                        asset: token_,
+                        borrower: _borrower,
+                        payer: token_,
+                        maturity: maturity_,
+                        protocolFee: fee_,
+                        referrer: address(0),
+                        referralFee: uint256(0)
+                    }),
+                    token_,
+                    _operatorAuthContext(_borrower, token_, 8)
+                )
+            );
+    }
+
+    // Scenarios: BLEXT-EXTEND-T02, BLEXT-EXTEND-C06.
     function test_givenCollateralCallback_whenExtended_revertsAtomically() public {
         (ReentrantFeeToken token, uint256 fee) = _prepareCollateralCallback();
         (, , IFLOANv1.Position memory beforePosition) = LoanPositions.forCore(
@@ -566,17 +603,10 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         // The nested, authorized action must reach Core after the outer maturity update.
         vm.expectCall(
             address(_core),
-            abi.encodeCall(
-                IBurnerLoansCore.settleExtend,
-                (
-                    address(token),
-                    _borrower,
-                    address(token),
-                    beforePosition.maturity + 2 * _TERM_LENGTH,
-                    fee,
-                    address(0),
-                    uint256(0)
-                )
+            _nestedExtendInstruction(
+                address(token),
+                beforePosition.maturity + 2 * _TERM_LENGTH,
+                fee
             )
         );
         bytes32 rollbackBefore = _stateDigestFor(address(token), _borrower);
@@ -673,7 +703,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         // Setup only; the canonical position is captured below.
         // forge-lint: disable-next-line(unused-return)
         _debt.borrow(address(token), 100e9, _borrower, _borrower, 100e18, address(0));
-        _core.setAuthorization(address(token), type(uint48).max);
+        _approveOperatorForAsset(_borrower, address(token), type(uint48).max, address(token));
         vm.stopPrank();
         vm.prank(_borrower);
         fee = _debt.previewExtend(address(token), _borrower, 1, type(uint256).max, address(0)).fee;
@@ -1044,15 +1074,23 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         _authorizeOperator(_recipient, deadline_);
         vm.warp(now_);
         _expectExtendExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_ExpiredGrant.selector, deadline_),
             0,
             0,
             _recipient
         );
         assertEq(
-            _core.authorizationDeadlines(_borrower, _recipient),
+            _authorizationDeadline(_borrower, _recipient),
+            0,
+            "Expired authority is hidden by the live-only getter"
+        );
+        // Read again at the inclusive deadline to prove the failed operation did not erase
+        // permission data or advance cancellation epochs; only the clock made it unavailable.
+        vm.warp(deadline_);
+        assertEq(
+            _authorizationDeadline(_borrower, _recipient),
             deadline_,
-            "Failed use does not cancel grant"
+            "Failed use preserves the accepted grant"
         );
     }
 
@@ -1064,11 +1102,11 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
     // Scenarios: BLEXT-EXTEND-A07.
     function test_givenCancelledGrant_whenOperatorActs_reverts() public {
         vm.startPrank(_borrower);
-        _core.setAuthorization(_recipient, type(uint48).max);
-        _core.cancelAuthorization(_recipient);
+        _approveOperator(_borrower, _recipient, type(uint48).max);
+        _auth.cancelGrant(_recipient);
         vm.stopPrank();
         _expectExtendExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             0,
             0,
             _recipient
@@ -1079,13 +1117,8 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
     function test_givenNoGrant_whenUnrelatedCallerActs_reverts(
         address caller_
     ) public givenDebtBearingPosition {
-        vm.assume(!_core.isSenderAuthorized(caller_, _borrower));
-        _expectExtendExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
-            0,
-            0,
-            caller_
-        );
+        vm.assume(!_isSenderAuthorized(caller_, _borrower));
+        _expectExtendExecutionRevert(_unauthorizedOperatorError(caller_), 0, 0, caller_);
     }
 
     // Scenarios: BLEXT-EXTEND-A11.
@@ -1100,12 +1133,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         vm.warp(1);
         _authorizeOperator(_recipient, deadline_);
         vm.warp(now_);
-        _expectExtendExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
-            0,
-            0,
-            caller_
-        );
+        _expectExtendExecutionRevert(_unauthorizedOperatorError(caller_), 0, 0, caller_);
     }
 
     // Scenarios: BLEXT-EXTEND-A05.
@@ -1198,7 +1226,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         _assertExtensionFeeHandoff(_recipient, 7, 1);
         assertEq(
-            _core.authorizationDeadlines(_borrower, _recipient),
+            _authorizationDeadline(_borrower, _recipient),
             deadline_,
             "Extension preserves operator grant"
         );
@@ -1359,9 +1387,9 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
     ) public givenMockDebt {
         // Poison the complete authorization selector: neither viewer nor borrower grants may be read.
         vm.mockCallRevert(
-            address(_core),
-            abi.encodeWithSelector(IOperatorAuth.isSenderAuthorized.selector),
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector)
+            address(_auth),
+            abi.encodeWithSelector(IOperatorAuth.captureAuthorization.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector)
         );
         _assertPermissionlessQuote(viewer_);
     }
@@ -1394,7 +1422,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer);
         _expectExtendExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             1,
             0,
             _recipient
@@ -1427,7 +1455,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer);
         _expectExtendExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_ExpiredGrant.selector, uint48(10)),
             1,
             0,
             _recipient
@@ -1438,11 +1466,11 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
     function test_givenRevokedGrant_whenUnrelatedViewerQuotes() public givenMockDebt {
         _authorizeOperator(_recipient, 10);
         vm.prank(_borrower);
-        _core.cancelAuthorization(_recipient);
+        _auth.cancelGrant(_recipient);
         address viewer = makeAddr("unrelatedQuoteViewer");
         _assertPermissionlessQuote(viewer);
         _expectExtendExecutionRevert(
-            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector),
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
             1,
             0,
             _recipient

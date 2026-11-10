@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
-import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
@@ -198,7 +200,16 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _borrow(100e9);
         address second = address(0xDEAD);
         vm.prank(address(_collateral));
-        _core.settleDeposit(address(_asset), 1, _borrower, second);
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 1,
+                payer: _borrower,
+                borrower: second
+            }),
+            second,
+            _ownerAuthContext()
+        );
         address[] memory borrowers = new address[](2);
         borrowers[0] = _borrower;
         borrowers[1] = second;
@@ -318,6 +329,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     }
 
     // Scenarios: BLCORE-SETTLE-SEIZE-P02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOrdinaryKeeper_whenSeized(uint128 reward_) public {
         _deposit(2000e6);
         _borrow(100e9);
@@ -388,6 +401,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         assertEq(_floan.getActiveBorrowerCount(market), 0, "Raw active index cleared");
         assertEq(_position().depositedCollateral, 0, "Collateral cleared");
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-SETTLE-SEIZE-P03.
     function test_givenProtocolKeeper_whenSeized(bool heart_) public {
@@ -924,7 +939,16 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     function test_givenInconsistentAggregate_whenSeized_reverts() public {
         _deposit(2);
         vm.prank(address(_collateral));
-        _core.settleDeposit(address(_asset), 2, _borrower, address(0xCAFE));
+        _core.settleDeposit(
+            IBurnerLoansCore.DepositRequest({
+                asset: address(_asset),
+                amount: 2,
+                payer: _borrower,
+                borrower: address(0xCAFE)
+            }),
+            address(0xCAFE),
+            _ownerAuthContext()
+        );
         address[] memory borrowers = new address[](2);
         borrowers[0] = _borrower;
         borrowers[1] = address(0xCAFE);
@@ -1012,3 +1036,4 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         assertEq(reserved, 0, "Ordinary-token payouts leave no deferred reserve");
     }
 }
+// forge-lint: disable-end(unused-return)

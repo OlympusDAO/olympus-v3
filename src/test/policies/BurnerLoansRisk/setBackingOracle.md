@@ -1,6 +1,6 @@
 # BurnerLoansRisk.setBackingOracle coverage plan
 
-Source: [setBackingOracle](../../../policies/burnerloans/BurnerLoansRisk.sol#L563). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setBackingOracle](../../../policies/burnerloans/BurnerLoansRisk.sol#L562). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 

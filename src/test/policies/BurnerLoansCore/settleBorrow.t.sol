@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -35,6 +38,84 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(_actor));
     }
 
+    // Scenarios: BLCORE-SETTLE-BORROW-A05.
+    function test_whenUnauthorizedCallerAndMalformedRequest_thenRoleErrorPrecedesFieldDecoding()
+        public
+    {
+        // Static tuple fields retain their ABI word order. Encode an amount above uint128
+        // without narrowing it, exercising raw calldata rather than Solidity's typed encoder.
+        bytes memory instruction = abi.encodeWithSelector(
+            IBurnerLoansCore.settleBorrow.selector,
+            address(_asset),
+            _borrower,
+            _borrower,
+            _recipient,
+            uint256(type(uint128).max) + 1,
+            uint48(30 days),
+            uint256(0),
+            address(0),
+            uint256(0),
+            _borrower,
+            _ownerAuthContext()
+        );
+        vm.prank(_recipient);
+        (bool success, bytes memory result) = address(_core).call(instruction);
+        assertFalse(success, "Unadmitted caller cannot settle malformed borrow");
+        assertEq(
+            result,
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE),
+            "Role rejection precedes lazy BorrowRequest field reads"
+        );
+    }
+
+    // Scenarios: BLCORE-SETTLE-BORROW-A02.
+    function test_givenLiveGrant_whenUnadmittedCallerReusesContext_reverts(
+        address caller_,
+        bool owner_
+    ) public {
+        vm.assume(!_roles.hasRole(caller_, BL_DEBT_POLICY_ROLE));
+        vm.assume(caller_ != _borrower && caller_ != _recipient);
+        _deposit(2000e6);
+        _borrow(100e9);
+        _approveOperator(_borrower, _recipient, type(uint48).max);
+        address operator = owner_ ? _borrower : _recipient;
+        // The attacker can read a real stamp; the view result is not settlement authority.
+        vm.prank(caller_);
+        IBurnerLoansCore.AuthorizationContext memory original = _operatorAuthContext(
+            _borrower,
+            operator,
+            2
+        );
+        IBurnerLoansCore.BorrowRequest memory request = IBurnerLoansCore.BorrowRequest({
+            asset: address(_asset),
+            borrower: _borrower,
+            payer: _borrower,
+            recipient: _recipient,
+            amount: 1,
+            maturity: _position().maturity,
+            protocolFee: 0,
+            referrer: address(0),
+            referralFee: 0
+        });
+        bytes32 beforeState = _ledger();
+        uint256 pairEpoch = _auth.pairEpochs(_borrower, _recipient);
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
+        );
+        vm.prank(caller_);
+        _core.settleBorrow(request, operator, original);
+        assertEq(
+            _ledger(),
+            beforeState,
+            "Publicly readable authority cannot move custody or change a position"
+        );
+        assertEq(
+            _auth.pairEpochs(_borrower, _recipient),
+            pairEpoch,
+            "Rejected impersonation preserves the genuine grant"
+        );
+    }
+
     // Scenarios: BLCORE-SETTLE-BORROW-A02.
     function test_whenCallerLacksSettlementRole_reverts(address caller_) public {
         vm.assume(!_roles.hasRole(caller_, BL_DEBT_POLICY_ROLE));
@@ -54,7 +135,9 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
                 0,
                 address(0),
                 0
-            )
+            ),
+            address(0),
+            _ownerAuthContext()
         );
         assertEq(_state(), before, "Unauthorized instruction has no effects");
     }
@@ -78,7 +161,9 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
                 0,
                 address(0),
                 0
-            )
+            ),
+            address(0),
+            _ownerAuthContext()
         );
     }
 
@@ -113,7 +198,9 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
                 0,
                 address(0),
                 0
-            )
+            ),
+            address(0),
+            _ownerAuthContext()
         );
         assertEq(_state(), before, "Disabled Core rejects before inputs");
     }
@@ -140,7 +227,9 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
                 0,
                 address(0),
                 0
-            )
+            ),
+            address(0),
+            _ownerAuthContext()
         );
         assertEq(_state(), before, "Own inactivity precedes local state and inputs");
     }
@@ -168,6 +257,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         _settleAsCaller(address(_actor));
     }
 
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function _settleAsCaller(address caller_) internal {
         _deposit(2000e6);
         vm.prank(caller_);
@@ -182,12 +273,18 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
                 0,
                 address(0),
                 0
-            )
+            ),
+            _borrower,
+            _ownerAuthContext()
         );
         assertEq(_position().debtOhm, 1, "Role-holding caller originates the requested debt");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-D03.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOriginationsDisabled_whenBorrowed_reverts() public {
         _deposit(2000e6);
         _config.setAssetOriginationsEnabled(address(_asset), false);
@@ -199,7 +296,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 0));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 0),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -207,7 +308,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-I01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenPastMaturity_whenBorrowed_reverts(uint48 maturity_) public {
         _deposit(2000e6);
         maturity_ = _bounds48(maturity_, 0, uint48(vm.getBlockTimestamp()));
@@ -220,7 +325,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, maturity_, 0));
+        _core.settleBorrow(_request(1, maturity_, 0), _borrower, _ownerAuthContext());
         assertEq(
             _ledger(),
             before,
@@ -228,7 +333,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-I01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_whenPastMaturityBoundarySeeds_reverts() public {
         uint48 now_ = uint48(vm.getBlockTimestamp());
         uint256 snapshot = vm.snapshotState();
@@ -240,6 +349,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         test_givenPastMaturity_whenBorrowed_reverts(now_);
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-I02.
     function test_givenChangedActiveMaturity_whenBorrowed_reverts() public {
         _deposit(2000e6);
@@ -250,7 +361,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMaturity.selector, old, old + 1)
         );
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, old + 1, 0));
+        _core.settleBorrow(_request(1, old + 1, 0), _borrower, _ownerAuthContext());
         assertEq(
             _ledger(),
             before,
@@ -259,12 +370,18 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     }
 
     // Scenarios: BLCORE-SETTLE-BORROW-N01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenZeroAmount_whenBorrowed_reverts() public {
         _deposit(2000e6);
         bytes32 before = _ledger();
         vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(0, uint48(vm.getBlockTimestamp() + 30 days), 0));
+        _core.settleBorrow(
+            _request(0, uint48(vm.getBlockTimestamp() + 30 days), 0),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -272,7 +389,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-N02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenHorizonExceeded_whenBorrowed_reverts(uint48 maturity_) public {
         _deposit(2000e6);
         uint48 maximum = uint48(vm.getBlockTimestamp() + 90 days);
@@ -286,7 +407,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, maturity_, 0));
+        _core.settleBorrow(_request(1, maturity_, 0), _borrower, _ownerAuthContext());
         assertEq(
             _ledger(),
             before,
@@ -294,7 +415,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-N03.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenCapExceeded_whenBorrowed_reverts() public {
         _deposit(2000e6);
         _config.setAssetDebtCap(address(_asset), 1);
@@ -307,7 +432,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(2, uint48(vm.getBlockTimestamp() + 30 days), 0));
+        _core.settleBorrow(
+            _request(2, uint48(vm.getBlockTimestamp() + 30 days), 0),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -315,12 +444,20 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-P01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenMissingPosition_whenBorrowed_reverts() public {
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 0));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 0),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -328,7 +465,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-P02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenMandatoryFeeFailure_whenBorrowed_reverts() public {
         _deposit(2000e6);
         vm.mockCallRevert(
@@ -339,7 +480,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(DependencyFailed.selector);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 1));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 1),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -347,7 +492,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-P05.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenInventoryFailureAfterFee_whenBorrowed_reverts() public {
         _deposit(2000e6);
         vm.mockCallRevert(
@@ -358,7 +507,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(DependencyFailed.selector);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 1));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 1),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -366,7 +519,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-I03.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenZeroFee_whenBorrowed(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         _deposit(1);
@@ -380,7 +537,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
         uint48 due = uint48(vm.getBlockTimestamp() + 30 days);
         vm.prank(address(_actor));
-        (uint128 principal, uint48 maturity) = _core.settleBorrow(_request(amount_, due, 0));
+        (uint128 principal, uint48 maturity) = _core.settleBorrow(
+            _request(amount_, due, 0),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(principal, amount_, "Exact principal returned");
         assertEq(maturity, due, "Exact maturity returned");
         assertEq(_ohm.balanceOf(_recipient) - before, amount_, "Inventory delivers principal once");
@@ -389,12 +550,16 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertEq(_rawPosition().principalDrawn, amount_, "Debt episode tracks draw");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-I03.
     function test_whenPrincipalBoundarySeeds() public {
         test_givenZeroFee_whenBorrowed(type(uint128).max);
     }
 
     // Scenarios: BLCORE-SETTLE-BORROW-P04.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOptionalPayoutFailure_whenBorrowed() public {
         _deposit(2000e6);
         address treasury = _payout.treasury();
@@ -405,7 +570,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
         uint256 payerBefore = _asset.balanceOf(_borrower);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         (uint256 fee, , , , uint256 total) = _payout.pendingAmounts(address(_asset));
         assertEq(fee, 17, "Failed optional route remains in fee bucket");
         assertEq(total, 17, "Exact reserved aggregate");
@@ -417,6 +586,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
         assertEq(_position().debtOhm, 1, "Optional delivery failure does not cancel borrow");
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     function _request(
         uint128 amount_,
@@ -438,6 +609,8 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     }
 
     // Scenarios: BLCORE-SETTLE-BORROW-C01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenSettlementCallback_whenCaught() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -460,7 +633,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -470,7 +647,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertEq(_ohm.balanceOf(_recipient), 1, "One Inventory delivery");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenSettlementCallback_whenPropagated() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -494,7 +675,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -502,7 +687,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenAdminMutationCallback_whenCaught() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -520,7 +709,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -530,7 +723,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertEq(_ohm.balanceOf(_recipient), 1, "One Inventory delivery");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenAdminMutationCallback_whenPropagated() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -549,7 +746,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -557,7 +758,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenPayoutRecoveryCallback_whenCaught() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -579,7 +784,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -589,7 +798,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertEq(_ohm.balanceOf(_recipient), 1, "One Inventory delivery");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C02.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenPayoutRecoveryCallback_whenPropagated() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -612,7 +825,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -620,7 +837,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C05.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOptionalFeeCallback_whenCaught() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -642,7 +863,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         token.setCallbackTransferRecipient(_payout.treasury());
         token.setBubbleCallbackFailure(false);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         uint256 expected = 17;
         uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(
@@ -653,7 +878,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertEq(pending, 0, "Caught optional callback permits delivery");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C06.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOptionalFeeCallback_whenPropagated() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -675,7 +904,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         token.setCallbackTransferRecipient(_payout.treasury());
         token.setBubbleCallbackFailure(true);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 17));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 17),
+            _borrower,
+            _ownerAuthContext()
+        );
         uint256 expected = 17;
         uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(pending, expected, "Optional callback propagation defers exactly one entitlement");
@@ -692,7 +925,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C03.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOhmCallback_whenCaught() public {
         CoreCallbackToken implementation = new CoreCallbackToken();
         vm.etch(address(_ohm), address(implementation).code);
@@ -717,7 +954,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 0));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 0),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -726,7 +967,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertEq(_position().debtOhm, 1, "Outer principal transition occurs once");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-C04.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenOhmCallback_whenPropagated() public {
         CoreCallbackToken implementation = new CoreCallbackToken();
         vm.etch(address(_ohm), address(implementation).code);
@@ -752,7 +997,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 0));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 0),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(
             _ledger(),
             before,
@@ -760,7 +1009,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         );
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-P03.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenShortIncomingReceipt_whenSettled_reverts() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -782,7 +1035,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 1));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 1),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Inexact mandatory receipt rolls back custody and accounting");
         assertEq(
             token.allowance(_borrower, address(_core)),
@@ -792,7 +1049,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertTrue(token.callbackEnabled(), "Callback state rolled back with transfer");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-P03.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenExcessIncomingReceipt_whenSettled_reverts() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
@@ -814,7 +1075,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleBorrow(_request(1, uint48(vm.getBlockTimestamp() + 30 days), 1));
+        _core.settleBorrow(
+            _request(1, uint48(vm.getBlockTimestamp() + 30 days), 1),
+            _borrower,
+            _ownerAuthContext()
+        );
         assertEq(_ledger(), before, "Inexact mandatory receipt rolls back custody and accounting");
         assertEq(
             token.allowance(_borrower, address(_core)),
@@ -824,12 +1089,16 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertTrue(token.callbackEnabled(), "Callback state rolled back with transfer");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-I03.
     function test_whenOnePrincipalSeed() public {
         test_givenZeroFee_whenBorrowed(1);
     }
 
     // Scenarios: BLCORE-SETTLE-BORROW-P06.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_whenFeeComponentsForwarded(uint256 total_, uint256 protocol_) public {
         _deposit(2000e6);
 
@@ -868,7 +1137,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         request.referrer = referrer;
         request.referralFee = referral;
         vm.prank(address(_actor));
-        _core.settleBorrow(request);
+        _core.settleBorrow(request, request.borrower, _ownerAuthContext());
         assertEq(
             _asset.balanceOf(_recipient),
             payerBalance - total_,
@@ -882,7 +1151,11 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         assertEq(_asset.balanceOf(address(_core)), coreBalance, "Core retains no fee tokens");
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-SETTLE-BORROW-N04.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_whenFeeComponentSumOverflows_reverts(
         uint256 protocol_,
         uint256 referral_
@@ -917,13 +1190,15 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleBorrow(request);
+        _core.settleBorrow(request, request.borrower, _ownerAuthContext());
         assertEq(
             _ledger(),
             beforeState,
             "Overflow restores position and all settlement accounting"
         );
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-SETTLE-BORROW-P06.
     function test_whenLiteralComponentFunding() public {
@@ -962,3 +1237,4 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
         test_whenFeeComponentsForwarded(maximum, 0);
     }
 }
+// forge-lint: disable-end(unused-return)

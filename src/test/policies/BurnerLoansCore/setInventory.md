@@ -1,6 +1,6 @@
 # BurnerLoansCore.setInventory coverage plan
 
-Source: [setInventory](../../../policies/burnerloans/BurnerLoansCore.sol#L683). Acceptance criteria below include replacement requirements not yet implemented by the current setter. No migration implementation is required for this spike.
+Source: [setInventory](../../../policies/burnerloans/BurnerLoansCore.sol#L866). Acceptance criteria below include replacement requirements not yet implemented by the current setter. No migration implementation is required for this spike.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -117,46 +117,46 @@ Equality rejects before dependency reads, ledger comparison or any mutation.
 | --- | --- | --- | --- | --- | --- |
 | BLCORE-INVENTORY-P02 | Fuzz ADMIN_ROLE holder | Current selected address | BurnerLoans_UnchangedAddress(candidate) | Unchanged; no compatibility reads or logs | Covered: [test][test_whenCurrentAddressIsSelected_reverts] |
 
-[test_givenBadBindingAndUnavailable_whenSelected_reverts]: setInventory.t.sol#L647
-[test_givenBoundInterface_whenSelected_reverts]: setInventory.t.sol#L420
-[test_givenCanonicalMismatch_whenInventorySelected_reverts]: setInventory.t.sol#L760
-[test_givenClaimMismatch_whenInventorySelected_reverts]: setInventory.t.sol#L814
+[test_givenBadBindingAndUnavailable_whenSelected_reverts]: setInventory.t.sol#L648
+[test_givenBoundInterface_whenSelected_reverts]: setInventory.t.sol#L421
+[test_givenCanonicalMismatch_whenInventorySelected_reverts]: setInventory.t.sol#L761
+[test_givenClaimMismatch_whenInventorySelected_reverts]: setInventory.t.sol#L815
 [test_givenCompatibleReadyService_whenSelected]: setInventory.t.sol#L92
 [test_givenCoreInactive_whenSelected_reverts]: setInventory.t.sol#L46
-[test_givenDefaultedProviderClaims_whenInventorySelected]: setInventory.t.sol#L934
-[test_givenDirtyCore_whenSelected_reverts]: setInventory.t.sol#L442
-[test_givenDirtyKernelPadding_whenSelected_reverts]: setInventory.t.sol#L882
+[test_givenDefaultedProviderClaims_whenInventorySelected]: setInventory.t.sol#L935
+[test_givenDirtyCore_whenSelected_reverts]: setInventory.t.sol#L443
+[test_givenDirtyKernelPadding_whenSelected_reverts]: setInventory.t.sol#L883
 [test_givenEOA_whenSelected_reverts]: setInventory.t.sol#L150
-[test_givenEnabledInterface_whenSelected_reverts]: setInventory.t.sol#L207
-[test_givenLyingERC165_whenSelected_reverts]: setInventory.t.sol#L621
-[test_givenMalformedCore_whenSelected_reverts]: setInventory.t.sol#L319
-[test_givenMalformedERC165_whenSelected_reverts]: setInventory.t.sol#L398
-[test_givenMalformedEnabled_whenSelected_reverts]: setInventory.t.sol#L548
-[test_givenMalformedKernel_whenSelected_reverts]: setInventory.t.sol#L495
-[test_givenMigratedIdleProviderFunds_whenInventorySelected]: setInventory.t.sol#L993
-[test_givenMigratedLedger_whenSelected]: setInventory.t.sol#L696
-[test_givenMigratedTwoProviderLedger_whenInventorySelected]: setInventory.t.sol#L963
-[test_givenMissingCore_whenSelected_reverts]: setInventory.t.sol#L297
-[test_givenNoncanonicalERC165_whenSelected_reverts]: setInventory.t.sol#L570
-[test_givenOldInventoryUnset_whenEmptyInventorySelected]: setInventory.t.sol#L687
-[test_givenOldPrincipalMismatch_whenInventorySelected_reverts]: setInventory.t.sol#L787
-[test_givenOtherCore_whenSelected_reverts]: setInventory.t.sol#L274
-[test_givenOtherOhm_whenSelected_reverts]: setInventory.t.sol#L251
-[test_givenRevertingCore_whenSelected_reverts]: setInventory.t.sol#L346
-[test_givenRevertingERC165_whenSelected_reverts]: setInventory.t.sol#L372
-[test_givenRevertingEnabled_whenSelected_reverts]: setInventory.t.sol#L522
-[test_givenRevertingKernel_whenSelected_reverts]: setInventory.t.sol#L469
-[test_givenServiceInterface_whenSelected_reverts]: setInventory.t.sol#L185
+[test_givenEnabledInterface_whenSelected_reverts]: setInventory.t.sol#L208
+[test_givenLyingERC165_whenSelected_reverts]: setInventory.t.sol#L622
+[test_givenMalformedCore_whenSelected_reverts]: setInventory.t.sol#L320
+[test_givenMalformedERC165_whenSelected_reverts]: setInventory.t.sol#L399
+[test_givenMalformedEnabled_whenSelected_reverts]: setInventory.t.sol#L549
+[test_givenMalformedKernel_whenSelected_reverts]: setInventory.t.sol#L496
+[test_givenMigratedIdleProviderFunds_whenInventorySelected]: setInventory.t.sol#L994
+[test_givenMigratedLedger_whenSelected]: setInventory.t.sol#L697
+[test_givenMigratedTwoProviderLedger_whenInventorySelected]: setInventory.t.sol#L964
+[test_givenMissingCore_whenSelected_reverts]: setInventory.t.sol#L298
+[test_givenNoncanonicalERC165_whenSelected_reverts]: setInventory.t.sol#L571
+[test_givenOldInventoryUnset_whenEmptyInventorySelected]: setInventory.t.sol#L688
+[test_givenOldPrincipalMismatch_whenInventorySelected_reverts]: setInventory.t.sol#L788
+[test_givenOtherCore_whenSelected_reverts]: setInventory.t.sol#L275
+[test_givenOtherOhm_whenSelected_reverts]: setInventory.t.sol#L252
+[test_givenRevertingCore_whenSelected_reverts]: setInventory.t.sol#L347
+[test_givenRevertingERC165_whenSelected_reverts]: setInventory.t.sol#L373
+[test_givenRevertingEnabled_whenSelected_reverts]: setInventory.t.sol#L523
+[test_givenRevertingKernel_whenSelected_reverts]: setInventory.t.sol#L470
+[test_givenServiceInterface_whenSelected_reverts]: setInventory.t.sol#L186
 [test_givenServiceUnavailable_whenSelected_reverts]: setInventory.t.sol#L113
-[test_givenSingleDirtyCorePaddingBit_whenSelected_reverts]: setInventory.t.sol#L918
-[test_givenVersionInterface_whenSelected_reverts]: setInventory.t.sol#L229
-[test_givenWritingCore_whenSelected_reverts]: setInventory.t.sol#L599
+[test_givenSingleDirtyCorePaddingBit_whenSelected_reverts]: setInventory.t.sol#L919
+[test_givenVersionInterface_whenSelected_reverts]: setInventory.t.sol#L230
+[test_givenWritingCore_whenSelected_reverts]: setInventory.t.sol#L600
 [test_givenWrongKernel_whenSelected_reverts]: setInventory.t.sol#L166
 [test_givenZero_whenSelected_reverts]: setInventory.t.sol#L135
 [test_whenCallerIsNotAdmin_reverts]: setInventory.t.sol#L36
-[test_whenCoreReturnLengthSeeds_reverts]: setInventory.t.sol#L852
+[test_whenCoreReturnLengthSeeds_reverts]: setInventory.t.sol#L853
 [test_whenCurrentAddressIsSelected_reverts]: setInventory.t.sol#L66
-[test_whenEnabledReturnShapeSeeds_reverts]: setInventory.t.sol#L898
-[test_whenKernelReturnLengthSeeds_reverts]: setInventory.t.sol#L867
-[test_whenMigratedLedgerBoundarySeeds]: setInventory.t.sol#L739
-[test_whenUnavailableServiceStatesSeeded_reverts]: setInventory.t.sol#L841
+[test_whenEnabledReturnShapeSeeds_reverts]: setInventory.t.sol#L899
+[test_whenKernelReturnLengthSeeds_reverts]: setInventory.t.sol#L868
+[test_whenMigratedLedgerBoundarySeeds]: setInventory.t.sol#L740
+[test_whenUnavailableServiceStatesSeeded_reverts]: setInventory.t.sol#L842

@@ -1,6 +1,6 @@
 # BurnerLoansCore.settleSeize coverage plan
 
-Source: [settleSeize](../../../policies/burnerloans/BurnerLoansCore.sol#L403). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [settleSeize](../../../policies/burnerloans/BurnerLoansCore.sol#L586). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 Coverage records implemented scenario domains and assertions. Test pass/fail results are separate from coverage.
 
@@ -102,36 +102,36 @@ Arm callbacks only after setup. Fund and authorize each nested route so it passe
 | BLCORE-SETTLE-SEIZE-C03 | Selected same-Kernel active action with the matching settlement role | Optional Custody→keeper and Custody→Treasury payouts; trigger each independently | Custody retry/recovery reaching Custody local guard; callback catches nested rejection | Nested call rejects ReentrancyGuardReentrantCall(); payout succeeds | Default and Inventory reconciliation commit once; isolate independent keeper and Treasury payout buckets; delivery clears only its bucket once | Covered: [test][test_givenOptionalKeeperCallback_whenCaught], [test][test_givenOptionalTreasuryCallback_whenCaught] |
 | BLCORE-SETTLE-SEIZE-C04 | Selected same-Kernel active action with the matching settlement role | Optional Custody→keeper and Custody→Treasury payouts; trigger each independently | Custody retry/recovery reaching Custody local guard; callback propagates nested rejection | Nested guard error propagates through token; optional payout defers | Default and Inventory reconciliation commit once; isolate independent keeper and Treasury payout buckets; exact unpaid amount stays backed and indexed; later callback-free retry pays once | Covered: [test][test_givenOptionalKeeperCallback_whenPropagated], [test][test_givenOptionalTreasuryCallback_whenPropagated] |
 
-[test_givenAdminMutationCallback_whenCaught]: settleSeize.t.sol#L547
-[test_givenAdminMutationCallback_whenPropagated]: settleSeize.t.sol#L582
-[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleSeize.t.sol#L154
-[test_givenCallerInactive_whenSettled]: settleSeize.t.sol#L141
-[test_givenCoreDisabled_whenSettled_reverts]: settleSeize.t.sol#L106
-[test_givenCoreInactive_whenSettled_reverts]: settleSeize.t.sol#L121
-[test_givenDecreasingBalance_whenSeized_reverts]: settleSeize.t.sol#L869
-[test_givenExcessReceipt_whenSeized_reverts]: settleSeize.t.sol#L897
-[test_givenExcessiveReward_whenSeized_reverts]: settleSeize.t.sol#L269
-[test_givenInconsistentAggregate_whenSeized_reverts]: settleSeize.t.sol#L924
-[test_givenKeeperTransferFailure_whenSeized]: settleSeize.t.sol#L414
-[test_givenLaterBorrowerMissing_whenSeized_reverts]: settleSeize.t.sol#L177
-[test_givenLaterBorrowerWithoutDebt_whenSeized_reverts]: settleSeize.t.sol#L196
-[test_givenOnlySiblingRole_whenSettled_reverts]: settleSeize.t.sol#L76
-[test_givenOptionalKeeperCallback_whenCaught]: settleSeize.t.sol#L685
-[test_givenOptionalKeeperCallback_whenPropagated]: settleSeize.t.sol#L728
-[test_givenOptionalTreasuryCallback_whenCaught]: settleSeize.t.sol#L777
-[test_givenOptionalTreasuryCallback_whenPropagated]: settleSeize.t.sol#L820
-[test_givenOrdinaryKeeper_whenSeized]: settleSeize.t.sol#L321
-[test_givenPayoutCreditRejected_whenSeized_reverts]: settleSeize.t.sol#L296
-[test_givenPayoutRecoveryCallback_whenCaught]: settleSeize.t.sol#L616
-[test_givenPayoutRecoveryCallback_whenPropagated]: settleSeize.t.sol#L651
-[test_givenProtocolKeeper_whenSeized]: settleSeize.t.sol#L393
-[test_givenRoleHoldingEOA_whenSettled]: settleSeize.t.sol#L147
-[test_givenSettlementCallback_whenCaught]: settleSeize.t.sol#L468
-[test_givenSettlementCallback_whenPropagated]: settleSeize.t.sol#L508
-[test_givenShortPayoutReceipt_whenSeized_reverts]: settleSeize.t.sol#L243
-[test_givenTreasuryTransferFailure_whenSeized]: settleSeize.t.sol#L441
-[test_givenUnexpectedOutputToken_whenSeized_reverts]: settleSeize.t.sol#L218
-[test_givenWrongKernelCaller_whenSettled]: settleSeize.t.sol#L92
-[test_whenCallerLacksSettlementRole_reverts]: settleSeize.t.sol#L59
+[test_givenAdminMutationCallback_whenCaught]: settleSeize.t.sol#L562
+[test_givenAdminMutationCallback_whenPropagated]: settleSeize.t.sol#L597
+[test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer]: settleSeize.t.sol#L156
+[test_givenCallerInactive_whenSettled]: settleSeize.t.sol#L143
+[test_givenCoreDisabled_whenSettled_reverts]: settleSeize.t.sol#L108
+[test_givenCoreInactive_whenSettled_reverts]: settleSeize.t.sol#L123
+[test_givenDecreasingBalance_whenSeized_reverts]: settleSeize.t.sol#L884
+[test_givenExcessReceipt_whenSeized_reverts]: settleSeize.t.sol#L912
+[test_givenExcessiveReward_whenSeized_reverts]: settleSeize.t.sol#L280
+[test_givenInconsistentAggregate_whenSeized_reverts]: settleSeize.t.sol#L939
+[test_givenKeeperTransferFailure_whenSeized]: settleSeize.t.sol#L429
+[test_givenLaterBorrowerMissing_whenSeized_reverts]: settleSeize.t.sol#L179
+[test_givenLaterBorrowerWithoutDebt_whenSeized_reverts]: settleSeize.t.sol#L198
+[test_givenOnlySiblingRole_whenSettled_reverts]: settleSeize.t.sol#L78
+[test_givenOptionalKeeperCallback_whenCaught]: settleSeize.t.sol#L700
+[test_givenOptionalKeeperCallback_whenPropagated]: settleSeize.t.sol#L743
+[test_givenOptionalTreasuryCallback_whenCaught]: settleSeize.t.sol#L792
+[test_givenOptionalTreasuryCallback_whenPropagated]: settleSeize.t.sol#L835
+[test_givenOrdinaryKeeper_whenSeized]: settleSeize.t.sol#L334
+[test_givenPayoutCreditRejected_whenSeized_reverts]: settleSeize.t.sol#L307
+[test_givenPayoutRecoveryCallback_whenCaught]: settleSeize.t.sol#L631
+[test_givenPayoutRecoveryCallback_whenPropagated]: settleSeize.t.sol#L666
+[test_givenProtocolKeeper_whenSeized]: settleSeize.t.sol#L408
+[test_givenRoleHoldingEOA_whenSettled]: settleSeize.t.sol#L149
+[test_givenSettlementCallback_whenCaught]: settleSeize.t.sol#L483
+[test_givenSettlementCallback_whenPropagated]: settleSeize.t.sol#L523
+[test_givenShortPayoutReceipt_whenSeized_reverts]: settleSeize.t.sol#L254
+[test_givenTreasuryTransferFailure_whenSeized]: settleSeize.t.sol#L456
+[test_givenUnexpectedOutputToken_whenSeized_reverts]: settleSeize.t.sol#L229
+[test_givenWrongKernelCaller_whenSettled]: settleSeize.t.sol#L94
+[test_whenCallerLacksSettlementRole_reverts]: settleSeize.t.sol#L61
 
-[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L963
+[invariant_canonicalDebtAndCustodyMatchIndependentModel]: settleSeize.t.sol#L987

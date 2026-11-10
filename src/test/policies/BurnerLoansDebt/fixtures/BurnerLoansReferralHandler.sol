@@ -64,6 +64,9 @@ contract BurnerLoansReferralHandler is Test {
         _services = services_;
     }
 
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(reentrancy-no-eth, unsafe-typecast)
     function borrow(uint8 attribution_) external {
         if (principalUnits == 1000) return;
         address referrer = _referrer(attribution_);
@@ -115,6 +118,8 @@ contract BurnerLoansReferralHandler is Test {
         _recordCredit(12500, protocolFee, referralFee, referrer);
     }
 
+    // forge-lint: disable-end(reentrancy-no-eth, unsafe-typecast)
+
     function extend(uint8 attribution_) external {
         if (principalUnits == 0) return;
         address referrer = _referrer(attribution_);
@@ -156,6 +161,8 @@ contract BurnerLoansReferralHandler is Test {
         _recordCredit(fee, protocolFee, referralFee, referrer);
     }
 
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function setShare(uint16 share_, bool operator_) external {
         address caller = operator_ ? OPERATOR : address(this);
         uint16 share = uint16(bound(share_, 0, 10000));
@@ -173,6 +180,8 @@ contract BurnerLoansReferralHandler is Test {
         _services.risk.setReferralFeeBps(share);
         bps = share;
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     function setAllowed(uint8 recipient_, bool allowed_, bool operator_) external {
         address caller = operator_ ? OPERATOR : address(this);
@@ -192,6 +201,8 @@ contract BurnerLoansReferralHandler is Test {
         allowed[k] = allowed_;
     }
 
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function unauthorizedShare(uint16 share_, bool bla_) external {
         uint16 share = uint16(bound(share_, 0, 10000));
         bytes memory failure = _riskFailure();
@@ -208,6 +219,8 @@ contract BurnerLoansReferralHandler is Test {
         );
         ++rejectedCalls;
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     function unauthorizedMembership(uint8 recipient_, bool allowed_, bool bla_) external {
         address recipient = recipients[bound(recipient_, 0, 1)];
@@ -228,10 +241,9 @@ contract BurnerLoansReferralHandler is Test {
 
     function unauthorizedBorrow() external {
         bytes memory failure = _localActionFailure();
-        if (failure.length == 0)
-            failure = abi.encodeWithSelector(
-                IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector
-            );
+        if (failure.length == 0) {
+            failure = abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector);
+        }
         bytes32 beforeState = _stateDigest();
         vm.expectRevert(failure);
         vm.prank(_STRANGER);
@@ -251,6 +263,8 @@ contract BurnerLoansReferralHandler is Test {
         ++rejectedCalls;
     }
 
+    // These calls enumerate bounded test actors/assets, including fixture helpers called by the loops.
+    // forge-lint: disable-start(calls-loop)
     function setDeliveryBlocked(uint8 recipient_, bool blocked_) external {
         blocked[bound(recipient_, 0, 1)] = blocked_;
         vm.clearMockedCalls();
@@ -264,6 +278,10 @@ contract BurnerLoansReferralHandler is Test {
         }
     }
 
+    // forge-lint: disable-end(calls-loop)
+
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // forge-lint: disable-start(reentrancy-no-eth)
     function retry(uint8 recipient_, address caller_) external {
         uint256 k = bound(recipient_, 0, 1);
         if (!active[2]) {
@@ -295,6 +313,11 @@ contract BurnerLoansReferralHandler is Test {
         pending[k] -= expected;
     }
 
+    // forge-lint: disable-end(reentrancy-no-eth)
+
+    // These calls enumerate bounded test actors/assets, including fixture helpers called by the loops.
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // forge-lint: disable-start(calls-loop, reentrancy-no-eth)
     function setActive(uint8 policy_, bool active_) public {
         uint256 p = bound(policy_, 0, 3);
         if (active[p] == active_) return;
@@ -306,6 +329,10 @@ contract BurnerLoansReferralHandler is Test {
         active[p] = active_;
     }
 
+    // forge-lint: disable-end(calls-loop, reentrancy-no-eth)
+
+    // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
+    // forge-lint: disable-start(reentrancy-no-eth)
     function setEnabled(uint8 policy_, bool enabled_) public {
         uint256 p = bound(policy_, 0, 3);
         if (enabled[p] == enabled_) return;
@@ -317,6 +344,8 @@ contract BurnerLoansReferralHandler is Test {
         } else IEnabler(_policy(p)).disable("");
         enabled[p] = enabled_;
     }
+
+    // forge-lint: disable-end(reentrancy-no-eth)
 
     function restoreServices() external {
         for (uint8 i; i < 4; ++i) setActive(i, true);

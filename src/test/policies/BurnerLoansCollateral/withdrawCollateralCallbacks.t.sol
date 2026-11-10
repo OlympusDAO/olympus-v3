@@ -2,11 +2,12 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBurnerLoansCollateral} from "src/policies/interfaces/burnerloans/IBurnerLoansCollateral.sol";
+import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
+import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
@@ -103,6 +104,57 @@ contract BurnerLoansCollateralWithdrawCollateralCallbacksTest is
         assertEq(_accountingDigest(address(_token)), beforeState, "Quote preserves all accounting");
     }
 
+    // Scenarios: BLCOL-WITHDRAW-AUTH-C01.
+    function test_givenDelegatedWithdrawal_whenAccountCancelsDuringDelivery_reverts() public {
+        _assertWithdrawalAuthorizationMutationRollback(false);
+    }
+
+    // Scenarios: BLCOL-WITHDRAW-AUTH-C02.
+    function test_givenDelegatedWithdrawal_whenIdenticalPermissionsReacceptedDuringDelivery_reverts()
+        public
+    {
+        _assertWithdrawalAuthorizationMutationRollback(true);
+    }
+
+    function _assertWithdrawalAuthorizationMutationRollback(bool replace_) internal {
+        _prepareDirectToken();
+        _depositAsset(_token, 10e18, address(_token));
+        _approveOperatorForAsset(address(_token), _recipient, type(uint48).max, address(_token));
+        IOperatorAuth.Grant memory replacement = _operatorGrantForAsset(
+            address(_token),
+            _recipient,
+            type(uint48).max,
+            address(_token)
+        );
+        bytes memory callback = replace_
+            ? abi.encodeCall(_auth.approveGrant, (replacement))
+            : abi.encodeCall(_auth.cancelGrant, (_recipient));
+        _token.setCallbackFrom(address(_depositManager), address(_auth), callback);
+        bytes32 beforeAccounting = _accountingDigest(address(_token));
+        uint256 beforeEpoch = _auth.pairEpochs(address(_token), _recipient);
+        uint256 beforeRecipient = _token.balanceOf(_recipient);
+        vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
+        vm.prank(_recipient);
+        _collateral.withdrawCollateral(address(_token), 1e18, address(_token), _recipient);
+        assertEq(
+            _accountingDigest(address(_token)),
+            beforeAccounting,
+            "Completion failure restores all accounting"
+        );
+        assertEq(_token.balanceOf(_recipient), beforeRecipient, "Delivered underlying rolled back");
+        assertEq(
+            _auth.pairEpochs(address(_token), _recipient),
+            beforeEpoch,
+            "Callback replacement or cancellation rolled back"
+        );
+        assertEq(
+            _lens.getPosition(address(_token), address(_token)).depositedCollateral,
+            10e18,
+            "Account collateral fully restored"
+        );
+        assertTrue(_token.callbackEnabled(), "Callback state rolled back");
+    }
+
     function _assertWithdrawalCaught() internal {
         uint256 beforeWallet = _token.balanceOf(_recipient);
         vm.prank(_borrower);
@@ -140,7 +192,7 @@ contract BurnerLoansCollateralWithdrawCollateralCallbacksTest is
     function test_givenShareDeliveryCallback_whenActionReentryCaught() public {
         ReentrantFeeToken shares = _prepareExternalShares();
         vm.prank(_borrower);
-        _core.setAuthorization(address(shares), type(uint48).max);
+        _approveOperatorForAsset(_borrower, address(shares), type(uint48).max, address(_token));
         shares.setCallbackFrom(
             address(_depositManager),
             address(_collateral),
@@ -156,7 +208,7 @@ contract BurnerLoansCollateralWithdrawCollateralCallbacksTest is
     function test_givenShareDeliveryCallback_whenActionReentryPropagated() public {
         ReentrantFeeToken shares = _prepareExternalShares();
         vm.prank(_borrower);
-        _core.setAuthorization(address(shares), type(uint48).max);
+        _approveOperatorForAsset(_borrower, address(shares), type(uint48).max, address(_token));
         shares.setCallbackFrom(
             address(_depositManager),
             address(_collateral),

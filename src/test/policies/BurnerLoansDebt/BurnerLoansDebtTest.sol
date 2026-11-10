@@ -123,7 +123,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
 
     function _authorizeOperator(address operator_, uint48 deadline_) internal {
         vm.prank(_borrower);
-        _core.setAuthorization(operator_, deadline_);
+        _approveOperator(_borrower, operator_, deadline_);
     }
 
     function _authorizeFeePayer(bool operator_) internal returns (address payer) {

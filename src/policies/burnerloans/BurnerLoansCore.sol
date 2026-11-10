@@ -8,6 +8,8 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansAuth} from "src/policies/interfaces/burnerloans/IBurnerLoansAuth.sol";
+import {IBurnerLoansAuthTarget} from "src/policies/interfaces/burnerloans/IBurnerLoansAuthTarget.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
@@ -19,7 +21,6 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
-import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
@@ -30,9 +31,10 @@ import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
+import {BL_ACTION_DEPOSIT, BL_ACTION_BORROW, BL_ACTION_WITHDRAW, BL_ACTION_EXTEND} from "src/policies/burnerloans/libraries/LoanActions.sol";
 import {LoanParameters} from "src/policies/burnerloans/libraries/LoanParameters.sol";
-import {LoanToken} from "src/policies/burnerloans/libraries/LoanToken.sol";
 import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
+import {LoanToken} from "src/policies/burnerloans/libraries/LoanToken.sol";
 import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
@@ -43,13 +45,13 @@ import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleStep.sol";
-import {OperatorAuth} from "src/policies/utils/OperatorAuth.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 
 /// @notice Permanent custody and complete settlement boundary. Economic algorithms live in replaceable Risk.
-/// @dev Governance-admitted first-party actions authenticate the actual public caller, enforce
-///      borrower authorization and approve economic rules. Core trusts their forwarded identities
-///      and instructions; it does not repeat user authorization or health/maturity checks.
+/// @dev Governance-admitted first-party actions capture the actual public operator before economic
+///      preparation. Core independently authenticates the original grant before settlement and
+///      revalidates its epochs/lifetime and canonical resulting limits before releasing its guard.
+///      Health and ordinary maturity economics remain the public actions’ responsibility.
 ///      Core owns exact incoming receipt checks, transfers and canonical FLOAN settlement.
 ///      One guard covers settlement/configuration/token-moving paths. Local action pauses and
 ///      immutable Core binding are enforced by the action contracts, not queried again at settlement.
@@ -58,7 +60,6 @@ contract BurnerLoansCore is
     ReEnablerGracePeriod,
     PolicyEnablerV2,
     ReentrancyGuard,
-    OperatorAuth,
     ConfigOperatorSingleStep,
     IBurnerLoansCore,
     IVersioned,
@@ -93,6 +94,15 @@ contract BurnerLoansCore is
     IBurnerLoansPayout internal _PAYOUT;
     /// @inheritdoc IBurnerLoansCore
     address public override risk;
+    /// @dev Selected ordinary verifier. Its payloads and account/pair counters stay in Auth.
+    IBurnerLoansAuth internal _AUTHORIZATION;
+    /// @dev Monotonic Auth installation epoch exposed with its selected verifier by authConfig.
+    uint256 private _authEpoch;
+
+    /// @inheritdoc IBurnerLoansCore
+    function authConfig() external view override returns (address, uint256) {
+        return (address(_AUTHORIZATION), _authEpoch);
+    }
 
     /// @notice Binds deployment dependencies and initializes the local contract state.
     /// @dev Reverts if:
@@ -223,13 +233,50 @@ contract BurnerLoansCore is
         _requireEnabled();
     }
 
-    /// @notice Requires an operational Core before direct or signed grant creation.
+    /// @notice Checks the captured Auth selection, including intrinsic owner operations.
     /// @dev Reverts if:
-    ///      - Core is Kernel-inactive, before checking enablement or authorization inputs.
-    ///      - Core is disabled, before checking authorization inputs or consuming a nonce.
-    /// @dev Cancellation remains available in every lifecycle state.
-    function _beforeSetAuthorization() internal view override {
-        _requireOperational();
+    ///      - No Auth is selected.
+    ///      - Preparation captured another verifier.
+    ///      - Preparation captured another installation epoch.
+    function _requireOriginalAuth(AuthorizationContext calldata original_) private view {
+        if (
+            address(_AUTHORIZATION) == address(0) ||
+            original_.auth != address(_AUTHORIZATION) ||
+            original_.globalAuthEpoch != _authEpoch
+        ) revert BurnerLoansCore_InvalidAuthorizationContext();
+    }
+
+    /// @inheritdoc IBurnerLoansCore
+    /// @dev Reverts for reentrancy, inactive Core, non-ADMIN callers, unchanged/invalid bindings,
+    ///      incompatible metadata or exhausted global epoch. Usable while locally disabled.
+    function setAuth(address auth_) external override nonReentrant onlyActive onlyAdminRole {
+        address previous = address(_AUTHORIZATION);
+        if (auth_ == previous && auth_ != address(0)) revert BurnerLoans_UnchangedAddress(auth_);
+        _validateAuth(auth_);
+        if (_authEpoch == type(uint256).max) revert BurnerLoansCore_AuthEpochExhausted();
+        ++_authEpoch;
+        _AUTHORIZATION = IBurnerLoansAuth(auth_);
+        emit AuthSet(previous, auth_, _authEpoch);
+    }
+
+    /// @notice Validates the consumed Auth interfaces and permanent Core binding.
+    /// @dev Reverts if:
+    ///      - The candidate fails ERC165 or lacks IBurnerLoansAuth or IBurnerLoansCoreBound.
+    ///      - The Core getter fails, returns malformed data or reports another Core.
+    ///      Ordinary Auth requires no Kernel membership, Enabler or version metadata.
+    function _validateAuth(address candidate_) private view {
+        bytes4[] memory interfaces = new bytes4[](2);
+        interfaces[0] = type(IBurnerLoansAuth).interfaceId;
+        interfaces[1] = type(IBurnerLoansCoreBound).interfaceId;
+        if (!ERC165Checker.supportsAllInterfaces(candidate_, interfaces))
+            revert BurnerLoansCore_InvalidAuth(candidate_);
+        if (
+            _readDependencyUint256(
+                candidate_,
+                abi.encodeCall(IBurnerLoansCoreBound.core, ()),
+                BurnerLoansCore_InvalidAuth.selector
+            ) != uint256(uint160(address(this)))
+        ) revert BurnerLoansCore_InvalidAuth(candidate_);
     }
 
     /// @notice Requires active membership and an explicitly matching Kernel.
@@ -247,15 +294,20 @@ contract BurnerLoansCore is
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
     ///      - Another guarded Core operation is executing.
+    ///      - The captured Auth/installation epoch or original grant stamp is stale.
+    ///      - Auth rejects the account/operator, selected action, asset or required recipient.
+    ///      - The resulting canonical collateral exceeds the grant's maximum.
     ///      - The market is unregistered.
     ///      - Exact incoming transfer, receipt approval or DepositManager deposit fails.
     ///      - Actual credit is zero or exceeds uint128.
     ///      - FLOAN rejects collateral credit.
+    /// @dev New deposit/withdraw/extend requests decode once into memory, preserving the original
+    ///      scalar ABI checks and reducing decoder code. Borrow retains its original calldata path.
+    ///      The separately captured authContext stays calldata and is revalidated unchanged.
     function settleDeposit(
-        address asset_,
-        uint128 amount_,
-        address payer_,
-        address borrower_
+        DepositRequest memory request_,
+        address operator_,
+        AuthorizationContext calldata authContext_
     )
         external
         override
@@ -263,31 +315,47 @@ contract BurnerLoansCore is
         onlyAction(BL_COLLATERAL_POLICY_ROLE)
         returns (uint128 credit, uint128 collateral)
     {
-        uint32 market = marketId(asset_);
-        ERC20 token = ERC20(asset_);
+        _validateOriginalAuthorization(
+            request_.borrower,
+            operator_,
+            BL_ACTION_DEPOSIT,
+            request_.asset,
+            address(0),
+            authContext_
+        );
+        uint32 market = marketId(request_.asset);
+        ERC20 token = ERC20(request_.asset);
         // DepositManager determines actual vault-backed credit. Book it only after deposit returns;
         // nominal input is not a safe collateral estimate. The Core guard blocks nested settlement.
-        token.safeTransferFromExact(payer_, address(this), amount_);
-        token.forceApprove(address(_DEPOSIT_MANAGER), amount_);
+        token.safeTransferFromExact(request_.payer, address(this), request_.amount);
+        token.forceApprove(address(_DEPOSIT_MANAGER), request_.amount);
         // FLOAN uses actual credited collateral; custody and receipt checks validate the token path.
         // This multiline operation needs a range; the suppression ends immediately after it.
         // forge-lint: disable-start(unused-return)
         (, uint256 raw) = _DEPOSIT_MANAGER.deposit(
             IDepositManager.DepositParams(
-                IERC20(asset_),
+                IERC20(request_.asset),
                 LoanParameters._DEPOSIT_PERIOD,
                 address(this),
-                amount_,
+                request_.amount,
                 false
             )
         );
         // forge-lint: disable-end(unused-return)
         credit = SafeCast.toUint128(raw);
         if (credit == 0) revert IBurnerLoansCore.BurnerLoansCore_ZeroCollateralCredit();
-        _approveReceiptBurn(asset_);
-        (bool exists, uint64 id) = LoanPositions.find(_FLOAN, market, borrower_);
-        if (!exists) id = _FLOAN.createPosition(market, borrower_);
+        _approveReceiptBurn(request_.asset);
+        (bool exists, uint64 id) = LoanPositions.find(_FLOAN, market, request_.borrower);
+        if (!exists) id = _FLOAN.createPosition(market, request_.borrower);
         collateral = _FLOAN.addCollateral(id, credit);
+        _completeAuthorization(
+            request_.borrower,
+            operator_,
+            BL_ACTION_DEPOSIT,
+            request_.asset,
+            address(0),
+            authContext_
+        );
     }
 
     /// @inheritdoc IBurnerLoansCore
@@ -295,14 +363,16 @@ contract BurnerLoansCore is
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
     ///      - Another guarded Core operation is executing.
+    ///      - The captured Auth/installation epoch or original grant stamp is stale.
+    ///      - Auth rejects the account/operator, selected action, asset or required recipient.
+    ///      - The remaining canonical collateral is below the grant's minimum.
     ///      - The market or collateral position is absent.
     ///      - FLOAN rejects the debit or DepositManager rejects the exit.
     ///      - The output token is unexpected or the output amount is zero.
     function settleWithdraw(
-        address asset_,
-        uint128 amount_,
-        address borrower_,
-        address recipient_
+        WithdrawRequest memory request_,
+        address operator_,
+        AuthorizationContext calldata authContext_
     )
         external
         override
@@ -310,9 +380,28 @@ contract BurnerLoansCore is
         onlyAction(BL_COLLATERAL_POLICY_ROLE)
         returns (address token, uint256 output, uint128 remaining)
     {
-        remaining = _FLOAN.removeCollateral(_positionId(asset_, borrower_), amount_);
-        (token, output) = _withdrawPayout(asset_, amount_, recipient_);
+        _validateOriginalAuthorization(
+            request_.borrower,
+            operator_,
+            BL_ACTION_WITHDRAW,
+            request_.asset,
+            request_.recipient,
+            authContext_
+        );
+        remaining = _FLOAN.removeCollateral(
+            _positionId(request_.asset, request_.borrower),
+            request_.amount
+        );
+        (token, output) = _withdrawPayout(request_.asset, request_.amount, request_.recipient);
         if (output == 0) revert IBurnerLoansCore.BurnerLoansCore_ZeroCollateralWithdrawal();
+        _completeAuthorization(
+            request_.borrower,
+            operator_,
+            BL_ACTION_WITHDRAW,
+            request_.asset,
+            request_.recipient,
+            authContext_
+        );
     }
 
     /// @inheritdoc IBurnerLoansCore
@@ -320,12 +409,27 @@ contract BurnerLoansCore is
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
     ///      - Another guarded Core operation is executing.
+    ///      - The captured Auth/installation epoch or original grant stamp is stale.
+    ///      - Auth rejects the account/operator, selected action, asset or required recipient.
+    ///      - The resulting canonical principal due exceeds the grant's maximum.
     ///      - The market or position is absent, or FLOAN rejects principal/maturity changes.
     ///      - The combined protocol and referral fee exceeds the uint256 maximum.
     ///      - Mandatory fee collection or Inventory funding fails.
+    /// @dev Keep BorrowRequest calldata decoding to preserve role-error precedence before lazy
+    ///      field reads for malformed raw requests; authorization context is always separate.
     function settleBorrow(
-        BorrowRequest calldata request_
+        BorrowRequest calldata request_,
+        address operator_,
+        AuthorizationContext calldata authContext_
     ) external override nonReentrant onlyAction(BL_DEBT_POLICY_ROLE) returns (uint128, uint48) {
+        _validateOriginalAuthorization(
+            request_.borrower,
+            operator_,
+            BL_ACTION_BORROW,
+            request_.asset,
+            request_.recipient,
+            authContext_
+        );
         // The action has validated health, caps and maturity. Commit the canonical debt here;
         // a failed fee receipt or principal delivery below rolls back this FLOAN update too.
         IFLOANv1.Position memory afterPosition = _FLOAN.increaseDebt(
@@ -342,6 +446,14 @@ contract BurnerLoansCore is
             request_.referralFee
         );
         _INVENTORY.draw(request_.recipient, request_.amount);
+        _completeAuthorization(
+            request_.borrower,
+            operator_,
+            BL_ACTION_BORROW,
+            request_.asset,
+            request_.recipient,
+            authContext_
+        );
         return (afterPosition.principalDue, afterPosition.maturity);
     }
 
@@ -375,20 +487,91 @@ contract BurnerLoansCore is
     ///      - Core is inactive or disabled.
     ///      - The caller lacks this operation’s settlement role.
     ///      - Another guarded Core operation is executing.
+    ///      - The captured Auth/installation epoch or original grant stamp is stale.
+    ///      - Auth rejects the account/operator, selected action, asset or required recipient.
+    ///      - The resulting canonical maturity exceeds the grant's maximum.
     ///      - The market or position is absent, or FLOAN rejects maturity extension.
     ///      - The combined protocol and referral fee exceeds the uint256 maximum.
     ///      - Mandatory fee collection fails.
     function settleExtend(
-        address asset_,
-        address borrower_,
-        address payer_,
-        uint48 maturity_,
-        uint256 protocolFee_,
-        address referrer_,
-        uint256 referralFee_
+        ExtendRequest memory request_,
+        address operator_,
+        AuthorizationContext calldata authContext_
     ) external override nonReentrant onlyAction(BL_DEBT_POLICY_ROLE) returns (uint48 maturity) {
-        maturity = _FLOAN.extendMaturity(_positionId(asset_, borrower_), maturity_).maturity;
-        _collectFee(asset_, payer_, protocolFee_, referrer_, referralFee_);
+        _validateOriginalAuthorization(
+            request_.borrower,
+            operator_,
+            BL_ACTION_EXTEND,
+            request_.asset,
+            address(0),
+            authContext_
+        );
+        maturity = _FLOAN
+            .extendMaturity(_positionId(request_.asset, request_.borrower), request_.maturity)
+            .maturity;
+        _collectFee(
+            request_.asset,
+            request_.payer,
+            request_.protocolFee,
+            request_.referrer,
+            request_.referralFee
+        );
+        _completeAuthorization(
+            request_.borrower,
+            operator_,
+            BL_ACTION_EXTEND,
+            request_.asset,
+            address(0),
+            authContext_
+        );
+    }
+
+    /// @dev Authenticates the same captured Core generation and grant at entry and completion.
+    function _validateOriginalAuthorization(
+        address account_,
+        address operator_,
+        uint8 action_,
+        address asset_,
+        address recipient_,
+        AuthorizationContext calldata originalContext_
+    ) private view returns (uint128) {
+        _requireOriginalAuth(originalContext_);
+        return
+            _AUTHORIZATION.validate(
+                account_,
+                operator_,
+                action_,
+                asset_,
+                recipient_,
+                originalContext_.grantContext
+            );
+    }
+
+    /// @dev Revalidates the original authority after all effects, then checks canonical FLOAN
+    ///      state while the shared Core guard is still held. Caller-supplied results are never used.
+    function _completeAuthorization(
+        address account_,
+        address operator_,
+        uint8 action_,
+        address asset_,
+        address recipient_,
+        AuthorizationContext calldata originalContext_
+    ) private view {
+        uint128 bound = _validateOriginalAuthorization(
+            account_,
+            operator_,
+            action_,
+            asset_,
+            recipient_,
+            originalContext_
+        );
+        IFLOANv1.Position memory position = _FLOAN.getPosition(_positionId(asset_, account_));
+        if (
+            (action_ == BL_ACTION_DEPOSIT && position.collateral > bound) ||
+            (action_ == BL_ACTION_BORROW && position.principalDue > bound) ||
+            (action_ == BL_ACTION_WITHDRAW && position.collateral < bound) ||
+            (action_ == BL_ACTION_EXTEND && position.maturity > bound)
+        ) revert BurnerLoansCore_ResultOutsideGrant();
     }
 
     /// @inheritdoc IBurnerLoansCore
@@ -905,6 +1088,7 @@ contract BurnerLoansCore is
                 BurnerLoansCore_InvalidRisk.selector
             )
         ) revert PolicyDependency.PolicyDependency_NotActive(risk);
+        _validateAuth(address(_AUTHORIZATION));
     }
 
     /// @inheritdoc IVersioned
@@ -913,7 +1097,7 @@ contract BurnerLoansCore is
         return (1, 0);
     }
 
-    /// @notice Advertises implemented interfaces and inherited lifecycle support.
+    /// @inheritdoc IERC165
     /// @dev Pure interface identifiers or inherited lifecycle identifiers only; no dependency calls.
     /// @param interfaceId_ ERC-165 interface identifier.
     /// @return bool Whether the interface identifier is supported.
@@ -922,7 +1106,7 @@ contract BurnerLoansCore is
     ) public view override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
             interfaceId_ == type(IBurnerLoansCore).interfaceId ||
-            interfaceId_ == type(IOperatorAuth).interfaceId ||
+            interfaceId_ == type(IBurnerLoansAuthTarget).interfaceId ||
             interfaceId_ == type(IConfigOperator).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
@@ -1031,6 +1215,10 @@ contract BurnerLoansCore is
     /// @dev Reverts if:
     ///      - This helper is called; it always raises the selected component-owned invalid-dependency error.
     function _invalidDependency(address candidate_, bytes4 invalid_) private pure {
+        if (invalid_ == BurnerLoansCore_InvalidAuth.selector)
+            // Auth probes are outside loops; lint follows other callers of this shared helper.
+            // forge-lint: disable-next-line(require-revert-in-loop)
+            revert BurnerLoansCore_InvalidAuth(candidate_);
         if (invalid_ == BurnerLoansCore_InvalidDepositManager.selector)
             // Reject this batch component with its own typed dependency error.
             // forge-lint: disable-next-line(require-revert-in-loop)

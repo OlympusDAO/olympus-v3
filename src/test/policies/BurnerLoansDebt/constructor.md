@@ -1,6 +1,6 @@
 # BurnerLoansDebt.constructor coverage plan
 
-Source: [constructor](../../../policies/burnerloans/BurnerLoansDebt.sol#L43). Implemented and mapped to the focused Foundry suite.
+Source: [constructor](../../../policies/burnerloans/BurnerLoansDebt.sol#L44). Implemented and mapped to the focused Foundry suite.
 
 ## Domains and notation
 
@@ -20,7 +20,6 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 | BLDEBT-CONSTRUCTOR-I02 | Fuzz deployer | N/A: no deployed candidate | N/A: no deployed candidate | Core is an EOA | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_whenCoreEOA_reverts][test_whenCoreEOA_reverts] |
 | BLDEBT-CONSTRUCTOR-I03 | Fuzz deployer | true | true | Core lacks IBurnerLoansCore but advertises IEnabler | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_givenMissingCoreInterface_whenDeployed_reverts][test_givenMissingCoreInterface_whenDeployed_reverts] |
 | BLDEBT-CONSTRUCTOR-I04 | Fuzz deployer | true | true | Core advertises IBurnerLoansCore but lacks IEnabler | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_givenMissingCoreInterface_whenDeployed_reverts][test_givenMissingCoreInterface_whenDeployed_reverts] |
-| BLDEBT-CONSTRUCTOR-I12 | Fuzz deployer | true | true | Core supports IBurnerLoansCore and IEnabler but lacks IOperatorAuth | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_givenMissingOperatorAuthInterface_whenDeployed_reverts][test_givenMissingOperatorAuthInterface_whenDeployed_reverts] |
 | BLDEBT-CONSTRUCTOR-I05 | Fuzz deployer | true | true | ERC165 supportsInterface reverts | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_givenBrokenERC165_whenDeployed_reverts][test_givenBrokenERC165_whenDeployed_reverts] |
 | BLDEBT-CONSTRUCTOR-I06 | Fuzz deployer | true | true | ERC165 supportsInterface returns malformed data | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_givenBrokenERC165_whenDeployed_reverts][test_givenBrokenERC165_whenDeployed_reverts] |
 | BLDEBT-CONSTRUCTOR-I07 | Fuzz deployer | true | true | All required interfaces supported; Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel) | No deployment or committed logs | Covered: [test_givenDifferentKernel_whenDeployed_reverts][test_givenDifferentKernel_whenDeployed_reverts] |
@@ -39,11 +38,10 @@ Co-located API assertions: `core`. These must be asserted independently of the a
 - [x] Implement named Foundry tests and boundary seed drivers.
 - [x] Map each row to passing tests.
 
-[test_givenBrokenERC165_whenDeployed_reverts]: constructor.t.sol#L67
-[test_givenDifferentKernel_whenDeployed_reverts]: constructor.t.sol#L79
-[test_givenMissingCoreInterface_whenDeployed_reverts]: constructor.t.sol#L55
-[test_givenMissingOperatorAuthInterface_whenDeployed_reverts]: constructor.t.sol#L25
-[test_whenBoundToCore_thenDeploymentIndependentOfLifecycle]: constructor.t.sol#L93
-[test_whenCoreEOA_reverts]: constructor.t.sol#L48
-[test_whenCoreLifecycleAxesSeeded_thenDeploymentStillBinds]: constructor.t.sol#L123
-[test_whenCoreZero_reverts]: constructor.t.sol#L42
+[test_givenBrokenERC165_whenDeployed_reverts]: constructor.t.sol#L48
+[test_givenDifferentKernel_whenDeployed_reverts]: constructor.t.sol#L60
+[test_givenMissingCoreInterface_whenDeployed_reverts]: constructor.t.sol#L36
+[test_whenBoundToCore_thenDeploymentIndependentOfLifecycle]: constructor.t.sol#L74
+[test_whenCoreEOA_reverts]: constructor.t.sol#L29
+[test_whenCoreLifecycleAxesSeeded_thenDeploymentStillBinds]: constructor.t.sol#L104
+[test_whenCoreZero_reverts]: constructor.t.sol#L23

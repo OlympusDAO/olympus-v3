@@ -14,6 +14,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {BL_DEBT_POLICY_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
+import {BL_ACTION_BORROW, BL_ACTION_EXTEND} from "src/policies/burnerloans/libraries/LoanActions.sol";
 import {LoanMarket} from "src/policies/burnerloans/libraries/LoanMarket.sol";
 import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
 import {LoanSolvency} from "src/policies/burnerloans/libraries/LoanSolvency.sol";
@@ -64,30 +65,30 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         uint256 maxFee_,
         address referrer_
     ) external override onlyOperational returns (IBurnerLoansDebt.BorrowPreview memory) {
-        _authorizeBorrower(borrower_);
+        IBurnerLoansCore.AuthorizationContext memory authContext = _captureBorrower(
+            borrower_,
+            BL_ACTION_BORROW
+        );
         _validateBorrowInputs(amount_, recipient_);
         IBurnerLoansDebt.BorrowPreview memory result;
         FeeAllocation memory allocation;
-        {
-            // Capture prices once so health and fees agree. Read FLOAN after this external write.
-            IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
-                .refreshSnapshot(asset_);
-            (result, allocation) = _quoteBorrow(asset_, amount_, borrower_, snapshot, referrer_);
-        }
+        (result, allocation) = _refreshBorrowQuote(asset_, amount_, borrower_, referrer_);
         if (result.fee > maxFee_)
             revert IBurnerLoansDebt.BurnerLoans_FeeExceedsMax(result.fee, maxFee_);
         (uint128 principal, uint48 maturity) = _CORE.settleBorrow(
-            IBurnerLoansCore.BorrowRequest(
-                asset_,
-                borrower_,
-                msg.sender,
-                recipient_,
-                amount_,
-                result.maturity,
-                allocation.protocolFee,
-                referrer_,
-                allocation.referralFee
-            )
+            IBurnerLoansCore.BorrowRequest({
+                asset: asset_,
+                borrower: borrower_,
+                payer: msg.sender,
+                recipient: recipient_,
+                amount: amount_,
+                maturity: result.maturity,
+                protocolFee: allocation.protocolFee,
+                referrer: referrer_,
+                referralFee: allocation.referralFee
+            }),
+            msg.sender,
+            authContext
         );
         result.resultingDebtOhm = principal;
         result.maturity = maturity;
@@ -285,7 +286,10 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         uint256 maxFee_,
         address referrer_
     ) external override onlyOperational returns (IBurnerLoansDebt.ExtendPreview memory result) {
-        _authorizeBorrower(borrower_);
+        IBurnerLoansCore.AuthorizationContext memory authContext = _captureBorrower(
+            borrower_,
+            BL_ACTION_EXTEND
+        );
         if (terms_ == 0) revert IBurnerLoansCore.BurnerLoansCore_ZeroAmount();
         IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
             .refreshSnapshot(asset_);
@@ -294,13 +298,17 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         if (result.fee > maxFee_)
             revert IBurnerLoansDebt.BurnerLoans_FeeExceedsMax(result.fee, maxFee_);
         result.maturity = _CORE.settleExtend(
-            asset_,
-            borrower_,
+            IBurnerLoansCore.ExtendRequest({
+                asset: asset_,
+                borrower: borrower_,
+                payer: msg.sender,
+                maturity: result.maturity,
+                protocolFee: allocation.protocolFee,
+                referrer: referrer_,
+                referralFee: allocation.referralFee
+            }),
             msg.sender,
-            result.maturity,
-            allocation.protocolFee,
-            referrer_,
-            allocation.referralFee
+            authContext
         );
         emit IBurnerLoansDebt.Extended(
             msg.sender,
@@ -432,6 +440,27 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         _requireFeePayoutOperational(allocation, referrer_);
     }
 
+    /// @notice Refreshes one operation-local snapshot before quoting the borrow.
+    /// @dev Reverts if snapshot refresh or the ordinary borrow quote checks fail. The caller
+    ///      captures authorization first. Resolve Risk and FLOAN again inside _quoteBorrow after
+    ///      the mutable refresh, so callbacks cannot leave a cached economic dependency or position.
+    /// @param asset_ Configured underlying collateral asset.
+    /// @param amount_ Requested principal in raw 9-decimal OHM units.
+    /// @param borrower_ Account whose canonical position is evaluated.
+    /// @param referrer_ Recipient used by Risk to allocate this operation's fee.
+    /// @return Borrow fee, maturity, resulting principal and health.
+    /// @return Separate protocol and referral fee allocations.
+    function _refreshBorrowQuote(
+        address asset_,
+        uint128 amount_,
+        address borrower_,
+        address referrer_
+    ) private returns (IBurnerLoansDebt.BorrowPreview memory, FeeAllocation memory) {
+        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
+            .refreshSnapshot(asset_);
+        return _quoteBorrow(asset_, amount_, borrower_, snapshot, referrer_);
+    }
+
     /// @notice Shared extension validation; Inventory is not consumed by this operation.
     /// @dev Reverts if:
     ///      - Debt is absent or originations are disabled.
@@ -454,55 +483,73 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         view
         returns (IBurnerLoansDebt.ExtendPreview memory result, FeeAllocation memory allocation)
     {
+        uint32 market;
         IFLOANv1.Position memory position;
-        {
-            (, IBurnerLoansCore.AssetConfig memory cfg, ) = LoanMarket.configuration(_CORE, asset_);
-            if (!cfg.originationsEnabled)
-                revert IBurnerLoansCore.BurnerLoansCore_AssetOriginationsDisabled(asset_);
-            LoanSolvency.requireSolvent(
-                IDepositManager(_CORE.depositManager()),
-                asset_,
-                address(_CORE)
-            );
-            (, , position) = LoanPositions.forCore(_CORE, asset_, borrower_);
-            if (position.principalDue == 0) revert IBurnerLoansCore.BurnerLoansCore_NoDebt();
-            // Extend from the stored deadline, not from now. An expired loan may be extended only if
-            // the purchased terms reach the future and stay within the horizon measured from now.
-            uint256 maturity = uint256(position.maturity) + uint256(cfg.termLength) * terms_;
-            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
-            // forge-lint: disable-next-line(block-timestamp)
-            if (maturity <= block.timestamp)
-                revert IBurnerLoansDebt.BurnerLoans_ExtensionMaturityNotFuture(
-                    maturity,
-                    block.timestamp
-                );
-            uint256 maximum = block.timestamp + uint256(cfg.maxMaturityHorizon);
-            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
-            // forge-lint: disable-next-line(block-timestamp)
-            if (maximum > type(uint48).max) maximum = type(uint48).max;
-            // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
-            // forge-lint: disable-next-line(block-timestamp)
-            if (maturity > maximum)
-                revert IBurnerLoansDebt.BurnerLoans_MaturityHorizonExceeded(maturity, maximum);
-            result.maturity = SafeCast.toUint48(maturity);
-        }
+        (market, position, result.maturity) = _prepareExtend(asset_, borrower_, terms_);
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
         result.healthFactor = evaluator.validateHealth(
             snapshot_,
-            _CORE.marketId(asset_),
+            market,
             position.collateral,
             position.principalDue,
             false
         );
         (allocation.protocolFee, allocation.referralFee) = evaluator.fee(
             snapshot_,
-            _CORE.marketId(asset_),
+            market,
             position.principalDue,
             terms_,
             referrer_
         );
         result.fee = allocation.protocolFee + allocation.referralFee;
         _requireFeePayoutOperational(allocation, referrer_);
+    }
+
+    /// @notice Resolves the extension position and validates its absolute maturity.
+    /// @dev Reverts in the existing order for disabled originations, insolvent custody, absent
+    ///      debt, a maturity not in the future, or a maturity beyond the configured horizon.
+    ///      Return the market already resolved by configuration for subsequent health/fee checks.
+    /// @param asset_ Configured underlying collateral asset.
+    /// @param borrower_ Account whose canonical debt position is evaluated.
+    /// @param terms_ Whole configured terms added to the stored maturity.
+    /// @return market Canonical FLOAN market identifier.
+    /// @return position Current canonical debt position, read after any external snapshot refresh.
+    /// @return maturity Validated resulting absolute maturity timestamp in seconds.
+    function _prepareExtend(
+        address asset_,
+        address borrower_,
+        uint16 terms_
+    ) private view returns (uint32 market, IFLOANv1.Position memory position, uint48 maturity) {
+        IBurnerLoansCore.AssetConfig memory cfg;
+        (market, cfg, ) = LoanMarket.configuration(_CORE, asset_);
+        if (!cfg.originationsEnabled)
+            revert IBurnerLoansCore.BurnerLoansCore_AssetOriginationsDisabled(asset_);
+        LoanSolvency.requireSolvent(
+            IDepositManager(_CORE.depositManager()),
+            asset_,
+            address(_CORE)
+        );
+        (, , position) = LoanPositions.forCore(_CORE, asset_, borrower_);
+        if (position.principalDue == 0) revert IBurnerLoansCore.BurnerLoansCore_NoDebt();
+        // Extend from the stored deadline, not from now. An expired loan may be extended only if
+        // the purchased terms reach the future and stay within the horizon measured from now.
+        uint256 nextMaturity = uint256(position.maturity) + uint256(cfg.termLength) * terms_;
+        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (nextMaturity <= block.timestamp)
+            revert IBurnerLoansDebt.BurnerLoans_ExtensionMaturityNotFuture(
+                nextMaturity,
+                block.timestamp
+            );
+        uint256 maximum = block.timestamp + uint256(cfg.maxMaturityHorizon);
+        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (maximum > type(uint48).max) maximum = type(uint48).max;
+        // Chain time defines this maturity/freshness boundary; its equality behavior is intentional.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (nextMaturity > maximum)
+            revert IBurnerLoansDebt.BurnerLoans_MaturityHorizonExceeded(nextMaturity, maximum);
+        maturity = SafeCast.toUint48(nextMaturity);
     }
 
     /// @notice Validates the payout service and referral destination shared by quotes and execution.

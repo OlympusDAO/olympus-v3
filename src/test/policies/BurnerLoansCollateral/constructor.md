@@ -1,6 +1,6 @@
 # BurnerLoansCollateral.constructor coverage plan
 
-Source: [constructor](../../../policies/burnerloans/BurnerLoansCollateral.sol#L34). Test mappings describe the verified scope of each named test.
+Source: [constructor](../../../policies/burnerloans/BurnerLoansCollateral.sol#L35). Test mappings describe the verified scope of each named test.
 
 ## Domains and notation
 
@@ -20,7 +20,6 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 | BLCOL-CONSTRUCTOR-I02 | Fuzz deployer | N/A: no deployed candidate | N/A: no deployed candidate | Core is an EOA | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_whenCoreEOA_reverts][test_whenCoreEOA_reverts] |
 | BLCOL-CONSTRUCTOR-I03 | Fuzz deployer | true | true | Core lacks IBurnerLoansCore but advertises IEnabler | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_whenCoreInterfaceMissing_reverts][test_whenCoreInterfaceMissing_reverts] |
 | BLCOL-CONSTRUCTOR-I04 | Fuzz deployer | true | true | Core advertises IBurnerLoansCore but lacks IEnabler | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_whenEnablerInterfaceMissing_reverts][test_whenEnablerInterfaceMissing_reverts] |
-| BLCOL-CONSTRUCTOR-I12 | Fuzz deployer | true | true | Core supports IBurnerLoansCore and IEnabler but lacks IOperatorAuth | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_givenMissingOperatorAuthInterface_whenDeployed_reverts][test_givenMissingOperatorAuthInterface_whenDeployed_reverts] |
 | BLCOL-CONSTRUCTOR-I05 | Fuzz deployer | true | true | ERC165 supportsInterface reverts | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_whenERC165Reverts_reverts][test_whenERC165Reverts_reverts] |
 | BLCOL-CONSTRUCTOR-I06 | Fuzz deployer | true | true | ERC165 supportsInterface returns malformed data | BurnerLoansAction_InvalidCore(candidate) | No deployment or committed logs | Covered: [test_whenERC165Malformed_reverts][test_whenERC165Malformed_reverts] |
 | BLCOL-CONSTRUCTOR-I07 | Fuzz deployer | true | true | All required interfaces supported; Core reports another Kernel | PolicyDependency_KernelMismatch(Core,expectedKernel,actualKernel) | No deployment or committed logs | Covered: [test_whenCoreKernelDiffers_reverts][test_whenCoreKernelDiffers_reverts] |
@@ -43,13 +42,12 @@ Co-located API assertions: `core`. These must be asserted independently of the a
 
 Constructor and lifecycle suites pass with solc 0.8.36, optimizer 400 and no via IR. This fixture uses real Kernel/ROLES and an existing enabled-policy mock for the Core identity. It does not prove real loan/custody preservation, settlement callbacks, or the full boundary/payload seed matrix. Deposit/withdrawal units and real-dependency integration remain pending.
 
-[test_givenMissingOperatorAuthInterface_whenDeployed_reverts]: constructor.t.sol#L27
-[test_whenCoreEOA_reverts]: constructor.t.sol#L51
-[test_whenCoreInterfaceMissing_reverts]: constructor.t.sol#L59
-[test_whenCoreKernelDiffers_reverts]: constructor.t.sol#L105
-[test_whenCoreLifecycleSeedsUsed_thenInitializationIsIndependent]: constructor.t.sol#L165
-[test_whenCoreZero_reverts]: constructor.t.sol#L44
-[test_whenERC165Malformed_reverts]: constructor.t.sol#L90
-[test_whenERC165Reverts_reverts]: constructor.t.sol#L75
-[test_whenEnablerInterfaceMissing_reverts]: constructor.t.sol#L67
-[test_whenValidCoreBinding]: constructor.t.sol#L120
+[test_whenCoreEOA_reverts]: constructor.t.sol#L32
+[test_whenCoreInterfaceMissing_reverts]: constructor.t.sol#L40
+[test_whenCoreKernelDiffers_reverts]: constructor.t.sol#L86
+[test_whenCoreLifecycleSeedsUsed_thenInitializationIsIndependent]: constructor.t.sol#L146
+[test_whenCoreZero_reverts]: constructor.t.sol#L25
+[test_whenERC165Malformed_reverts]: constructor.t.sol#L71
+[test_whenERC165Reverts_reverts]: constructor.t.sol#L56
+[test_whenEnablerInterfaceMissing_reverts]: constructor.t.sol#L48
+[test_whenValidCoreBinding]: constructor.t.sol#L101

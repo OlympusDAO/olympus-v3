@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test calls may target exact reverts or canonical state rather than their return values.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
+import {Vm} from "@forge-std-1.16.2/Vm.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
@@ -9,12 +13,11 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 
 // Libraries
+import {Actions} from "src/Kernel.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
 // Contracts
 import {BurnerLoansCoreTest} from "./BurnerLoansCoreTest.sol";
-import {Vm} from "@forge-std-1.16.2/Vm.sol";
-import {Actions} from "src/Kernel.sol";
 import {BurnerLoansCore} from "src/policies/burnerloans/BurnerLoansCore.sol";
 
 contract BurnerLoansCoreConstructorTest is BurnerLoansCoreTest {
@@ -22,6 +25,8 @@ contract BurnerLoansCoreConstructorTest is BurnerLoansCoreTest {
     error BurnerLoansCore_InvalidOhm(address ohm);
 
     // Scenarios: BLCORE-CONSTRUCTOR-P03, BLCORE-CONSTRUCTOR-P04, BLCORE-CONSTRUCTOR-P05, BLCORE-CONSTRUCTOR-P06, BLCORE-CONSTRUCTOR-P07.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_whenDeployed(
         address deployer_,
         uint8 decimals_,
@@ -49,14 +54,17 @@ contract BurnerLoansCoreConstructorTest is BurnerLoansCoreTest {
         assertEq(fresh.configOperator(), address(0), "Config unset");
         assertEq(fresh.gracePeriod(), 7 days, "Default grace");
         assertEq(fresh.lastTransitionAt(), 0, "No lifecycle transition");
-        assertEq(fresh.authorizationNonces(deployer_), 0, "No initial nonce");
-        assertEq(fresh.authorizationDeadlines(deployer_, _recipient), 0, "No grants");
+        (address initialAuth, uint256 initialEpoch) = fresh.authConfig();
+        assertEq(initialEpoch, 0, "No initial Auth epoch");
+        assertEq(initialAuth, address(0), "No Auth initially bound");
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertEq(logs.length, 1, "Only grace initialization event, no child deployment event");
         assertEq(logs[0].emitter, address(fresh), "Constructor event emitter");
         assertEq(logs[0].topics[0], keccak256("GracePeriodSet(uint32)"), "Exact constructor event");
         assertEq(abi.decode(logs[0].data, (uint32)), 7 days, "Exact initial period");
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-CONSTRUCTOR-P03.
     function test_whenDecimalsBoundarySeeds() public {
@@ -233,6 +241,8 @@ contract BurnerLoansCoreConstructorTest is BurnerLoansCoreTest {
     }
 
     // Scenarios: BLCORE-CONSTRUCTOR-N01.
+    // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
+    // forge-lint: disable-start(unsafe-typecast)
     function test_givenUnsupportedDecimals_whenDeployed_reverts(
         address deployer_,
         uint8 decimals_
@@ -244,9 +254,12 @@ contract BurnerLoansCoreConstructorTest is BurnerLoansCoreTest {
         new BurnerLoansCore(_kernel, IERC20(address(_ohm)), _depositManager);
     }
 
+    // forge-lint: disable-end(unsafe-typecast)
+
     // Scenarios: BLCORE-CONSTRUCTOR-N01.
     function test_whenUnsupportedDecimalSeeds_reverts() public {
         test_givenUnsupportedDecimals_whenDeployed_reverts(_recipient, 37);
         test_givenUnsupportedDecimals_whenDeployed_reverts(address(0), type(uint8).max);
     }
 }
+// forge-lint: disable-end(unused-return)
