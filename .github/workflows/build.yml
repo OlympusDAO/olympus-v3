@@ -116,9 +116,10 @@ jobs:
             - name: Run invariant tests
               run: pnpm run test:invariant
 
+    # RPC secrets are unavailable to fork and Dependabot pull requests.
     fork-tests:
         name: Fork tests - ${{ matrix.shard.name }}
-        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
         needs: build
         runs-on: ubuntu-latest
         timeout-minutes: 45
@@ -156,7 +157,7 @@ jobs:
                   ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
 
     proposal-tests:
-        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
         needs: build
         runs-on: ubuntu-latest
         timeout-minutes: 45
@@ -182,7 +183,7 @@ jobs:
                   ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
 
     crosschain-tests:
-        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
         needs: build
         runs-on: ubuntu-latest
         timeout-minutes: 45
