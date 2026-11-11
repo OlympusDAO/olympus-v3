@@ -1,5 +1,6 @@
 ---
-description: Guide for writing and formatting NatSpec documentation in the Olympus V3 codebase
+name: natspec-format
+description: Write and review NatSpec documentation, interface declaration ordering, and definition spacing in the Olympus V3 codebase.
 ---
 
 # NatSpec Formatting Guide
@@ -15,6 +16,39 @@ NatSpec (Ethereum Natural Language Specification) is the format for documenting 
 - Writing new functions, structs, events, errors, or modifiers
 - Reviewing code for documentation completeness
 - Formatting existing NatSpec comments to match project standards
+- Organizing Solidity interface declarations and the spacing between definitions
+
+## Interface Declaration Order
+
+Group declarations in this order, following existing interfaces such as `IOperator` and
+`IDepositManager`:
+
+1. Events
+2. Errors
+3. Enums, when present
+4. Structs
+5. Functions, with related functions grouped together
+
+Use the existing `// ========== EVENTS ========== //` heading style and omit empty sections.
+Move each declaration together with its NatSpec. Preserve parameter order, struct field order,
+enum member order, signatures and inheritance when reorganizing declarations.
+
+Keep deployed interfaces that must remain immutable unchanged, including formatting. Apply additions
+and layout improvements to the appropriate versioned extension instead.
+
+## Spacing Between Definitions
+
+Leave one actual empty source line between definitions, including errors, events, enums, structs and
+functions. NatSpec does not replace that separator: put the empty line before the next declaration's
+NatSpec block, and keep that block directly attached to its declaration.
+
+```solidity
+/// @notice Emitted when the first action completes.
+event EventA();
+
+/// @notice Emitted when the second action completes.
+event EventB();
+```
 
 ## NatSpec Format Standards
 
@@ -23,10 +57,13 @@ NatSpec (Ethereum Natural Language Specification) is the format for documenting 
 1. **Blank line separator** - A `///` line between `@notice`/`@dev` and `@param`/`@return` tags
 2. **Tab after tag** - The tag name (`@notice`, `@dev`, `@param`, `@return`) is followed by a tab
 3. **Tab-aligned descriptions** - Align descriptions at the first tab stop after the longest parameter name in the list
-4. **Tab-aligned returns** - For `@return`: `@return<TAB>type<TAB>description`
-5. **All parameters documented** - Every parameter must have a `@param` entry
-6. **Multi-line `@dev`** - Continue multi-line `@dev` comments on separate `/// @dev` lines
-7. **Trailing underscore** - Parameters with trailing underscore (e.g., `params_`)
+4. **Tab-aligned returns** - For `@return`: `@return<TAB>name-or-type<TAB>description`
+    - If the Solidity return value is named, use that return name.
+    - If the Solidity return value is unnamed, use the return type.
+5. **Named interface returns** - Interface functions should name every return value. The interface NatSpec should document each return by name. Implementation contracts may omit return names when appropriate.
+6. **All parameters documented** - Every parameter must have a `@param` entry
+7. **Multi-line `@dev`** - Continue multi-line `@dev` comments on separate `/// @dev` lines
+8. **Trailing underscore** - Parameters with trailing underscore (e.g., `params_`)
 
 ### Target Format Example
 
@@ -69,9 +106,43 @@ function exampleFunction(uint256 paramOne_, address paramTwo_) external returns 
 
 - **`@notice`**: User-facing description. Keep it clear and concise. Describe what, not how.
 - **`@dev`**: Implementation details, caveats, or technical notes. Use as many lines as needed.
+- **Revert conditions**: In concrete implementations, use `@dev Reverts if:` followed by a bulleted list. Put each independent failure condition in its own item. Keep combined conditions together when the failure requires both, such as a position being healthy and unexpired. Keep normal behavior and recovery notes outside the failure list. Interface NatSpec describes API purpose and observable behavior. Specify revert conditions on an interface only when implementations must adhere to them as part of the API contract; list those mandatory conditions explicitly. Keep implementation-specific guard details on the concrete contract.
 - **`@inheritdoc`**: Use when implementing functions from interfaces or parent contracts. Place as the first tag. This references the parent documentation and reduces duplication.
 - **`@param`**: Required for every parameter. Describe what the parameter represents.
-- **`@return`**: Required for non-void functions. Format: `@return<TAB>type<TAB>description`
+- **`@return`**: Required for non-void functions. Format: `@return<TAB>name-or-type<TAB>description`. Use the named return variable when present; otherwise use the return type.
+- **Interface returns**: Interface functions should name return values and NatSpec should use those names. Implementation contracts may omit return names; if an implementation function has its own NatSpec and an unnamed return, document the return by type.
+- **Removing implementation return names**: Update each explicit `@return` tag in the same change. Replace the removed name with the declared Solidity type, preserving the description and return order. Include qualified struct names and array dimensions; omit data locations such as `memory`. For example, `@return healthFactor Health ratio...` becomes `@return uint256 Health ratio...`. An `@inheritdoc`-only implementation needs no duplicate return tags.
+
+### Interface Return Values
+
+Interface return values are part of the integration surface and should be named. This makes generated docs and downstream integrations clearer.
+
+```solidity
+/// @notice Returns the Burner Loans policy.
+///
+/// @return burnerLoans_ The Burner Loans policy.
+function burnerLoans() external view returns (IBurnerLoans burnerLoans_);
+```
+
+Implementation contracts may omit return names when the interface already documents the return value via `@inheritdoc`:
+
+```solidity
+/// @inheritdoc IBurnerLoansConfigTimelock
+function burnerLoans() external view override returns (IBurnerLoans) {
+    return _burnerLoans;
+}
+```
+
+If an implementation does not use `@inheritdoc` and keeps an unnamed return, use the return type in NatSpec:
+
+```solidity
+/// @notice Returns the Burner Loans policy.
+///
+/// @return IBurnerLoans The Burner Loans policy.
+function burnerLoans() external view returns (IBurnerLoans) {
+    return _burnerLoans;
+}
+```
 
 ### Implementing Interface Functions
 
@@ -266,7 +337,7 @@ modifier onlyAdmin() {
 | Undocumented parameters   | No `@param` for some parameters            | All parameters documented                        |
 | Struct fields inline      | Inline `/// @notice` on each field         | Document fields as `@param` at struct level      |
 | Multi-line on single line | Very long `/// @notice` line               | Break across multiple `/// @notice` lines        |
-| Missing @inheritdoc       | Duplicating interface docs               | Use `/// @inheritdoc InterfaceName`              |
+| Missing @inheritdoc       | Duplicating interface docs                 | Use `/// @inheritdoc InterfaceName`              |
 
 ## GOOD vs BAD Examples
 
@@ -336,25 +407,27 @@ struct DeviationConfig {
 
 ## Quick Reference
 
-| Element                | Tag             | Required          | Format                                      |
-| ---------------------- | --------------- | ----------------- | ------------------------------------------- |
-| Function description   | `@notice`       | Yes               | `/// @notice<TAB>description`               |
-| Implementation details | `@dev`          | As needed         | `/// @dev<TAB>description`                  |
-| Parameters             | `@param`        | Yes (all)         | `/// @param<TAB>paramName_<TAB>description` |
-| Return values          | `@return`       | Yes (if non-void) | `/// @return<TAB>type<TAB>description`      |
-| Events                 | (use `@notice`) | Yes               | `/// @notice<TAB>when emitted`              |
-| Struct fields          | `@param`        | Yes (all)         | `/// @param<TAB>fieldName<TAB>description`  |
-| Error params           | `@param`        | Yes (all)         | `/// @param<TAB>paramName_<TAB>description` |
+| Element                | Tag             | Required          | Format                                         |
+| ---------------------- | --------------- | ----------------- | ---------------------------------------------- |
+| Function description   | `@notice`       | Yes               | `/// @notice<TAB>description`                  |
+| Implementation details | `@dev`          | As needed         | `/// @dev<TAB>description`                     |
+| Parameters             | `@param`        | Yes (all)         | `/// @param<TAB>paramName_<TAB>description`    |
+| Return values          | `@return`       | Yes (if non-void) | `/// @return<TAB>name-or-type<TAB>description` |
+| Events                 | (use `@notice`) | Yes               | `/// @notice<TAB>when emitted`                 |
+| Struct fields          | `@param`        | Yes (all)         | `/// @param<TAB>fieldName<TAB>description`     |
+| Error params           | `@param`        | Yes (all)         | `/// @param<TAB>paramName_<TAB>description`    |
 
 ## Checklist
 
 When writing NatSpec documentation:
 
+- [ ] Interface sections follow events, errors, enums, structs, functions; empty sections are omitted
+- [ ] An empty source line separates definitions, before the next attached NatSpec block
 - [ ] `@notice` tag present with clear user-facing description
 - [ ] `@dev` tags for implementation details (if needed)
 - [ ] Blank `///` line before `@param`/`@return` tags
 - [ ] All parameters documented with `@param`
-- [ ] Return values documented with `@return` (format: type + description)
+- [ ] Return values documented with `@return` (format: named return or unnamed type + description)
 - [ ] Descriptions tab-aligned based on longest parameter name
 - [ ] Parameter names use trailing underscore (e.g., `amount_`)
 - [ ] Struct fields documented at struct level, not inline

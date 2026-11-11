@@ -6,7 +6,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 
 // Contracts
-import {ERC165, IERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
+import {ERC165, IERC165} from "@openzeppelin-5.7.0/utils/introspection/ERC165.sol";
 
 /// @title EnablerV2
 /// @notice An abstract base contract that implements `IEnablerV2` and exposes
@@ -131,12 +131,14 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     }
 
     // Retained as a reusable lifecycle guard for inheriting contracts.
-    // forge-lint: disable-next-item(modifier-used-only-once)
+    // forge-lint: disable-start(modifier-used-only-once)
     /// @notice Modifier that reverts when the contract is not currently enabled.
     modifier givenEnabled() {
         _requireEnabled();
         _;
     }
+
+    // forge-lint: disable-end(modifier-used-only-once)
 
     /// @notice Asserts that the contract is currently disabled.
     /// @dev The check is exposed as a function so that inheriting contracts

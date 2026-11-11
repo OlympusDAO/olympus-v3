@@ -69,7 +69,20 @@ The approach to fixing linter notes depends on whether the contract is deployed 
 
 ## In-Development Contracts: Fix the Code
 
-For contracts still in development, **always fix the linter note** by refactoring the code rather than suppressing it.
+For contracts still in development, fix the linter note in code whenever a behavior-preserving
+improvement exists. Do not suppress a defect or replace a useful check with a weaker one.
+
+Use a narrowly scoped, documented exception when the flagged operation is intentional and a
+refactor would only obscure or alter its required behavior. Examples include inclusive grant
+deadlines compared against `block.timestamp`, deliberately reading one element of a tuple,
+bounded fuzz casts, and ignoring a return value when a test asserts an exact revert or authoritative
+state instead. Controlled callback tests may also need the external call/effect ordering they test.
+
+Before adding an exception, check the actual rule, call path and existing tests. State the reason
+beside the directive and disable only the relevant rule over the smallest useful scope. Do not use
+global configuration changes, dummy assignments, redundant assertions or a new abstraction merely
+to silence a note. Existing justified exceptions should be preserved during formatting or fixture
+moves; ordinary accidental warnings still require a code fix.
 
 ### Common Fixes
 

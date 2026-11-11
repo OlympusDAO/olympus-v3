@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.20;
 
+import {stdError} from "@forge-std-1.16.2/StdError.sol";
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -96,7 +97,7 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
     {
         // Expect revert
-        vm.expectRevert("TRANSFER_FROM_FAILED");
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         _createPosition(recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, false, false);

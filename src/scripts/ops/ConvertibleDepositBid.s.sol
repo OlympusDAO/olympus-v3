@@ -68,7 +68,7 @@ contract ConvertibleDepositBid is WithEnvironment {
         auctioneer = _envAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
         facility = _envAddressNotZero("olympus.policies.ConvertibleDepositFacility");
         receiptTokenManager = _envAddressNotZero("olympus.periphery.ReceiptTokenManager");
-        depositManager = _envAddressNotZero("olympus.policies.DepositManager");
+        depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
         deposModule = _envAddressNotZero("olympus.modules.OlympusDepositPositionManager");
         depositRedemptionVault = _envAddressNotZero("olympus.policies.DepositRedemptionVault");
 
@@ -183,12 +183,16 @@ contract ConvertibleDepositBid is WithEnvironment {
         console2.log("\n2. Approving USDS spending");
 
         vm.broadcast();
+        // Preserve legacy approval behavior; the subsequent bid consumes this allowance.
+        // forge-lint: disable-next-line(unused-return)
         IERC20(usds).approve(depositManager, amount_);
 
         console2.log("  Approved", amount_, "USDS for depositManager");
     }
 
     /// @notice Submit the bid to the auctioneer
+    // Result fields belong to the off-chain script, not protocol authorization state.
+    // forge-lint: disable-next-item(missing-events-access-control)
     function _submitBid(uint8 depositPeriod_, uint256 bidAmount_, uint256 minOhmOut_) internal {
         console2.log("\n3. Submitting bid");
 
@@ -231,6 +235,8 @@ contract ConvertibleDepositBid is WithEnvironment {
     // ========== INTERNAL CONVERSION FUNCTIONS ========== //
 
     /// @notice Get all convertible positions for a user
+    // Read-only search over the user's enumerated positions.
+    // forge-lint: disable-next-item(calls-loop)
     function _getConvertiblePositions(
         address user_,
         uint8 depositPeriod_
@@ -307,6 +313,8 @@ contract ConvertibleDepositBid is WithEnvironment {
         console2.log("\n1. Approving receipt token spending");
 
         vm.broadcast();
+        // Preserve legacy approval behavior; the following custody operation consumes it.
+        // forge-lint: disable-next-line(unused-return)
         IReceiptTokenManager(receiptTokenManager).approve(depositManager, receiptTokenId_, amount_);
 
         console2.log("  Approved deposit manager to spend receipt tokens");
@@ -360,6 +368,8 @@ contract ConvertibleDepositBid is WithEnvironment {
     /// @param chain_ The chain to interact with
     /// @param depositPeriod_ The deposit period in months
     /// @param amount_ Amount of receipt tokens to redeem
+    // Preserve the legacy receipt approval flow; redemption consumes the allowance.
+    // forge-lint: disable-next-item(unused-return)
     function startRedemption(
         string memory chain_,
         uint8 depositPeriod_,
@@ -468,6 +478,8 @@ contract ConvertibleDepositBid is WithEnvironment {
         // Approve DepositManager to spend receipt tokens
         console2.log("Approving DepositManager to spend receipt tokens");
         vm.broadcast();
+        // Preserve legacy approval behavior; the following custody operation consumes it.
+        // forge-lint: disable-next-line(unused-return)
         IReceiptTokenManager(receiptTokenManager).approve(depositManager, receiptTokenId, amount_);
 
         // Preview the reclaim

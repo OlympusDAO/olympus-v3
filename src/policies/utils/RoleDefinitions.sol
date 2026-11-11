@@ -43,3 +43,22 @@ bytes32 constant BRIDGE_CHANNEL_MANAGER_ROLE = "bridge_channel_manager";
 
 /// @dev Oracle manager role, e.g. managing oracle deployments.
 bytes32 constant ORACLE_MANAGER_ROLE = "oracle_manager";
+/// @dev Burner Loans parameter manager role, e.g. managing bounded operational parameters
+///      and re-enabling Burner Loans policies within their grace windows.
+bytes32 constant BURNER_LOANS_ADMIN_ROLE = "burner_loans_admin";
+/// @dev Revenue Distributor configuration proposer role. Proposals execute through its selected
+///      config timelock after the configured delay.
+bytes32 constant REVENUE_DISTRIBUTOR_ADMIN_ROLE = "revenue_distributor_admin";
+/// @dev Burner Loans protocol seizer role, e.g. performing periodic seizure without keeper rewards.
+bytes32 constant BURNER_LOANS_SEIZER_ROLE = "burner_loans_seizer";
+/// @dev Supplies and withdraws protocol-owned OHM held by Burner Loans Inventory.
+bytes32 constant BURNER_LOANS_INVENTORY_PROVIDER_ROLE = "burner_loans_inventory_provider";
+/// @dev Deposit Manager parameter proposer and bounded lifecycle recovery role.
+bytes32 constant DEPOSIT_MANAGER_ADMIN_ROLE = "deposit_manager_admin";
+/// @dev Deposit Manager operator role. Holders may call operator-gated actions against their
+///      accounting namespace for configured asset periods.
+bytes32 constant DEPOSIT_OPERATOR_ROLE = "deposit_operator";
+
+/// @dev Proposes bounded updates through BackingOracleConfigTimelock and re-enables
+///      the backing oracle or its queue within their grace windows.
+bytes32 constant BACKING_ADMIN_ROLE = "backing_admin";

@@ -103,7 +103,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
 
@@ -161,7 +161,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     function _validateQueueEnablePostBatch() external view {
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
 
@@ -199,7 +199,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
 
@@ -247,7 +247,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     function _validateToggleEnablePostBatch() external view {
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
 
@@ -281,7 +281,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
 
         console2.log("=== Queueing Removal of tempOHM and MigrationProposalHelper ===");
@@ -329,7 +329,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
 
         console2.log("\n Validating disable Post-Batch State ");
@@ -366,7 +366,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
         address timelock = _envAddressNotZero("olympus.governance.Timelock");
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
 
         console2.log("=== Minting tempOHM ===");
@@ -445,7 +445,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // Get addresses from environment
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
 
         console2.log("=== Setting OHM v1 to Migrate on MigrationProposalHelper ===");
@@ -480,7 +480,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     /// @dev    Validates that OHMv1ToMigrate has been updated correctly
     function _validateSetOHMv1ToMigratePostBatch() external view {
         address migrationProposalHelper = _envAddressNotZero(
-            "olympus.periphery.MigrationProposalHelper"
+            "olympus.proposals.MigrationProposalHelper"
         );
 
         console2.log("\n Validating setOHMv1ToMigrate Post-Batch State ");

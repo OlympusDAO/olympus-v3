@@ -148,8 +148,11 @@ Choose the destination based on the required rotation behavior:
 A local key identifies the smallest configuration domain that the action reads or writes. Key
 design must follow storage dependencies, not only function selectors.
 
-Use the same local key when either action can change an assumption of the other action. Use different
-local keys only when both actions are valid in either execution order.
+By default, use the same local key when either action can change an assumption of the other action.
+Independent domains use different keys and remain valid in either execution order. A product can
+explicitly admit dependency-coupled actions with separate keys and stale-state rejection, as Payout
+does for routing versus pending recovery. Document and test that exception; those domains are not
+order-independent.
 
 A selector alone is usually not a safe key:
 
@@ -164,8 +167,7 @@ the same domains regardless of the current configuration.
 
 The state hash is a compare-and-set guard. It records the state that the queued intent assumes.
 
-Include all configuration whose change makes the action stale. Exclude unrelated or deliberately
-volatile accounting data.
+Include the destination's current config operator by default, alongside configuration whose change makes the action stale. Live selected-operator checks complement this commitment. Exclude unrelated or deliberately volatile accounting data. These hashes compare current state; operator/configuration changes away and back can match again unless the product explicitly adds a history epoch.
 
 For example, a debt-cap hash can include the configured cap but exclude live debt. Live debt changes
 during normal operation. The destination can validate the proposed cap against live debt during
@@ -223,13 +225,19 @@ releases every key and removes every guard record.
 
 Expiry is a timestamp condition, not a state transition. An expired action keeps its keys until an
 authorized caller cancels it. Cancellation can occur after expiry, subject to the product's lifecycle
-gates. Burner Loans and Revenue Distributor config timelocks require themselves enabled and
-Kernel-active; target state and operator selection do not gate cancellation. Restore the timelock
-before cancelling if it is disabled or inactive.
+gates. Product configuration timelocks require themselves Kernel-active and the caller to hold EMERGENCY, but permit local disablement. Target state and operator selection do not gate cancellation, and cancellation makes no target/operator calls. A paused queue or broken target must not strand reservations; Kernel deactivation still blocks cancellation until governance restores membership.
 
-`CCIPTokenPoolConfigTimelock` is the exception: `cancelQueuedAction` has no enabled or Kernel-active
-gate, so an authorized caller releases the keys without first restoring the timelock. See
-[CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for its cancellation authority.
+`CCIPTokenPoolConfigTimelock` is an exception: cancellation does not require local enablement or Kernel activity. ADMIN, EMERGENCY, or the proposer can cancel through the expiry timestamp; anyone can cancel after expiry. See [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for its cancellation authority.
+
+## Policy activation versus operation readiness
+
+The shared base does not impose Policy lifecycle rules. Each product uses the same target prerequisites for enable and reEnable. The four Burner Loans configuration queues and `BackingOracleConfigTimelock` require compatible consumed interfaces, a target that reports the same Kernel and is active in it, and selection as the target's current config operator. Target local enablement is not required or read during activation. Inherited local transition, caller, payload, history and grace checks still apply.
+
+`BackingOracleConfigTimelock` requires both policies active and enabled when queueing or executing backing updates. See [Backing oracle](backing_oracle.md) for its separate role and fixed one-day notice.
+
+Activation does not waive operation-specific readiness checks. Queueing and execution require the target Kernel-active for all configuration and recovery. Local target enablement is operation-specific: ordinary configuration respects operational pause, while explicit recovery paths can remain usable to repair routing or discharge funded obligations. See the product access-control documents for which selectors require target enablement and why.
+
+Constructors validate the same consumed interface set and same-Kernel binding used by enable/reEnable. Reuse the interface predicate across those paths. Construction does not read or require target activity, local enablement or prior operator selection; activation separately checks delegated authority and any product-required target activity.
 
 ## Implement a subclass
 
@@ -436,8 +444,8 @@ cannot override those shared bookkeeping paths. Product customization uses only 
 section and the remaining `TimelockBatchQueue` lifecycle hooks.
 
 Product-specific keys and hashes belong with each product's configuration documentation. See
-[CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for the authority of the CCIP token pool
-config timelock.
+[Burner Loans access control](burner_loans_access_control.md) for its timelock authority and
+[Revenue Distributor access control](revenue_distributor_access_control.md) for distribution routes. See also [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for CCIP token pool configuration.
 
 ## Observability
 
@@ -516,8 +524,7 @@ Include that dependency in the canonical hash or give it another owned key.
 
 Expired actions keep their keys. If no authorized cancellation path remains, those keys stay locked.
 
-Allow cancellation after expiry and document its lifecycle gates. If cancellation requires an
-enabled, Kernel-active timelock, restore that state before cancelling to release the keys.
+Allow cancellation after expiry while the timelock is Kernel-active, including while locally paused. Require the cancellation role, without target/operator readiness calls. An inactive queue must regain Kernel membership before cancellation; local re-enablement must not be needed to release keys.
 
 ### Separate batches depend on execution order
 

@@ -175,7 +175,7 @@ FOUNDRY_PROFILE=deploy forge verify-contract <address> src/policies/bridge/CCIPT
 
 The settings are the same for all five CCIP contracts (the pool, the config policy, the config timelock, the periphery and the checker), so the only per-contract inputs are the path, the name and the constructor arguments.
 
-After the deployment, record the three mainnet addresses in `src/proposals/addresses.json` (`olympus-policy-ccip-token-pool-config`, `olympus-policy-ccip-token-pool-config-timelock`, `olympus-periphery-ccip-token-pool-config-proposal-checker`) for the OCG proposal; the deploy script records them in `env.json` under `olympus.policies` and `olympus.periphery.CCIPTokenPoolConfigProposalChecker`.
+After the deployment, record the three mainnet addresses in `src/proposals/addresses.json` (`olympus-policy-ccip-token-pool-config`, `olympus-policy-ccip-token-pool-config-timelock`, `olympus-periphery-ccip-token-pool-config-proposal-checker`) for the OCG proposal; the deploy script records them in `env.json` under `olympus.policies` and `olympus.proposals.CCIPTokenPoolConfigProposalChecker`.
 
 ## Mainnet rollout
 

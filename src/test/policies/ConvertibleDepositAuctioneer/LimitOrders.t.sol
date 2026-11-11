@@ -7,6 +7,9 @@
 // solhint-disable one-contract-per-file
 pragma solidity ^0.8.20;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
@@ -16,6 +19,8 @@ import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
 // Interfaces
 import {IERC721Errors} from "@openzeppelin-5.3.0/interfaces/draft-IERC6093.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Libraries
@@ -111,6 +116,12 @@ contract CDAuctioneerLimitOrdersTest is Test {
         cdAuctioneer.setReceiptToken(PERIOD_3, address(receiptToken3));
         cdAuctioneer.setReceiptToken(PERIOD_6, address(receiptToken6));
         cdAuctioneer.setPositionNFT(address(positionNFT));
+
+        depositManager.addAsset(IERC20(address(usds)), IERC4626(address(0)), type(uint256).max, 0);
+        depositManager.addAssetPeriod(IERC20(address(usds)), PERIOD_3, address(cdAuctioneer));
+        depositManager.enableAssetPeriod(IERC20(address(usds)), PERIOD_3, address(cdAuctioneer));
+        depositManager.addAssetPeriod(IERC20(address(usds)), PERIOD_6, address(cdAuctioneer));
+        depositManager.enableAssetPeriod(IERC20(address(usds)), PERIOD_6, address(cdAuctioneer));
 
         // Deploy limit orders contract
         uint8[] memory periods = new uint8[](2);
@@ -3908,3 +3919,5 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 }
 /// forge-lint: disable-end(mixed-case-variable)
+
+// forge-lint: disable-end(unused-return)

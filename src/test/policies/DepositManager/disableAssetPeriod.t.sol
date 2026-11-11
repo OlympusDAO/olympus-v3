@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {Actions} from "src/Kernel.sol";
 
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 
@@ -26,18 +28,53 @@ contract DepositManagerDisableAssetPeriodTest is DepositManagerTest {
         depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
-    // when the caller is not the manager or admin
+    // when the caller is neither admin, config operator, nor emergency
     //  [X] it reverts
 
-    function test_givenCallerIsNotManagerOrAdmin_reverts(
+    function test_whenCallerIsUnauthorized_reverts(
         address caller_
     ) public givenIsEnabled givenFacilityNameIsSetDefault {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+        vm.assume(caller_ != ADMIN && caller_ != CONFIG_OPERATOR && caller_ != EMERGENCY);
+        _setConfigOperator(CONFIG_OPERATOR);
 
-        _expectRevertNotManagerOrAdmin();
+        _expectRevertNotConfigOperator(caller_);
 
         vm.prank(caller_);
         depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    function test_givenConfigOperator_disablesAssetPeriod()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(CONFIG_OPERATOR);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        assertFalse(
+            depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR).isEnabled,
+            "config operator should disable asset period"
+        );
+    }
+
+    function test_givenEmergency_disablesAssetPeriod()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
+        vm.prank(EMERGENCY);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        assertFalse(
+            depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR).isEnabled,
+            "emergency should disable asset period"
+        );
     }
 
     // given there is no asset period
@@ -111,5 +148,15 @@ contract DepositManagerDisableAssetPeriodTest is DepositManagerTest {
         );
         assertEq(status.isConfigured, true, "isAssetPeriod: isConfigured mismatch");
         assertEq(status.isEnabled, false, "isAssetPeriod: isEnabled mismatch");
+    }
+
+    // Scenarios: DM-DISABLE-ASSET-PERIOD-L01.
+    function test_givenInactiveAndDisabled_whenOrdinaryAction_revertsActivityFirst() public {
+        vm.prank(ADMIN);
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+        vm.expectRevert(IDepositManagerV1_1.DepositManager_PolicyInactive.selector);
+
+        vm.prank(ADMIN);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 }

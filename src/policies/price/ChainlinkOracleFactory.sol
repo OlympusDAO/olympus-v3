@@ -2,19 +2,20 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity ^0.8.15;
 
-// Bophades
+// Libraries
+import {Strings} from "@openzeppelin-5.7.0/utils/Strings.sol";
+
+// Contracts
 import {Kernel} from "src/Kernel.sol";
 import {BaseOracleFactory} from "src/policies/price/BaseOracleFactory.sol";
 import {ChainlinkOracleCloneable} from "src/policies/price/ChainlinkOracleCloneable.sol";
-
-import {LibString} from "@solmate-6.2.0/utils/LibString.sol";
 
 /// @title  ChainlinkOracleFactory
 /// @author OlympusDAO
 /// @notice Factory contract for deploying ChainlinkOracle clones for base/quote token pairs
 /// @dev    Uses ClonesWithImmutableArgs for gas-efficient oracle deployment
 contract ChainlinkOracleFactory is BaseOracleFactory {
-    using LibString for uint256;
+    using Strings for uint256;
 
     // ========== STATE ========== //
 
@@ -24,7 +25,8 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Constructs a new ChainlinkOracleFactory
-    /// @dev    Reverts if `priceCache_` is not a valid IPriceCache policy for this Kernel.
+    /// @dev Reverts if:
+    ///      - priceCache_ is not a valid IPriceCache policy for this Kernel.
     ///
     /// @param  kernel_ The Kernel address
     /// @param  priceCache_ The price cache policy address
@@ -54,9 +56,22 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
         // Compose name from token symbols and maxAge: "base/quote CL {maxAge}s"
         string memory baseSymbol = priceCache.assetSymbol(baseToken_);
         string memory quoteSymbol = priceCache.assetSymbol(quoteToken_);
+        // Display names retain exactly the first 32 bytes and are not used as oracle identifiers.
+        // This multiline operation needs a range; the suppression ends immediately after it.
+        // forge-lint: disable-start(unsafe-typecast)
         bytes32 oracleName = bytes32(
-            abi.encodePacked(baseSymbol, "/", quoteSymbol, " CL ", uint256(maxAge_).toString(), "s")
+            bytes(
+                string.concat(
+                    baseSymbol,
+                    "/",
+                    quoteSymbol,
+                    " CL ",
+                    uint256(maxAge_).toString(),
+                    "s"
+                )
+            )
         );
+        // forge-lint: disable-end(unsafe-typecast)
         // Intentionally snapshot cache decimals at oracle creation so each oracle keeps a fixed scale.
         uint8 priceCacheDecimals = priceCache.decimals();
 

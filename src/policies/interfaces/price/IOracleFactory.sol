@@ -56,12 +56,6 @@ interface IOracleFactory {
     /// @param  minor   Minor version of the module
     error OracleFactory_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
 
-    /// @notice Thrown when module does not support interface
-    ///
-    /// @param  keycode     Keycode of the module
-    /// @param  interfaceId Interface identifier, as specified in ERC-165
-    error OracleFactory_UnsupportedModuleInterface(bytes5 keycode, bytes4 interfaceId);
-
     /// @notice Thrown when oracle creation is disabled
     error OracleFactory_CreationDisabled();
 
@@ -107,6 +101,10 @@ interface IOracleFactory {
     ///
     /// @param  policy  Invalid price cache policy address
     error OracleFactory_InvalidPriceCache(address policy);
+
+    /// @notice The requested contract address is already selected.
+    /// @param policy Unchanged contract address.
+    error OracleFactory_UnchangedAddress(address policy);
 
     /// @notice Thrown when re-enable pair arrays are malformed
     ///

@@ -1,0 +1,4 @@
+interface:
+    display_name: "Config Timelock Design"
+    short_description: "Design and test Olympus configuration timelocks"
+    default_prompt: "Use $config-timelock-design for the requested design, implementation or review of a configuration timelock and its target integration."

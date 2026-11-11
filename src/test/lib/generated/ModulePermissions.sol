@@ -10,6 +10,7 @@ import {OlympusBoostedLiquidityRegistry} from "src/modules/BLREG/OlympusBoostedL
 import {OlympusClearinghouseRegistry} from "src/modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {OlympusGovDelegation} from "src/modules/DLGTE/OlympusGovDelegation.sol";
+import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusInstructions} from "src/modules/INSTR/OlympusInstructions.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
@@ -74,6 +75,27 @@ library ModulePermissions {
         selectors[2] = OlympusDepositPositionManager.setAdditionalData.selector;
         selectors[3] = OlympusDepositPositionManager.split.selector;
         selectors[4] = OlympusDepositPositionManager.setTokenRenderer.selector;
+    }
+
+    /// @notice Selectors that {OlympusFixedTermLoan} gates with the `permissioned` modifier.
+    /// @return selectors The selectors, in the order the contract declares them.
+    function olympusFixedTermLoan() internal pure returns (bytes4[] memory selectors) {
+        selectors = new bytes4[](15);
+        selectors[0] = OlympusFixedTermLoan.createMarket.selector;
+        selectors[1] = OlympusFixedTermLoan.setMarketPrincipalCap.selector;
+        selectors[2] = OlympusFixedTermLoan.setMarketRiskConfig.selector;
+        selectors[3] = OlympusFixedTermLoan.setMarketBaseFee.selector;
+        selectors[4] = OlympusFixedTermLoan.setMarketConfigData.selector;
+        selectors[5] = OlympusFixedTermLoan.setMarketManager.selector;
+        selectors[6] = OlympusFixedTermLoan.setMarketOriginationsEnabled.selector;
+        selectors[7] = OlympusFixedTermLoan.setMarketFacility.selector;
+        selectors[8] = OlympusFixedTermLoan.createPosition.selector;
+        selectors[9] = OlympusFixedTermLoan.addCollateral.selector;
+        selectors[10] = OlympusFixedTermLoan.removeCollateral.selector;
+        selectors[11] = OlympusFixedTermLoan.increaseDebt.selector;
+        selectors[12] = OlympusFixedTermLoan.decreaseDebt.selector;
+        selectors[13] = OlympusFixedTermLoan.extendMaturity.selector;
+        selectors[14] = OlympusFixedTermLoan.defaultPosition.selector;
     }
 
     /// @notice Selectors that {OlympusGovDelegation} gates with the `permissioned` modifier.

@@ -5,7 +5,7 @@ pragma solidity ^0.8.15;
 // Interfaces
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
@@ -16,8 +16,9 @@ import {ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.sol";
 
 // Libraries
+import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
-import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
 /// @title  ERC7726OracleFactory
 /// @author OlympusDAO
@@ -69,7 +70,8 @@ contract ERC7726OracleFactory is
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Constructs a new ERC7726OracleFactory
-    /// @dev    Reverts if `priceCache_` is not a valid IPriceCache policy for this Kernel.
+    /// @dev Reverts if:
+    ///      - priceCache_ is not a valid IPriceCache policy for this Kernel.
     ///
     /// @param  kernel_     The Kernel address
     /// @param  priceCache_ The price cache policy address
@@ -82,7 +84,8 @@ contract ERC7726OracleFactory is
     // ========== POLICY SETUP ========== //
 
     /// @inheritdoc Policy
-    /// @dev        Reverts if the configured ROLES module major version is unsupported.
+    /// @dev Reverts if:
+    ///      - The configured ROLES module major version is unsupported.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
         dependencies[0] = toKeycode(_ROLES_KEYCODE);
@@ -112,7 +115,9 @@ contract ERC7726OracleFactory is
 
     // ========== ACCESS CONTROL ========== //
 
-    /// @notice Reverts if this policy is not active in the Kernel.
+    /// @notice Requires own Kernel activity.
+    /// @dev Reverts if:
+    ///      - This policy is not active in the Kernel.
     modifier onlyPolicyActive() {
         _onlyPolicyActive();
         _;
@@ -166,9 +171,10 @@ contract ERC7726OracleFactory is
     )
         external
         override
+        nonReentrant
+        onlyPolicyActive
         onlyEnabled
         onlyOracleManagerOrAdminRole
-        nonReentrant
         returns (address oracle)
     {
         if (!isCreationEnabled) revert ERC7726OracleFactory_CreationDisabled();
@@ -222,9 +228,10 @@ contract ERC7726OracleFactory is
     function enableCreation()
         external
         override
+        nonReentrant
+        onlyPolicyActive
         onlyEnabled
         onlyOracleManagerOrAdminRole
-        nonReentrant
     {
         if (isCreationEnabled) revert ERC7726OracleFactory_CreationAlreadyEnabled();
         isCreationEnabled = true;
@@ -242,9 +249,10 @@ contract ERC7726OracleFactory is
     function disableCreation()
         external
         override
+        nonReentrant
+        onlyPolicyActive
         onlyEnabled
         onlyOracleManagerOrAdminOrEmergencyRole
-        nonReentrant
     {
         if (!isCreationEnabled) revert ERC7726OracleFactory_CreationAlreadyDisabled();
         isCreationEnabled = false;
@@ -255,10 +263,12 @@ contract ERC7726OracleFactory is
     /// @dev        Reverts if:
     ///             - The factory is disabled
     ///             - The caller is not admin
+    ///             - `policy_` is already the selected cache (UnchangedAddress)
     ///             - `policy_` is zero, not IPriceCache-compatible, or bound to a different Kernel
     function setPriceCache(
         address policy_
-    ) external override onlyEnabled onlyAdminRole nonReentrant {
+    ) external override nonReentrant onlyPolicyActive onlyEnabled onlyAdminRole {
+        if (policy_ == address(priceCache)) revert ERC7726OracleFactory_UnchangedAddress(policy_);
         _setPriceCache(policy_);
     }
 
@@ -272,7 +282,7 @@ contract ERC7726OracleFactory is
     ///             - `oracle_` is already enabled
     function enableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrAdminRole nonReentrant {
+    ) external override nonReentrant onlyPolicyActive onlyEnabled onlyOracleManagerOrAdminRole {
         if (!isOracle[oracle_]) revert ERC7726OracleFactory_InvalidOracle(oracle_);
         if (_isOracleEnabled[oracle_]) revert ERC7726OracleFactory_OracleAlreadyEnabled(oracle_);
 
@@ -289,7 +299,14 @@ contract ERC7726OracleFactory is
     ///             - `oracle_` is already disabled
     function disableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrAdminOrEmergencyRole nonReentrant {
+    )
+        external
+        override
+        nonReentrant
+        onlyPolicyActive
+        onlyEnabled
+        onlyOracleManagerOrAdminOrEmergencyRole
+    {
         if (!isOracle[oracle_]) revert ERC7726OracleFactory_InvalidOracle(oracle_);
         if (!_isOracleEnabled[oracle_]) {
             revert ERC7726OracleFactory_OracleAlreadyDisabled(oracle_);
@@ -301,7 +318,8 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    /// @dev        Reverts if the policy is deactivated in Kernel.
+    /// @dev Reverts if:
+    ///      - The policy is deactivated in Kernel.
     function isOracleEnabled(
         address oracle_
     ) external view override onlyPolicyActive returns (bool enabled) {
@@ -331,7 +349,7 @@ contract ERC7726OracleFactory is
     function cachePrice(
         address base_,
         address quote_
-    ) external override onlyPolicyActive onlyEnabled nonReentrant {
+    ) external override nonReentrant onlyPolicyActive onlyEnabled {
         _validateCachingCaller(msg.sender);
         priceCache.cachePrice(base_, quote_);
     }
@@ -346,9 +364,11 @@ contract ERC7726OracleFactory is
     function cachePriceIfNecessary(
         address base_,
         address quote_
-    ) external override onlyPolicyActive onlyEnabled nonReentrant {
+    ) external override nonReentrant onlyPolicyActive onlyEnabled {
         _validateCachingCaller(msg.sender);
         uint48 configuredMaxAge = _oracleToMaxAge[msg.sender];
+        // The factory caller only needs the cache freshness side effect.
+        // forge-lint: disable-next-line(unused-return)
         priceCache.cachePriceIfNecessary(base_, quote_, configuredMaxAge);
     }
 
@@ -381,6 +401,8 @@ contract ERC7726OracleFactory is
         if (!_hasEnabledOracleVariant()) return;
 
         for (uint256 i; i < pairCount; ) {
+            // Every selected pair must be validated and recached; caller-sized batches revert atomically.
+            // forge-lint: disable-next-line(calls-loop)
             priceCache.cachePrice(baseTokens[i], quoteTokens[i]);
 
             unchecked {
@@ -412,9 +434,9 @@ contract ERC7726OracleFactory is
     }
 
     function _setPriceCache(address policy_) internal {
-        if (policy_ == address(0) || !_implementsIPriceCache(policy_) || !_hasSameKernel(policy_)) {
+        if (policy_ == address(0) || !_implementsIPriceCache(policy_))
             revert ERC7726OracleFactory_InvalidPriceCache(policy_);
-        }
+        PolicyDependency.requireSameKernel(policy_, address(kernel));
         priceCache = IPriceCache(policy_);
         emit PriceCacheSet(policy_);
     }
@@ -430,16 +452,6 @@ contract ERC7726OracleFactory is
         );
 
         return success && returnData.length >= 32 && abi.decode(returnData, (bool));
-    }
-
-    function _hasSameKernel(address policy_) internal view returns (bool) {
-        (bool success, bytes memory returnData) = policy_.staticcall(
-            abi.encodeWithSignature("kernel()")
-        );
-        if (!success || returnData.length < 32) return false;
-
-        address cacheKernel = abi.decode(returnData, (address));
-        return cacheKernel == address(kernel);
     }
 
     // ========== ERC165 ========== //

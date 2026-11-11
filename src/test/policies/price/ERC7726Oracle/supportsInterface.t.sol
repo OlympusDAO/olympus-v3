@@ -10,7 +10,7 @@ import {ERC165Helper} from "src/test/lib/ERC165.sol";
 import {IPriceOracle} from "src/policies/interfaces/price/IPriceOracle.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {IERC7726OraclePriceCache} from "src/policies/interfaces/price/IERC7726OraclePriceCache.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract ERC7726OracleSupportsInterfaceTest is ERC7726OracleTest {
