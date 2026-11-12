@@ -3,18 +3,18 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
-import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {BurnerLoansSeizeIntegrationTestBase} from "src/test/policies/BurnerLoansSeize/fixtures/BurnerLoansSeizeIntegrationTestBase.sol";
 import {SeizeRedemptionFeeVault} from "src/test/policies/BurnerLoansSeize/fixtures/SeizeRedemptionFeeVault.sol";
 
@@ -73,11 +73,11 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
     }
 
     // Scenarios: BLLIQ-SEIZE-I04, BLLIQ-SEIZE-P19.
-    function test_givenAllDebtExpiredAndRealPriceStale_whenSeized_thenSnapshotStillRequired()
+    function test_givenMaturedDebt_givenOrdinaryKeeper_givenRealPriceStale_whenSeized_reverts()
         public
     {
         _open(address(_asset), _borrower, 2000e6, 100e9);
-        vm.warp(block.timestamp + 30 days);
+        vm.warp(vm.getBlockTimestamp() + 30 days);
         address[] memory borrowers = new address[](1);
         borrowers[0] = _borrower;
         bytes32 beforeState = _stateDigestFor(address(_asset), _keeper);
@@ -149,7 +149,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
         // Public borrowing does not originate unsecured loans; module/Inventory accounting stays real.
         vm.startPrank(address(_core));
         uint64 id = _floan.createPosition(_core.marketId(address(_asset)), _borrower);
-        _floan.increaseDebt(id, 100e9, 0, uint48(block.timestamp + 30 days));
+        _floan.increaseDebt(id, 100e9, 0, uint48(vm.getBlockTimestamp() + 30 days));
         _inventory.draw(_borrower, 100e9);
         vm.stopPrank();
         _expire();
@@ -219,7 +219,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
             "Independent real health calculation"
         );
         assertLt(
-            block.timestamp,
+            vm.getBlockTimestamp(),
             _lens.getPosition(address(_asset), _borrower).maturity,
             "Fixture has not matured"
         );
@@ -227,32 +227,615 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
         _assertSeizure(address(_asset), address(_asset), 20e6, 1980e6);
     }
 
+    // Scenarios: BLLIQ-SEIZE-P03.
+    function test_givenDebtFreeBorrower_givenOracleOutage_whenSeizedOrPreviewed_reverts(
+        uint8 faultSeed_,
+        uint8 keeperSeed_,
+        bool existing_,
+        bool emptyFirst_
+    ) public {
+        OracleFault fault_ = OracleFault(bound(faultSeed_, 0, uint8(OracleFault.PriceStale)));
+        KeeperClass keeperClass_ = KeeperClass(bound(keeperSeed_, 0, uint8(KeeperClass.Both)));
+        address[] memory borrowers = _prepareDebtFreeSelection(
+            keeperClass_,
+            existing_,
+            emptyFirst_
+        );
+        _injectOracleFault(fault_);
+        _expectNoSeizurePricing();
+        _assertOracleFailure(
+            borrowers,
+            abi.encodeWithSelector(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector)
+        );
+    }
+
+    // Scenarios: BLLIQ-SEIZE-P03.
+    function test_givenDebtFreeBorrower_givenReadyOracles_whenSeizedOrPreviewed_reverts(
+        uint8 keeperSeed_,
+        bool existing_,
+        bool emptyFirst_
+    ) public {
+        KeeperClass keeperClass_ = KeeperClass(bound(keeperSeed_, 0, uint8(KeeperClass.Both)));
+        address[] memory borrowers = _prepareDebtFreeSelection(
+            keeperClass_,
+            existing_,
+            emptyFirst_
+        );
+        _expectNoSeizurePricing();
+        _assertOracleFailure(
+            borrowers,
+            abi.encodeWithSelector(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector)
+        );
+    }
+
     // Scenarios: BLLIQ-SEIZE-D13.
-    function test_givenMaturedDebtAndBackingPaused_whenSeized_reverts(bool protocol_) public {
+    function test_givenExpiredHealthyOrdinaryDebt_givenOracleOutage_reverts(
+        uint8 faultSeed_,
+        bool afterMaturity_
+    ) public {
+        OracleFault fault_ = OracleFault(bound(faultSeed_, 0, uint8(OracleFault.PriceStale)));
+        address[] memory borrowers = _prepareHealthyExpired(KeeperClass.Ordinary, afterMaturity_);
+        _assertOracleFailure(borrowers, _injectOracleFault(fault_));
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D13.
+    function test_givenExpiredOrdinaryDebt_givenZeroRewardConfig_givenOracleOutage_reverts(
+        uint8 faultSeed_,
+        uint8 configSeed_
+    ) public {
+        OracleFault fault_ = OracleFault(bound(faultSeed_, 0, uint8(OracleFault.PriceStale)));
+        uint256 config = bound(configSeed_, 0, 2);
+        address[] memory borrowers = _prepareHealthyExpired(KeeperClass.Ordinary, false);
+        // Seed 0: zero BPS; seed 1: zero cap; seed 2: both zero. Admission remains priced.
+        _config.setAssetRiskConfig(
+            address(_asset),
+            IBurnerLoansRisk.AssetRiskConfigInput(
+                8500,
+                12500,
+                config == 1 ? 100 : 0,
+                30 days,
+                90 days,
+                config == 0 ? 1000e6 : 0
+            )
+        );
+        _assertOracleFailure(borrowers, _injectOracleFault(fault_));
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.PriceReverts);
+        _assertOracleFreeSeizure(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.CacheReverts);
+        _assertOracleFreeSeizure(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.BackingReverts);
+        _assertOracleFreeSeizure(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.BackingPaused);
+        _assertOracleFreeSeizure(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.PriceStale);
+        _assertOracleFreeSeizure(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.PriceReverts);
+        _assertOracleFreePreview(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.CacheReverts);
+        _assertOracleFreePreview(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.BackingReverts);
+        _assertOracleFreePreview(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.BackingPaused);
+        _assertOracleFreePreview(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D14.
+    function test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_
+    ) public {
+        address[] memory borrowers = _prepareHealthyExpired(
+            _protocolClass(heart_, overlap_),
+            afterMaturity_
+        );
+        _injectOracleFault(OracleFault.PriceStale);
+        _assertOracleFreePreview(borrowers, 100e9, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D24.
+    function test_givenUnexpiredUnhealthyDebt_givenOracleOutage_reverts(
+        uint8 faultSeed_,
+        uint8 keeperSeed_
+    ) public {
+        OracleFault fault_ = OracleFault(bound(faultSeed_, 0, uint8(OracleFault.PriceStale)));
+        KeeperClass keeperClass_ = KeeperClass(bound(keeperSeed_, 0, uint8(KeeperClass.Both)));
         _open(address(_asset), _borrower, 2000e6, 100e9);
-        if (protocol_) _rolesAdmin.grantRole(HEART_ROLE, _keeper);
-        _expire();
-        address oracle = _risk.backingOracle();
-        MockBackingOracle(oracle).setEnabled(false);
-        assertTrue(
-            _lens.isSeizable(address(_asset), _borrower),
-            "maturity eligibility remains independent of pricing"
+        _setKeeperClass(keeperClass_);
+        vm.warp(vm.getBlockTimestamp() + 1 days);
+        _price.setTimestamp(uint48(vm.getBlockTimestamp()));
+        _price.setPrice(address(_ohm), 25e18);
+        _assertHealth(_borrower, false);
+        assertLt(
+            vm.getBlockTimestamp(),
+            _lens.getPosition(address(_asset), _borrower).maturity,
+            "Debt remains unexpired"
         );
-        bytes32 beforeState = _stateDigestFor(address(_asset), _keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        _assertOracleFailure(_single(_borrower), _injectOracleFault(fault_));
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D25.
+    function test_givenMixedMaturityDebt_givenOracleOutage_reverts(
+        uint8 faultSeed_,
+        uint8 keeperSeed_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        OracleFault fault_ = OracleFault(bound(faultSeed_, 0, uint8(OracleFault.PriceStale)));
+        KeeperClass keeperClass_ = KeeperClass(bound(keeperSeed_, 0, uint8(KeeperClass.Both)));
+        address[] memory borrowers = _prepareMixedHealth(
+            keeperClass_,
+            true,
+            afterMaturity_,
+            reverse_
         );
-        _liquidation.previewSeizeFor(_keeper, address(_asset), _single(_borrower));
-        vm.expectRevert(
-            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
+        _assertOracleFailure(borrowers, _injectOracleFault(fault_));
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D27.
+    function test_givenExpiredMixedHealthOrdinaryDebt_givenOracleOutage_reverts(
+        uint8 faultSeed_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        OracleFault fault_ = OracleFault(bound(faultSeed_, 0, uint8(OracleFault.PriceStale)));
+        address[] memory borrowers = _prepareMixedHealth(
+            KeeperClass.Ordinary,
+            false,
+            afterMaturity_,
+            reverse_
         );
+        _assertOracleFailure(borrowers, _injectOracleFault(fault_));
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.PriceReverts);
+        _assertOracleFreeSeizure(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.CacheReverts);
+        _assertOracleFreeSeizure(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.BackingReverts);
+        _assertOracleFreeSeizure(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.BackingPaused);
+        _assertOracleFreeSeizure(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenSeized(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.PriceStale);
+        _assertOracleFreeSeizure(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.PriceReverts);
+        _assertOracleFreePreview(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.CacheReverts);
+        _assertOracleFreePreview(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.BackingReverts);
+        _assertOracleFreePreview(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.BackingPaused);
+        _assertOracleFreePreview(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D26.
+    function test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenPreviewed(
+        bool heart_,
+        bool overlap_,
+        bool afterMaturity_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            false,
+            afterMaturity_,
+            reverse_
+        );
+        _injectOracleFault(OracleFault.PriceStale);
+        _assertOracleFreePreview(borrowers, 200e9, 7000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D25.
+    function test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredSelected(
+        uint8 faultSeed_,
+        bool heart_,
+        bool overlap_
+    ) public {
+        OracleFault fault_ = OracleFault(bound(faultSeed_, 0, uint8(OracleFault.PriceStale)));
+        address[] memory allBorrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            true,
+            false,
+            false
+        );
+        bytes memory reason = _injectOracleFault(fault_);
+        _assertOracleFailure(allBorrowers, reason);
+        uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        uint256 capacityBefore = _inventory.availableCapacity();
+        IBurnerLoansCore.Position memory unexpiredBefore = _lens.getPosition(
+            address(_asset),
+            _recipient
+        );
+        _expectNoSeizurePricing();
         vm.prank(_keeper);
-        _liquidation.seize(address(_asset), _single(_borrower));
-        assertEq(
-            _stateDigestFor(address(_asset), _keeper),
-            beforeState,
-            "backing outage preserves default and payout accounting"
+        (address token, uint256 reward, uint256 treasury) = _liquidation.seize(
+            address(_asset),
+            _single(_borrower)
         );
+        assertEq(token, address(_asset), "Expired subset redeems underlying");
+        assertEq(reward, 0, "Protocol selection receives no reward");
+        assertEq(treasury, 5000e6, "All selected collateral goes to Treasury");
+        assertEq(
+            _asset.balanceOf(_payout.treasury()),
+            treasuryBefore + 5000e6,
+            "Selected collateral is paid"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _borrower).debtOhm,
+            0,
+            "Selected debt defaults"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _borrower).depositedCollateral,
+            0,
+            "Selected collateral clears"
+        );
+        assertEq(
+            keccak256(abi.encode(_lens.getPosition(address(_asset), _recipient))),
+            keccak256(abi.encode(unexpiredBefore)),
+            "Unselected debt and collateral remain unchanged"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 100e9, "Unselected principal remains active");
+        assertEq(_core.totalActiveDebtOhm(), 100e9, "Core retains unselected debt");
+        assertEq(
+            _inventory.availableCapacity(),
+            capacityBefore + 100e9,
+            "Only selected debt releases cap room"
+        );
+        assertEq(
+            _inventory.providerClaimOhm(address(this)),
+            200e9,
+            "Provider claim survives subset default"
+        );
+        assertEq(
+            _floan.getMarketPrincipalDefaulted(_core.marketId(address(_asset))),
+            100e9,
+            "Only selected debt is booked as defaulted"
+        );
+        address[] memory active = _floan.getActiveBorrowers(_core.marketId(address(_asset)));
+        assertEq(active.length, 1, "Only unselected borrower remains indexed");
+        assertEq(active[0], _recipient, "Remaining index identifies the unselected borrower");
+        assertEq(
+            _asset.balanceOf(address(_depositManager)),
+            2000e6,
+            "Unselected collateral remains in custody"
+        );
+        assertEq(
+            _depositManager.getOperatorLiabilities(IERC20(address(_asset)), address(_core)),
+            2000e6,
+            "Unselected custody liability remains"
+        );
+    }
+
+    // Scenarios: BLLIQ-SEIZE-D25.
+    function test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredPreviewed(
+        uint8 faultSeed_,
+        bool heart_,
+        bool overlap_
+    ) public {
+        OracleFault fault_ = OracleFault(bound(faultSeed_, 0, uint8(OracleFault.PriceStale)));
+        address[] memory allBorrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            true,
+            false,
+            false
+        );
+        _injectOracleFault(fault_);
+        bytes32 beforeState = _oracleBatchDigest(allBorrowers);
+        _expectNoSeizurePricing();
+        IBurnerLoansCore.SeizePreview memory quote = _liquidation.previewSeizeFor(
+            _keeper,
+            address(_asset),
+            _single(_borrower)
+        );
+        assertEq(quote.tokenOut, address(_asset), "Subset quote returns underlying");
+        assertEq(quote.seizedDebtOhm, 100e9, "Subset quote includes only expired debt");
+        assertEq(quote.seizedCollateral, 5000e6, "Subset quote includes only expired collateral");
+        assertEq(quote.keeperReward, 0, "Subset quote has no protocol reward");
+        assertEq(
+            quote.collateralToTreasury,
+            5000e6,
+            "Subset quote allocates all output to Treasury"
+        );
+        assertEq(
+            _oracleBatchDigest(allBorrowers),
+            beforeState,
+            "Subset quote preserves both positions and all custody"
+        );
+    }
+
+    // Scenarios: BLLIQ-SEIZE-P21.
+    function test_givenMaturedDebt_givenOrdinaryKeeper_givenCollateralBelowBacking_whenSeized(
+        bool cached_
+    ) public {
+        _prepareHealthyExpired(KeeperClass.Ordinary, false);
+        _price.setPrice(address(_ohm), 25e18);
+        MockBackingOracle(_risk.backingOracle()).setBacking(20e18);
+        if (cached_) _installSeizurePriceCache();
+        // 100e9 OHM (9 decimals) * $20e18 * 12500/10000 / 1e9 = $2500e18.
+        // At $1e18 per asset, required backing is 2500e6, above 2000e6 collateral.
+        // Surplus and reward are zero; Treasury receives all 2000e6 (6 decimals).
+        _assertHealth(_borrower, false);
+        _assertSeizure(address(_asset), address(_asset), 0, 2000e6);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-P22.
+    function test_givenMixedMaturityProtocolDebt_givenOperationalOracles(
+        bool heart_,
+        bool overlap_,
+        bool cached_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            _protocolClass(heart_, overlap_),
+            true,
+            false,
+            reverse_
+        );
+        if (cached_) _installSeizurePriceCache();
+        _assertPricedBatch(borrowers, 0);
+    }
+
+    // Scenarios: BLLIQ-SEIZE-P23.
+    function test_givenMixedMaturityOrdinaryDebt_givenOperationalOracles(
+        bool cached_,
+        bool reverse_
+    ) public {
+        address[] memory borrowers = _prepareMixedHealth(
+            KeeperClass.Ordinary,
+            true,
+            false,
+            reverse_
+        );
+        MockBackingOracle(_risk.backingOracle()).setBacking(27.8e18);
+        if (cached_) _installSeizurePriceCache();
+        _assertHealth(_borrower, true);
+        _assertHealth(_recipient, false);
+        // 200e9 OHM * $27.8e18 / 1e9 * 12500/10000 = $6950e18 -> 6950e6 assets.
+        // floor(7000e6 * 100/10000)=70e6, but backing surplus=7000e6-6950e6=50e6.
+        // Reward is capped to 50e6; Treasury keeps 6950e6. All divisions are exact here.
+        _assertPricedBatch(borrowers, 50e6);
     }
 }
 

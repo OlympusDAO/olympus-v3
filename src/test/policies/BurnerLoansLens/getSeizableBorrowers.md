@@ -62,7 +62,7 @@ Keep these separate from price failures. Configure snapshot, withdrawal-preview 
 
 ## Fixed pagination and eligibility cases
 
-Canonical ordered fixture: index0 Alice (expired debt10e9,collateral100e6), index1 Bob (healthy debt20e9), index2 Carol (unexpired unhealthy debt30e9,collateral300e6), index3 Dave (healthy debt40e9). Prices are valid. Use a controlled Risk for health and reward handoff; check exact candidates visited and use one shared snapshot. Pagination values and expected arrays are hard-coded.
+Canonical ordered fixture: index0 Alice (expired debt10e9,collateral100e6), index1 Bob (healthy debt20e9), index2 Carol (unexpired unhealthy debt30e9,collateral300e6), index3 Dave (healthy debt40e9). Prices are valid. Use a controlled Risk for health and reward handoff; check exact candidates visited and use one snapshot for health. Risk reads its own cached/live prices for the reward. Pagination values and expected arrays are hard-coded.
 
 | ID | Caller | N | start | count | Returned borrowers | Next cursor | Selected debt; collateral | For consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -92,7 +92,7 @@ Each fixture isolates one behavior; no ordering promise survives independent FLO
 
 ## Reward actor and custody handoff
 
-Use start=0,count=4 in the canonical fixture: Alice and Carol contribute debt40e9 and collateral400e6. Mock withdrawal preview to return independently chosen output O and Risk.keeperReward to return R; assert exact snapshot, asset, debt, collateral, O and protocol flag. Real reward arithmetic belongs in Risk tests, not a copied Lens oracle.
+Use start=0,count=4 in the canonical fixture: Alice and Carol contribute debt40e9 and collateral400e6. Mock withdrawal preview to return independently chosen output O and Risk.keeperReward to return R; assert exact market, debt, collateral, O and protocol flag. Real reward arithmetic belongs in Risk tests, not a copied Lens oracle.
 
 | ID | Caller | Actor / output mode | Expected quote / calls | For consistency | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -136,7 +136,7 @@ Legacy scans had separate check/return limits and circular traversal. Their elig
 [test_givenBorrowerInOtherMarket_whenScanned]: ./getSeizableBorrowersIntegration.t.sol#L71
 [test_givenBorrowerRepaid_whenFinalPageScanned]: ./getSeizableBorrowersIntegration.t.sol#L23
 [test_givenBorrowerRepaid_whenSavedCursorIsInvalid_reverts]: ./getSeizableBorrowersIntegration.t.sol#L32
-[test_givenBothRoles_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L550
+[test_givenBothRoles_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L536
 [test_givenCanonicalList_whenAbovePopulationCountScanned]: ./getSeizableBorrowers.t.sol#L342
 [test_givenCanonicalList_whenExactPopulationCountScanned]: ./getSeizableBorrowers.t.sol#L333
 [test_givenCanonicalList_whenFinalTwoScanned]: ./getSeizableBorrowers.t.sol#L279
@@ -156,9 +156,9 @@ Legacy scans had separate check/return limits and circular traversal. Their elig
 [test_givenEmptyPopulation_whenOneStartSeeded_reverts]: ./getSeizableBorrowers.t.sol#L180
 [test_givenEmptyPopulation_whenStartIsNonzero_reverts]: ./getSeizableBorrowers.t.sol#L161
 [test_givenEqualCount_whenInvalidStartSeeded_reverts]: ./getSeizableBorrowers.t.sol#L126
-[test_givenExpiredOnlyList_whenSnapshotFails_reverts]: ./getSeizableBorrowers.t.sol#L671
+[test_givenExpiredOnlyList_whenSnapshotFails_reverts]: ./getSeizableBorrowers.t.sol#L650
 [test_givenFiftyOneExpiredBorrowers_whenScanned]: ./getSeizableBorrowers.t.sol#L370
-[test_givenHealthFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L650
+[test_givenHealthFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L629
 [test_givenHeart_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L504
 [test_givenInactiveDisabledCore_whenQueried]: ./getSeizableBorrowers.t.sol#L52
 [test_givenInactiveEnabledCore_whenQueried]: ./getSeizableBorrowers.t.sol#L43
@@ -171,19 +171,19 @@ Legacy scans had separate check/return limits and circular traversal. Their elig
 [test_givenOneUnitReward_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L478
 [test_givenOrdinary_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L411
 [test_givenRejectedSavedCursor_whenCallerResets]: ./getSeizableBorrowersIntegration.t.sol#L52
-[test_givenRewardFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L632
-[test_givenSeizer_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L527
+[test_givenRewardFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L611
+[test_givenSeizer_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L520
 [test_givenShares_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L436
-[test_givenSnapshotFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L591
+[test_givenSnapshotFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L570
 [test_givenStaleZeroDebtCandidate_whenScanned]: ./getSeizableBorrowers.t.sol#L402
-[test_givenTestContractHasHeartRole_whenOrdinaryActorQuoted]: ./getSeizableBorrowers.t.sol#L574
+[test_givenTestContractHasHeartRole_whenOrdinaryActorQuoted]: ./getSeizableBorrowers.t.sol#L553
 [test_givenUnderlying_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L419
-[test_givenWithdrawalFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L609
+[test_givenWithdrawalFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L588
 [test_givenZeroCount_whenFirstOfOneSeeded]: ./getSeizableBorrowers.t.sol#L231
 [test_givenZeroCount_whenLastOfFourSeeded]: ./getSeizableBorrowers.t.sol#L238
 [test_givenZeroCount_whenLastOfMaximumSeeded]: ./getSeizableBorrowers.t.sol#L245
 [test_givenZeroCount_whenStartIsValid]: ./getSeizableBorrowers.t.sol#L216
 [test_givenZeroReward_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L486
 [test_whenUnknownAsset_revertsBeforeBounds]: ./getSeizableBorrowers.t.sol#L61
-[test_whenZeroActorQuoted]: ./getSeizableBorrowers.t.sol#L584
+[test_whenZeroActorQuoted]: ./getSeizableBorrowers.t.sol#L563
 [test_whenZeroAsset_reverts]: ./getSeizableBorrowers.t.sol#L86

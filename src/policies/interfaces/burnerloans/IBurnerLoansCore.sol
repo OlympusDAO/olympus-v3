@@ -178,16 +178,6 @@ interface IBurnerLoansCore {
         uint128 maxKeeperReward;
     }
 
-    /// @notice Prices and backing captured by Risk for one operation; never persisted on Core.
-    /// @param ohmUsdPrice USD price per whole OHM token, in PRICE decimals.
-    /// @param collateralUsdPrice USD price per whole underlying collateral token, in PRICE decimals.
-    /// @param backingPerOhmUsd Protocol backing per whole OHM token, in PRICE decimals.
-    struct PriceSnapshot {
-        uint256 ohmUsdPrice;
-        uint256 collateralUsdPrice;
-        uint256 backingPerOhmUsd;
-    }
-
     /// @notice A borrower's collateral and debt position for one collateral asset.
     /// @param depositedCollateral Withdrawable collateral credit, in collateral token decimals.
     /// @param debtOhm Outstanding principal, in OHM decimals.
@@ -379,14 +369,12 @@ interface IBurnerLoansCore {
     /// @notice Defaults and redeems a complete batch, allocating only actual received collateral.
     /// @param asset Configured underlying collateral token.
     /// @param borrowers Distinct accounts approved for liquidation by the calling policy.
-    /// @param keeper Keeper identity, or zero for a protocol caller.
-    /// @param snapshot Operation-local prices and backing used for all keeper allocations.
+    /// @param keeper Keeper identity used to determine protocol reward eligibility.
     /// @return result Batch principal, actual redemption proceeds and allocated payouts.
     function settleSeize(
         address asset,
         address[] calldata borrowers,
-        address keeper,
-        PriceSnapshot calldata snapshot
+        address keeper
     ) external returns (SeizePreview memory result);
 
     /// @notice Returns the registered market identifier, including market zero.

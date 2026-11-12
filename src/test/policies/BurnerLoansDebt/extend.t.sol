@@ -184,7 +184,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         }
         IFLOANv1.Position memory beforePosition = _position();
         {
-            IBurnerLoansCore.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
+            IBurnerLoansRisk.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
             bytes memory feeCall = abi.encodeCall(
                 IBurnerLoansRisk.fee,
                 (

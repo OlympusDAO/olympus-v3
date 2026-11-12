@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-// Interfaces
-import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
-
 /// @notice Replaceable pricing and economic calculations; custody and positions remain at Core/FLOAN.
-/// @dev Calculation inputs are operation-local values supplied by the caller, not stored or authenticated
-///      price snapshots. Installed actions supply the canonical FLOAN market ID; Risk validates its OHM
-///      debt token, without checking a Core facility or borrower authorization. Calculations never settle funds.
+/// @dev Health and fee calculations accept operation-local snapshots, which are neither stored nor
+///      authenticated. Keeper rewards obtain their own prices when needed. Installed actions supply the
+///      canonical FLOAN market ID; Risk validates its OHM debt token, without checking a Core facility or
+///      borrower authorization. Calculations never settle funds.
 interface IBurnerLoansRisk {
     // ========== EVENTS ========== //
 
@@ -82,6 +80,16 @@ interface IBurnerLoansRisk {
 
     // ========== STRUCTS ========== //
 
+    /// @notice Operation-local prices and backing captured by Risk.
+    /// @param ohmUsdPrice USD price per whole OHM token, in PRICE decimals.
+    /// @param collateralUsdPrice USD price per whole underlying collateral token, in PRICE decimals.
+    /// @param backingPerOhmUsd Protocol backing per whole OHM token, in PRICE decimals.
+    struct PriceSnapshot {
+        uint256 ohmUsdPrice;
+        uint256 collateralUsdPrice;
+        uint256 backingPerOhmUsd;
+    }
+
     /// @notice Mutable risk and term fields for a Burner Loans collateral market.
     /// @dev `maxKeeperReward` matches the `uint128` width used by FLOAN market configuration;
     ///      every representable value is valid, so no separate upper-bound check is required.
@@ -121,16 +129,12 @@ interface IBurnerLoansRisk {
     /// @notice Uses a fresh cached pair when available, otherwise direct PRICE; does not refresh cache.
     /// @param asset Configured underlying collateral token to price against OHM.
     /// @return prices Captured pair prices and protocol backing for one operation.
-    function snapshot(
-        address asset
-    ) external view returns (IBurnerLoansCore.PriceSnapshot memory prices);
+    function snapshot(address asset) external view returns (PriceSnapshot memory prices);
 
     /// @notice Policies refresh prices before reading positions and validating settlement; permissionless cache maintenance.
     /// @param asset Configured underlying collateral token to price against OHM.
     /// @return snapshot Captured pair prices and protocol backing for one operation.
-    function refreshSnapshot(
-        address asset
-    ) external returns (IBurnerLoansCore.PriceSnapshot memory snapshot);
+    function refreshSnapshot(address asset) external returns (PriceSnapshot memory snapshot);
 
     /// @notice WAD-scaled health; zero principal returns the maximum uint256.
     /// @dev Snapshot USD values share the current PRICE decimal scale, which need not be 18.
@@ -141,7 +145,7 @@ interface IBurnerLoansRisk {
     /// @param debt Position principal in OHM units.
     /// @return healthFactor Health scaled by 1e18, or uint256.max when debt is zero.
     function health(
-        IBurnerLoansCore.PriceSnapshot calldata snapshot,
+        PriceSnapshot calldata snapshot,
         uint32 marketId,
         uint256 collateral,
         uint256 debt
@@ -155,7 +159,7 @@ interface IBurnerLoansRisk {
     /// @param finalPosition Whether this validates a proposed final position (borrow or withdrawal) rather than the current position.
     /// @return healthFactor Accepted position health scaled by 1e18.
     function validateHealth(
-        IBurnerLoansCore.PriceSnapshot calldata snapshot,
+        PriceSnapshot calldata snapshot,
         uint32 marketId,
         uint256 collateral,
         uint256 debt,
@@ -171,7 +175,7 @@ interface IBurnerLoansRisk {
     /// @return protocolFee Protocol remainder of the upfront fee, in underlying collateral units.
     /// @return referralFee Referral share rounded down, in underlying collateral units.
     function fee(
-        IBurnerLoansCore.PriceSnapshot calldata snapshot,
+        PriceSnapshot calldata snapshot,
         uint32 marketId,
         uint256 principal,
         uint16 terms,
@@ -196,8 +200,7 @@ interface IBurnerLoansRisk {
     /// @param allowed Whether new operations may name this address.
     function setReferrerAllowed(address referrer, bool allowed) external;
 
-    /// @notice Returns the keeper allocation from actual redemption output, preserving underlying/share rounding.
-    /// @param snapshot Prices and backing captured before batch settlement.
+    /// @notice Returns the keeper allocation from actual redemption output using current Risk prices.
     /// @param marketId Canonical FLOAN market selected by the caller; must use this Risk's OHM.
     /// @param debt Principal defaulted by the position, in OHM units.
     /// @param collateral Position collateral redeemed, in underlying token units.
@@ -205,7 +208,6 @@ interface IBurnerLoansRisk {
     /// @param protocolCaller Whether the caller receives no keeper reward.
     /// @return reward Keeper allocation in the same token units as output.
     function keeperReward(
-        IBurnerLoansCore.PriceSnapshot calldata snapshot,
         uint32 marketId,
         uint256 debt,
         uint256 collateral,

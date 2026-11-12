@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
@@ -229,8 +228,8 @@ contract BurnerLoansRiskFeeIntegrationTest is BurnerLoansModularTest {
         return _feeMarket(debt_, cap_, 18, IBurnerLoansRisk.AssetFeeConfig(25, 8000, 100, 900));
     }
 
-    function _oneDollarSnapshot() private pure returns (IBurnerLoansCore.PriceSnapshot memory) {
-        return IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18);
+    function _oneDollarSnapshot() private pure returns (IBurnerLoansRisk.PriceSnapshot memory) {
+        return IBurnerLoansRisk.PriceSnapshot(1e18, 1e18, 1e18);
     }
 
     function _feeMarket(
@@ -324,7 +323,7 @@ contract BurnerLoansRiskFeeIntegrationTest is BurnerLoansModularTest {
     }
 
     function _fee(
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         uint32 market_,
         uint256 principal_,
         uint16 terms_

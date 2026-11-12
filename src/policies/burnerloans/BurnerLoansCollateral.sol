@@ -63,7 +63,7 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
         );
         IFLOANv1.Position memory beforePosition = _validateDeposit(asset_, amount_, borrower_);
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansCore.PriceSnapshot memory snapshot;
+        IBurnerLoansRisk.PriceSnapshot memory snapshot;
         if (beforePosition.principalDue != 0) snapshot = evaluator.refreshSnapshot(asset_);
         (credit, collateral) = _CORE.settleDeposit(
             IBurnerLoansCore.DepositRequest({
@@ -123,7 +123,7 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
             recipient_
         );
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansCore.PriceSnapshot memory snapshot;
+        IBurnerLoansRisk.PriceSnapshot memory snapshot;
         // Debt-free exits remain available during price/cache outages.
         if (position.principalDue != 0) snapshot = evaluator.refreshSnapshot(asset_);
         uint128 remaining;
@@ -239,7 +239,7 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
         p.collateral -= amount_;
         result.remainingDepositedCollateral = p.collateral;
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansCore.PriceSnapshot memory snapshot;
+        IBurnerLoansRisk.PriceSnapshot memory snapshot;
         if (p.principalDue != 0) snapshot = evaluator.snapshot(asset_);
         result.resultingHealthFactor = LoanPositions.validateFinalHealth(evaluator, snapshot, p);
         (result.returnToken, result.returnAmount) = LoanCustody.previewWithdrawAmount(

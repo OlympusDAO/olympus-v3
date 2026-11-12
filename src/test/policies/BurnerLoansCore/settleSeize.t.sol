@@ -7,9 +7,12 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
@@ -24,6 +27,14 @@ import {CoreService} from "./fixtures/CoreService.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {Actions, Kernel, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+
+// Isolates the variant overload so its selector is available without a signature literal.
+interface IPriceVariantReader {
+    function getPrice(
+        address asset,
+        IPRICEv2.Variant variant
+    ) external view returns (uint256, uint48);
+}
 
 contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     CoreService internal _actor;
@@ -65,12 +76,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_LIQUIDATION_POLICY_ROLE)
         );
         vm.prank(caller_);
-        _core.settleSeize(
-            address(0),
-            new address[](0),
-            address(0),
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0)
-        );
+        _core.settleSeize(address(0), new address[](0), address(0));
         assertEq(_state(), before, "Unauthorized instruction has no effects");
     }
 
@@ -82,12 +88,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_LIQUIDATION_POLICY_ROLE)
         );
         vm.prank(address(sibling));
-        _core.settleSeize(
-            address(0),
-            new address[](0),
-            address(0),
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0)
-        );
+        _core.settleSeize(address(0), new address[](0), address(0));
     }
 
     // Scenarios: BLCORE-SETTLE-SEIZE-A04.
@@ -95,7 +96,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _actor.changeKernel(other);
-        vm.expectCall(address(_actor), abi.encodeWithSignature("kernel()"), uint64(0));
+        vm.expectCall(address(_actor), abi.encodeWithSelector(_actor.kernel.selector), uint64(0));
         vm.expectCall(
             address(_kernel),
             abi.encodeCall(_kernel.isPolicyActive, (Policy(address(_actor)))),
@@ -110,12 +111,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(0),
-            new address[](0),
-            address(0),
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0)
-        );
+        _core.settleSeize(address(0), new address[](0), address(0));
         assertEq(_state(), before, "Disabled Core rejects before inputs");
     }
 
@@ -130,12 +126,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(0),
-            new address[](0),
-            address(0),
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0)
-        );
+        _core.settleSeize(address(0), new address[](0), address(0));
         assertEq(_state(), before, "Own inactivity precedes local state and inputs");
     }
 
@@ -166,12 +157,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _deposit(2000e6);
         _borrow(100e9);
         vm.prank(caller_);
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(_core.totalActiveDebtOhm(), 0, "Role-holding caller settles the seizure");
     }
 
@@ -185,12 +171,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            borrowers,
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), borrowers, _recipient);
         assertEq(_ledger(), before, "Later failure rolls back earlier default and indexes");
     }
 
@@ -216,12 +197,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            borrowers,
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), borrowers, _recipient);
         assertEq(_ledger(), before, "Earlier default rolls back when later position has no debt");
     }
 
@@ -231,18 +207,13 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _borrow(100e9);
         vm.mockCall(
             address(_depositManager),
-            abi.encodeWithSignature("withdraw((address,uint8,address,address,uint256,bool),bool)"),
+            abi.encodeWithSelector(IDepositManagerV1_1.withdraw.selector),
             abi.encode(address(_ohm), uint256(1))
         );
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -257,18 +228,13 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _asset.mint(address(_payout), 1000);
         vm.mockCall(
             address(_depositManager),
-            abi.encodeWithSignature("withdraw((address,uint8,address,address,uint256,bool),bool)"),
+            abi.encodeWithSelector(IDepositManagerV1_1.withdraw.selector),
             abi.encode(address(_asset), uint256(1))
         );
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -282,20 +248,13 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _borrow(100e9);
         vm.mockCall(
             address(_risk),
-            abi.encodeWithSignature(
-                "keeperReward((uint256,uint256,uint256),uint32,uint256,uint256,uint256,bool)"
-            ),
+            abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
             abi.encode(uint256(2000e6 + 1))
         );
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -309,18 +268,13 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _borrow(100e9);
         vm.mockCallRevert(
             address(_payout),
-            abi.encodeWithSignature("creditSeizure(address,address,uint256,uint256)"),
+            abi.encodeWithSelector(_payout.creditSeizure.selector),
             abi.encodeWithSelector(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector)
         );
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -336,23 +290,15 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _borrow(100e9);
         reward_ = uint128(bound(reward_, 0, 2000e6));
         uint32 market = _core.marketId(address(_asset));
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
-            123,
-            456,
-            789
-        );
         vm.mockCall(
             address(_risk),
-            abi.encodeWithSignature(
-                "keeperReward((uint256,uint256,uint256),uint32,uint256,uint256,uint256,bool)"
-            ),
+            abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
             abi.encode(uint256(reward_))
         );
         vm.expectCall(
             address(_risk),
-            abi.encodeWithSignature(
-                "keeperReward((uint256,uint256,uint256),uint32,uint256,uint256,uint256,bool)",
-                snapshot,
+            abi.encodeWithSelector(
+                IBurnerLoansRisk.keeperReward.selector,
                 market,
                 uint256(100e9),
                 uint256(2000e6),
@@ -379,8 +325,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         IBurnerLoansCore.SeizePreview memory result = _core.settleSeize(
             address(_asset),
             _borrowers(),
-            _recipient,
-            snapshot
+            _recipient
         );
         assertEq(result.seizedDebtOhm, 100e9, "Defaulted principal aggregated");
         assertEq(result.seizedCollateral, 2000e6, "Actual seized collateral aggregated");
@@ -405,17 +350,33 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     // forge-lint: disable-end(unsafe-typecast)
 
     // Scenarios: BLCORE-SETTLE-SEIZE-P03.
-    function test_givenProtocolKeeper_whenSeized(bool heart_) public {
+    function test_givenProtocolKeeper_whenSeized(bool heart_, bool overlap_) public {
         _deposit(2000e6);
         _borrow(100e9);
         _rolesAdmin.grantRole(heart_ ? HEART_ROLE : BURNER_LOANS_SEIZER_ROLE, _recipient);
+        if (overlap_)
+            _rolesAdmin.grantRole(heart_ ? BURNER_LOANS_SEIZER_ROLE : HEART_ROLE, _recipient);
+        vm.expectCall(address(_price), bytes(""), uint64(0));
+        vm.expectCall(_risk.backingOracle(), bytes(""), uint64(0));
+        vm.expectCall(
+            address(_risk),
+            abi.encodeCall(
+                IBurnerLoansRisk.keeperReward,
+                (
+                    _core.marketId(address(_asset)),
+                    uint256(100e9),
+                    uint256(2000e6),
+                    uint256(2000e6),
+                    true
+                )
+            )
+        );
         uint256 before = _asset.balanceOf(_payout.treasury());
         vm.prank(address(_actor));
         IBurnerLoansCore.SeizePreview memory result = _core.settleSeize(
             address(_asset),
             _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
+            _recipient
         );
         assertEq(result.keeperReward, 0, "Protocol keeper receives no reward");
         assertEq(
@@ -425,21 +386,75 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         );
     }
 
+    // Scenarios: BLCORE-SETTLE-SEIZE-D06.
+    function test_givenProtocolKeeper_givenRiskInactive_whenSeized_reverts(bool enabled_) public {
+        _deposit(2000e6);
+        _borrow(100e9);
+        _rolesAdmin.grantRole(HEART_ROLE, _recipient);
+        _setPolicyLifecycle(_risk, false, enabled_);
+        bytes32 beforeState = _state();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
+                address(_risk)
+            )
+        );
+        vm.prank(address(_actor));
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
+        assertEq(
+            _state(),
+            beforeState,
+            "Risk inactivity rolls back defaults, redemption and payouts"
+        );
+    }
+
+    // Scenarios: BLCORE-SETTLE-SEIZE-D07.
+    function test_givenProtocolKeeper_givenRiskDisabled_whenSeized_reverts() public {
+        _deposit(2000e6);
+        _borrow(100e9);
+        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, _recipient);
+        _risk.disable("");
+        bytes32 beforeState = _state();
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(address(_actor));
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
+        assertEq(_state(), beforeState, "Risk pause rolls back defaults, redemption and payouts");
+    }
+
+    // Scenarios: BLCORE-SETTLE-SEIZE-D08.
+    function test_givenOrdinaryKeeper_givenRewardPriceFailure_whenSeized_reverts() public {
+        _deposit(2000e6);
+        _borrow(100e9);
+        vm.mockCallRevert(
+            address(_price),
+            abi.encodeWithSelector(IPriceVariantReader.getPrice.selector),
+            abi.encodeWithSelector(DependencyFailed.selector)
+        );
+        bytes32 beforeState = _state();
+        vm.expectRevert(DependencyFailed.selector);
+        vm.prank(address(_actor));
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
+        assertEq(
+            _state(),
+            beforeState,
+            "Reward pricing failure restores defaults, redemption and every payout ledger"
+        );
+    }
+
     // Scenarios: BLCORE-SETTLE-SEIZE-D03.
     function test_givenKeeperTransferFailure_whenSeized() public {
         _deposit(2000e6);
         _borrow(100e9);
         vm.mockCallRevert(
             address(_asset),
-            abi.encodeWithSignature("transfer(address,uint256)", _recipient),
+            abi.encodeWithSelector(IERC20.transfer.selector, _recipient),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         vm.prank(address(_actor));
         IBurnerLoansCore.SeizePreview memory result = _core.settleSeize(
             address(_asset),
             _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
+            _recipient
         );
         uint256 expected = result.keeperReward;
         assertGt(expected, 0, "Fixture produces positive obligation");
@@ -458,15 +473,14 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _borrow(100e9);
         vm.mockCallRevert(
             address(_asset),
-            abi.encodeWithSignature("transfer(address,uint256)", _payout.treasury()),
+            abi.encodeWithSelector(IERC20.transfer.selector, _payout.treasury()),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         vm.prank(address(_actor));
         IBurnerLoansCore.SeizePreview memory result = _core.settleSeize(
             address(_asset),
             _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
+            _recipient
         );
         uint256 expected = result.collateralToTreasury;
         assertGt(expected, 0, "Fixture produces positive obligation");
@@ -492,8 +506,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_collateral),
-                abi.encodeWithSignature(
-                    "depositCollateral(address,uint128,address)",
+                abi.encodeWithSelector(
+                    _collateral.depositCollateral.selector,
                     address(_asset),
                     uint128(1),
                     _recipient
@@ -504,12 +518,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -532,8 +541,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_collateral),
-                abi.encodeWithSignature(
-                    "depositCollateral(address,uint128,address)",
+                abi.encodeWithSelector(
+                    _collateral.depositCollateral.selector,
                     address(_asset),
                     uint128(1),
                     _recipient
@@ -545,12 +554,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -571,19 +575,14 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_core),
-                abi.encodeWithSignature("setGracePeriod(uint32)", uint32(1))
+                abi.encodeWithSelector(_liquidation.setGracePeriod.selector, uint32(1))
             )
         );
         token.setCallbackPhases(true, false);
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -606,7 +605,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_core),
-                abi.encodeWithSignature("setGracePeriod(uint32)", uint32(1))
+                abi.encodeWithSelector(_liquidation.setGracePeriod.selector, uint32(1))
             )
         );
         token.setCallbackPhases(true, false);
@@ -614,12 +613,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -640,19 +634,14 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(_payout.rescue.selector, address(_asset), _recipient)
             )
         );
         token.setCallbackPhases(true, false);
         token.setBubbleCallbackFailure(false);
         bytes32 before = _ledger();
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -675,7 +664,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(_payout.rescue.selector, address(_asset), _recipient)
             )
         );
         token.setCallbackPhases(true, false);
@@ -683,12 +672,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         bytes32 before = _ledger();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -705,9 +689,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
         vm.mockCall(
             address(_risk),
-            abi.encodeWithSignature(
-                "keeperReward((uint256,uint256,uint256),uint32,uint256,uint256,uint256,bool)"
-            ),
+            abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
             abi.encode(uint256(7))
         );
         token.setCallbackFrom(
@@ -716,19 +698,14 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(_payout.rescue.selector, address(_asset), _recipient)
             )
         );
         token.setCallbackPhases(true, false);
         token.setCallbackTransferRecipient(_recipient);
         token.setBubbleCallbackFailure(false);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         uint256 expected = 7;
         uint256 pending = _payout.pendingRecipientAmount(address(_asset), _recipient);
         assertEq(
@@ -748,9 +725,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
         vm.mockCall(
             address(_risk),
-            abi.encodeWithSignature(
-                "keeperReward((uint256,uint256,uint256),uint32,uint256,uint256,uint256,bool)"
-            ),
+            abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
             abi.encode(uint256(7))
         );
         token.setCallbackFrom(
@@ -759,19 +734,14 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(_payout.rescue.selector, address(_asset), _recipient)
             )
         );
         token.setCallbackPhases(true, false);
         token.setCallbackTransferRecipient(_recipient);
         token.setBubbleCallbackFailure(true);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         uint256 expected = 7;
         uint256 pending = _payout.pendingRecipientAmount(address(_asset), _recipient);
         assertEq(pending, expected, "Optional callback propagation defers exactly one entitlement");
@@ -797,9 +767,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
         vm.mockCall(
             address(_risk),
-            abi.encodeWithSignature(
-                "keeperReward((uint256,uint256,uint256),uint32,uint256,uint256,uint256,bool)"
-            ),
+            abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
             abi.encode(uint256(7))
         );
         token.setCallbackFrom(
@@ -808,19 +776,14 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(_payout.rescue.selector, address(_asset), _recipient)
             )
         );
         token.setCallbackPhases(true, false);
         token.setCallbackTransferRecipient(_payout.treasury());
         token.setBubbleCallbackFailure(false);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         uint256 expected = 93;
         uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(
@@ -840,9 +803,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
         vm.mockCall(
             address(_risk),
-            abi.encodeWithSignature(
-                "keeperReward((uint256,uint256,uint256),uint32,uint256,uint256,uint256,bool)"
-            ),
+            abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
             abi.encode(uint256(7))
         );
         token.setCallbackFrom(
@@ -851,19 +812,14 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(
                 CoreService.forward.selector,
                 address(_payout),
-                abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient)
+                abi.encodeWithSelector(_payout.rescue.selector, address(_asset), _recipient)
             )
         );
         token.setCallbackPhases(true, false);
         token.setCallbackTransferRecipient(_payout.treasury());
         token.setBubbleCallbackFailure(true);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         uint256 expected = 93;
         uint256 pending = _payout.pendingRecipientAmount(address(_asset), _payout.treasury());
         assertEq(pending, expected, "Optional callback propagation defers exactly one entitlement");
@@ -889,18 +845,13 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         token.setCallbackFrom(
             address(_depositManager),
             address(token),
-            abi.encodeWithSignature("burn(address,uint256)", address(_payout), uint256(101))
+            abi.encodeWithSelector(_asset.burn.selector, address(_payout), uint256(101))
         );
         token.setCallbackPhases(true, false);
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -916,18 +867,13 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         token.setCallbackFrom(
             address(_depositManager),
             address(token),
-            abi.encodeWithSignature("mint(address,uint256)", address(_payout), uint256(1))
+            abi.encodeWithSelector(_asset.mint.selector, address(_payout), uint256(1))
         );
         token.setCallbackPhases(true, false);
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidSettlement.selector);
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            _borrowers(),
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), _borrowers(), _recipient);
         assertEq(
             _ledger(),
             before,
@@ -954,14 +900,12 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         borrowers[1] = address(0xCAFE);
         vm.mockCall(
             address(_floan),
-            abi.encodeWithSignature("defaultPosition(uint64)"),
+            abi.encodeWithSelector(IFLOANv1.defaultPosition.selector),
             abi.encode(type(uint128).max, uint128(0), uint128(0))
         );
         vm.mockCall(
             address(_risk),
-            abi.encodeWithSignature(
-                "keeperReward((uint256,uint256,uint256),uint32,uint256,uint256,uint256,bool)"
-            ),
+            abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
             abi.encode(uint256(0))
         );
         bytes32 before = _ledger();
@@ -974,12 +918,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
             )
         );
         vm.prank(address(_actor));
-        _core.settleSeize(
-            address(_asset),
-            borrowers,
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), borrowers, _recipient);
         assertEq(_ledger(), before, "Aggregate narrowing never truncates principal");
     }
 

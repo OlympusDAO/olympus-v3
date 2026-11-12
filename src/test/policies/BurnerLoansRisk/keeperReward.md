@@ -1,6 +1,6 @@
 # BurnerLoansRisk.keeperReward coverage plan
 
-Source: [keeperReward](../../../policies/burnerloans/BurnerLoansRisk.sol#L454). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [keeperReward](../../../policies/burnerloans/BurnerLoansRisk.sol#L463). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -32,7 +32,7 @@ Fixed for this table: Accounting / events: Share units; reward<=output for valid
 
 ## Fixed share-conversion boundaries
 
-Use the same one-unit backing reservation as the percentage/cap table. In shares mode collateral=100 raw underlying units, keeperRewardBps=100 and maxKeeperReward=100: the pre-conversion reward is exactly 1 underlying unit. These cases isolate conversion rounding with fixed inputs.
+Use zero debt and a ready live snapshot. In shares mode collateral=100 raw underlying units, keeperRewardBps=100 and maxKeeperReward=100: the pre-conversion reward is exactly 1 underlying unit. These cases isolate conversion rounding with fixed inputs.
 
 | ID | Caller | Collateral | Output shares | Expected reward shares | Working | Test |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -42,7 +42,7 @@ Use the same one-unit backing reservation as the percentage/cap table. In shares
 
 ## Percentage, cap and backing boundaries
 
-Fixed caller; ordinary underlying-output mode unless specified. Use 9-decimal OHM and 6-decimal collateral. debt=1 raw OHM, snapshot OHM/collateral/backing prices=1e18, backingMultiplierBps=10000: the rounded backing reservation is exactly 1 raw underlying unit. Hard-code each expected integer and show the raw-unit arithmetic in test comments.
+Fixed caller; ordinary underlying-output mode unless specified. Use 9-decimal OHM and 6-decimal collateral. debt=1e9 raw OHM, live OHM/collateral prices=1e18, backing=1e12 and backingMultiplierBps=10000: the rounded backing reservation is exactly 1 raw underlying unit. Hard-code each expected integer and show the raw-unit arithmetic in test comments.
 
 | ID | Caller | Output / reward basis | keeperRewardBps | maxKeeperReward | Expected reward | Binding proof | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -62,7 +62,7 @@ Fixed caller; ordinary underlying-output mode unless specified. Use 9-decimal OH
 
 ## Fixed rounding regressions
 
-Use the fixed fixtures in [seize's payout rounding cases](../BurnerLoansSeize/seize.md#fixed-payout-rounding-and-zero-output-cases). Use a fixed caller; hard-code the expected integer reward rather than deriving it with LoanMath/FullMath or the implementation under test. Principal=1 raw OHM unit, OHM decimals=9, underlying decimals=6, snapshot prices/backing=1e18, backingMultiplierBps=10000 and maxKeeperReward=1000 underlying units; required backing is exactly 1 underlying unit after rounding up.
+Use the fixed fixtures in [seize's payout rounding cases](../BurnerLoansSeize/seize.md#fixed-payout-rounding-and-zero-output-cases). Use a fixed caller; hard-code the expected integer reward rather than deriving it with LoanMath/FullMath or the implementation under test. For underlying cases principal=1e9 raw OHM units, OHM decimals=9, underlying decimals=6, live OHM/collateral prices=1e18, backing=1e12 and backingMultiplierBps=10000 and maxKeeperReward=1000 underlying units; required backing is exactly 1 underlying unit after rounding up.
 
 | ID | Caller | Output mode | Collateral / output | keeperRewardBps | Expected return | Required proof | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -73,7 +73,7 @@ Use the fixed fixtures in [seize's payout rounding cases](../BurnerLoansSeize/se
 
 ## Zero-reward branches
 
-Registered asset; representable snapshot fields; unset fields not used by this early branch can revert if queried.
+Registered market. These branches require no snapshot or pricing dependency calls; lifecycle and canonical configuration validation still run.
 
 | ID | Caller | protocolCaller_ | keeperRewardBps | maxKeeperReward | Return | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -98,36 +98,61 @@ shortcuts, which do not consume backing.
 | BLRISK-KEEPER-REWARD-D01 | Test caller (permissionless API) | Oracle active/enabled vary independently; exclude true/true | PolicyDependency_NotActive(oracle); no committed changes | Covered: [test][test_givenBackingUnavailable_whenConsumed_reverts] |
 | BLRISK-KEEPER-REWARD-D02 | Test caller (permissionless API) | Deterministic oracle states: active/disabled, inactive/enabled, inactive/disabled | PolicyDependency_NotActive(oracle) for each seed | Covered: [test][test_givenBackingLifecycleBoundaries_whenConsumed_reverts] |
 
-[test_givenDisabled_whenCalled_reverts]: keeperReward.t.sol#L32
-[test_givenInactiveAndDisabled_whenCalled_reverts]: keeperReward.t.sol#L46
-[test_givenInactive_whenCalled_reverts]: keeperReward.t.sol#L39
-[test_givenOperational_whenCalled]: keeperReward.t.sol#L22
-[test_givenProtocolCaller_whenRewardQuoted]: keeperReward.t.sol#L275
-[test_givenReEnabled_whenCalled]: keeperReward.t.sol#L55
-[test_givenZeroBps_whenRewardQuoted]: keeperReward.t.sol#L297
-[test_givenZeroCap_whenRewardQuoted]: keeperReward.t.sol#L320
-[test_whenAboveBacking]: keeperReward.t.sol#L156
-[test_whenAbovePercentBoundary]: keeperReward.t.sol#L102
-[test_whenAtBacking]: keeperReward.t.sol#L147
-[test_whenAtPercentBoundary]: keeperReward.t.sol#L93
-[test_whenBelowBacking]: keeperReward.t.sol#L138
-[test_whenBelowPercentBoundary]: keeperReward.t.sol#L84
-[test_whenCapAbovePercent]: keeperReward.t.sol#L129
-[test_whenCapBelowPercent]: keeperReward.t.sol#L111
-[test_whenCapEqualsPercent]: keeperReward.t.sol#L120
-[test_whenFractionalShareReward]: keeperReward.t.sol#L210
-[test_whenFractionalUnderlyingReward]: keeperReward.t.sol#L165
-[test_whenRequiredBackingOverflows_reverts]: keeperReward.t.sol#L343
-[test_whenRewardLeavesBackingRemainder]: keeperReward.t.sol#L174
-[test_whenShareCollateralIsZero]: keeperReward.t.sol#L253
-[test_whenShareConversionUsesAnyRepresentableOutput]: keeperReward.t.sol#L228
-[test_whenShareOutputMaximum]: keeperReward.t.sol#L243
-[test_whenSharesAboveUnity]: keeperReward.t.sol#L201
-[test_whenSharesAtUnity]: keeperReward.t.sol#L192
-[test_whenSharesBelowUnity]: keeperReward.t.sol#L183
-[test_whenZeroCollateralOutputEndpoints]: keeperReward.t.sol#L264
-[test_whenZeroShareOutput]: keeperReward.t.sol#L219
+## Reward price ownership
 
-[test_givenBackingUnavailable_whenConsumed_reverts]: ./keeperReward.t.sol#L357
+The function receives no caller-supplied snapshot. After lifecycle and canonical-market validation,
+protocol callers and zero reward configurations return zero without pricing. Other rewards read
+Risk's current cached/live snapshot using the market's underlying collateral token. All calls
+preserve storage, balances and cache observations. The public Seize action retains its ordinary
+keeper pricing admission, including zero configured rewards.
 
-[test_givenBackingLifecycleBoundaries_whenConsumed_reverts]: ./keeperReward.t.sol#L371
+For the fixed positive-reward cases below, principal=10e9 OHM, collateral/output=100e6 units,
+backing=$35 per OHM, multiplier=10000 BPS, keeperRewardBps=1000 and maxKeeperReward=100e6.
+A $4 collateral price reserves ceil(10 * 35 / 4)=87.5 assets, leaving 12.5 assets of surplus.
+The 10% reward is 10e6 units, below surplus; independent expected reward is 10e6.
+
+| ID | Caller | protocolCaller_ | Pricing source / condition | Return / error | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLRISK-KEEPER-REWARD-P07 | Test caller; API remains permissionless | false | Fresh operational cache: collateral=$4 while live collateral=$1; backing ready | 10e6; no live PRICE.getPrice reads; cached snapshot is not refreshed | Covered: [test][test_givenFreshCachedPrices_whenRewardQuoted] |
+| BLRISK-KEEPER-REWARD-P08 | Test caller; API remains permissionless | false | Cache unset; live collateral=$4 and backing ready | 10e6; reads its own live snapshot | Covered: [test][test_givenLivePrices_whenRewardQuoted] |
+| BLRISK-KEEPER-REWARD-I01 | Fuzz all callers | Fuzz false/true | Absent canonical market; marketId=MAX32 | FLOAN_InvalidMarket(MAX32) before pricing | Covered: [test][test_givenMissingMarket_whenRewardQuoted_reverts] |
+| BLRISK-KEEPER-REWARD-I03 | Test caller; API remains permissionless | false | Cache unset; PRICE returns zero collateral price and a fresh timestamp | BurnerLoans_InvalidPrice(); no writes | Covered: [test][test_givenInvalidLivePrice_whenRewardQuoted_reverts] |
+
+[test_givenDisabled_whenCalled_reverts]: keeperReward.t.sol#L31
+[test_givenInactiveAndDisabled_whenCalled_reverts]: keeperReward.t.sol#L51
+[test_givenInactive_whenCalled_reverts]: keeperReward.t.sol#L41
+[test_givenOperational_whenCalled]: keeperReward.t.sol#L25
+[test_givenProtocolCaller_whenRewardQuoted]: keeperReward.t.sol#L326
+[test_givenReEnabled_whenCalled]: keeperReward.t.sol#L61
+[test_givenZeroBps_whenRewardQuoted]: keeperReward.t.sol#L344
+[test_givenZeroCap_whenRewardQuoted]: keeperReward.t.sol#L363
+[test_whenAboveBacking]: keeperReward.t.sol#L211
+[test_whenAbovePercentBoundary]: keeperReward.t.sol#L157
+[test_whenAtBacking]: keeperReward.t.sol#L202
+[test_whenAtPercentBoundary]: keeperReward.t.sol#L148
+[test_whenBelowBacking]: keeperReward.t.sol#L193
+[test_whenBelowPercentBoundary]: keeperReward.t.sol#L139
+[test_whenCapAbovePercent]: keeperReward.t.sol#L184
+[test_whenCapBelowPercent]: keeperReward.t.sol#L166
+[test_whenCapEqualsPercent]: keeperReward.t.sol#L175
+[test_whenFractionalShareReward]: keeperReward.t.sol#L265
+[test_whenFractionalUnderlyingReward]: keeperReward.t.sol#L220
+[test_whenRequiredBackingOverflows_reverts]: keeperReward.t.sol#L382
+[test_whenRewardLeavesBackingRemainder]: keeperReward.t.sol#L229
+[test_whenShareCollateralIsZero]: keeperReward.t.sol#L308
+[test_whenShareConversionUsesAnyRepresentableOutput]: keeperReward.t.sol#L283
+[test_whenShareOutputMaximum]: keeperReward.t.sol#L298
+[test_whenSharesAboveUnity]: keeperReward.t.sol#L256
+[test_whenSharesAtUnity]: keeperReward.t.sol#L247
+[test_whenSharesBelowUnity]: keeperReward.t.sol#L238
+[test_whenZeroCollateralOutputEndpoints]: keeperReward.t.sol#L319
+[test_whenZeroShareOutput]: keeperReward.t.sol#L274
+
+[test_givenBackingUnavailable_whenConsumed_reverts]: ./keeperReward.t.sol#L390
+
+[test_givenBackingLifecycleBoundaries_whenConsumed_reverts]: ./keeperReward.t.sol#L404
+
+[test_givenFreshCachedPrices_whenRewardQuoted]: keeperReward.t.sol#L85
+[test_givenLivePrices_whenRewardQuoted]: keeperReward.t.sol#L103
+[test_givenMissingMarket_whenRewardQuoted_reverts]: keeperReward.t.sol#L73
+[test_givenInvalidLivePrice_whenRewardQuoted_reverts]: keeperReward.t.sol#L120

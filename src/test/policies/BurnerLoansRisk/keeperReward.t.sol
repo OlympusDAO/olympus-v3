@@ -4,12 +4,10 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
 import {stdError} from "@forge-std-1.16.2/StdError.sol";
-import {LoanMath} from "src/policies/burnerloans/libraries/LoanMath.sol";
 
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
@@ -18,59 +16,116 @@ import {Actions} from "src/Kernel.sol";
 import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/BurnerLoansRiskTest.sol";
 
 contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
+    function setUp() public override {
+        super.setUp();
+        _price.setPrice(address(_asset), 1e18);
+    }
+
     // Scenarios: BLRISK-KEEPER-REWARD-L01.
     function test_givenOperational_whenCalled(address caller_) public {
         vm.prank(caller_);
-        assertEq(
-            _risk.keeperReward(_prices(), _MARKET, 0, 1000, 1000, false),
-            10,
-            "one percent reward"
-        );
+        assertEq(_risk.keeperReward(_MARKET, 0, 1000, 1000, false), 10, "one percent reward");
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-L02.
-    function test_givenDisabled_whenCalled_reverts(address caller_) public givenDisabled {
+    function test_givenDisabled_whenCalled_reverts(
+        address caller_,
+        bool protocol_
+    ) public givenDisabled {
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
-        _risk.keeperReward(_prices(), _MARKET, 0, 1000, 1000, false);
+        _risk.keeperReward(_MARKET, 0, 1000, 1000, protocol_);
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-L03.
-    function test_givenInactive_whenCalled_reverts(address caller_) public givenInactive {
+    function test_givenInactive_whenCalled_reverts(
+        address caller_,
+        bool protocol_
+    ) public givenInactive {
         _expectInactive();
         vm.prank(caller_);
-        _risk.keeperReward(_prices(), _MARKET, 0, 1000, 1000, false);
+        _risk.keeperReward(_MARKET, 0, 1000, 1000, protocol_);
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-L04.
     function test_givenInactiveAndDisabled_whenCalled_reverts(
-        address caller_
+        address caller_,
+        bool protocol_
     ) public givenDisabled givenInactive {
         _expectInactive();
         vm.prank(caller_);
-        _risk.keeperReward(_prices(), _MARKET, 0, 1000, 1000, false);
+        _risk.keeperReward(_MARKET, 0, 1000, 1000, protocol_);
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-L01.
     function test_givenReEnabled_whenCalled(address caller_) public givenReEnabled {
         vm.prank(caller_);
+        assertEq(_risk.keeperReward(_MARKET, 0, 1000, 1000, false), 10, "one percent reward");
+    }
+
+    function _expectNoRewardPricing() private {
+        vm.expectCall(address(_price), bytes(""), uint64(0));
+        vm.expectCall(address(_oracle), bytes(""), uint64(0));
+        vm.expectCall(address(_cache), bytes(""), uint64(0));
+    }
+
+    // Scenarios: BLRISK-KEEPER-REWARD-I01.
+    function test_givenMissingMarket_whenRewardQuoted_reverts(
+        address caller_,
+        bool protocol_
+    ) public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, type(uint32).max)
+        );
+        vm.prank(caller_);
+        _risk.keeperReward(type(uint32).max, 0, 0, 0, protocol_);
+    }
+
+    // Scenarios: BLRISK-KEEPER-REWARD-P07.
+    function test_givenFreshCachedPrices_whenRewardQuoted() public givenCache {
+        _setReward(false, 1000, 100e6);
+        _oracle.setBacking(35e18);
+        vm.expectCall(
+            address(_price),
+            abi.encodeWithSignature("getPrice(address,uint8)"),
+            uint64(0)
+        );
+        // Cached collateral=$4; backing=10 OHM * $35 = $350 = 87.5e6 assets.
+        // Surplus=100e6-87.5e6=12.5e6; floor(100e6*1000/10000)=10e6 binds.
         assertEq(
-            _risk.keeperReward(_prices(), _MARKET, 0, 1000, 1000, false),
-            10,
-            "one percent reward"
+            _risk.keeperReward(_MARKET, 10e9, 100e6, 100e6, false),
+            10e6,
+            "Reward uses Risk's fresh cached prices"
         );
     }
 
-    function _reward(uint256 output_) private view returns (uint256) {
-        return
-            _risk.keeperReward(
-                IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e12),
-                _MARKET,
-                1e9,
-                output_,
-                output_,
-                false
-            );
+    // Scenarios: BLRISK-KEEPER-REWARD-P08.
+    function test_givenLivePrices_whenRewardQuoted() public {
+        _setReward(false, 1000, 100e6);
+        _price.setPrice(address(_asset), 4e18);
+        _oracle.setBacking(35e18);
+        vm.expectCall(
+            address(_price),
+            abi.encodeWithSignature("getPrice(address,uint8)", address(_asset))
+        );
+        // Same independent arithmetic as the cached case: 10e6 reward, 90e6 Treasury.
+        assertEq(
+            _risk.keeperReward(_MARKET, 10e9, 100e6, 100e6, false),
+            10e6,
+            "Reward uses Risk's live prices"
+        );
+    }
+
+    // Scenarios: BLRISK-KEEPER-REWARD-I03.
+    function test_givenInvalidLivePrice_whenRewardQuoted_reverts() public {
+        _mockDirectPrice(address(_asset), 0, 100 days);
+        vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
+        _risk.keeperReward(_MARKET, 1e9, 100, 100, false);
+    }
+
+    function _reward(uint256 output_) private returns (uint256) {
+        _oracle.setBacking(1e12);
+        return _risk.keeperReward(_MARKET, 1e9, output_, output_, false);
     }
 
     function _setReward(bool shares_, uint16 bps_, uint128 cap_) private {
@@ -183,7 +238,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
     function test_whenSharesBelowUnity() public {
         _setReward(true, 100, 100);
         // 100 underlying * 1%=1; shares=floor(50*1/100)=0.
-        uint256 reward = _risk.keeperReward(_prices(), _MARKET, 0, 100, 50, false);
+        uint256 reward = _risk.keeperReward(_MARKET, 0, 100, 50, false);
         assertEq(reward, 0, "independent share reward");
         assertEq(50 - reward, 50, "remaining output shares");
     }
@@ -192,7 +247,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
     function test_whenSharesAtUnity() public {
         _setReward(true, 100, 100);
         // 100 underlying * 1%=1; shares=floor(100*1/100)=1.
-        uint256 reward = _risk.keeperReward(_prices(), _MARKET, 0, 100, 100, false);
+        uint256 reward = _risk.keeperReward(_MARKET, 0, 100, 100, false);
         assertEq(reward, 1, "independent share reward");
         assertEq(100 - reward, 99, "remaining output shares");
     }
@@ -201,7 +256,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
     function test_whenSharesAboveUnity() public {
         _setReward(true, 100, 100);
         // 100 underlying * 1%=1; shares=floor(200*1/100)=2.
-        uint256 reward = _risk.keeperReward(_prices(), _MARKET, 0, 100, 200, false);
+        uint256 reward = _risk.keeperReward(_MARKET, 0, 100, 200, false);
         assertEq(reward, 2, "independent share reward");
         assertEq(200 - reward, 198, "remaining output shares");
     }
@@ -210,7 +265,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
     function test_whenFractionalShareReward() public {
         _setReward(true, 100, 100);
         // 100 underlying * 1%=1; shares=floor(1*1/100)=0.
-        uint256 reward = _risk.keeperReward(_prices(), _MARKET, 0, 100, 1, false);
+        uint256 reward = _risk.keeperReward(_MARKET, 0, 100, 1, false);
         assertEq(reward, 0, "independent share reward");
         assertEq(1 - reward, 1, "remaining output shares");
     }
@@ -219,7 +274,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
     function test_whenZeroShareOutput() public {
         _setReward(true, 100, 100);
         // 100 underlying * 1%=1; shares=floor(0*1/100)=0.
-        uint256 reward = _risk.keeperReward(_prices(), _MARKET, 0, 100, 0, false);
+        uint256 reward = _risk.keeperReward(_MARKET, 0, 100, 0, false);
         assertEq(reward, 0, "independent share reward");
         assertEq(0 - reward, 0, "remaining output shares");
     }
@@ -233,7 +288,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
         // One underlying reward out of 100; output/100 is exact independent integer division.
         vm.prank(caller_);
         assertEq(
-            _risk.keeperReward(_prices(), _MARKET, 0, 100, output_, false),
+            _risk.keeperReward(_MARKET, 0, 100, output_, false),
             output_ / 100,
             "share conversion floors"
         );
@@ -243,7 +298,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
     function test_whenShareOutputMaximum() public {
         _setReward(true, 100, 100);
         assertEq(
-            _risk.keeperReward(_prices(), _MARKET, 0, 100, type(uint256).max, false),
+            _risk.keeperReward(_MARKET, 0, 100, type(uint256).max, false),
             type(uint256).max / 100,
             "full precision share conversion"
         );
@@ -254,7 +309,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
         _setReward(true, 100, 100);
         vm.prank(caller_);
         assertEq(
-            _risk.keeperReward(_prices(), _MARKET, 1e9, 0, output_, false),
+            _risk.keeperReward(_MARKET, 1e9, 0, output_, false),
             0,
             "zero collateral avoids division"
         );
@@ -263,20 +318,17 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-KEEPER-REWARD-P02.
     function test_whenZeroCollateralOutputEndpoints() public {
         _setReward(true, 100, 100);
-        assertEq(_risk.keeperReward(_prices(), _MARKET, 1e9, 0, 0, false), 0, "zero output");
-        assertEq(
-            _risk.keeperReward(_prices(), _MARKET, 1e9, 0, type(uint256).max, false),
-            0,
-            "max output"
-        );
+        assertEq(_risk.keeperReward(_MARKET, 1e9, 0, 0, false), 0, "zero output");
+        assertEq(_risk.keeperReward(_MARKET, 1e9, 0, type(uint256).max, false), 0, "max output");
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-P03.
-    function test_givenProtocolCaller_whenRewardQuoted(address caller_) public {
+    function test_givenProtocolCaller_whenRewardQuoted(address caller_) public givenCache {
+        _oracle.setEnabled(false);
+        _expectNoRewardPricing();
         vm.prank(caller_);
         assertEq(
             _risk.keeperReward(
-                IBurnerLoansCore.PriceSnapshot(0, 0, type(uint256).max),
                 _MARKET,
                 type(uint256).max,
                 type(uint256).max,
@@ -286,20 +338,16 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
             0,
             "early reward bypasses price arithmetic"
         );
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, type(uint32).max)
-        );
-        vm.prank(caller_);
-        _risk.keeperReward(_prices(), type(uint32).max, 0, 0, 0, true);
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-P04.
     function test_givenZeroBps_whenRewardQuoted(address caller_) public {
         _setReward(false, 0, 100);
+        _oracle.setEnabled(false);
+        _expectNoRewardPricing();
         vm.prank(caller_);
         assertEq(
             _risk.keeperReward(
-                IBurnerLoansCore.PriceSnapshot(0, 0, type(uint256).max),
                 _MARKET,
                 type(uint256).max,
                 type(uint256).max,
@@ -309,20 +357,16 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
             0,
             "early reward bypasses price arithmetic"
         );
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, type(uint32).max)
-        );
-        vm.prank(caller_);
-        _risk.keeperReward(_prices(), type(uint32).max, 0, 0, 0, false);
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-P05.
     function test_givenZeroCap_whenRewardQuoted(address caller_) public {
         _setReward(false, 100, 0);
+        _oracle.setEnabled(false);
+        _expectNoRewardPricing();
         vm.prank(caller_);
         assertEq(
             _risk.keeperReward(
-                IBurnerLoansCore.PriceSnapshot(0, 0, type(uint256).max),
                 _MARKET,
                 type(uint256).max,
                 type(uint256).max,
@@ -332,25 +376,14 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
             0,
             "early reward bypasses price arithmetic"
         );
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, type(uint32).max)
-        );
-        vm.prank(caller_);
-        _risk.keeperReward(_prices(), type(uint32).max, 0, 0, 0, false);
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-N03.
     function test_whenRequiredBackingOverflows_reverts(address caller_) public {
+        _oracle.setBacking(type(uint256).max);
         vm.expectRevert(stdError.arithmeticError);
         vm.prank(caller_);
-        _risk.keeperReward(
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, type(uint256).max),
-            _MARKET,
-            type(uint256).max,
-            100,
-            100,
-            false
-        );
+        _risk.keeperReward(_MARKET, type(uint256).max, 100, 100, false);
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-D01.
@@ -364,7 +397,7 @@ contract BurnerLoansRiskKeeperRewardTest is BurnerLoansRiskTest {
                 address(_oracle)
             )
         );
-        _risk.keeperReward(_prices(), _MARKET, 1e9, 2e6, 2e6, false);
+        _risk.keeperReward(_MARKET, 1e9, 2e6, 2e6, false);
     }
 
     // Scenarios: BLRISK-KEEPER-REWARD-D02.

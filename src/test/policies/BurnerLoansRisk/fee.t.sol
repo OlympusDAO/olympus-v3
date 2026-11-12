@@ -5,7 +5,6 @@ pragma solidity >=0.8.24;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
@@ -24,7 +23,7 @@ import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/Bu
 contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-FEE-I08.
     function test_whenCollateralPriceIsZero_whenTermsAreZero_reverts(address caller_) public {
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot(
             1e18,
             0,
             1e18
@@ -37,7 +36,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-FEE-N03.
     function test_whenRequiredDebtValueOverflows_reverts(address caller_) public {
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot(
             2e18,
             1e18,
             1e18
@@ -60,7 +59,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // USD inputs use one common synthetic scale. Each raw OHM unit needs one raw collateral
         // unit: debtPrice / 1e9 = collateralPrice / 1e6 = 1. At a 100% fee, fee/term=principal.
         // principal=2**255 is representable; two terms need 2**256, which is not.
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot(
             1e9,
             1e6,
             1e9
@@ -79,7 +78,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // One whole OHM makes backing USD equal to this supplied raw backing value.
         // backing * 10001 = MAX256 * 10000 + 6512. The floor fits MAX256, but ceil needs MAX256+1.
         uint256 backing = 115780511186197575666004384570230884764793505315109053134144169590954034236512;
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot(
             0,
             1e18,
             backing
@@ -212,7 +211,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // Identical debt/collateral unit values, full fee, so each term costs exactly principal.
         vm.prank(caller_);
         assertEq(
-            _fee(IBurnerLoansCore.PriceSnapshot(1e9, 1e6, 1e9), _MARKET, principal, terms),
+            _fee(IBurnerLoansRisk.PriceSnapshot(1e9, 1e6, 1e9), _MARKET, principal, terms),
             principal * terms,
             "per-term scaling"
         );
@@ -221,7 +220,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-FEE-N01, BLRISK-FEE-N16.
     function test_whenPrincipalAndTermEndpoints() public {
         _curve(10000, 0, 0, 0);
-        IBurnerLoansCore.PriceSnapshot memory prices = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory prices = IBurnerLoansRisk.PriceSnapshot(
             1e9,
             1e6,
             1e9
@@ -316,7 +315,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // ceil(2000000 * 100 / 10000) = 20000 raw collateral fee.
         assertEq(
             _fee(
-                IBurnerLoansCore.PriceSnapshot(
+                IBurnerLoansRisk.PriceSnapshot(
                     2000000000000000000,
                     1000000000000000000,
                     1000000000000000000
@@ -341,7 +340,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // ceil(2000000 * 100 / 10000) = 20000 raw collateral fee.
         assertEq(
             _fee(
-                IBurnerLoansCore.PriceSnapshot(
+                IBurnerLoansRisk.PriceSnapshot(
                     1000000000000000000,
                     1000000000000000000,
                     2000000000000000000
@@ -366,7 +365,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // ceil(2000000 * 100 / 10000) = 20000 raw collateral fee.
         assertEq(
             _fee(
-                IBurnerLoansCore.PriceSnapshot(
+                IBurnerLoansRisk.PriceSnapshot(
                     2000000000000000000,
                     1000000000000000000,
                     2000000000000000000
@@ -391,7 +390,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // ceil(4000000 * 100 / 10000) = 40000 raw collateral fee.
         assertEq(
             _fee(
-                IBurnerLoansCore.PriceSnapshot(
+                IBurnerLoansRisk.PriceSnapshot(
                     2000000000000000000,
                     1000000000000000000,
                     1000000000000000000
@@ -416,7 +415,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // ceil(2500000 * 100 / 10000) = 25000 raw collateral fee.
         assertEq(
             _fee(
-                IBurnerLoansCore.PriceSnapshot(
+                IBurnerLoansRisk.PriceSnapshot(
                     1000000000000000000,
                     1000000000000000000,
                     2000000000000000000
@@ -441,7 +440,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // ceil(333334 * 100 / 10000) = 3334 raw collateral fee.
         assertEq(
             _fee(
-                IBurnerLoansCore.PriceSnapshot(
+                IBurnerLoansRisk.PriceSnapshot(
                     1000000000000000000,
                     3000000000000000000,
                     1000000000000000000
@@ -465,7 +464,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // max(market/LTV, backing*multiplier) converted up gives 1000000 raw collateral.
         // ceil(1000000 * 100 / 10000) = 10000 raw collateral fee.
         assertEq(
-            _fee(IBurnerLoansCore.PriceSnapshot(1000000, 1000000, 1000000), _MARKET, 1e9, 1),
+            _fee(IBurnerLoansRisk.PriceSnapshot(1000000, 1000000, 1000000), _MARKET, 1e9, 1),
             10000,
             "independent collateral fee"
         );
@@ -481,7 +480,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // max(market/LTV, backing*multiplier) converted up gives 1000000000000000000 raw collateral.
         // ceil(1000000000000000000 * 100 / 10000) = 10000000000000000 raw collateral fee.
         assertEq(
-            _fee(IBurnerLoansCore.PriceSnapshot(1000000, 1000000, 1000000), _MARKET, 1e9, 1),
+            _fee(IBurnerLoansRisk.PriceSnapshot(1000000, 1000000, 1000000), _MARKET, 1e9, 1),
             10000000000000000,
             "independent collateral fee"
         );
@@ -575,7 +574,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // Identical maximum USD fields: MAX debt USD / MAX collateral price yields 1e6 raw collateral.
         assertEq(
             _fee(
-                IBurnerLoansCore.PriceSnapshot(
+                IBurnerLoansRisk.PriceSnapshot(
                     type(uint256).max,
                     type(uint256).max,
                     type(uint256).max
@@ -590,7 +589,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
     }
 
     function _fee(
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         uint32 market_,
         uint256 principal_,
         uint16 terms_
@@ -616,7 +615,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         // Identity conversion: debt USD unit=1e9, collateral USD unit=1e6. At 100% gross
         // fee, one raw principal unit costs one raw collateral unit. No decimal rescaling.
         (uint256 p, uint256 r) = _risk.fee(
-            IBurnerLoansCore.PriceSnapshot(1e9, 1e6, 1e9),
+            IBurnerLoansRisk.PriceSnapshot(1e9, 1e6, 1e9),
             _MARKET,
             total_,
             1,
@@ -651,7 +650,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         _risk.setReferralFeeBps(uint16(bound(share_, 0, 10000)));
         vm.prank(caller_);
         (uint256 p, uint256 r) = _risk.fee(
-            IBurnerLoansCore.PriceSnapshot(1e9, 1e6, 1e9),
+            IBurnerLoansRisk.PriceSnapshot(1e9, 1e6, 1e9),
             _MARKET,
             total_,
             1,
@@ -675,7 +674,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         uint256 expected = (total_ / 10000) * bps + ((total_ % 10000) * bps) / 10000;
         vm.prank(caller_);
         (uint256 p, uint256 r) = _risk.fee(
-            IBurnerLoansCore.PriceSnapshot(1e9, 1e6, 1e9),
+            IBurnerLoansRisk.PriceSnapshot(1e9, 1e6, 1e9),
             _MARKET,
             total_,
             1,
@@ -706,7 +705,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
             )
         );
         vm.prank(caller_);
-        _risk.fee(IBurnerLoansCore.PriceSnapshot(1e9, 1e6, 1e9), _MARKET, total_, 1, _operator);
+        _risk.fee(IBurnerLoansRisk.PriceSnapshot(1e9, 1e6, 1e9), _MARKET, total_, 1, _operator);
     }
 
     // Scenarios: BLRISK-SPLIT-I02, BLRISK-SPLIT-I03.

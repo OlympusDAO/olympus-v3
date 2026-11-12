@@ -159,13 +159,8 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 start_,
         uint256 count_
     ) public view override returns (address[] memory, uint256, uint256) {
-        (Scan memory scan, IBurnerLoansCore.PriceSnapshot memory snapshot) = _scan(
-            asset_,
-            start_,
-            count_,
-            type(uint256).max
-        );
-        return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan, snapshot));
+        Scan memory scan = _scan(asset_, start_, count_, type(uint256).max);
+        return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
     }
 
     /// @inheritdoc IBurnerLoansLens
@@ -182,13 +177,8 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 count_,
         uint256 maxResults_
     ) external view override returns (address[] memory, uint256, uint256) {
-        (Scan memory scan, IBurnerLoansCore.PriceSnapshot memory snapshot) = _scan(
-            asset_,
-            start_,
-            count_,
-            maxResults_
-        );
-        return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan, snapshot));
+        Scan memory scan = _scan(asset_, start_, count_, maxResults_);
+        return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
     }
 
     /// @notice Quotes the keeper reward for the selected scan results.
@@ -196,13 +186,11 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
     /// @param asset_ Underlying collateral token identifying the market.
     /// @param actor_ Keeper identity used to select protocol-caller rewards.
     /// @param scan_ Bounded borrower scan with cursor and aggregate collateral/principal.
-    /// @param snapshot_ Captured operation price/backing values, all in the same PRICE decimal scale.
     /// @return uint256 Keeper reward estimate in output-token units.
     function _scanReward(
         address asset_,
         address actor_,
-        Scan memory scan_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_
+        Scan memory scan_
     ) private view returns (uint256) {
         if (scan_.borrowers.length == 0) return 0;
         // Quote one redemption and one reward for the selected batch, matching Core's aggregate
@@ -222,15 +210,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         );
         bool protocolCaller = roles.hasRole(actor_, BURNER_LOANS_SEIZER_ROLE) ||
             roles.hasRole(actor_, HEART_ROLE);
-        return
-            _risk().keeperReward(
-                snapshot_,
-                market,
-                scan_.debt,
-                scan_.collateral,
-                output,
-                protocolCaller
-            );
+        return _risk().keeperReward(market, scan_.debt, scan_.collateral, output, protocolCaller);
     }
 
     /// @notice Builds a bounded list of currently seizable borrowers.
@@ -240,7 +220,6 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
     /// @param count_ Maximum canonical borrowers examined in the remaining suffix.
     /// @param maxResults_ Maximum eligible borrowers selected before stopping the scan.
     /// @return scan Bounded selected borrowers, canonical cursor and aggregate position amounts.
-    /// @return snapshot Captured price/backing pair shared by this scan.
     // Canonical dependency reads are bounded by the clipped borrower suffix.
     // forge-lint: disable-start(calls-loop)
     function _scan(
@@ -248,7 +227,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 start_,
         uint256 count_,
         uint256 maxResults_
-    ) private view returns (Scan memory scan, IBurnerLoansCore.PriceSnapshot memory snapshot) {
+    ) private view returns (Scan memory scan) {
         IFLOANv1 floan = IFLOANv1(_CORE.floan());
         uint32 market = _CORE.marketId(asset_);
         uint256 population = floan.getActiveBorrowerCount(market);
@@ -256,12 +235,12 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
             revert BurnerLoansLens_InvalidStart(start_, population);
         scan.cursor = start_;
         scan.borrowers = new address[](0);
-        if (population == 0 || count_ == 0 || maxResults_ == 0) return (scan, snapshot);
+        if (population == 0 || count_ == 0 || maxResults_ == 0) return scan;
         // Clamp before allocating or adding: even uint256.max requests stay within this suffix.
         uint256 remaining = population - start_;
         if (count_ > remaining) count_ = remaining;
         IBurnerLoansRisk evaluator = _risk();
-        snapshot = evaluator.snapshot(asset_);
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = evaluator.snapshot(asset_);
         // count_ bounds inspected positions, while maxResults_ bounds selected borrowers. Healthy
         // positions still consume scan work and advance the cursor, but do not contribute to the reward.
         address[] memory candidates = new address[](count_ < maxResults_ ? count_ : maxResults_);

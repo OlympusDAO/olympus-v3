@@ -525,7 +525,7 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
             abi.encodeWithSelector(IBurnerLoansRisk.validateHealth.selector),
             abi.encode(health_)
         );
-        IBurnerLoansCore.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
         vm.expectCall(
             address(_risk),
             abi.encodeCall(

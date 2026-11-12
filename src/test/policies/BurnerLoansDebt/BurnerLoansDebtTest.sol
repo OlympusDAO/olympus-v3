@@ -5,7 +5,6 @@ pragma solidity >=0.8.24;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
@@ -168,7 +167,7 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
     }
 
     function _mockRisk(uint256 fee_) internal {
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot(
             1e18,
             1e18,
             1e18

@@ -101,8 +101,8 @@ abstract contract BurnerLoansLensTest is BurnerLoansModularTest {
         vm.mockCall(address(_floan), abi.encodeCall(IFLOANv1.getPosition, (id)), abi.encode(p));
     }
 
-    function _snapshot() internal pure returns (IBurnerLoansCore.PriceSnapshot memory) {
-        return IBurnerLoansCore.PriceSnapshot(2e18, 3e18, 1e18);
+    function _snapshot() internal pure returns (IBurnerLoansRisk.PriceSnapshot memory) {
+        return IBurnerLoansRisk.PriceSnapshot(2e18, 3e18, 1e18);
     }
 
     function _mockRisk(uint256 health_) internal {

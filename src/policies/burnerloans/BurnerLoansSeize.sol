@@ -22,8 +22,8 @@ import {Kernel} from "src/Kernel.sol";
 import {BaseBurnerLoansAction} from "src/policies/burnerloans/abstracts/BaseBurnerLoansAction.sol";
 
 /// @notice Permissionless bounded liquidation entry point; settlement and payouts remain at Core.
-/// @dev Anyone may identify eligible debt. This action validates every borrower against one price
-///      snapshot; Core then defaults the batch, redeems collateral and credits the resulting payouts.
+/// @dev Anyone may identify eligible debt. Protocol callers need no prices for entirely expired
+///      batches; other batches use one snapshot. Core defaults, redeems and credits the payouts.
 contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     /// @notice Binds deployment dependencies and initializes the local contract state.
     /// @dev Reverts if:
@@ -42,7 +42,7 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     ///      - The batch is empty.
     ///      - A borrower is zero, duplicated or has no debt.
     ///      - A position is healthy and has not matured.
-    ///      - Prices are unavailable or custody is insolvent.
+    ///      - Required prices are unavailable or custody is insolvent.
     ///      - A positive keeper reward names zero or the selected Payout as its recipient.
     ///      - Core’s atomic default, redemption, receipt validation or payout credit fails.
     function seize(
@@ -52,16 +52,17 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
         if (borrowers_.length == 0) revert IBurnerLoansSeize.BurnerLoans_InvalidBatch();
         _requireInventoryOperational();
         _requirePayoutOperational();
+        bool allExpired = _validateBorrowersAndDebt(asset_, borrowers_);
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansCore.PriceSnapshot memory snapshot = evaluator.refreshSnapshot(asset_);
+        IBurnerLoansRisk.PriceSnapshot memory snapshot;
+        if (_requiresSnapshot(msg.sender, allExpired)) snapshot = evaluator.refreshSnapshot(asset_);
         // Admit the complete batch before the first default. One ineligible borrower rejects the
         // entire request instead of leaving the keeper with a partially executed selection.
         _validatePositions(evaluator, snapshot, asset_, borrowers_);
         IBurnerLoansCore.SeizePreview memory result = _CORE.settleSeize(
             asset_,
             borrowers_,
-            msg.sender,
-            snapshot
+            msg.sender
         );
         return (result.tokenOut, result.keeperReward, result.collateralToTreasury);
     }
@@ -81,14 +82,12 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     ///      - Risk allocates a reward larger than the quoted output.
     ///      - A positive keeper reward names zero or the selected Payout as its recipient.
     /// @param evaluator_ Risk implementation using the captured snapshot.
-    /// @param snapshot_ Captured operation price/backing values, all in the same PRICE decimal scale.
     /// @param asset_ Underlying collateral token identifying the market.
     /// @param actor_ Keeper identity used to select protocol-caller rewards.
     /// @param result_ Aggregated batch debt, collateral and output allocation.
     /// @return IBurnerLoansCore.SeizePreview Batch amounts and output allocation calculated from selected positions.
     function _allocate(
         IBurnerLoansRisk evaluator_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
         address asset_,
         address actor_,
         IBurnerLoansCore.SeizePreview memory result_
@@ -107,7 +106,6 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
         bool protocolCaller = _hasRole(actor_, BURNER_LOANS_SEIZER_ROLE) ||
             _hasRole(actor_, HEART_ROLE);
         result_.keeperReward = evaluator_.keeperReward(
-            snapshot_,
             _CORE.marketId(asset_),
             result_.seizedDebtOhm,
             result_.seizedCollateral,
@@ -129,7 +127,7 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     ///      - A required address is zero.
     ///      - A borrower appears more than once in a seizure batch.
     ///      - A borrower has no debt or is healthy and unexpired.
-    ///      - Custody is unavailable or insolvent, or pricing is unavailable, including an entirely expired batch.
+    ///      - Custody is unavailable or insolvent, or required pricing is unavailable.
     ///      - Risk allocates a reward larger than the quoted output.
     ///      - A positive keeper reward names zero or the selected Payout as its recipient.
     ///      Reads without state changes; errors from dependency views propagate.
@@ -151,9 +149,10 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
             asset_,
             address(_CORE)
         );
+        bool allExpired = _validateBorrowersAndDebt(asset_, borrowers_);
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansCore.PriceSnapshot memory snapshot = evaluator.snapshot(asset_);
-        _validateBorrowers(borrowers_);
+        IBurnerLoansRisk.PriceSnapshot memory snapshot;
+        if (_requiresSnapshot(actor_, allExpired)) snapshot = evaluator.snapshot(asset_);
         IFLOANv1 floan = IFLOANv1(_CORE.floan());
         uint32 market = _CORE.marketId(asset_);
         for (uint256 i; i < borrowers_.length; ++i) {
@@ -167,7 +166,47 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
             result.seizedDebtOhm += p.principalDue;
             result.seizedCollateral += p.collateral;
         }
-        return _allocate(evaluator, snapshot, asset_, actor_, result);
+        return _allocate(evaluator, asset_, actor_, result);
+    }
+
+    /// @notice Validates borrower identities and principal before any pricing decision.
+    /// @dev Reverts for zero/duplicate borrowers or any position without debt.
+    /// @param asset_ Underlying collateral token identifying the market.
+    /// @param borrowers_ Complete selected borrower list.
+    /// @return allExpired Whether every selected debt episode has matured.
+    function _validateBorrowersAndDebt(
+        address asset_,
+        address[] calldata borrowers_
+    ) private view returns (bool allExpired) {
+        _validateBorrowers(borrowers_);
+        IFLOANv1 floan = IFLOANv1(_CORE.floan());
+        uint32 market = _CORE.marketId(asset_);
+        allExpired = true;
+        for (uint256 i; i < borrowers_.length; ++i) {
+            IFLOANv1.Position memory position = LoanPositions.getOrEmpty(
+                floan,
+                market,
+                borrowers_[i]
+            );
+            // Invalid selections reject before any oracle can mask the debt error.
+            // forge-lint: disable-next-line(require-revert-in-loop)
+            if (position.principalDue == 0) revert IBurnerLoansCore.BurnerLoansCore_NoDebt();
+            // Expiry equality qualifies the stored debt episode, as in LoanPositions.isSeizable.
+            // forge-lint: disable-next-line(block-timestamp)
+            if (block.timestamp < position.maturity) allExpired = false;
+        }
+    }
+
+    /// @notice Reports whether health or keeper rewards need a price snapshot.
+    /// @param actor_ Keeper whose roles determine reward eligibility.
+    /// @param allExpired_ Whether the validated selection contains only matured debt.
+    /// @return bool Whether the priced path is required.
+    function _requiresSnapshot(address actor_, bool allExpired_) private view returns (bool) {
+        // Expiry removes health pricing, but ordinary rewards still need prices to protect backing.
+        // Protocol keepers receive zero, so only their all-expired batches can omit the snapshot.
+        return
+            !allExpired_ ||
+            (!_hasRole(actor_, BURNER_LOANS_SEIZER_ROLE) && !_hasRole(actor_, HEART_ROLE));
     }
 
     /// @notice Rechecks the direct funding/default service before enabling this action.
@@ -181,7 +220,7 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
 
     /// @notice Validates every borrower before atomic Core settlement.
     /// @dev Reverts if:
-    ///      - Borrowers are duplicated or zero, or debt is absent.
+    ///      - Debt is absent, including state changed by snapshot refresh.
     ///      - Positions are ineligible, custody is unavailable or custody is insolvent.
     /// @param evaluator Risk calculator selected for this operation.
     /// @param snapshot Captured prices/backing in PRICE decimals.
@@ -189,11 +228,10 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     /// @param borrowers_ Complete bounded borrower list.
     function _validatePositions(
         IBurnerLoansRisk evaluator,
-        IBurnerLoansCore.PriceSnapshot memory snapshot,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot,
         address asset_,
         address[] calldata borrowers_
     ) private view {
-        _validateBorrowers(borrowers_);
         LoanCustody.validateWithdrawalSupport(_CORE, asset_, address(kernel));
         IFLOANv1 floan = IFLOANv1(_CORE.floan());
         uint32 market = _CORE.marketId(asset_);
@@ -221,7 +259,7 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     /// @return	position	Canonical debt-bearing position eligible for seizure.
     function _validateSeizablePosition(
         IBurnerLoansRisk evaluator_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         IFLOANv1 floan_,
         uint32 market_,
         address borrower_

@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
@@ -19,7 +18,7 @@ import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/Bu
 
 contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     function _assertHealthy(uint256 collateral_, uint256 backing_, uint256 expected_) internal {
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot(
             2e18,
             1e18,
             backing_
@@ -43,7 +42,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     }
 
     function _assertUnhealthy(uint256 collateral_, uint256 backing_, uint256 expected_) internal {
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot(
             2e18,
             1e18,
             backing_
@@ -210,7 +209,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     }
 
     function _accepted(
-        IBurnerLoansCore.PriceSnapshot memory prices_,
+        IBurnerLoansRisk.PriceSnapshot memory prices_,
         uint32 market_,
         uint256 collateral_,
         uint256 debt_,
@@ -238,7 +237,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     }
 
     function _rejected(
-        IBurnerLoansCore.PriceSnapshot memory prices_,
+        IBurnerLoansRisk.PriceSnapshot memory prices_,
         uint32 market_,
         uint256 collateral_,
         uint256 debt_,
@@ -259,7 +258,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-HEALTH-P01.
     function test_whenDebtIsZero(address caller_, uint256 collateral_) public {
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0),
+            IBurnerLoansRisk.PriceSnapshot(0, 0, 0),
             type(uint32).max,
             collateral_,
             0,
@@ -271,7 +270,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-HEALTH-P02.
     function test_whenRequirementIsZero(address caller_, uint256 debt_) public {
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0),
+            IBurnerLoansRisk.PriceSnapshot(0, 0, 0),
             _MARKET,
             type(uint256).max,
             bound(debt_, 1, type(uint256).max),
@@ -352,7 +351,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     function test_whenHealthQuotientOverflows_reverts() public {
         // collateral USD=MAX256, required USD=1. MAX256*1e18/1 cannot fit.
         _rejected(
-            IBurnerLoansCore.PriceSnapshot(1e9, 1e6, 0),
+            IBurnerLoansRisk.PriceSnapshot(1e9, 1e6, 0),
             _MARKET,
             type(uint256).max,
             1,
@@ -368,7 +367,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         // backing*10001 = MAX256*10000+6512: floor fits; ceil overflows.
         uint256 backing = 115780511186197575666004384570230884764793505315109053134144169590954034236512;
         _rejected(
-            IBurnerLoansCore.PriceSnapshot(0, 1e18, backing),
+            IBurnerLoansRisk.PriceSnapshot(0, 1e18, backing),
             _MARKET,
             1e6,
             1e9,
@@ -382,7 +381,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         _price.setPriceDecimals(6);
         // $2 collateral / $1 requirement = 2 WAD at every exact common USD scale.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(1000000, 1000000, 1000000),
+            IBurnerLoansRisk.PriceSnapshot(1000000, 1000000, 1000000),
             _MARKET,
             2e6,
             1e9,
@@ -397,7 +396,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         // ceil(1000000001*1000000/1e9)=1000001; floor(2000001*1000000/1e6)=2000001.
         // floor(2000001*1e18/1000001)=1999999000000999999 WAD.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(1000000, 1000000, 1000000),
+            IBurnerLoansRisk.PriceSnapshot(1000000, 1000000, 1000000),
             _MARKET,
             2000001,
             1000000001,
@@ -411,7 +410,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         _price.setPriceDecimals(8);
         // $2 collateral / $1 requirement = 2 WAD at every exact common USD scale.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(100000000, 100000000, 100000000),
+            IBurnerLoansRisk.PriceSnapshot(100000000, 100000000, 100000000),
             _MARKET,
             2e6,
             1e9,
@@ -426,7 +425,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         // ceil(1000000001*100000000/1e9)=100000001; floor(2000001*100000000/1e6)=200000100.
         // floor(200000100*1e18/100000001)=2000000979999990200 WAD.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(100000000, 100000000, 100000000),
+            IBurnerLoansRisk.PriceSnapshot(100000000, 100000000, 100000000),
             _MARKET,
             2000001,
             1000000001,
@@ -440,7 +439,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         _price.setPriceDecimals(18);
         // $2 collateral / $1 requirement = 2 WAD at every exact common USD scale.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(
+            IBurnerLoansRisk.PriceSnapshot(
                 1000000000000000000,
                 1000000000000000000,
                 1000000000000000000
@@ -459,7 +458,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         // ceil(1000000001*1000000000000000000/1e9)=1000000001000000000; floor(2000001*1000000000000000000/1e6)=2000001000000000000.
         // floor(2000001000000000000*1e18/1000000001000000000)=2000000997999999002 WAD.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(
+            IBurnerLoansRisk.PriceSnapshot(
                 1000000000000000000,
                 1000000000000000000,
                 1000000000000000000
@@ -477,7 +476,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         _price.setPriceDecimals(36);
         // $2 collateral / $1 requirement = 2 WAD at every exact common USD scale.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(
+            IBurnerLoansRisk.PriceSnapshot(
                 1000000000000000000000000000000000000,
                 1000000000000000000000000000000000000,
                 1000000000000000000000000000000000000
@@ -496,7 +495,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
         // ceil(1000000001*1000000000000000000000000000000000000/1e9)=1000000001000000000000000000000000000; floor(2000001*1000000000000000000000000000000000000/1e6)=2000001000000000000000000000000000000.
         // floor(2000001000000000000000000000000000000*1e18/1000000001000000000000000000000000000)=2000000997999999002 WAD.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(
+            IBurnerLoansRisk.PriceSnapshot(
                 1000000000000000000000000000000000000,
                 1000000000000000000000000000000000000,
                 1000000000000000000000000000000000000
@@ -513,7 +512,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     function test_whenSnapshotFieldsAreMaximum() public {
         // Equal MAX256 values cancel in the full-precision ratio: health=1e18.
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(type(uint256).max, type(uint256).max, type(uint256).max),
+            IBurnerLoansRisk.PriceSnapshot(type(uint256).max, type(uint256).max, type(uint256).max),
             _MARKET,
             1e6,
             1e9,
@@ -525,7 +524,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-HEALTH-P01, BLRISK-HEALTH-P02.
     function test_whenDebtAndCollateralEndpoints() public {
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0),
+            IBurnerLoansRisk.PriceSnapshot(0, 0, 0),
             type(uint32).max,
             0,
             0,
@@ -533,7 +532,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
             address(this)
         );
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0),
+            IBurnerLoansRisk.PriceSnapshot(0, 0, 0),
             _MARKET,
             0,
             1,
@@ -541,7 +540,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
             address(this)
         );
         _accepted(
-            IBurnerLoansCore.PriceSnapshot(0, 0, 0),
+            IBurnerLoansRisk.PriceSnapshot(0, 0, 0),
             _MARKET,
             type(uint256).max,
             type(uint256).max,
@@ -603,7 +602,7 @@ contract BurnerLoansRiskHealthTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-HEALTH-D05.
     function test_givenCapturedBacking_whenGetterFails_thenHealthUsesCapture() public {
-        IBurnerLoansCore.PriceSnapshot memory captured = _risk.snapshot(address(_asset));
+        IBurnerLoansRisk.PriceSnapshot memory captured = _risk.snapshot(address(_asset));
         vm.mockCallRevert(
             address(_oracle),
             abi.encodeWithSignature("backing()"),

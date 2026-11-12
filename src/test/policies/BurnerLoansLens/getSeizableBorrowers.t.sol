@@ -509,14 +509,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
             address(_risk),
             abi.encodeCall(
                 IBurnerLoansRisk.keeperReward,
-                (
-                    _snapshot(),
-                    _core.marketId(address(_asset)),
-                    uint256(40e9),
-                    uint256(400e6),
-                    uint256(77),
-                    true
-                )
+                (_core.marketId(address(_asset)), uint256(40e9), uint256(400e6), uint256(77), true)
             ),
             uint64(2)
         );
@@ -532,14 +525,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
             address(_risk),
             abi.encodeCall(
                 IBurnerLoansRisk.keeperReward,
-                (
-                    _snapshot(),
-                    _core.marketId(address(_asset)),
-                    uint256(40e9),
-                    uint256(400e6),
-                    uint256(77),
-                    true
-                )
+                (_core.marketId(address(_asset)), uint256(40e9), uint256(400e6), uint256(77), true)
             ),
             uint64(2)
         );
@@ -556,14 +542,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
             address(_risk),
             abi.encodeCall(
                 IBurnerLoansRisk.keeperReward,
-                (
-                    _snapshot(),
-                    _core.marketId(address(_asset)),
-                    uint256(40e9),
-                    uint256(400e6),
-                    uint256(77),
-                    true
-                )
+                (_core.marketId(address(_asset)), uint256(40e9), uint256(400e6), uint256(77), true)
             ),
             uint64(2)
         );

@@ -276,7 +276,7 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
             BL_ACTION_EXTEND
         );
         if (terms_ == 0) revert IBurnerLoansCore.BurnerLoansCore_ZeroAmount();
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
             .refreshSnapshot(asset_);
         FeeAllocation memory allocation;
         (result, allocation) = _quoteExtend(asset_, borrower_, terms_, snapshot, referrer_);
@@ -383,7 +383,7 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         address asset_,
         uint128 amount_,
         address borrower_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         address referrer_
     )
         private
@@ -441,7 +441,7 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         address borrower_,
         address referrer_
     ) private returns (IBurnerLoansDebt.BorrowPreview memory, FeeAllocation memory) {
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk(_CORE.risk())
             .refreshSnapshot(asset_);
         return _quoteBorrow(asset_, amount_, borrower_, snapshot, referrer_);
     }
@@ -461,7 +461,7 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         address asset_,
         address borrower_,
         uint16 terms_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         address referrer_
     )
         private

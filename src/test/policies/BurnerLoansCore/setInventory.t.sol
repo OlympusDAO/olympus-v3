@@ -939,12 +939,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         address[] memory borrowers = new address[](1);
         borrowers[0] = _borrower;
         vm.prank(address(_liquidation));
-        _core.settleSeize(
-            address(_asset),
-            borrowers,
-            _recipient,
-            IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18)
-        );
+        _core.settleSeize(address(_asset), borrowers, _recipient);
         assertEq(_inventory.activePrincipalOhm(), 0, "Default clears active principal");
         assertEq(_inventory.suppliedOhm(), 100e9, "Default preserves historical provider claim");
         assertEq(_inventory.suppliedIdleOhm(), 0, "Default leaves no idle recapitalization");

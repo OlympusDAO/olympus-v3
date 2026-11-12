@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
-import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
@@ -55,7 +55,7 @@ contract BackingOracleSetBackingRiskIntegrationTest is BurnerLoansRiskTest {
         oracle.enable(abi.encode(15e18));
         vm.prank(_ADMIN);
         _risk.setBackingOracle(address(oracle));
-        IBurnerLoansCore.PriceSnapshot memory p = _risk.snapshot(address(_asset));
+        IBurnerLoansRisk.PriceSnapshot memory p = _risk.snapshot(address(_asset));
         assertEq(p.backingPerOhmUsd, 15e18, "18 decimal backing consumed directly");
         vm.prank(_ADMIN);
         oracle.setBacking(16e18);

@@ -182,8 +182,8 @@ abstract contract BurnerLoansRiskTest is Test, IERC165 {
         );
     }
 
-    function _prices() internal pure returns (IBurnerLoansCore.PriceSnapshot memory) {
-        return IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18);
+    function _prices() internal pure returns (IBurnerLoansRisk.PriceSnapshot memory) {
+        return IBurnerLoansRisk.PriceSnapshot(1e18, 1e18, 1e18);
     }
 
     function _expectInactive() internal {
@@ -204,7 +204,7 @@ abstract contract BurnerLoansRiskTest is Test, IERC165 {
     }
 
     function _assertSnapshot(
-        IBurnerLoansCore.PriceSnapshot memory p_,
+        IBurnerLoansRisk.PriceSnapshot memory p_,
         uint256 ohm_,
         uint256 asset_,
         uint256 backing_

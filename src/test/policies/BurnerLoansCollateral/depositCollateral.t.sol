@@ -346,7 +346,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     }
 
     function _mockTopUpHealth(uint256 resultingHealth_) internal {
-        IBurnerLoansCore.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
         uint32 market = _core.marketId(address(_asset));
         bytes memory beforeHealth = abi.encodeCall(
             IBurnerLoansRisk.health,
@@ -1425,7 +1425,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         vm.prank(_borrower);
         _debt.borrow(address(_asset), debt_, _borrower, _borrower, type(uint256).max, address(0));
         _asset.mint(_borrower, amount_);
-        IBurnerLoansCore.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.health.selector),

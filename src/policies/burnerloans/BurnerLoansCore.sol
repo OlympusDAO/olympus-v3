@@ -586,8 +586,7 @@ contract BurnerLoansCore is
     function settleSeize(
         address asset_,
         address[] calldata borrowers_,
-        address keeper_,
-        IBurnerLoansCore.PriceSnapshot calldata snapshot
+        address keeper_
     )
         external
         override
@@ -617,12 +616,12 @@ contract BurnerLoansCore is
             result.seizedCollateral,
             address(_PAYOUT)
         );
-        // Price-based reward limits use the action's snapshot, but distribution uses actual redemption
-        // output. This keeps keeper plus Treasury entitlements equal to the tokens received by Payout.
+        // Risk reads its own reward prices after the actual redemption output is known.
+        // Protocol keepers return zero before pricing; keeper plus Treasury entitlements
+        // remain equal to the tokens actually received by Payout.
         bool protocolCaller = _hasRole(keeper_, BURNER_LOANS_SEIZER_ROLE) ||
             _hasRole(keeper_, HEART_ROLE);
         result.keeperReward = evaluator.keeperReward(
-            snapshot,
             marketId(asset_),
             result.seizedDebtOhm,
             result.seizedCollateral,

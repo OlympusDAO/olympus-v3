@@ -37,8 +37,9 @@ import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleS
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 
 /// @notice OCG-replaceable pricing and arithmetic. Owns oracle/cache bindings and cache age; no custody, positions or user authorization.
-/// @dev Captures oracle inputs once, then evaluates caller-supplied snapshots against current FLOAN
-///      market terms. Core is an immutable same-Kernel identity; its activity and enablement are independent.
+/// @dev Evaluates caller-supplied health/fee snapshots and obtains keeper-reward prices when needed,
+///      against current FLOAN market terms. Core is an immutable same-Kernel identity; its activity and
+///      enablement are independent.
 contract BurnerLoansRisk is
     Policy,
     PolicyEnablerV2,
@@ -196,7 +197,17 @@ contract BurnerLoansRisk is
     ///      The PRICE configuration must include sufficient guards for price volatility and feed freshness.
     function snapshot(
         address asset_
-    ) external view onlyOperational returns (IBurnerLoansCore.PriceSnapshot memory prices) {
+    ) external view onlyOperational returns (IBurnerLoansRisk.PriceSnapshot memory prices) {
+        return _snapshot(asset_);
+    }
+
+    /// @notice Reads the current cached or live pair and canonical backing for a market asset.
+    /// @dev The calling calculator enforces Risk lifecycle before this read-only helper.
+    /// @param asset_ Underlying collateral token identifying the market.
+    /// @return prices Current OHM/collateral prices and backing in PRICE decimals.
+    function _snapshot(
+        address asset_
+    ) private view returns (IBurnerLoansRisk.PriceSnapshot memory prices) {
         IPRICEv2 price = _PRICE;
         address cache = priceCache;
         bool cached;
@@ -228,7 +239,7 @@ contract BurnerLoansRisk is
     /// @dev Shares the timestamp behavior and PRICE configuration requirements documented in snapshot().
     function refreshSnapshot(
         address asset_
-    ) external onlyOperational returns (IBurnerLoansCore.PriceSnapshot memory snapshot) {
+    ) external onlyOperational returns (IBurnerLoansRisk.PriceSnapshot memory snapshot) {
         IPRICEv2 price = _PRICE;
         address cache = priceCache;
         // Execution may refresh the shared pair; snapshot() is the read-only alternative. Both paths
@@ -253,11 +264,11 @@ contract BurnerLoansRisk is
     /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param price_ Current PRICE module.
     /// @param snapshot_ Captured operation price/backing values, all in the same PRICE decimal scale.
-    /// @return IBurnerLoansCore.PriceSnapshot Captured OHM/collateral prices and backing, all in PRICE decimals.
+    /// @return IBurnerLoansRisk.PriceSnapshot Captured OHM/collateral prices and backing, all in PRICE decimals.
     function _completeSnapshot(
         IPRICEv2 price_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_
-    ) private view returns (IBurnerLoansCore.PriceSnapshot memory) {
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_
+    ) private view returns (IBurnerLoansRisk.PriceSnapshot memory) {
         _requireBackingOracleReady();
         uint256 backing18 = IBackingOracle(backingOracle).backing();
         if (backing18 == 0) revert IBurnerLoansRisk.BurnerLoans_InvalidPrice();
@@ -322,7 +333,7 @@ contract BurnerLoansRisk is
     ///      - A required dependency read or numeric conversion fails.
     /// @dev Reads without state changes; errors from dependency views propagate.
     function health(
-        IBurnerLoansCore.PriceSnapshot calldata snapshot_,
+        IBurnerLoansRisk.PriceSnapshot calldata snapshot_,
         uint32 marketId_,
         uint256 collateral_,
         uint256 debt_
@@ -337,7 +348,7 @@ contract BurnerLoansRisk is
     ///      - An operation requires a healthy position but the current or resulting position is unhealthy.
     /// @dev Reads without state changes; errors from dependency views propagate.
     function validateHealth(
-        IBurnerLoansCore.PriceSnapshot calldata snapshot_,
+        IBurnerLoansRisk.PriceSnapshot calldata snapshot_,
         uint32 marketId_,
         uint256 collateral_,
         uint256 debt_,
@@ -364,7 +375,7 @@ contract BurnerLoansRisk is
     /// @param debt_ Outstanding principal in OHM units.
     /// @return uint256 Health ratio scaled by 1e18 and rounded down; max uint when debt-free.
     function _health(
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         uint32 marketId_,
         uint256 collateral_,
         uint256 debt_
@@ -386,7 +397,7 @@ contract BurnerLoansRisk is
     /// @param debt_ Outstanding principal in OHM units.
     /// @return uint256 Required collateral value in PRICE-decimal USD, rounded up.
     function _requiredUsd(
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         IBurnerLoansCore.AssetConfig memory cfg_,
         uint256 debt_
     ) private view returns (uint256) {
@@ -409,7 +420,7 @@ contract BurnerLoansRisk is
     ///      - A debt cap is invalid for the requested operation.
     /// @dev Reads without state changes; errors from dependency views propagate.
     function fee(
-        IBurnerLoansCore.PriceSnapshot calldata snapshot_,
+        IBurnerLoansRisk.PriceSnapshot calldata snapshot_,
         uint32 marketId_,
         uint256 principal_,
         uint16 terms_,
@@ -454,7 +465,6 @@ contract BurnerLoansRisk is
     ///      - A required dependency read or numeric conversion fails.
     /// @dev Reads without state changes; errors from dependency views propagate.
     function keeperReward(
-        IBurnerLoansCore.PriceSnapshot calldata snapshot_,
         uint32 marketId_,
         uint256 debt_,
         uint256 collateral_,
@@ -462,8 +472,11 @@ contract BurnerLoansRisk is
         bool protocolCaller_
     ) external view onlyOperational returns (uint256 reward) {
         (IBurnerLoansCore.AssetConfig memory cfg, ) = _configuration(marketId_);
+        // Zero rewards still require lifecycle and canonical market validation, but no prices.
         if (protocolCaller_ || cfg.keeperRewardBps == 0 || cfg.maxKeeperReward == 0) return 0;
-        _requireBackingOracleReady();
+        IBurnerLoansRisk.PriceSnapshot memory prices = _snapshot(
+            _FLOAN.getMarket(marketId_).collateralToken
+        );
         // Configure and cap rewards in underlying collateral units even when redemption pays shares.
         // Protect backing first, then convert the permitted reward to actual output units below.
         uint256 rewardBasis = cfg.withdrawAsShares ? collateral_ : output_;
@@ -471,13 +484,13 @@ contract BurnerLoansRisk is
         if (reward > cfg.maxKeeperReward) reward = cfg.maxKeeperReward;
         uint256 requiredBackingUsd = LoanMath.requiredBackingValue(
             debt_,
-            snapshot_.backingPerOhmUsd,
+            prices.backingPerOhmUsd,
             _OHM_DECIMALS,
             cfg.backingMultiplierBps
         );
         uint256 requiredBackingAssets = LoanMath.requiredCollateralAsset(
             requiredBackingUsd,
-            snapshot_.collateralUsdPrice,
+            prices.collateralUsdPrice,
             cfg.collateralDecimals
         );
         uint256 surplus = rewardBasis > requiredBackingAssets

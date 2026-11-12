@@ -146,7 +146,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
             IERC20(address(_asset)),
             address(_core)
         );
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot(
             1e18,
             1e18,
             1e18
@@ -661,7 +661,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         bytes memory callData = abi.encodeCall(
             IBurnerLoansRisk.validateHealth,
             (
-                IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18),
+                IBurnerLoansRisk.PriceSnapshot(1e18, 1e18, 1e18),
                 _core.marketId(address(_asset)),
                 uint256(type(uint128).max),
                 uint256(1),
@@ -693,7 +693,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         bytes memory callData = abi.encodeCall(
             IBurnerLoansRisk.validateHealth,
             (
-                IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18),
+                IBurnerLoansRisk.PriceSnapshot(1e18, 1e18, 1e18),
                 _core.marketId(address(_asset)),
                 uint256(type(uint128).max),
                 uint256(1),

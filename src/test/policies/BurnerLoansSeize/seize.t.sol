@@ -64,11 +64,6 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
         uint256 reward_,
         uint256 treasury_
     ) public {
-        IBurnerLoansCore.PriceSnapshot memory snapshot = IBurnerLoansCore.PriceSnapshot(
-            1e18,
-            1e18,
-            1e18
-        );
         address[] memory borrowers = _borrowers();
         IBurnerLoansCore.SeizePreview memory result = IBurnerLoansCore.SeizePreview(
             100e9,
@@ -79,7 +74,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
         );
         bytes memory settlement = abi.encodeCall(
             IBurnerLoansCore.settleSeize,
-            (address(_asset), borrowers, keeper_, snapshot)
+            (address(_asset), borrowers, keeper_)
         );
         bytes32 beforeState = _seizeDigest(keeper_);
         vm.prank(keeper_);
@@ -118,7 +113,6 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
             abi.encodeCall(
                 IBurnerLoansRisk.keeperReward,
                 (
-                    IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18),
                     _core.marketId(address(_asset)),
                     uint256(100e9),
                     uint256(2000e6),

@@ -21,7 +21,7 @@ library LoanPositions {
     /// @return	uint256	Health in WAD, rounded down, or uint256.max for a debt-free position.
     function health(
         IBurnerLoansRisk evaluator_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         IFLOANv1.Position memory position_
     ) internal view returns (uint256) {
         if (position_.principalDue == 0) return type(uint256).max;
@@ -45,7 +45,7 @@ library LoanPositions {
     /// @return	uint256	Accepted health in WAD, or uint256.max for a debt-free position.
     function validateFinalHealth(
         IBurnerLoansRisk evaluator_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         IFLOANv1.Position memory position_
     ) internal view returns (uint256) {
         if (position_.principalDue == 0) return type(uint256).max;
@@ -70,7 +70,7 @@ library LoanPositions {
     /// @return	bool	Whether the position can be seized under the captured snapshot.
     function isSeizable(
         IBurnerLoansRisk evaluator_,
-        IBurnerLoansCore.PriceSnapshot memory snapshot_,
+        IBurnerLoansRisk.PriceSnapshot memory snapshot_,
         uint32 market_,
         IFLOANv1.Position memory position_
     ) internal view returns (bool) {

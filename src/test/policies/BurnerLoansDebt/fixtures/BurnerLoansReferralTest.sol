@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
 // Contracts
@@ -29,7 +28,7 @@ abstract contract BurnerLoansReferralTest is BurnerLoansDebtTest {
             abi.encodeCall(
                 IBurnerLoansRisk.fee,
                 (
-                    IBurnerLoansCore.PriceSnapshot(1e18, 1e18, 1e18),
+                    IBurnerLoansRisk.PriceSnapshot(1e18, 1e18, 1e18),
                     _core.marketId(address(_asset)),
                     principal_,
                     terms_,

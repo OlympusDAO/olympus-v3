@@ -78,7 +78,7 @@ abstract contract BurnerLoansLensScanTest is BurnerLoansLensTest {
         _mockWithdrawal(collateral_, output_);
         bytes memory data = abi.encodeCall(
             IBurnerLoansRisk.keeperReward,
-            (_snapshot(), _core.marketId(address(_asset)), debt_, collateral_, output_, protocol_)
+            (_core.marketId(address(_asset)), debt_, collateral_, output_, protocol_)
         );
         vm.mockCall(address(_risk), data, abi.encode(reward_));
         vm.expectCall(address(_risk), data, uint64(2));
