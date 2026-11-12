@@ -24,7 +24,8 @@ import {MockPeriodicTask} from "src/test/bases/PeriodicTaskManager/MockPeriodicT
 import {MockPeriodicTaskManager} from "src/test/bases/PeriodicTaskManager/MockPeriodicTaskManager.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
-import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
+import {BackingOracle} from "src/policies/BackingOracle.sol";
+import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
 /// @dev Real Burner Loans policies and custody, with a local price module and periodic-task manager.
@@ -37,7 +38,8 @@ abstract contract BurnerLoansActivatorTest is Test {
     MockERC20 internal _usde;
     MockERC4626 internal _susds;
     MockERC4626 internal _susde;
-    MockBackingOracle internal _oracle;
+    BackingOracle internal _oracle;
+    BackingOracleConfigTimelock internal _oracleQueue;
     MockPrice internal _price;
     MockPeriodicTaskManager internal _heart;
     MockPeriodicTask internal _existingTask;
@@ -56,7 +58,8 @@ abstract contract BurnerLoansActivatorTest is Test {
         _usde = new MockERC20("USDe", "USDe", 18);
         _susds = new MockERC4626(OZIERC20(address(_usds)), "sUSDS", "sUSDS");
         _susde = new MockERC4626(OZIERC20(address(_usde)), "sUSDe", "sUSDe");
-        _oracle = new MockBackingOracle(_kernel, 12e18);
+        _oracle = new BackingOracle(_kernel);
+        _oracleQueue = new BackingOracleConfigTimelock(_kernel, _oracle);
         _price = new MockPrice(_kernel, 18, 8 hours);
         _heart = new MockPeriodicTaskManager(_kernel);
         _existingTask = new MockPeriodicTask();
@@ -118,6 +121,7 @@ abstract contract BurnerLoansActivatorTest is Test {
         _graph.susds = address(_susds);
         _graph.susde = address(_susde);
         _graph.backingOracle = address(_oracle);
+        _graph.backingOracleTimelock = address(_oracleQueue);
         _activator = new BurnerLoansActivator(_timelock, _graph);
         _rolesAdmin = new RolesAdmin(_kernel);
         _kernel.executeAction(Actions.InstallModule, address(_roles));
@@ -131,6 +135,7 @@ abstract contract BurnerLoansActivatorTest is Test {
         _kernel.executeAction(Actions.ActivatePolicy, address(_rolesAdmin));
         _kernel.executeAction(Actions.ActivatePolicy, _graph.priceConfig);
         _kernel.executeAction(Actions.ActivatePolicy, address(_oracle));
+        _kernel.executeAction(Actions.ActivatePolicy, address(_oracleQueue));
         address[] memory targets = _deployer.policies();
         for (uint256 i; i < targets.length; ++i)
             _kernel.executeAction(Actions.ActivatePolicy, targets[i]);
@@ -146,6 +151,8 @@ abstract contract BurnerLoansActivatorTest is Test {
         _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, _graph.seizerTask);
         _heart.enable("");
         _heart.addPeriodicTask(address(_existingTask));
+        // Match the six-task mainnet layout: three preparation tasks, Operator, then two tasks.
+        for (uint256 i; i < 5; ++i) _heart.addPeriodicTask(address(new MockPeriodicTask()));
         _price.setPrice(address(_ohm), 20e18);
         _price.setPrice(address(_usds), 1e18);
         _price.setPrice(address(_usde), 1e18);

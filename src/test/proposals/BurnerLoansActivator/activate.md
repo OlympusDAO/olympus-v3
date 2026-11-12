@@ -11,11 +11,11 @@ The constructor fixes all targets and the sole timelock caller. Launch accepts n
 | BLAUNCH-S03 | Previously enabled Risk with retained whitelist is rejected                       | [test_givenRiskPreviouslyEnabled_givenReferrerAllowed_whenTimelockActivates_reverts][test_givenRiskPreviouslyEnabled_givenReferrerAllowed_whenTimelockActivates_reverts] |
 | BLAUNCH-S04 | Late external failure rolls back every earlier mutation                           | [test_givenLateTaskFailure_whenTimelockActivates_reverts][test_givenLateTaskFailure_whenTimelockActivates_reverts]                                                       |
 | BLAUNCH-S05 | Missing OHM or USDS PRICE support is rejected; the OCG fork covers USDe admission | [test_givenPriceSupportMissing_whenTimelockActivates_reverts][test_givenPriceSupportMissing_whenTimelockActivates_reverts]                                               |
-| BLAUNCH-S06 | Zero backing is rejected                                                          | [test_givenZeroBacking_whenTimelockActivates_reverts][test_givenZeroBacking_whenTimelockActivates_reverts]                                                               |
+| BLAUNCH-S06 | Previously enabled backing oracle is rejected without overwriting backing                                                          | [test_givenBackingOraclePreviouslyEnabled_whenTimelockActivates_reverts][test_givenBackingOraclePreviouslyEnabled_whenTimelockActivates_reverts]                                                               |
 | BLAUNCH-C01 | Zero governance timelock is rejected                                              | [test_whenTimelockIsZero_reverts][test_whenTimelockIsZero_reverts]                                                                                                       |
 | BLAUNCH-C02 | Missing component code is rejected                                                | [test_whenComponentHasNoCode_reverts][test_whenComponentHasNoCode_reverts]                                                                                               |
 | BLAUNCH-C04 | Revenue task bound to a different distributor is rejected                         | [test_whenRevenueTaskBoundToDifferentDistributor_reverts][test_whenRevenueTaskBoundToDifferentDistributor_reverts]                                                       |
-| BLAUNCH-O01 | Disabled external backing oracle is rejected before proposal preparation          | [test_givenBackingOracleDisabled_whenPreparationValidated_reverts][test_givenBackingOracleDisabled_whenPreparationValidated_reverts]                                     |
+| BLAUNCH-O01 | Fresh disabled BackingOracle is initialized to $11.99 and its queue is selected/enabled by OCG          | [test_givenFreshBackingOracle_whenTimelockActivates][test_givenFreshBackingOracle_whenTimelockActivates]                                     |
 | BLAUNCH-O02 | Inactive external backing oracle is rejected before proposal preparation          | [test_givenBackingOracleInactive_whenPreparationValidated_reverts][test_givenBackingOracleInactive_whenPreparationValidated_reverts]                                     |
 | BLAUNCH-C03 | Constructor caller receives no authority                                          | [test_whenCreatedByAnyCaller][test_whenCreatedByAnyCaller]                                                                                                               |
 | BLAUNCH-C06 | Missing Auth code, including the zero address, is rejected                        | [test_whenAuthHasNoCode_reverts][test_whenAuthHasNoCode_reverts]                                                                                                         |
@@ -29,22 +29,32 @@ The constructor fixes all targets and the sole timelock caller. Launch accepts n
 | BLAUNCH-A02 | Any missing activator, settlement, custody or seizer role aborts activation | [test_givenMissingRole_whenTimelockActivates_reverts][test_givenMissingRole_whenTimelockActivates_reverts] |
 | BLAUNCH-C05 | Any of the five queues with a missing or different immutable target aborts activation | [test_givenWrongTimelockTarget_whenTimelockActivates_reverts][test_givenWrongTimelockTarget_whenTimelockActivates_reverts] |
 
-[test_whenCallerIsNotTimelock_reverts]: ./activate.t.sol#L28
-[test_givenPreparedStack_whenTimelockActivates]: ./activate.t.sol#L42
-[test_givenAlreadyActivated_whenTimelockActivates_reverts]: ./activate.t.sol#L105
-[test_givenInactivePolicy_whenTimelockActivates_reverts]: ./activate.t.sol#L113
-[test_givenRiskPreviouslyEnabled_givenReferrerAllowed_whenTimelockActivates_reverts]: ./activate.t.sol#L254
-[test_givenLateTaskFailure_whenTimelockActivates_reverts]: ./activate.t.sol#L275
-[test_givenPriceSupportMissing_whenTimelockActivates_reverts]: ./activate.t.sol#L292
-[test_givenZeroBacking_whenTimelockActivates_reverts]: ./activate.t.sol#L311
-[test_whenTimelockIsZero_reverts]: ./activate.t.sol#L324
-[test_whenComponentHasNoCode_reverts]: ./activate.t.sol#L335
-[test_whenCreatedByAnyCaller]: ./activate.t.sol#L348
-[test_whenRevenueTaskBoundToDifferentDistributor_reverts]: ./activate.t.sol#L212
-[test_givenBackingOracleDisabled_whenPreparationValidated_reverts]: ./activate.t.sol#L228
-[test_givenBackingOracleInactive_whenPreparationValidated_reverts]: ./activate.t.sol#L241
-[test_givenMissingRole_whenTimelockActivates_reverts]: ./activate.t.sol#L128
-[test_givenWrongTimelockTarget_whenTimelockActivates_reverts]: ./activate.t.sol#L160
+| ID | Scenario | Test |
+| --- | --- | --- |
+| BLAUNCH-S07 | Inactive PriceConfig is rejected even if USDe is already approved | [test][test_givenPriceConfigInactive_whenTimelockActivates_reverts] |
+| BLAUNCH-S08 | Disabled PriceConfig is rejected even if USDe is already approved | [test][test_givenPriceConfigDisabled_whenTimelockActivates_reverts] |
+| BLAUNCH-O03 | Inactive backing queue is rejected before mutations | [test][test_givenBackingQueueInactive_whenTimelockActivates_reverts] |
 
-[test_whenAuthHasNoCode_reverts]: ./activate.t.sol#L188
-[test_whenAuthBoundToDifferentCore_reverts]: ./activate.t.sol#L200
+[test_whenCallerIsNotTimelock_reverts]: ./activate.t.sol#L29
+[test_givenPreparedStack_whenTimelockActivates]: ./activate.t.sol#L43
+[test_givenAlreadyActivated_whenTimelockActivates_reverts]: ./activate.t.sol#L129
+[test_givenInactivePolicy_whenTimelockActivates_reverts]: ./activate.t.sol#L137
+[test_givenRiskPreviouslyEnabled_givenReferrerAllowed_whenTimelockActivates_reverts]: ./activate.t.sol#L280
+[test_givenLateTaskFailure_whenTimelockActivates_reverts]: ./activate.t.sol#L302
+[test_givenPriceSupportMissing_whenTimelockActivates_reverts]: ./activate.t.sol#L323
+[test_givenBackingOraclePreviouslyEnabled_whenTimelockActivates_reverts]: ./activate.t.sol#L342
+[test_whenTimelockIsZero_reverts]: ./activate.t.sol#L396
+[test_whenComponentHasNoCode_reverts]: ./activate.t.sol#L407
+[test_whenCreatedByAnyCaller]: ./activate.t.sol#L420
+[test_whenRevenueTaskBoundToDifferentDistributor_reverts]: ./activate.t.sol#L236
+[test_givenFreshBackingOracle_whenTimelockActivates]: ./activate.t.sol#L252
+[test_givenBackingOracleInactive_whenPreparationValidated_reverts]: ./activate.t.sol#L267
+[test_givenMissingRole_whenTimelockActivates_reverts]: ./activate.t.sol#L152
+[test_givenWrongTimelockTarget_whenTimelockActivates_reverts]: ./activate.t.sol#L184
+
+[test_whenAuthHasNoCode_reverts]: ./activate.t.sol#L212
+[test_whenAuthBoundToDifferentCore_reverts]: ./activate.t.sol#L224
+
+[test_givenPriceConfigInactive_whenTimelockActivates_reverts]: ./activate.t.sol#L357
+[test_givenPriceConfigDisabled_whenTimelockActivates_reverts]: ./activate.t.sol#L383
+[test_givenBackingQueueInactive_whenTimelockActivates_reverts]: ./activate.t.sol#L370

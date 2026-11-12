@@ -11,6 +11,7 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 
 // Libraries
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
@@ -81,6 +82,19 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             _graph.usde
         );
         // OHM caps use 9 decimals; collateral keeper caps use 18 decimals.
+        assertTrue(usds.originationsEnabled, "USDS originations start enabled");
+        assertTrue(usde.originationsEnabled, "USDe originations start enabled");
+        assertEq(
+            uint256(IRevenueDistributor(_graph.revenueDistributor).assetState(_graph.susds)),
+            uint256(IRevenueDistributor.AssetState.Active),
+            "sUSDS revenue routing is active at launch"
+        );
+        (
+            uint16 repurchaseBps,
+            IRevenueDistributor.AssetRoute[] memory routes
+        ) = IRevenueDistributor(_graph.revenueDistributor).getAssetDistribution(_graph.susds);
+        assertEq(repurchaseBps, 0, "sUSDS allocates nothing to repurchases");
+        assertEq(routes.length, 0, "sUSDS receipts all accrue to Treasury");
         assertEq(usds.debtCap, 50_000e9, "USDS market debt cap");
         assertEq(usde.debtCap, 50_000e9, "USDe market debt cap");
         assertEq(usds.maxKeeperReward, 100e18, "USDS keeper reward cap");
@@ -96,9 +110,19 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             100_000e9,
             "Global OHM debt cap"
         );
-        (address retained, bytes4 selector) = _heart.getPeriodicTaskAtIndex(3);
+        (address retained, bytes4 selector) = _heart.getPeriodicTaskAtIndex(0);
         assertEq(retained, address(_existingTask), "Existing task order is retained");
         assertEq(selector, bytes4(0), "Existing task selector is retained");
+        (address seizer, ) = _heart.getPeriodicTaskAtIndex(3);
+        (address yieldClaimer, ) = _heart.getPeriodicTaskAtIndex(4);
+        (address distributor, ) = _heart.getPeriodicTaskAtIndex(5);
+        assertEq(seizer, _graph.seizerTask, "Seizer follows existing preparation tasks");
+        assertEq(yieldClaimer, _graph.yieldClaimerTask, "Yield collection follows seizure");
+        assertEq(
+            distributor,
+            _graph.revenueDistributorTask,
+            "Distribution immediately precedes Operator"
+        );
     }
 
     // Scenarios: BLAUNCH-S01.
@@ -225,16 +249,18 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     }
 
     // Scenarios: BLAUNCH-O01.
-    function test_givenBackingOracleDisabled_whenPreparationValidated_reverts() public {
-        _oracle.disable("");
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
-                _graph.backingOracle
-            )
-        );
+    function test_givenFreshBackingOracle_whenTimelockActivates() public {
+        assertFalse(_oracle.isEnabled(), "Oracle starts disabled");
+        assertEq(_oracle.backing(), 0, "Oracle starts without backing");
         _activate();
-        _assertUnlaunched();
+        assertTrue(_oracle.isEnabled(), "Governance enables the oracle");
+        assertEq(_oracle.backing(), 1199e16, "Governance initializes backing to $11.99 per OHM");
+        assertEq(
+            _oracle.configOperator(),
+            address(_oracleQueue),
+            "Governance selects the backing queue"
+        );
+        assertTrue(_oracleQueue.isEnabled(), "Governance enables the backing queue");
     }
 
     // Scenarios: BLAUNCH-O02.
@@ -254,6 +280,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     function test_givenRiskPreviouslyEnabled_givenReferrerAllowed_whenTimelockActivates_reverts()
         public
     {
+        _oracle.enable(abi.encode(uint256(1199e16)));
         IEnabler(_graph.risk).enable("");
         IBurnerLoansRisk(_graph.risk).setReferrerAllowed(address(0xFEE), true);
         IEnabler(_graph.risk).disable("");
@@ -277,15 +304,19 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             _graph.heart,
             abi.encodeCall(
                 IPeriodicTaskManager.addPeriodicTaskAtIndex,
-                (_graph.yieldClaimerTask, bytes4(0), 1)
+                (_graph.yieldClaimerTask, bytes4(0), 4)
             ),
             abi.encodeWithSelector(LateFailure.selector)
         );
         vm.expectRevert(LateFailure.selector);
         _activate();
         _assertUnlaunched();
-        assertEq(_heart.getPeriodicTaskCount(), 1, "Earlier task insertion rolls back");
+        assertEq(_heart.getPeriodicTaskCount(), 6, "Earlier task insertion rolls back");
         assertFalse(_heart.hasPeriodicTask(_graph.seizerTask), "Seizer insertion rolls back");
+        assertFalse(_oracle.isEnabled(), "Oracle initialization rolls back");
+        assertEq(_oracle.backing(), 0, "Initial backing rolls back");
+        assertEq(_oracle.configOperator(), address(0), "Oracle controller selection rolls back");
+        assertFalse(_oracleQueue.isEnabled(), "Backing queue enablement rolls back");
     }
 
     // Scenarios: BLAUNCH-S05.
@@ -308,12 +339,53 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     }
 
     // Scenarios: BLAUNCH-S06.
-    function test_givenZeroBacking_whenTimelockActivates_reverts() public {
-        _oracle.setBacking(0);
+    function test_givenBackingOraclePreviouslyEnabled_whenTimelockActivates_reverts() public {
+        _oracle.enable(abi.encode(uint256(12e18)));
+        _oracle.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
                 _graph.backingOracle
+            )
+        );
+        _activate();
+        _assertUnlaunched();
+        assertEq(_oracle.backing(), 12e18, "Failed launch preserves existing backing");
+    }
+
+    // Scenarios: BLAUNCH-S07.
+    function test_givenPriceConfigInactive_whenTimelockActivates_reverts() public {
+        _kernel.executeAction(Actions.DeactivatePolicy, _graph.priceConfig);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
+                _graph.priceConfig
+            )
+        );
+        _activate();
+        _assertUnlaunched();
+    }
+
+    // Scenarios: BLAUNCH-O03.
+    function test_givenBackingQueueInactive_whenTimelockActivates_reverts() public {
+        _kernel.executeAction(Actions.DeactivatePolicy, _graph.backingOracleTimelock);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
+                _graph.backingOracleTimelock
+            )
+        );
+        _activate();
+        _assertUnlaunched();
+    }
+
+    // Scenarios: BLAUNCH-S08.
+    function test_givenPriceConfigDisabled_whenTimelockActivates_reverts() public {
+        IEnabler(_graph.priceConfig).disable("");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
+                _graph.priceConfig
             )
         );
         _activate();

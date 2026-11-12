@@ -9,6 +9,7 @@ import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurne
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 
 // Contracts
+import {console2} from "@forge-std-1.16.2/console2.sol";
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 /// @notice SeizerTask operational controls delegated to burner_loans_admin.
@@ -21,6 +22,7 @@ contract BurnerLoansSeizerTaskBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansSeizerTaskBatch: setScanLimits");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansSeizerTask"),
             abi.encodeCall(
@@ -40,6 +42,7 @@ contract BurnerLoansSeizerTaskBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansSeizerTaskBatch: setExecutionGasLimit");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansSeizerTask"),
             abi.encodeCall(
@@ -56,6 +59,7 @@ contract BurnerLoansSeizerTaskBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansSeizerTaskBatch: setNextAssetIndex");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansSeizerTask"),
             abi.encodeCall(
@@ -72,6 +76,7 @@ contract BurnerLoansSeizerTaskBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansSeizerTaskBatch: setNextAssetBorrowerIndex");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansSeizerTask"),
             abi.encodeCall(

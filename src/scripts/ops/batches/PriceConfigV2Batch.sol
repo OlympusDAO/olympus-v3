@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {ITimelockQueue} from "src/policies/interfaces/utils/ITimelockQueue.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 
 // Libraries
@@ -12,13 +11,14 @@ import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {toSubKeycode} from "src/Submodules.sol";
 
 // Contracts
+import {console2} from "@forge-std-1.16.2/console2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
-import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
+import {TimelockBatchScript} from "src/scripts/ops/lib/TimelockBatchScript.sol";
 
 /// @notice Add, update and remove PRICE assets through the existing PriceConfigv2 policy.
 /// @dev Updates and removals use the policy's delayed queue.
-contract PriceConfigV2Batch is BatchScriptV2 {
+contract PriceConfigV2Batch is TimelockBatchScript {
     using SafeCast for uint256;
 
     /// @notice Admit the asset and single-feed parameters supplied in the args file.
@@ -27,6 +27,7 @@ contract PriceConfigV2Batch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("PriceConfigV2Batch: addAsset");
         PriceConfigv2 config = PriceConfigv2(
             _envAddressNotZero("olympus.policies.OlympusPriceConfigV2")
         );
@@ -65,6 +66,7 @@ contract PriceConfigV2Batch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("PriceConfigV2Batch: queueUpdateAsset");
         (
             IPRICEv2.UpdateAssetParams memory params,
             IPriceConfigv2.PriceFeedExpectation[] memory expectations
@@ -87,6 +89,7 @@ contract PriceConfigV2Batch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("PriceConfigV2Batch: queueRemoveAsset");
         addToBatch(
             _envAddressNotZero("olympus.policies.OlympusPriceConfigV2"),
             abi.encodeCall(
@@ -97,33 +100,7 @@ contract PriceConfigV2Batch is BatchScriptV2 {
         proposeBatch();
     }
 
-    function executeQueuedAction(
-        bool useDaoMS_,
-        string calldata argsFile_,
-        string calldata ledgerDerivationPath_
-    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
-        addToBatch(
-            _envAddressNotZero("olympus.policies.OlympusPriceConfigV2"),
-            abi.encodeCall(
-                ITimelockQueue.executeQueuedAction,
-                (SafeCast.toUint64(_readBatchArgUint256("executeQueuedAction", "actionId")))
-            )
-        );
-        proposeBatch();
-    }
-
-    function cancelQueuedAction(
-        bool useDaoMS_,
-        string calldata argsFile_,
-        string calldata ledgerDerivationPath_
-    ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
-        addToBatch(
-            _envAddressNotZero("olympus.policies.OlympusPriceConfigV2"),
-            abi.encodeCall(
-                ITimelockQueue.cancelQueuedAction,
-                (SafeCast.toUint64(_readBatchArgUint256("cancelQueuedAction", "actionId")))
-            )
-        );
-        proposeBatch();
+    function _timelockKey() internal pure override returns (string memory) {
+        return "olympus.policies.OlympusPriceConfigV2";
     }
 }

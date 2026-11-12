@@ -56,10 +56,7 @@ Authorization, lifecycle, queue admission and execution checks are enforced by t
 
 | Script | Entry points | Authority |
 | --- | --- | --- |
-| `BurnerLoansKernelSetupBatch` | `setupKernel`: FLOAN, fourteen Burner Loans policies and PriceCache | Kernel executor |
-| `DepositManagerSetupBatch` | `setupKernel`: shared DepositManager v1.1 | Kernel executor |
-| `RevenueDistributorSetupBatch` | `setupKernel`: distributor, timelock and task | Kernel executor |
-| `BackingOracleSetupBatch` | `setupKernel`: oracle and timelock | Kernel executor |
+| `KernelBatch` | `installModules`, `upgradeModules`, `activatePolicies`, `deactivatePolicies` for supplied environment keys | Kernel executor |
 | `PriceConfigV2Batch` | `addAsset`, `queueUpdateAsset`, `queueRemoveAsset`, execute/cancel | `price_admin` or ADMIN; anyone/Emergency for execute/cancel |
 | `EnablerBatch` | `enable`, `disable`, `reEnable` for supplied targets | Target-specific authority; Emergency for disable |
 | `BurnerLoansInventoryBatch` | `supply`, `withdraw`; `syncMintApproval` | `burner_loans_inventory_provider`; `burner_loans_admin` |
@@ -68,18 +65,25 @@ Authorization, lifecycle, queue admission and execution checks are enforced by t
 | `BurnerLoansYieldClaimerTaskBatch` | `setExecutionGasLimit`, `setMinimumGasToAttempt`, `setGasReserve`, `setNextAssetIndex` | ADMIN/`burner_loans_admin` |
 | `RevenueDistributorBatch` | `distribute`, `transferPendingPayout` | Anyone |
 | `RevenueDistributorConfigTimelockBatch` | Asset routes, yield recipient, rescue, pending rescue, admitted `queueBatch`; execute/cancel | ADMIN/`revenue_distributor_admin`; anyone/Emergency |
-| `BackingOracleBatch` | `initialize` | ADMIN |
 | `BackingOracleConfigTimelockBatch` | `queueSetBacking`; execute/cancel | ADMIN/`backing_admin`; anyone/Emergency |
 
-Setup batches log already-active policies and leave them unchanged. Initialization, enablement,
-asset registration and role grants belong to governance. `BackingOracleBatch.initialize` selects
-the deployed queue and enables both contracts with the reviewed initial backing value.
+`KernelBatch` takes `targets` as an ordered array of keys from the selected chain in `env.json`,
+such as `olympus.modules.OlympusFixedTermLoan` or `olympus.policies.DepositManager`.
+Each entry point maps directly to the corresponding Kernel action; every supplied target is queued.
+Kernel simulation rejects already-installed modules, already-active policies and invalid upgrades.
+Use `deactivatePolicies` to remove policies; the Kernel has no module-removal action.
+Initialization, enablement,
+asset registration, configuration-operator selection and role grants belong to governance.
+The OCG activator initializes BackingOracle to $11.99 per OHM and selects/enables its queue.
+Use `EnablerBatch.reEnable` with the BackingOracle target for grace-period recovery;
+this preserves backing and operator and cannot initialize the oracle.
 
 `EnablerBatch` centralizes lifecycle calls for all compatible policies and periphery contracts.
 Supply `targets` as an address array in the order to execute. `enable` and `disable` also take a
 parallel `data` array of hex payloads, using `"0x"` for empty payloads. `reEnable` only needs targets.
 Initial enable requires the target's administrator; fast re-enable preserves configuration and
-uses its delegated role/grace rules. These calls run the standard heartbeat simulation.
+uses its delegated role/grace rules. Targets must advertise the matching ERC165 interface before a lifecycle call is added.
+These calls run the standard heartbeat simulation.
 
 For a complete Burner Loans shutdown/recovery, use the dependency order in the
 [runbook](../../../documentation/burner_loans_launch_runbook.md#5-confirm-launch-and-operate).
@@ -89,7 +93,8 @@ Shared services have separate lifecycles and can be included in a reviewed targe
 
 Create task/timelock args files when needed. Use a `functions` array with a matching entry-point
 `name` and an `args` object. Field names are read by each script's `_readBatchArg*` calls.
-Terminal operations use `actionId` with the actual queue ID. `queueBatch` takes ABI-encoded `(address,bytes4,bytes)[]` in `encodedActions`. Distributor routes
+The six batch configuration-timelock scripts and PriceConfigV2Batch inherit execution and emergency cancellation from
+`TimelockBatchScript`; each binds its queue environment key. Terminal operations use `actionId` with the actual queue ID. `queueBatch` takes ABI-encoded `(address,bytes4,bytes)[]` in `encodedActions`. Distributor routes
 use ABI-encoded `(address,uint16)[]` in `encodedRoutes`. Supply reads `amount` in OHM base units; withdrawal also reads
 `recipient`. The provider Safe supplies and withdraws its own OHM claim.
 

@@ -29,49 +29,88 @@ It is periphery, so it needs no Kernel policy activation, role or independent en
 OCG selects Auth on Core before enabling Core. Bundler deployment remains a TODO.
 Oracle factories are not required: PriceCache reads PRICE directly.
 
-## 2. Prepare Kernel membership and backing
+## 2. Prepare Kernel membership
 
-Use the actual Kernel executor for these independent setup batches. If the executor is the OCG
-timelock, submit these Kernel actions through governance. Already-active policies are logged.
+Use `KernelBatch` with the actual Kernel executor. If the executor is the OCG timelock, submit
+these Kernel actions through governance. Create a reviewed args file, for example
+`path/to/reviewed-kernel.json`, with ordered keys from the selected chain in `src/scripts/env.json`:
 
-| Batch | Entry point | Prepares |
-| --- | --- | --- |
-| `BackingOracleSetupBatch` | `setupKernel` | Oracle and its queue |
-| `DepositManagerSetupBatch` | `setupKernel` | Shared DepositManager v1.1 |
-| `RevenueDistributorSetupBatch` | `setupKernel` | Distributor, queue and task |
-| `BurnerLoansKernelSetupBatch` | `setupKernel` | FLOAN, fourteen Burner Loans policies and PriceCache |
+```json
+{
+  "functions": [
+    {
+      "name": "installModules",
+      "args": {
+        "targets": ["olympus.modules.OlympusFixedTermLoan"]
+      }
+    },
+    {
+      "name": "activatePolicies",
+      "args": {
+        "targets": [
+          "olympus.policies.BackingOracle",
+          "olympus.policies.BackingOracleConfigTimelock",
+          "olympus.policies.DepositManager",
+          "olympus.policies.RevenueDistributor",
+          "olympus.policies.RevenueDistributorConfigTimelock",
+          "olympus.policies.RevenueDistributorTask",
+          "olympus.policies.BurnerLoansInventory",
+          "olympus.policies.BurnerLoansPayout",
+          "olympus.policies.BurnerLoansRisk",
+          "olympus.policies.BurnerLoansCore",
+          "olympus.policies.BurnerLoansConfig",
+          "olympus.policies.BurnerLoansCollateral",
+          "olympus.policies.BurnerLoansDebt",
+          "olympus.policies.BurnerLoansSeize",
+          "olympus.policies.BurnerLoansConfigTimelock",
+          "olympus.policies.BurnerLoansRiskConfigTimelock",
+          "olympus.policies.BurnerLoansPayoutConfigTimelock",
+          "olympus.policies.BurnerLoansInventoryConfigTimelock",
+          "olympus.policies.BurnerLoansSeizerTask",
+          "olympus.policies.BurnerLoansYieldClaimerTask",
+          "olympus.policies.PriceCache"
+        ]
+      }
+    }
+  ]
+}
+```
+
+Every listed target is queued. Omit modules already installed and policies already active after
+checking their addresses and state; duplicate or invalid operations fail Kernel simulation.
+Use `upgradeModules` for reviewed module replacements and `deactivatePolicies` for policy removal.
+The Kernel has no module-removal action.
 
 For a Safe that is the current Kernel executor:
 
 ```bash
-./shell/safeBatchV2.sh --contract DepositManagerSetupBatch --function setupKernel --chain mainnet --multisig true --ledger 5 --env .env
+./shell/safeBatchV2.sh --contract KernelBatch --function installModules --chain mainnet --multisig true --ledger 5 --env .env --args path/to/reviewed-kernel.json
+./shell/safeBatchV2.sh --contract KernelBatch --function activatePolicies --chain mainnet --multisig true --ledger 5 --env .env --args path/to/reviewed-kernel.json
 ```
 
-Repeat for the other setup contracts, review simulations including heartbeat validation, then add
-`--broadcast true` to submit the approved Safe proposals. Execute and confirm these transactions.
+Execute and confirm module installation before activating policies. Review simulations including
+heartbeat validation, then add `--broadcast true` to submit the approved Safe proposals.
 
-The backing oracle is populated before the launch proposal. `BackingOracleBatch.initialize`
-selects its deployed timelock, enables the oracle with `abi.encode(backing)`, and enables the queue.
-It takes a reviewed positive `backing` value in 18 decimals from an args file and requires ADMIN.
-Arrange this initial population through governance or an already-authorized administrator.
-The launch proposal grants DAO `backing_admin`, so no separate operational role grant is needed.
-Keep the remaining new launch policies active but never enabled until the proposal executes.
+Keep all new launch policies, including BackingOracle and its queue, active but never enabled.
+The OCG activator selects the backing queue, initializes the oracle to **$11.99 per OHM**
+(`11_990_000_000_000_000_000`, 18 decimals), then enables the queue in the same transaction.
+The DAO multisig has no ADMIN authority to call `enable` or `setConfigOperator`.
+The proposal grants DAO `backing_admin` for delayed updates and grace-period recovery.
 Heart and PriceConfigv2 must be active and enabled; PRICE must already support OHM and USDS.
 
 ### Timelock wiring checklist
 
 All six queues are policies activated in the Kernel. Their immutable target and the target's
-`configOperator` must agree. The backing queue is ready before OCG; the activator finishes the
-other five bindings and enables those queues during OCG.
+`configOperator` must agree. The activator selects and enables all six queues during OCG.
 
 | Queue | Target | Deployment sequence | Kernel setup batch | Binding and enablement |
 | --- | --- | --- | --- | --- |
-| BurnerLoansConfigTimelock | BurnerLoansConfig | `burner_loans.json` | BurnerLoansKernelSetupBatch | Activator |
-| BurnerLoansRiskConfigTimelock | BurnerLoansRisk | `burner_loans.json` | BurnerLoansKernelSetupBatch | Activator |
-| BurnerLoansPayoutConfigTimelock | BurnerLoansPayout | `burner_loans.json` | BurnerLoansKernelSetupBatch | Activator |
-| BurnerLoansInventoryConfigTimelock | BurnerLoansInventory | `burner_loans.json` | BurnerLoansKernelSetupBatch | Activator |
-| RevenueDistributorConfigTimelock | RevenueDistributor | `revenue_distributor.json` | RevenueDistributorSetupBatch | Activator |
-| BackingOracleConfigTimelock | BackingOracle | `backing_oracle.json` | BackingOracleSetupBatch | BackingOracleBatch.initialize before OCG |
+| BurnerLoansConfigTimelock | BurnerLoansConfig | `burner_loans.json` | KernelBatch.activatePolicies | Activator |
+| BurnerLoansRiskConfigTimelock | BurnerLoansRisk | `burner_loans.json` | KernelBatch.activatePolicies | Activator |
+| BurnerLoansPayoutConfigTimelock | BurnerLoansPayout | `burner_loans.json` | KernelBatch.activatePolicies | Activator |
+| BurnerLoansInventoryConfigTimelock | BurnerLoansInventory | `burner_loans.json` | KernelBatch.activatePolicies | Activator |
+| RevenueDistributorConfigTimelock | RevenueDistributor | `revenue_distributor.json` | KernelBatch.activatePolicies | Activator |
+| BackingOracleConfigTimelock | BackingOracle | `backing_oracle.json` | KernelBatch.activatePolicies | Activator |
 
 OCG grants the DAO multisig `burner_loans_admin`, `backing_admin`,
 `revenue_distributor_admin` and `burner_loans_inventory_provider`. The first three authorize
@@ -87,8 +126,10 @@ reviewed deployment addresses. `olympus-policy-deposit-manager` is the new v1.1 
 arguments against the deployment log and proposal addresses.
 
 The activator admits USDe through existing PriceConfigv2 if it is not approved already. The
-Chainlink USDe/USD feed must be within the one-day freshness limit and the $1 +/-1% launch bounds
-when this executes. No DAO PRICE preparation batch or USDe args file is required. sUSDe is the
+Chainlink and RedStone USDe/USD feeds must be no older than one day; the API3 reader must be no
+older than 25 hours. Each feed must meet the $1 +/-1% admission bounds. The strict deviation
+strategy then averages at least two valid prices after excluding 1% deviations; see the
+[asset configuration](./price.md#assets). No DAO PRICE preparation batch or USDe args file is required. sUSDe is the
 withdrawal output and needs no separate PRICE admission.
 
 Rehearse the proposal and initial-configuration happy paths:
@@ -105,7 +146,7 @@ FOUNDRY_PROFILE=deploy ./src/scripts/proposals/printInputs.sh --file src/proposa
 
 The proposal grants custody, settlement and automation roles, delegates DAO operational roles,
 grants temporary activator ADMIN, executes the fixed launch and revokes activator ADMIN.
-The activator configures USDe PRICE admission, USDS/sUSDS and USDe/sUSDe custody, lending markets,
+The activator initializes BackingOracle and its queue, configures USDe PRICE admission, USDS/sUSDS and USDe/sUSDe custody, lending markets,
 Auth selection and service/config-timelock bindings, revenue routes and Heart tasks. Confirm the
 resulting action list fits the Governor's 15-action limit and confirm the proposal identifier before submission.
 
@@ -117,19 +158,20 @@ Add `--broadcast true` after approval. Complete voting, queueing and execution t
 
 ## 4. Heart ordering
 
-The mainnet fork at block **25,973,712** has the following six tasks. The new tasks are prepended:
-seize defaults before collecting yield, then distribute the resulting receipts. Existing task
-order and custom selectors are retained. Re-read the live list before approving deployment.
+The mainnet fork at block **25,973,712** has the following six tasks. The three new tasks run
+after ConvertibleDepositFacility, ReserveMigrator and ReserveWrapper, immediately before Operator:
+seize defaults, collect yield, then distribute the resulting receipts. Existing task order and
+custom selectors are retained. Re-read the live list before approving deployment.
 
 <!-- prettier-ignore -->
 | Existing index | Launch index | Task | Address at the fork block | Call |
 | --- | --- | --- | --- | --- |
-| - | 0 | BurnerLoansSeizerTask | New deployment | `execute()` |
-| - | 1 | BurnerLoansYieldClaimerTask | New deployment | `execute()` |
-| - | 2 | RevenueDistributorTask | New deployment | `execute()` |
-| 0 | 3 | ConvertibleDepositFacility | `0xEBDe552D851DD6Dfd3D360C596D3F4aF6e5F9678` | `execute()` |
-| 1 | 4 | ReserveMigrator | `0x986b99579BEc7B990331474b66CcDB94Fa2419F5` | `migrate()` (`0x8fd3ab80`) |
-| 2 | 5 | ReserveWrapper | `0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9` | `execute()` |
+| 0 | 0 | ConvertibleDepositFacility | `0xEBDe552D851DD6Dfd3D360C596D3F4aF6e5F9678` | `execute()` |
+| 1 | 1 | ReserveMigrator | `0x986b99579BEc7B990331474b66CcDB94Fa2419F5` | `migrate()` (`0x8fd3ab80`) |
+| 2 | 2 | ReserveWrapper | `0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9` | `execute()` |
+| - | 3 | BurnerLoansSeizerTask | New deployment | `execute()` |
+| - | 4 | BurnerLoansYieldClaimerTask | New deployment | `execute()` |
+| - | 5 | RevenueDistributorTask | New deployment | `execute()` |
 | 3 | 6 | Operator | `0x6417F206a0a6628Da136C0Faa39026d0134D2b52` | `operate()` (`0x7159a618`) |
 | 4 | 7 | YieldRepurchaseFacility | `0x271e35a8555a62F6bA76508E85dfD76D580B0692` | `endEpoch()` (`0x0b9663db`) |
 | 5 | 8 | EmissionManager | `0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff` | `execute()` |

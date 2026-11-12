@@ -6,14 +6,18 @@ import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Libraries
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {stdJson} from "@forge-std-1.16.2/StdJson.sol";
 
 // Contracts
+import {console2} from "@forge-std-1.16.2/console2.sol";
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 /// @notice Generic lifecycle calls, executed in the operator-supplied target order.
 contract EnablerBatch is BatchScriptV2 {
     using stdJson for string;
+
+    error EnablerBatch_UnsupportedInterface(address target, bytes4 interfaceId);
 
     /// @notice Initial enablement; each target enforces its administrator authority and payload.
     // Encode the reviewed target list; the standard batch simulator executes every call.
@@ -30,8 +34,11 @@ contract EnablerBatch is BatchScriptV2 {
             ".functions[?(@.name == 'enable')].args.data"
         );
         assert(targets.length == data.length);
-        for (uint256 i; i < targets.length; ++i)
+        for (uint256 i; i < targets.length; ++i) {
+            _requireInterface(targets[i], type(IEnabler).interfaceId);
+            console2.log("Enabling target", targets[i]);
             addToBatch(targets[i], abi.encodeCall(IEnabler.enable, (data[i])));
+        }
         proposeBatch();
     }
 
@@ -50,8 +57,11 @@ contract EnablerBatch is BatchScriptV2 {
             ".functions[?(@.name == 'disable')].args.data"
         );
         assert(targets.length == data.length);
-        for (uint256 i; i < targets.length; ++i)
+        for (uint256 i; i < targets.length; ++i) {
+            _requireInterface(targets[i], type(IEnabler).interfaceId);
+            console2.log("Disabling target", targets[i]);
             addToBatch(targets[i], abi.encodeCall(IEnabler.disable, (data[i])));
+        }
         proposeBatch();
     }
 
@@ -66,8 +76,18 @@ contract EnablerBatch is BatchScriptV2 {
         address[] memory targets = _argsFile.readAddressArray(
             ".functions[?(@.name == 'reEnable')].args.targets"
         );
-        for (uint256 i; i < targets.length; ++i)
+        for (uint256 i; i < targets.length; ++i) {
+            _requireInterface(targets[i], type(IReEnabler).interfaceId);
+            console2.log("Re-enabling target", targets[i]);
             addToBatch(targets[i], abi.encodeCall(IReEnabler.reEnable, ()));
+        }
         proposeBatch();
+    }
+
+    // Reject each incompatible target before adding its lifecycle action to the batch.
+    // forge-lint: disable-next-item(require-revert-in-loop)
+    function _requireInterface(address target_, bytes4 interfaceId_) internal view {
+        if (!ERC165Checker.supportsInterface(target_, interfaceId_))
+            revert EnablerBatch_UnsupportedInterface(target_, interfaceId_);
     }
 }

@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
@@ -11,10 +10,11 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 
 // Contracts
-import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
+import {TimelockBatchScript} from "src/scripts/ops/lib/TimelockBatchScript.sol";
 
 /// @notice Reviewed args files supply distributor configuration and actual queued action IDs.
-contract RevenueDistributorConfigTimelockBatch is BatchScriptV2 {
+contract RevenueDistributorConfigTimelockBatch is TimelockBatchScript {
     using SafeCast for uint256;
 
     /// @notice Submit the reviewed queueDisableAssetRoutes inputs to the delayed queue.
@@ -23,6 +23,7 @@ contract RevenueDistributorConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("RevenueDistributorConfigTimelockBatch: queueDisableAssetRoutes");
         addToBatch(
             _envAddressNotZero("olympus.policies.RevenueDistributorConfigTimelock"),
             abi.encodeCall(
@@ -39,6 +40,7 @@ contract RevenueDistributorConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("RevenueDistributorConfigTimelockBatch: queueSetYieldRecipient");
         addToBatch(
             _envAddressNotZero("olympus.policies.RevenueDistributorConfigTimelock"),
             abi.encodeCall(
@@ -55,6 +57,7 @@ contract RevenueDistributorConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("RevenueDistributorConfigTimelockBatch: queueRescue");
         addToBatch(
             _envAddressNotZero("olympus.policies.RevenueDistributorConfigTimelock"),
             abi.encodeCall(
@@ -74,6 +77,7 @@ contract RevenueDistributorConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("RevenueDistributorConfigTimelockBatch: queueRescuePendingPayout");
         addToBatch(
             _envAddressNotZero("olympus.policies.RevenueDistributorConfigTimelock"),
             abi.encodeCall(
@@ -95,6 +99,7 @@ contract RevenueDistributorConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("RevenueDistributorConfigTimelockBatch: queueSetAssetRoutes");
         IRevenueDistributor.AssetRoute[] memory routes = abi.decode(
             vm.parseBytes(_readBatchArgString("queueSetAssetRoutes", "encodedRoutes")),
             (IRevenueDistributor.AssetRoute[])
@@ -119,6 +124,7 @@ contract RevenueDistributorConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("RevenueDistributorConfigTimelockBatch: queueBatch");
         ITimelockBatchQueue.BatchAction[] memory actions = abi.decode(
             vm.parseBytes(_readBatchArgString("queueBatch", "encodedActions")),
             (ITimelockBatchQueue.BatchAction[])
@@ -130,37 +136,7 @@ contract RevenueDistributorConfigTimelockBatch is BatchScriptV2 {
         proposeBatch();
     }
 
-    /// @notice Permissionless execution of real action IDs after the notice period.
-
-    /// @notice Emergency cancellation of real action IDs, including while paused.
-
-    function executeQueuedAction(
-        bool useDaoMS_,
-        string calldata argsFile_,
-        string calldata ledgerDerivationPath_
-    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
-        addToBatch(
-            _envAddressNotZero("olympus.policies.RevenueDistributorConfigTimelock"),
-            abi.encodeCall(
-                ITimelockBatchQueue.executeQueuedAction,
-                (SafeCast.toUint64(_readBatchArgUint256("executeQueuedAction", "actionId")))
-            )
-        );
-        proposeBatch();
-    }
-
-    function cancelQueuedAction(
-        bool useDaoMS_,
-        string calldata argsFile_,
-        string calldata ledgerDerivationPath_
-    ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
-        addToBatch(
-            _envAddressNotZero("olympus.policies.RevenueDistributorConfigTimelock"),
-            abi.encodeCall(
-                ITimelockBatchQueue.cancelQueuedAction,
-                (SafeCast.toUint64(_readBatchArgUint256("cancelQueuedAction", "actionId")))
-            )
-        );
-        proposeBatch();
+    function _timelockKey() internal pure override returns (string memory) {
+        return "olympus.policies.RevenueDistributorConfigTimelock";
     }
 }

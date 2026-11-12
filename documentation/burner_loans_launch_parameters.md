@@ -19,8 +19,8 @@ These are proposed settings, not a record of deployed configuration. Governance 
 | New custody asset capacity | 10,000,000 USDS | 10,000,000 USDe | Separate from OHM debt limits; preserve existing shared asset settings |
 | New custody asset minimum deposit | 1 USDS | 1 USDe | Explicit admission minimum; both assets have 18 decimals |
 | PRICE admission | Preserve the existing approved configuration | OCG activator admits through PriceConfigv2 if absent | PRICE and custody configuration execute atomically in OCG |
-| PRICE feed | Existing feeds and strategy | Chainlink USDe / USD (`0xa569d910839Ae8865Da8F8e70FfFb0cBA869F961`), single feed, no moving average or strategy | Use market pricing; do not assume a permanent dollar peg |
-| New PRICE feed maximum age | Existing setting | 1 day (`86_400` seconds) | Proposed freshness bound for the newly admitted USDe feed |
+| PRICE feed | Existing feeds and strategy | Chainlink, RedStone and API3 USDe/USD; strict 1% deviation-filtered average, minimum two valid feeds; no moving average (see [asset configuration](./price.md#assets)) | Use market pricing; do not assume a permanent dollar peg |
+| New PRICE feed maximum age | Existing setting | Chainlink and RedStone: 1 day (`86_400` seconds); API3: 25 hours (`90_000` seconds) | API3 receives the same one-hour heartbeat grace as existing API3 feeds |
 | New PRICE feed launch expectation | Existing setting | $1 (`1e18` PRICE units), 1% (`100` bps) tolerance | Admission rejects a launch price outside $0.99–$1.01; subsequent pricing follows the feed |
 
 ## System configuration
@@ -36,18 +36,18 @@ and its deposits remain in place.
 | Referral fee share and whitelist | 0%; no initial referrers | Zero-fee launch |
 | DepositManager operator namespace and period | `brn`; period `1` for Core | Burner Loans receipt namespace |
 | DepositManager deployment | Shared v1.1 manager; reuse existing ReceiptTokenManager | Keep existing v1.0 deposits |
-| Backing oracle | Deploy BackingOracle and its timelock separately; populate reviewed backing in 18 decimals before OCG | Same Kernel; active, enabled and nonzero backing |
+| Backing oracle | Deploy BackingOracle and its timelock separately; OCG initializes backing to $11.99 (`11_990_000_000_000_000_000`, 18 decimals) | Same Kernel; active and never enabled before OCG |
 | Backing oracle configuration | Select its timelock; one-day notice and seven-day execution window | Separate shared-service administration |
 | PRICE compatibility | OlympusPricev1_2 or PRICE major 2 | Preserve existing PRICE and Heart |
 | PRICE configuration policy | Existing active PriceConfigv2 (`0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd`) | OCG admits missing USDe before activation |
 | PriceCache | USD cache, 18 decimals; maximum age `300` seconds | Refresh pairs on demand |
-| Payout routing | Fresh RevenueDistributor; both distributor flags true | USDS, USDe and sUSDe route to Treasury |
+| Payout routing | Fresh RevenueDistributor; both distributor flags true | USDS, sUSDS, USDe and sUSDe route to Treasury |
 | RevenueDistributor configuration | Deploy its independent configuration timelock, activate and enable it; select it as distributor config operator | DAO proposes delayed changes |
 | RevenueDistributorTask | Deploy, activate and enable; 1,000,000 execution gas; 250,000 minimum attempt gas; 100,000 reserve gas | Run after yield collection |
 | Initial inventory supply | None required; DAO multisig receives the inventory provider role | Mint shortfall within global cap |
 | SeizerTask | Check at most 100 borrowers; seize at most 25; 10,000,000 execution gas | Bounded initial scan |
 | YieldClaimerTask | 1,000,000 execution gas; 250,000 minimum attempt gas; 100,000 reserve gas | Explicit execution budget |
-| Automation | Enable SeizerTask, YieldClaimerTask and RevenueDistributorTask in that order before existing Heart tasks | Preserve existing task order |
+| Automation | Enable SeizerTask, YieldClaimerTask and RevenueDistributorTask in that order at Heart indexes 3, 4 and 5, immediately before Operator | Preserve existing task order |
 | Operational roles | DAO: `burner_loans_admin`, `burner_loans_inventory_provider` and `revenue_distributor_admin` and `backing_admin`; existing emergency multisig: `emergency` | No permanent ADMIN grant |
 
 The four Burner Loans queues and RevenueDistributor queue use one-day notice and a three-day inclusive execution window.
@@ -56,7 +56,7 @@ The existing seven-day fast re-enable grace period is retained for all fourteen 
 Emergency shutdown includes Payout and every Burner Loans policy with a local lifecycle, but excludes custody infrastructure (DepositManager) and shared infrastructure (PRICE, BackingOracle, PriceCache, RevenueDistributor, RevenueDistributorTask and Heart).
 DAO fast restart must occur within each component's grace window; OCG retains ordinary enable authority after expiry.
 
-Separate deployment sequences create the backing oracle, shared DepositManager v1.1, cache and distributor before the Burner Loans graph. Risk validates oracle compatibility at construction, and the activator requires positive backing before launch.
+Separate deployment sequences create the backing oracle, shared DepositManager v1.1, cache and distributor before the Burner Loans graph. Risk validates oracle compatibility at construction. The activator initializes the fresh oracle and selects/enables its queue before enabling Risk.
 The proposal assumes deployments, FLOAN installation and policy activation are already complete, then admits missing USDe support into PRICE, assigns roles, selects services and controllers, configures custody and markets, and enables the stack in dependency order. Existing approved OHM and USDS PRICE configurations are retained; an already approved USDe configuration is also retained.
 The fork test must execute the actual proposal before borrower operations on both assets and must not preconfigure the launch in its fixture.
 

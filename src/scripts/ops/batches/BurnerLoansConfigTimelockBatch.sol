@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
@@ -11,11 +10,12 @@ import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 
 // Contracts
-import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
+import {TimelockBatchScript} from "src/scripts/ops/lib/TimelockBatchScript.sol";
 
 /// @notice Config timelock templates. Queue, execute and emergency cancel are separate runs.
 /// @dev Target selector admission and execution-time commitments remain enforced by the queue.
-contract BurnerLoansConfigTimelockBatch is BatchScriptV2 {
+contract BurnerLoansConfigTimelockBatch is TimelockBatchScript {
     using SafeCast for uint256;
 
     /// @notice Queue SetAssetDebtCap using the required args file.
@@ -24,6 +24,7 @@ contract BurnerLoansConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansConfigTimelockBatch: queueSetAssetDebtCap");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansConfigTimelock"),
             abi.encodeCall(
@@ -43,6 +44,7 @@ contract BurnerLoansConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansConfigTimelockBatch: queueSetAssetWithdrawAsShares");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansConfigTimelock"),
             abi.encodeCall(
@@ -62,6 +64,7 @@ contract BurnerLoansConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansConfigTimelockBatch: queueRescue");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansConfigTimelock"),
             abi.encodeCall(
@@ -81,6 +84,7 @@ contract BurnerLoansConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansConfigTimelockBatch: queueSetAssetFeeConfig");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansConfigTimelock"),
             abi.encodeCall(
@@ -107,6 +111,7 @@ contract BurnerLoansConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansConfigTimelockBatch: queueSetAssetRiskConfig");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansConfigTimelock"),
             abi.encodeCall(
@@ -137,6 +142,7 @@ contract BurnerLoansConfigTimelockBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansConfigTimelockBatch: queueBatch");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansConfigTimelock"),
             abi.encodeCall(
@@ -152,33 +158,7 @@ contract BurnerLoansConfigTimelockBatch is BatchScriptV2 {
         proposeBatch();
     }
 
-    function executeQueuedAction(
-        bool useDaoMS_,
-        string calldata argsFile_,
-        string calldata ledgerDerivationPath_
-    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
-        addToBatch(
-            _envAddressNotZero("olympus.policies.BurnerLoansConfigTimelock"),
-            abi.encodeCall(
-                ITimelockBatchQueue.executeQueuedAction,
-                (SafeCast.toUint64(_readBatchArgUint256("executeQueuedAction", "actionId")))
-            )
-        );
-        proposeBatch();
-    }
-
-    function cancelQueuedAction(
-        bool useDaoMS_,
-        string calldata argsFile_,
-        string calldata ledgerDerivationPath_
-    ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
-        addToBatch(
-            _envAddressNotZero("olympus.policies.BurnerLoansConfigTimelock"),
-            abi.encodeCall(
-                ITimelockBatchQueue.cancelQueuedAction,
-                (SafeCast.toUint64(_readBatchArgUint256("cancelQueuedAction", "actionId")))
-            )
-        );
-        proposeBatch();
+    function _timelockKey() internal pure override returns (string memory) {
+        return "olympus.policies.BurnerLoansConfigTimelock";
     }
 }

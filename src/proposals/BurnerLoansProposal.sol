@@ -27,28 +27,35 @@ contract BurnerLoansProposal is GovernorBravoProposal {
     }
 
     function name() public pure override returns (string memory) {
-        return "Burner Loans - Activation";
+        return "Burner Loans";
     }
 
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# Burner Loans Activation\n\n",
-                "This proposal launches USDS and USDe lending markets, configures shared DepositManager v1.1 and revenue routing, and delegates DAO operational authority.\n\n",
+                "# Burner Loans\n\n",
+                "## Summary\n\n",
+                "This proposal activates the Burner Loans shorting facility. Initial collateral assets are USDS and USDe, held in sUSDS and sUSDe through shared DepositManager v1.1. Borrowers deposit collateral to borrow OHM for fixed terms; collateral must satisfy both the market LTV limit and the OHM backing requirement.\n\n",
+                "Both markets launch with an 85% maximum LTV, a 125% backing multiplier, a 30-day term and a 90-day maximum maturity horizon. Each market has a 50,000 OHM debt cap and the facility has a 100,000 OHM global cap. Origination fees are zero at launch. Seizure rewards are 1%, capped at 100 collateral tokens. USDe withdrawals return sUSDe shares because the vault cannot synchronously redeem underlying.\n\n",
                 "## Resources\n\n",
-                "- Parameters: documentation/burner_loans_launch_parameters.md\n",
-                "- Deployment and operations: documentation/burner_loans_launch_runbook.md\n\n",
+                "- Pull request: TBC\n",
+                "- Audit report: TBC\n",
+                "\n",
                 "## Assumptions\n\n",
-                "- The reviewed contracts are deployed; FLOAN is installed and the new policies are Kernel-active but have never been enabled.\n",
-                "- BackingOracle and its queue are separately deployed and configured; the oracle is active, enabled and populated.\n",
-                "- Heart and PriceConfigv2 are active and enabled; compatible PRICE supports OHM and USDS.\n",
-                "- The governance timelock holds ADMIN and controls RolesAdmin.\n\n",
+                "- The reviewed contracts are deployed and recorded in the address registry.\n",
+                "- The DAO multisig, as Kernel executor, has installed the OlympusFixedTermLoan (FLOAN) module and activated the following policies without enabling them: DepositManager v1.1; PriceCache; BackingOracle and BackingOracleConfigTimelock; RevenueDistributor, RevenueDistributorConfigTimelock and RevenueDistributorTask; BurnerLoansCore, Config, Inventory, Payout, Risk, Collateral, Debt and Seize; BurnerLoansConfigTimelock, RiskConfigTimelock, PayoutConfigTimelock and InventoryConfigTimelock; BurnerLoansSeizerTask and BurnerLoansYieldClaimerTask.\n",
+                "- BurnerLoansAuth, BurnerLoansLens and the one-use BurnerLoansActivator are deployed periphery/helpers, rather than Kernel policies.\n",
+                "- Heart and PriceConfigv2 are active and enabled. PRICE supports OHM and USDS. Heart retains the reviewed six-task order: ConvertibleDepositFacility, ReserveMigrator, ReserveWrapper, Operator, YieldRepurchaseFacility and EmissionManager.\n",
+                "- The governance timelock holds ADMIN and controls RolesAdmin. No DAO multisig initial enablement or configuration-operator selection is assumed.\n\n",
                 "## Proposal Steps\n\n",
-                "1. Grant custody, settlement and automation roles; grant DAO lending, inventory-provider, distributor and backing administration roles.\n",
+                "1. Grant the custody, settlement and automation roles required by Core, Collateral, Debt, Seize, SeizerTask and YieldClaimerTask. Grant the named lending, inventory, revenue and backing operational roles to the DAO multisig.\n",
                 "2. Grant temporary ADMIN to the one-use activator.\n",
-                "3. Activate the reviewed launch: admit USDe into PRICE if absent, configure USDS/sUSDS and USDe/sUSDe custody, select Core-bound Auth, services and timelocks, configure and enable both markets, and set up Heart tasks.\n",
-                "4. Revoke activator ADMIN in the same execution.\n\n",
-                "Heart order becomes Seizer, Yield, RevenueDistributorTask, then the six existing tasks in their original order. Market parameters and exact task indexes are recorded in the linked documents."
+                "3. Call the activator atomically. It verifies the prepared Kernel membership, immutable target bindings and fresh disabled state; adds USDe PRICE support if absent; initializes BackingOracle to $11.99 per OHM and selects and enables its configuration timelock.\n",
+                "4. Select Core-bound Auth, services and delayed configuration operators. Enable PriceCache, RevenueDistributor, DepositManager v1.1, Inventory, Payout, Risk, Core, Config, Collateral, Debt and Seize in dependency order. Configure Treasury-only routes for USDS, sUSDS, USDe and sUSDe revenue.\n",
+                "5. Register USDS/sUSDS and USDe/sUSDe custody routes and markets with the published launch parameters. Enable all five lending/revenue configuration timelocks and the SeizerTask, YieldClaimerTask and RevenueDistributorTask. Insert these tasks at Heart indexes 3, 4 and 5, respectively, after reserve preparation and immediately before Operator. Existing tasks and their selectors retain relative order.\n",
+                "6. Revoke the activator ADMIN role in the same governance execution. Any failed action rolls back the entire proposal.\n\n",
+                "## Next Steps\n\n",
+                "No further governance action is required to enable the configured markets. Before borrowers can draw debt, the DAO inventory provider must supply OHM or the delegated lending administrator must configure a Treasury-backed mint limit. Operators must confirm live prices and capacity, then monitor Heart task execution, outstanding debt and collateral custody using the launch runbook.\n"
             );
     }
 

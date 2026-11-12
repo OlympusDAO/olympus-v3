@@ -9,6 +9,7 @@ import {IBurnerLoansYieldClaimerTask} from "src/policies/interfaces/burnerloans/
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 
 // Contracts
+import {console2} from "@forge-std-1.16.2/console2.sol";
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 /// @notice YieldClaimerTask operational controls delegated to burner_loans_admin.
@@ -21,6 +22,7 @@ contract BurnerLoansYieldClaimerTaskBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansYieldClaimerTaskBatch: setExecutionGasLimit");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansYieldClaimerTask"),
             abi.encodeCall(
@@ -37,6 +39,7 @@ contract BurnerLoansYieldClaimerTaskBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansYieldClaimerTaskBatch: setMinimumGasToAttempt");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansYieldClaimerTask"),
             abi.encodeCall(
@@ -53,6 +56,7 @@ contract BurnerLoansYieldClaimerTaskBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansYieldClaimerTaskBatch: setGasReserve");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansYieldClaimerTask"),
             abi.encodeCall(
@@ -69,6 +73,7 @@ contract BurnerLoansYieldClaimerTaskBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansYieldClaimerTaskBatch: setNextAssetIndex");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansYieldClaimerTask"),
             abi.encodeCall(

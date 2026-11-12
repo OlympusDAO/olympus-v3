@@ -144,6 +144,7 @@ import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolCon
 ///         and the runtime code of a large contract compiled without the optimizer exceeds the
 ///         24,576 B limit and cannot be deployed.
 contract DeployV3 is WithEnvironment {
+    using SafeCast for uint256;
     using stdJson for string;
 
     // TODOs
@@ -1694,9 +1695,8 @@ contract DeployV3 is WithEnvironment {
     function deployBurnerLoansRisk() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
-        uint48 maxAge = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("BurnerLoansRisk", "priceCacheMaxAge")
-        );
+        uint48 maxAge = _readDeploymentArgUint256("BurnerLoansRisk", "priceCacheMaxAge")
+            .encodeUInt48();
         Kernel kernel = _getKernel();
         IERC20 ohm = IERC20(_getAddressNotZero("olympus.legacy.OHM"));
         address oracle = _getAddressNotZero("olympus.policies.BackingOracle");
@@ -2067,6 +2067,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("  susds", d.susds);
         console2.log("  susde", d.susde);
         console2.log("  backingOracle", d.backingOracle);
+        console2.log("  backingOracleTimelock", d.backingOracleTimelock);
 
         // Deploy
         vm.broadcast();
@@ -2115,6 +2116,9 @@ contract DeployV3 is WithEnvironment {
         d.susds = _getAddressNotZero("external.tokens.sUSDS");
         d.susde = _getAddressNotZero("external.tokens.sUSDe");
         d.backingOracle = _getAddressNotZero("olympus.policies.BackingOracle");
+        d.backingOracleTimelock = _getAddressNotZero(
+            "olympus.policies.BackingOracleConfigTimelock"
+        );
     }
 
     function _getKernel() private view returns (Kernel) {

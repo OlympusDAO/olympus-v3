@@ -13,6 +13,7 @@ import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
@@ -26,7 +27,9 @@ import {SafeCast} from "src/libraries/SafeCast.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice Installs and activates the complete ConvertibleDeposit system including EmissionManager
-/// @dev    This script handles the complete activation sequence based on ConvertibleDepositAuctioneerTest setup
+/// @dev    Kernel installation requires the executor. Initial configuration, role grants and
+///         enablement entry points require their target's governance/ADMIN authority; being
+///         the Kernel executor does not grant that authority to the DAO multisig.
 contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Install modules and activate policies
     /// @dev    Currently, the DAO MS has kernel executor role, so this will be run as a batch script through the DAO MS
@@ -41,7 +44,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         address depositPositionManager = _envAddressNotZero(
             "olympus.modules.OlympusDepositPositionManager"
         );
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );
@@ -267,7 +270,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
 
         console2.log("=== Configuring DepositManager ===");
         console2.log("Enabling DepositManager policy to accept deposits");
@@ -289,7 +292,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             "ConfigureConvertibleDepositFacility",
             "facilityName"
         );
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );
@@ -324,7 +327,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address usds = _envAddressNotZero("external.tokens.USDS");
         address usdsVault = _envAddressNotZero("external.tokens.sUSDS");
         uint256 maxCapacity = _readBatchArgUint256("ConfigureUSDS", "maxCapacity");
@@ -341,11 +344,12 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         addToBatch(
             depositManager,
             abi.encodeWithSelector(
-                IDepositManager.addAsset.selector,
+                IDepositManagerV1_1.addAsset.selector,
                 usds,
                 usdsVault,
                 maxCapacity,
-                minDeposit
+                minDeposit,
+                false // sUSDS permits synchronous underlying withdrawals.
             )
         );
 
@@ -359,7 +363,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
-        address depositManager = _envAddressNotZero("olympus.policies.DepositManagerv1_0");
+        address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );

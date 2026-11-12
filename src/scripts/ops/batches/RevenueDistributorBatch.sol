@@ -6,6 +6,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 
 // Contracts
+import {console2} from "@forge-std-1.16.2/console2.sol";
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 /// @notice Shared revenue infrastructure operations; target authorization is checked in simulation.
@@ -16,6 +17,7 @@ contract RevenueDistributorBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("RevenueDistributorBatch: distribute");
         addToBatch(
             _envAddressNotZero("olympus.policies.RevenueDistributor"),
             abi.encodeCall(
@@ -32,6 +34,7 @@ contract RevenueDistributorBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("RevenueDistributorBatch: transferPendingPayout");
         addToBatch(
             _envAddressNotZero("olympus.policies.RevenueDistributor"),
             abi.encodeCall(

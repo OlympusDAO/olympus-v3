@@ -5,6 +5,7 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(reentrancy-no-eth)
 
 // Interfaces
+import {IApi3ReaderProxyV1Factory} from "./IApi3ReaderProxyV1Factory.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -34,11 +35,13 @@ import {BurnerLoansDeployHarness} from "src/test/proposals/BurnerLoansActivator/
 import {ProposalTest} from "src/test/proposals/ProposalTest.sol";
 
 /// @dev Real mainnet Kernel, PRICE v1.2, Heart, tokens, vaults and Governor. The deployed Burner
-///      Loans graph uses the saved deployment sequence and a pre-populated real BackingOracle.
+///      Loans graph uses the saved deployment sequence and a fresh real BackingOracle.
 ///      External-feed publication cadence is adapted. No launch role, PRICE asset or custody market is seeded.
 abstract contract BurnerLoansForkTest is ProposalTest {
     uint256 internal constant _BLOCK = 25_973_712;
     address internal constant _USDE_FEED = 0xa569d910839Ae8865Da8F8e70FfFb0cBA869F961;
+    address internal constant _USDE_REDSTONE_FEED = 0xbC5FBcf58CeAEa19D523aBc76515b9AEFb5cfd58;
+    address internal constant _USDE_API3_FEED = 0x22a35f4BDD167EAF7Cbf0C0Dc0C2001071714cc6;
     IBurnerLoansActivator.Deployment internal _graph;
     BurnerLoansActivator internal _activator;
     BurnerLoansProposal internal _proposal;
@@ -91,6 +94,15 @@ abstract contract BurnerLoansForkTest is ProposalTest {
         assertFalse(_price.isAssetApproved(_graph.usde), "Fixture does not admit USDe to PRICE");
         assertEq(_core.getAssetCount(), 0, "Fixture does not configure lending markets");
         assertFalse(IEnabler(_graph.core).isEnabled(), "Fixture does not enable Core");
+        assertFalse(
+            IEnabler(_graph.backingOracle).isEnabled(),
+            "OCG owns initial oracle enablement"
+        );
+        assertEq(
+            IConfigOperator(_graph.backingOracle).configOperator(),
+            address(0),
+            "OCG owns oracle operator selection"
+        );
         assertFalse(_roles.hasRole(_dao, BURNER_LOANS_ADMIN_ROLE), "Proposal owns DAO role grant");
         _ohmConfiguration = keccak256(abi.encode(_price.getAssetData(_graph.ohm)));
         _usdsConfiguration = keccak256(abi.encode(_price.getAssetData(_graph.usds)));
@@ -101,6 +113,19 @@ abstract contract BurnerLoansForkTest is ProposalTest {
         _adaptAssetFeeds(_graph.ohm);
         _adaptAssetFeeds(_graph.usds);
         _adaptFeed(_USDE_FEED);
+        _adaptFeed(_USDE_REDSTONE_FEED);
+        // The reader was published after this pinned block. Reproduce its real, permissionless
+        // factory deployment at the same deterministic address; retain the historical dAPI data.
+        if (_USDE_API3_FEED.code.length == 0) {
+            address proxy = IApi3ReaderProxyV1Factory(0x1Fe170311Cb13e3bfB96DeC8FAadcf97BF843381)
+                .deployApi3ReaderProxyV1("USDe/USD", 1, "");
+            assertEq(
+                proxy,
+                _USDE_API3_FEED,
+                "Historical factory reproduces the published API3 reader"
+            );
+        }
+        _adaptFeed(_USDE_API3_FEED);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         // The expected disabled-state revert returns no deposit result.
         // forge-lint: disable-next-item(unused-return)
@@ -144,11 +169,6 @@ abstract contract BurnerLoansForkTest is ProposalTest {
         vm.startPrank(_kernel.executor());
         _kernel.executeAction(Actions.ActivatePolicy, oracle);
         _kernel.executeAction(Actions.ActivatePolicy, oracleQueue);
-        vm.stopPrank();
-        vm.startPrank(_timelock);
-        IConfigOperator(oracle).setConfigOperator(oracleQueue);
-        IEnabler(oracle).enable(abi.encode(uint256(12e18)));
-        IEnabler(oracleQueue).enable("");
         vm.stopPrank();
         _deployer.setDependency(
             "olympus.policies.OlympusHeart",
@@ -324,17 +344,22 @@ abstract contract BurnerLoansForkTest is ProposalTest {
             _existingHeartTasks.length + 3,
             "Heart retains all previous tasks plus three launch tasks"
         );
-        assertEq(tasks[0], _graph.seizerTask, "Seizer precedes yield collection");
-        assertEq(tasks[1], _graph.yieldClaimerTask, "Yield collection precedes distribution");
-        assertEq(tasks[2], _graph.revenueDistributorTask, "Distributor follows yield collection");
+        assertEq(tasks[3], _graph.seizerTask, "Seizer follows custody and reserve preparation");
+        assertEq(tasks[4], _graph.yieldClaimerTask, "Yield collection follows seizure");
+        assertEq(
+            tasks[5],
+            _graph.revenueDistributorTask,
+            "Distribution immediately precedes Operator"
+        );
         for (uint256 i; i < _existingHeartTasks.length; ++i) {
+            uint256 launchIndex = i < 3 ? i : i + 3;
             assertEq(
-                tasks[i + 3],
+                tasks[launchIndex],
                 _existingHeartTasks[i],
                 "Existing task relative order is preserved"
             );
             assertEq(
-                selectors[i + 3],
+                selectors[launchIndex],
                 _existingHeartSelectors[i],
                 "Existing custom task selector is preserved"
             );

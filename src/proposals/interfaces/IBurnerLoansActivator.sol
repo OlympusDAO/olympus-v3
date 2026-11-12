@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-// Interfaces
-import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
-
 /// @notice One-use governance launcher for an already deployed and Kernel-prepared Burner Loans stack.
-interface IBurnerLoansActivator is IERC165 {
+interface IBurnerLoansActivator {
     /// @notice A fixed deployment graph and its external dependencies.
     /// @dev Assets and vaults are supplied explicitly so the reviewed graph can be reproduced in tests.
     struct Deployment {
@@ -40,6 +37,7 @@ interface IBurnerLoansActivator is IERC165 {
         address susds;
         address susde;
         address backingOracle;
+        address backingOracleTimelock;
     }
 
     /// @notice The caller is not the constructor-bound governance timelock.
