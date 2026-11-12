@@ -167,26 +167,17 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
     ///      - The amount or borrower is zero, or Inventory is disabled.
     ///      - The position is absent, debt is zero or repayment exceeds principal.
     ///      - Repayment occurs in the latest borrow block.
-    ///      - A partial repayment cannot obtain prices to report resulting health.
     ///      - Exact OHM collection, FLOAN reduction or Inventory settlement fails.
     function repay(
         address asset_,
         uint128 amount_,
         address borrower_
-    ) external override onlyOperational returns (uint128 principal, uint256 resultingHealthFactor) {
-        IFLOANv1.Position memory position = _quoteRepay(asset_, amount_, borrower_);
-        IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansCore.PriceSnapshot memory snapshot;
-        // Clearing all principal needs no price quote. Partial repayment reports health but never
-        // requires the borrower to cure an already unhealthy position before reducing debt.
-        if (position.principalDue != 0) {
-            snapshot = evaluator.refreshSnapshot(asset_);
-            // A mutating price refresh can change debt; validate the live position again.
-            position = _quoteRepay(asset_, amount_, borrower_);
-        }
-        resultingHealthFactor = LoanPositions.health(evaluator, snapshot, position);
+    ) external override onlyOperational returns (uint128 principal) {
+        _quoteRepay(asset_, amount_, borrower_);
         principal = _CORE.settleRepay(asset_, amount_, msg.sender, borrower_);
         emit IBurnerLoansDebt.Repaid(msg.sender, asset_, borrower_, amount_, principal);
+        // Health is intentionally not calculated or returned so oracle outages cannot block repayment.
+        // Query BurnerLoansLens separately to assess the remaining position.
     }
 
     /// @notice Advertises this public action interface and the inherited lifecycle interface.
@@ -241,12 +232,11 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
             revert IBurnerLoansDebt.BurnerLoans_FeeExceedsMax(result.fee, maxFee_);
     }
 
-    /// @notice Quotes remaining principal and resulting health for a repayment.
+    /// @notice Quotes remaining principal without requiring prices.
     /// @param asset_ Configured collateral token identifying the borrower's market.
     /// @param amount_ Principal to repay, in OHM units.
     /// @param borrower_ Account whose principal would be reduced.
     /// @return remainingPrincipal Outstanding principal after repayment, in OHM units.
-    /// @return resultingHealthFactor WAD-scaled health, or uint256.max for full repayment.
     /// @dev Reverts if:
     ///      - An operation was requested with a zero token amount.
     ///      - This contract or a required dependency is disabled.
@@ -259,14 +249,9 @@ contract BurnerLoansDebt is BaseBurnerLoansAction, IBurnerLoansDebt {
         address asset_,
         uint128 amount_,
         address borrower_
-    ) external view override returns (uint128 remainingPrincipal, uint256 resultingHealthFactor) {
+    ) external view override returns (uint128 remainingPrincipal) {
         _requirePreviewOperational();
-        IFLOANv1.Position memory position = _quoteRepay(asset_, amount_, borrower_);
-        remainingPrincipal = position.principalDue;
-        IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansCore.PriceSnapshot memory snapshot;
-        if (remainingPrincipal != 0) snapshot = evaluator.snapshot(asset_);
-        resultingHealthFactor = LoanPositions.health(evaluator, snapshot, position);
+        return _quoteRepay(asset_, amount_, borrower_).principalDue;
     }
 
     /// @inheritdoc IBurnerLoansDebt

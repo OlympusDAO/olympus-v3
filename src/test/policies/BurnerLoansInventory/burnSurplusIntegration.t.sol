@@ -39,10 +39,18 @@ contract BurnerLoansInventoryBurnSurplusIntegrationTest is BurnerLoansInventoryM
         vm.roll(block.number + 1);
         vm.startPrank(_borrower);
         assertTrue(_ohm.approve(address(_core), 100e9), "Borrower approves full repayment");
-        (uint128 principal, uint256 health) = _debt.repay(address(_asset), 100e9, _borrower);
+        uint128 principal = _debt.repay(address(_asset), 100e9, _borrower);
         vm.stopPrank();
         assertEq(principal, 0, "Full repayment clears borrower principal despite burn failure");
-        assertEq(health, type(uint256).max, "Debt-free position reports maximum health");
+        assertEq(
+            _lens.positionHealthFactor(
+                address(_asset),
+                _lens.getPosition(address(_asset), _borrower).depositedCollateral,
+                principal
+            ),
+            type(uint256).max,
+            "Separate debt-free health read"
+        );
         // Supply 50, draw 100: 50 supplied + 50 minted. Repay 100: retain 50, burn the other 50.
         assertEq(_inventory.suppliedIdleOhm(), 50e9, "Repayment restores provider funding");
         assertEq(_inventory.surplusOhm(), 50e9, "Failed burn is recoverable surplus");

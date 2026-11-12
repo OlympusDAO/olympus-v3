@@ -96,7 +96,7 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
         address borrower = makeAddr("expiredBorrower");
         _openLoan(_graph.usds, _graph.susds, borrower);
         _openLoan(_graph.usde, _graph.susde, borrower);
-        vm.warp(block.timestamp + 30 days + 1);
+        vm.warp(vm.getBlockTimestamp() + 30 days + 1);
         _seizeAndAssert(_graph.usds, _graph.usds, borrower);
         _seizeAndAssert(_graph.usde, _graph.susde, borrower);
         assertEq(_core.totalActiveDebtOhm(), 0, "Both defaults clear Core active debt");
@@ -119,7 +119,7 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
         uint128 usdeCredit = _depositAndAssert(_graph.usde, _graph.susde, depositor);
         // Real sUSDS accrues through chi over time. A controlled USDe donation to the actual
         // sUSDe vault guarantees positive test yield; no vault conversion function is mocked.
-        vm.warp(block.timestamp + 7 days);
+        vm.warp(vm.getBlockTimestamp() + 7 days);
         deal(_graph.usde, _graph.susde, IERC20(_graph.usde).balanceOf(_graph.susde) + 1_000e18);
         address treasury = address(_kernel.getModuleForKeycode(toKeycode("TRSRY")));
         uint256 usdsBefore = IERC20(_graph.usds).balanceOf(treasury);
@@ -202,7 +202,7 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
     function test_givenExpiredPosition_whenHeartSeizerTaskRuns() public {
         address borrower = makeAddr("automatedDefaultBorrower");
         _openLoan(_graph.usds, _graph.susds, borrower);
-        vm.warp(block.timestamp + 30 days + 1);
+        vm.warp(vm.getBlockTimestamp() + 30 days + 1);
         address treasury = address(_kernel.getModuleForKeycode(toKeycode("TRSRY")));
         uint256 treasuryBefore = IERC20(_graph.usds).balanceOf(treasury);
         vm.prank(_graph.heart);
@@ -387,10 +387,14 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
             _graph.ohm,
             asset_
         );
-        assertEq(pair.updatedAt, block.timestamp, "Borrow refreshes the configured cache");
+        assertEq(pair.updatedAt, vm.getBlockTimestamp(), "Borrow refreshes the configured cache");
         assertGt(pair.assetPriceUsd, 0, "Cached OHM quote is positive");
         assertGt(pair.quotePriceUsd, 0, "Cached collateral quote is positive");
-        assertEq(borrowed.maturity, block.timestamp + 30 days, "Initial debt term is thirty days");
+        assertEq(
+            borrowed.maturity,
+            vm.getBlockTimestamp() + 30 days,
+            "Initial debt term is thirty days"
+        );
         maturity = borrowed.maturity;
         assertEq(
             IERC20(_graph.ohm).balanceOf(borrower_),
@@ -437,11 +441,17 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
 
     function _repayAndAssert(address asset_, address borrower_, uint256 supplyBefore_) private {
         vm.roll(block.number + 1);
-        (uint128 previewDebt, uint256 previewHealth) = _debt.previewRepay(asset_, 40e9, borrower_);
+        uint128 previewDebt = _debt.previewRepay(asset_, 40e9, borrower_);
+        uint256 collateral = _lens.getPosition(asset_, borrower_).depositedCollateral;
+        uint256 previewHealth = _lens.positionHealthFactor(asset_, collateral, previewDebt);
         vm.prank(borrower_);
-        (uint128 debt, uint256 resultingHealth) = _debt.repay(asset_, 40e9, borrower_);
+        uint128 debt = _debt.repay(asset_, 40e9, borrower_);
         assertEq(debt, previewDebt, "Partial repayment principal matches preview");
-        assertEq(resultingHealth, previewHealth, "Partial repayment health matches preview");
+        assertEq(
+            _lens.positionHealthFactor(asset_, collateral, debt),
+            previewHealth,
+            "Separate partial repayment health matches preview"
+        );
         assertEq(debt, 60e9, "100 OHM minus 40 OHM leaves 60 OHM");
         assertEq(
             IERC20(_graph.ohm).balanceOf(borrower_),
@@ -450,9 +460,13 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
         );
         _assertPrincipal(asset_, borrower_, 60e9);
         vm.prank(borrower_);
-        (debt, resultingHealth) = _debt.repay(asset_, 60e9, borrower_);
+        debt = _debt.repay(asset_, 60e9, borrower_);
         assertEq(debt, 0, "Full repayment clears principal");
-        assertEq(resultingHealth, type(uint256).max, "Fully repaid health is unlimited");
+        assertEq(
+            _lens.positionHealthFactor(asset_, collateral, debt),
+            type(uint256).max,
+            "Separate fully repaid health is unlimited"
+        );
         _assertPrincipal(asset_, borrower_, 0);
         assertEq(
             IERC20(_graph.ohm).totalSupply(),

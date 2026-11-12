@@ -82,7 +82,7 @@ For example, a later term reduction does not shorten an existing loan. A future 
 | --- | --- | --- |
 | Deposit | Adds the underlying-denominated credit reported by DepositManager | First deposits and top-ups are allowed with originations enabled or disabled, subject to the other deposit checks |
 | Borrow | Adds principal and, for a new debt episode, sets maturity | Originations enabled, healthy position, valid maturity and available capacity |
-| Repay | Reduces principal and returns OHM to Inventory | Payer supplies its own OHM; repayment is not in the latest borrow block |
+| Repay | Reduces principal, returns OHM to Inventory and reports remaining principal | Payer supplies its own OHM; repayment is not in the latest borrow block; no prices required |
 | Withdraw | Removes collateral credit and returns underlying or shares | Any remaining debt stays healthy |
 | Extend | Advances the shared maturity | Originations enabled, valid term/horizon, health and accepted fee |
 | Seize | Defaults all principal and removes collateral | Nonzero debt is matured or health is below `1e18` |
@@ -132,9 +132,13 @@ crossover = (maxLtvBps / 10_000) * (backingMultiplierBps / 10_000)
 
 Risk owns `backingOracle`, `priceCache` and `priceCacheMaxAge`. Zero cache selects direct PRICE reads. A configured cache is used only while active and enabled; otherwise Risk uses PRICE. Cache compatibility and lifecycle errors remain distinct, including the shared Kernel-mismatch error.
 
-Views use a fresh cached snapshot or read PRICE without writing the cache. Price-dependent actions refresh an operational cache when necessary. An error from an operational cache propagates. Debt-free health does not need a price read. An unavailable backing oracle blocks borrow/extend, partial repayment, indebted collateral deposits/withdrawals and seizure execution, including their price-dependent previews. Full repayment and debt-free collateral operations retain their pricing-independent paths. Pause originations rather than backing to retain price-dependent servicing during wind-down.
+Views use a fresh cached snapshot or read PRICE without writing the cache. Price-dependent actions refresh an operational cache when necessary. An error from an operational cache propagates. Debt-free health does not need a price read. An unavailable backing oracle blocks borrowing, extensions, indebted collateral deposits/withdrawals and seizure execution, including their price-dependent previews. Partial/full repayment and its preview require no prices. Debt-free collateral operations also retain their pricing-independent paths. Pause originations rather than backing to retain price-dependent servicing during wind-down.
 
-A full repayment has a debt-free result, but it still applies custody, amount and same-block validation. Repaid positions with remaining debt use current pricing for their resulting health.
+Repayment and `previewRepay` return only the remaining OHM principal. Full repayment returns zero. Neither function calculates or returns a health factor, so oracle outages cannot block an otherwise valid repayment. Existing lifecycle, Inventory, amount and same-block checks still apply. Exact OHM collection and mandatory settlement remain atomic.
+
+A successful repayment does not guarantee that the remaining position is healthy or extend its maturity. Callers check health separately through `BurnerLoansLens`. The caller reads current collateral and debt through `getPosition(asset,borrower)`, then supplies those amounts to `positionHealthFactor(asset,collateral,debt)`. For remaining debt, this separate health read requires valid prices and can fail during an oracle outage.
+
+Integrations must decode the repayment and preview return as one `uint128` principal value. The previous second health return no longer exists. Function input selectors remain unchanged.
 
 Cache age is a `uint48` number of seconds with no additional protocol maximum. Risk has its own `configOperator`, normally RiskConfigTimelock. This queue calls its immutable Risk target directly. Config retains a forwarding method that requires selecting Config as Risk's operator instead. A Core Config rotation does not update Risk's authority automatically.
 

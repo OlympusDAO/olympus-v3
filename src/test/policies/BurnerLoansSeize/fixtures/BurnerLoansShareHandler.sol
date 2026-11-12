@@ -213,19 +213,24 @@ contract BurnerLoansShareHandler is Test {
         if (available == 0) return;
         uint128 amount = uint128(bound(amountSeed_, 1, available));
         vm.roll(block.number + 1);
-        (uint128 quotedDebt, uint256 quotedHealth) = _services.debt.previewRepay(
+        uint128 quotedDebt = _services.debt.previewRepay(address(_ASSET), amount, actor);
+        uint256 quotedHealth = _services.lens.positionHealthFactor(
             address(_ASSET),
-            amount,
-            actor
+            collateral[actor],
+            quotedDebt
         );
         uint256 supplyBefore = _OHM.totalSupply();
         uint256 idleBefore = _INVENTORY.suppliedIdleOhm();
         vm.prank(actor);
-        (uint128 debt, uint256 health) = _services.debt.repay(address(_ASSET), amount, actor);
+        uint128 debt = _services.debt.repay(address(_ASSET), amount, actor);
         principal[actor] -= amount;
         assertEq(debt, principal[actor], "Repayment reduces modeled debt");
         assertEq(debt, quotedDebt, "Repayment agrees with quote");
-        assertEq(health, quotedHealth, "Repayment health agrees with quote");
+        assertEq(
+            _services.lens.positionHealthFactor(address(_ASSET), collateral[actor], debt),
+            quotedHealth,
+            "Separate repayment health agrees with independent quote"
+        );
         assertEq(
             supplyBefore - _OHM.totalSupply() + _INVENTORY.suppliedIdleOhm() - idleBefore,
             amount,

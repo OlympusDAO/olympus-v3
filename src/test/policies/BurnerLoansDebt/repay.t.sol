@@ -48,16 +48,12 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         );
         amount_ = uint128(bound(amount_, 1, _PRINCIPAL - 1));
         _fundRepayer(payer_, amount_);
+        _expectNoRepaymentPricing();
         uint256 payerBefore = _ohm.balanceOf(payer_);
         IFLOANv1.Position memory beforePosition = _position();
         vm.prank(payer_);
-        (uint128 quoted, uint256 quotedHealth) = _debt.previewRepay(
-            address(_asset),
-            amount_,
-            _borrower
-        );
+        uint128 quoted = _debt.previewRepay(address(_asset), amount_, _borrower);
         assertEq(quoted, _PRINCIPAL - amount_, "Independent remaining principal");
-        assertEq(quotedHealth, _HEALTH, "Risk health forwarded unchanged");
         assertEq(_position().principalDue, _PRINCIPAL, "Preview preserves debt");
         vm.expectEmit(address(_debt));
         emit IBurnerLoansDebt.Repaid(
@@ -68,9 +64,8 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
             _PRINCIPAL - amount_
         );
         vm.prank(payer_);
-        (uint128 remaining, uint256 health) = _debt.repay(address(_asset), amount_, _borrower);
+        uint128 remaining = _debt.repay(address(_asset), amount_, _borrower);
         assertEq(remaining, _PRINCIPAL - amount_, "Actual remaining principal");
-        assertEq(health, _HEALTH, "Actual health uses remaining debt");
         assertEq(_ohm.balanceOf(payer_), payerBefore - amount_, "Only payer supplies repayment");
         assertEq(_inventory.activePrincipalOhm(), remaining, "Inventory principal reconciled");
         assertEq(
@@ -106,24 +101,13 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
             payer_ != address(0) && payer_ != address(_inventory) && payer_ != address(_core)
         );
         _fundRepayer(payer_, _PRINCIPAL);
-        _mockRiskSnapshotFailure(abi.encodeWithSelector(PricingUnavailable.selector));
-        vm.mockCallRevert(
-            address(_risk),
-            abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
-            abi.encodeWithSelector(PricingUnavailable.selector)
-        );
+        _expectNoRepaymentPricing();
         vm.prank(payer_);
-        (uint128 quote, uint256 quotedHealth) = _debt.previewRepay(
-            address(_asset),
-            _PRINCIPAL,
-            _borrower
-        );
+        uint128 quote = _debt.previewRepay(address(_asset), _PRINCIPAL, _borrower);
         vm.prank(payer_);
-        (uint128 remaining, uint256 health) = _debt.repay(address(_asset), _PRINCIPAL, _borrower);
+        uint128 remaining = _debt.repay(address(_asset), _PRINCIPAL, _borrower);
         assertEq(quote, 0, "Full repayment quote");
         assertEq(remaining, 0, "No principal remains");
-        assertEq(quotedHealth, type(uint256).max, "Debt-free quote");
-        assertEq(health, type(uint256).max, "Debt-free result");
         assertEq(_inventory.activePrincipalOhm(), 0, "Inventory principal cleared");
         assertEq(_position().collateral, 2000e6, "Full repayment retains collateral");
         assertEq(
@@ -140,19 +124,35 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
     }
 
     // Scenarios: BLDEBT-REPAY-N04.
-    function test_givenUnhealthyDebt_whenPartiallyRepaid_thenHelpfulRepaymentAllowed() public {
+    function test_givenUnhealthyDebt_whenPartiallyRepaid_thenHelpfulRepaymentAllowed(
+        address payer_
+    ) public {
+        vm.assume(payer_ != address(0) && payer_ != address(_inventory));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
             abi.encode(uint256(1))
         );
-        _fundRepayer(_recipient, 1);
-        vm.prank(_recipient);
-        (, uint256 quotedHealth) = _debt.previewRepay(address(_asset), 1, _borrower);
-        vm.prank(_recipient);
-        (, uint256 health) = _debt.repay(address(_asset), 1, _borrower);
-        assertEq(quotedHealth, 1, "Unhealthy quote allowed");
-        assertEq(health, 1, "Helpful repayment need not cure all debt");
+        _fundRepayer(payer_, 1);
+        uint256 payerBalance = _ohm.balanceOf(payer_);
+        uint256 healthBefore = _lens.positionHealthFactor(address(_asset), 2000e6, _PRINCIPAL);
+        vm.prank(payer_);
+        uint128 quoted = _debt.previewRepay(address(_asset), 1, _borrower);
+        vm.prank(payer_);
+        uint128 remaining = _debt.repay(address(_asset), 1, _borrower);
+        assertEq(quoted, _PRINCIPAL - 1, "Unhealthy debt can be quoted for repayment");
+        assertEq(remaining, _PRINCIPAL - 1, "Helpful repayment need not cure all debt");
+        assertEq(
+            _ohm.balanceOf(payer_),
+            payerBalance - 1,
+            "Fuzzed caller supplies its own repayment"
+        );
+        assertEq(healthBefore, 1, "Separate initial health read identifies unhealthy position");
+        assertEq(
+            _lens.positionHealthFactor(address(_asset), 2000e6, remaining),
+            1,
+            "Separate final health may remain unhealthy"
+        );
     }
 
     // Scenarios: BLDEBT-REPAY-N05.
@@ -189,6 +189,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-REPAY-I04.
     function test_whenPositionAbsent_reverts(address payer_, address borrower_) public {
+        _expectNoRepaymentPricing();
         vm.assume(borrower_ != address(0) && borrower_ != _borrower);
         _expectRepayRevert(
             abi.encodeWithSelector(IBurnerLoansDebt.BurnerLoans_NoCollateral.selector),
@@ -234,6 +235,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-REPAY-I07.
     function test_givenLatestBorrowBlock_whenRepaid_reverts() public {
+        _expectNoRepaymentPricing();
         vm.roll(_position().lastBorrowBlock);
         _expectRepayRevert(
             abi.encodeWithSelector(
@@ -262,18 +264,32 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
     }
 
     // Scenarios: BLDEBT-REPAY-D04.
-    function test_givenPartialDebt_whenPricingFails_reverts() public {
-        _mockRiskSnapshotFailure(abi.encodeWithSelector(PricingUnavailable.selector));
-        _expectRepayRevert(
-            abi.encodeWithSelector(PricingUnavailable.selector),
-            1,
-            _borrower,
-            _recipient
-        );
+    function test_givenPartialDebt_whenPricingUnavailable() public {
+        _expectNoRepaymentPricing();
+        _fundRepayer(_recipient, 1);
+        bytes32 beforeQuote = _stateDigest(_recipient);
+        vm.prank(_recipient);
+        uint128 quote = _debt.previewRepay(address(_asset), 1, _borrower);
+        assertEq(quote, _PRINCIPAL - 1, "Principal quote needs no prices");
+        assertEq(_stateDigest(_recipient), beforeQuote, "Price-independent preview is read only");
+        vm.prank(_recipient);
+        uint128 remaining = _debt.repay(address(_asset), 1, _borrower);
+        assertEq(remaining, _PRINCIPAL - 1, "Repayment needs no prices");
+        assertEq(_position().principalDue, remaining, "Canonical principal is reduced");
+        assertEq(_inventory.activePrincipalOhm(), remaining, "Inventory reconciles repayment");
+        assertEq(_ohm.balanceOf(_recipient), 0, "Exact unrelated payer debit");
     }
 
     // Scenarios: BLDEBT-REPAY-D05.
     function test_whenIncomingOhmInexact_thenDebtAndAllowanceRollBack() public {
+        _expectNoRepaymentPricing();
+        bytes32 beforeQuote = _stateDigest(_recipient);
+        assertEq(
+            _debt.previewRepay(address(_asset), 1, _borrower),
+            _PRINCIPAL - 1,
+            "Quote excludes token delivery and optional settlement failures"
+        );
+        assertEq(_stateDigest(_recipient), beforeQuote, "Settlement-failure quote is read only");
         vm.mockCall(
             address(_ohm),
             abi.encodeWithSelector(
@@ -309,6 +325,14 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
     function test_givenMintrBurnFailure_whenRepaid_thenDebtReducedAndOhmRetained(
         address payer_
     ) public {
+        _expectNoRepaymentPricing();
+        bytes32 beforeQuote = _stateDigest(_recipient);
+        assertEq(
+            _debt.previewRepay(address(_asset), 1, _borrower),
+            _PRINCIPAL - 1,
+            "Quote excludes token delivery and optional settlement failures"
+        );
+        assertEq(_stateDigest(_recipient), beforeQuote, "Settlement-failure quote is read only");
         vm.assume(payer_ != address(0) && payer_ != address(_inventory));
         _ohm.mint(payer_, 1);
         uint256 payerBalance = _ohm.balanceOf(payer_);
@@ -324,7 +348,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         vm.expectEmit(address(_inventory));
         emit IBurnerLoansInventory.OhmBurnFailed(1, failure);
         vm.prank(payer_);
-        (uint128 remaining, ) = _debt.repay(address(_asset), 1, _borrower);
+        uint128 remaining = _debt.repay(address(_asset), 1, _borrower);
         assertEq(remaining, _PRINCIPAL - 1, "Burn failure cannot prevent repayment");
         assertEq(_ohm.balanceOf(address(_inventory)), 1, "Failed burn remains recoverable surplus");
         assertEq(
@@ -344,6 +368,14 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
     function test_givenMintrApprovalFailure_whenRepaid_thenSafeApprovalDeficitRemains(
         address payer_
     ) public {
+        _expectNoRepaymentPricing();
+        bytes32 beforeQuote = _stateDigest(_recipient);
+        assertEq(
+            _debt.previewRepay(address(_asset), 1, _borrower),
+            _PRINCIPAL - 1,
+            "Quote excludes token delivery and optional settlement failures"
+        );
+        assertEq(_stateDigest(_recipient), beforeQuote, "Settlement-failure quote is read only");
         vm.assume(payer_ != address(0) && payer_ != address(_inventory));
         _ohm.mint(payer_, 1);
         uint256 payerBalance = _ohm.balanceOf(payer_);
@@ -363,7 +395,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         vm.expectEmit(address(_inventory));
         emit IBurnerLoansInventory.ApprovalRestorationFailed(1, failure);
         vm.prank(payer_);
-        (uint128 remaining, ) = _debt.repay(address(_asset), 1, _borrower);
+        uint128 remaining = _debt.repay(address(_asset), 1, _borrower);
         assertEq(
             remaining,
             _PRINCIPAL - 1,
@@ -498,17 +530,13 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         amount_ = uint128(bound(amount_, 1, uint256(principal_) - 1));
         _replacePrincipal(principal_);
         _fundRepayer(payer_, amount_);
+        _expectNoRepaymentPricing();
         uint256 balance = _ohm.balanceOf(payer_);
         bytes32 beforeQuote = _stateDigest(payer_);
         vm.prank(payer_);
-        (uint128 quoted, uint256 quotedHealth) = _debt.previewRepay(
-            address(_asset),
-            amount_,
-            _borrower
-        );
+        uint128 quoted = _debt.previewRepay(address(_asset), amount_, _borrower);
         assertEq(_stateDigest(payer_), beforeQuote, "Partial repayment quote is read only");
         assertEq(quoted, principal_ - amount_, "Independent remaining principal");
-        assertEq(quotedHealth, _HEALTH, "Exact mocked health");
         vm.expectEmit(address(_debt));
         emit IBurnerLoansDebt.Repaid(
             payer_,
@@ -518,9 +546,8 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
             principal_ - amount_
         );
         vm.prank(payer_);
-        (uint128 remaining, uint256 health) = _debt.repay(address(_asset), amount_, _borrower);
+        uint128 remaining = _debt.repay(address(_asset), amount_, _borrower);
         assertEq(remaining, principal_ - amount_, "Independent partial result");
-        assertEq(health, _HEALTH, "Health returned unchanged");
         assertEq(_ohm.balanceOf(payer_), balance - amount_, "Actual payer supplies OHM");
         assertEq(_position().principalDue, remaining, "Position agrees with returned debt");
         assertEq(
@@ -547,25 +574,18 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         principal_ = uint128(bound(principal_, 1, type(uint128).max));
         _replacePrincipal(principal_);
         _fundRepayer(payer_, principal_);
-        _mockRiskSnapshotFailure(abi.encodeWithSelector(PricingUnavailable.selector));
-        vm.mockCallRevert(
-            address(_risk),
-            abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
-            abi.encodeWithSelector(PricingUnavailable.selector)
-        );
+        _expectNoRepaymentPricing();
         bytes32 beforeQuote = _stateDigest(payer_);
         vm.prank(payer_);
-        (uint128 q, uint256 h) = _debt.previewRepay(address(_asset), principal_, _borrower);
+        uint128 q = _debt.previewRepay(address(_asset), principal_, _borrower);
         assertEq(q, 0, "Full quote has no debt");
-        assertEq(h, type(uint256).max, "Debt free health quote");
         assertEq(_stateDigest(payer_), beforeQuote, "Full quote is read only");
         uint256 balance = _ohm.balanceOf(payer_);
         vm.expectEmit(address(_debt));
         emit IBurnerLoansDebt.Repaid(payer_, address(_asset), _borrower, principal_, 0);
         vm.prank(payer_);
-        (uint128 remaining, uint256 health) = _debt.repay(address(_asset), principal_, _borrower);
+        uint128 remaining = _debt.repay(address(_asset), principal_, _borrower);
         assertEq(remaining, 0, "No debt remains");
-        assertEq(health, type(uint256).max, "Debt free health");
         assertEq(_ohm.balanceOf(payer_), balance - principal_, "Payer supplies full principal");
         assertEq(_inventory.activePrincipalOhm(), 0, "Inventory reconciled");
         assertEq(
@@ -617,7 +637,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
     // Scenarios: BLDEBT-REPAY-A01.
     function test_whenPayerIsZero_thenQuoteSucceedsAndTokenRejectsAllowance() public {
         vm.prank(address(0));
-        (uint128 remaining, ) = _debt.previewRepay(address(_asset), 1, _borrower);
+        uint128 remaining = _debt.previewRepay(address(_asset), 1, _borrower);
         assertEq(
             remaining,
             _PRINCIPAL - 1,
@@ -680,7 +700,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         vm.prank(address(_inventory));
         _ohm.approve(address(_core), 1);
         vm.prank(address(_inventory));
-        (uint128 remaining, ) = _debt.previewRepay(address(_asset), 1, _borrower);
+        uint128 remaining = _debt.previewRepay(address(_asset), 1, _borrower);
         assertEq(remaining, _PRINCIPAL - 1, "Inventory caller needs no borrower authorization");
         bytes32 state = _stateDigest(address(_inventory));
         vm.expectRevert(
@@ -754,6 +774,85 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         _debt.disable("");
         _debt.reEnable();
         test_givenFullDebt_whenAnyPayerRepays_thenNoPricing(_recipient);
+    }
+
+    // Scenarios: BLDEBT-REPAY-D12, BLDEBT-REPAY-D13, BLDEBT-REPAY-D14, BLDEBT-REPAY-D15.
+    function test_givenRiskLifecycleDrift_whenPartiallyRepaid(bool active_, bool enabled_) public {
+        _setPolicyState(_risk, active_, enabled_);
+        _expectNoRepaymentPricing();
+        _fundRepayer(_recipient, 50e9);
+        bytes32 beforeQuote = _stateDigest(_recipient);
+        vm.prank(_recipient);
+        uint128 quote = _debt.previewRepay(address(_asset), 50e9, _borrower);
+        assertEq(quote, 50e9, "Risk lifecycle does not gate the principal quote");
+        assertEq(_stateDigest(_recipient), beforeQuote, "Lifecycle-independent quote is read only");
+        vm.prank(_recipient);
+        uint128 remaining = _debt.repay(address(_asset), 50e9, _borrower);
+        assertEq(remaining, 50e9, "Risk lifecycle does not gate repayment");
+        assertEq(_position().principalDue, 50e9, "Canonical position reduced once");
+        assertEq(_inventory.activePrincipalOhm(), 50e9, "Inventory principal reduced once");
+        assertEq(
+            _floan.getMarketPrincipalDue(_core.marketId(address(_asset))),
+            50e9,
+            "Market principal reduced once"
+        );
+        assertEq(_position().collateral, 2000e6, "Collateral retained");
+        assertEq(_ohm.balanceOf(_recipient), 0, "Exact unrelated payer debit");
+    }
+
+    // Scenarios: BLDEBT-REPAY-D12.
+    function test_givenRiskActiveEnabled_whenPartiallyRepaid() public {
+        test_givenRiskLifecycleDrift_whenPartiallyRepaid(true, true);
+    }
+
+    // Scenarios: BLDEBT-REPAY-D13.
+    function test_givenRiskActiveDisabled_whenPartiallyRepaid() public {
+        test_givenRiskLifecycleDrift_whenPartiallyRepaid(true, false);
+    }
+
+    // Scenarios: BLDEBT-REPAY-D14.
+    function test_givenRiskInactiveEnabled_whenPartiallyRepaid() public {
+        test_givenRiskLifecycleDrift_whenPartiallyRepaid(false, true);
+    }
+
+    // Scenarios: BLDEBT-REPAY-D15.
+    function test_givenRiskInactiveDisabled_whenPartiallyRepaid() public {
+        test_givenRiskLifecycleDrift_whenPartiallyRepaid(false, false);
+    }
+
+    function _expectNoRepaymentPricing() internal {
+        bytes memory reason = abi.encodeWithSelector(PricingUnavailable.selector);
+        _mockRiskSnapshotFailure(reason);
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
+            reason
+        );
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeWithSelector(IBurnerLoansCore.risk.selector),
+            reason
+        );
+        vm.expectCall(
+            address(_core),
+            abi.encodeWithSelector(IBurnerLoansCore.risk.selector),
+            uint64(0)
+        );
+        vm.expectCall(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.snapshot.selector),
+            uint64(0)
+        );
+        vm.expectCall(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.refreshSnapshot.selector),
+            uint64(0)
+        );
+        vm.expectCall(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
+            uint64(0)
+        );
     }
 }
 

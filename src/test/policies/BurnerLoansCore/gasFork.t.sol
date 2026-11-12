@@ -306,7 +306,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
         assertGt(result.fee, 0, "borrow fee");
         assertEq(result.resultingDebtOhm, _DEBT, "resulting debt");
-        assertGt(result.maturity, block.timestamp, "maturity");
+        assertGt(result.maturity, vm.getBlockTimestamp(), "maturity");
         // collateralValueUsd = floor(4_000e18 * 0.999819106666666666e18 / 1e18)
         //                    = 3_999_276_426_666_666_664_000 (18 decimals)
         // debtValueUsd = ceil(100e9 * 20.097127953802461330e18 / 1e9)
@@ -328,7 +328,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
     function test_gasSnapshot_repay_partial() public {
         vm.startPrank(_alice);
         vm.startSnapshotGas(_snapshotName("repay.partial"));
-        (uint256 remainingDebt, uint256 healthFactor) = _debt.repay(_USDS, _REPAYMENT, _alice);
+        uint256 remainingDebt = _debt.repay(_USDS, _REPAYMENT, _alice);
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
@@ -344,7 +344,15 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         // requiredCollateralUsd = 1_418_620_796_738_997_270_353
         // health = floor(collateralValueUsd * 1e18 / requiredCollateralUsd)
         //        = 2_819_129_985_870_683_161
-        assertEq(healthFactor, _HEALTH_AFTER_REPAYMENT, "resulting health factor");
+        assertEq(
+            _lens.positionHealthFactor(
+                _USDS,
+                _lens.getPosition(_USDS, _alice).depositedCollateral,
+                remainingDebt
+            ),
+            _HEALTH_AFTER_REPAYMENT,
+            "Separate resulting health factor"
+        );
         assertEq(
             _aliceOhmBalanceBeforeTest - _ohm.balanceOf(_alice),
             _REPAYMENT,
@@ -578,7 +586,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         assertEq(_ohm.balanceOf(account_), amount_, "setup borrowed principal");
         assertGt(result.fee, 0, "setup borrow fee");
         assertEq(result.resultingDebtOhm, amount_, "setup resulting debt");
-        assertGt(result.maturity, block.timestamp, "setup maturity");
+        assertGt(result.maturity, vm.getBlockTimestamp(), "setup maturity");
         // For 4_000e18 collateral and 100e9 debt, the pinned-price working shown in
         // test_gasSnapshot_borrow_first yields health = 1_691_477_991_522_409_896.
         assertEq(result.resultingHealthFactor, _HEALTH_AFTER_BORROW, "setup health factor");

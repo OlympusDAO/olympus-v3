@@ -1,6 +1,6 @@
 # BurnerLoansDebt.repay coverage plan
 
-Source: [repay](../../../policies/burnerloans/BurnerLoansDebt.sol#L172). Scenarios specify the required behavior; mappings identify existing test proof.
+Source: [repay](../../../policies/burnerloans/BurnerLoansDebt.sol#L171). Scenarios specify the required behavior; mappings identify existing test proof.
 
 Coverage records implemented domains and assertions independently of execution results. `Partial` identifies missing proof, not a production failure. New required behavior remains `Unmapped` until corresponding tests assert it.
 
@@ -12,7 +12,9 @@ Own-policy admission: require Kernel-active BurnerLoansDebt; own inactivity uses
 
 Error ownership: an inactive local action uses `BurnerLoans_PolicyNotActive(BurnerLoansDebt)`; a locally disabled action uses inherited `NotEnabled()`. An inactive or disabled Core uses `PolicyDependency_NotActive(Core)`. Local activity is checked before local enablement and Core availability.
 
-Permissionless payer, including unrelated third party without any grant. Defaults: nonzero borrower, existing position principal D>0, Inventory enabled, block later than lastBorrowBlock. Amount OHM uint128.
+Permissionless payer, including unrelated third party without any grant. Defaults: nonzero borrower, existing position principal D>0, Inventory enabled, block later than lastBorrowBlock. Amount OHM uint128; MAX128 = type(uint128).max. D is current principal and A is the repayment amount, both in raw OHM units (9 decimals). Unchanged means authoritative position/market/global principal, collateral, maturity, borrower indexes, funding/provider claims, token balances and allowances, and dependency/cache state; a revert commits no logs.
+
+`repay` and `previewRepay` return only outstanding OHM principal as `uint128`, including zero for full repayment. A caller that needs health reads canonical collateral/debt through `BurnerLoansLens.getPosition`, then calls `positionHealthFactor` separately. That read may fail during a pricing outage; repayment does not certify healthy remaining debt or extend maturity.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
@@ -58,7 +60,7 @@ The action retains its own active/enabled gates; Core retains its own lifecycle 
 | ID | Caller | Input / pre-state | Execution / return | Accounting / events | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
 | BLDEBT-REPAY-A02 | Fuzz all callers | Action settlement role revoked after public enablement | `ROLES_RequireRole(BL_DEBT_POLICY_ROLE)` | Unchanged; no committed logs | Same ROLES_RequireRole(BL_DEBT_POLICY_ROLE) | Covered: [test_givenActionRoleRevoked_whenRepaid_reverts][test_givenActionRoleRevoked_whenRepaid_reverts] |
-| BLDEBT-REPAY-A03 | Fuzz all payers | Required settlement role retained; own activity/enabled state unchanged; external action `kernel()` reports another Kernel or reverts; seed both | Return (remainingPrincipal,resultingHealthFactor) | Collect OHM only from the actual payer; reduce borrower and Inventory principal once; no caller `kernel()` read | Same economic quote under unchanged prices/conversion; no caller metadata read, writes or logs | Covered: [test_givenActionReportedKernelMismatch_whenRepaid_thenGetterIsNotRead][test_givenActionReportedKernelMismatch_whenRepaid_thenGetterIsNotRead], [test_givenActionKernelGetterReverts_whenRepaid_thenGetterIsNotRead][test_givenActionKernelGetterReverts_whenRepaid_thenGetterIsNotRead] |
+| BLDEBT-REPAY-A03 | Fuzz all payers | Required settlement role retained; own activity/enabled state unchanged; external action `kernel()` reports another Kernel or reverts; seed both | Return remaining principal only | Collect OHM only from the actual payer; reduce borrower and Inventory principal once; no caller `kernel()` read | Same remaining-principal quote under unchanged debt; no caller metadata or pricing read, writes or logs | Covered: [test_givenActionReportedKernelMismatch_whenRepaid_thenGetterIsNotRead][test_givenActionReportedKernelMismatch_whenRepaid_thenGetterIsNotRead], [test_givenActionKernelGetterReverts_whenRepaid_thenGetterIsNotRead][test_givenActionKernelGetterReverts_whenRepaid_thenGetterIsNotRead] |
 
 ## Dependency lifecycle
 
@@ -76,81 +78,78 @@ Action and Core active/enabled; positive repayment for an existing debt-bearing 
 | --- | --- | --- | --- | --- | --- | --- |
 | BLDEBT-REPAY-I01 | Fuzz actual payer | amount=0; borrower nonzero | `BurnerLoansCore_ZeroAmount()` | Unchanged; no committed logs | Same BurnerLoansCore_ZeroAmount() with all earlier preview checks satisfied; assert no writes | Covered: [test_whenAmountZero_reverts][test_whenAmountZero_reverts] |
 | BLDEBT-REPAY-I02 | Fuzz actual payer | borrower=0; amount>0 | `BurnerLoans_ZeroAddress()` | Unchanged; no committed logs | Same BurnerLoans_ZeroAddress() | Covered: [test_whenBorrowerZero_reverts][test_whenBorrowerZero_reverts] |
-| BLDEBT-REPAY-I04 | Fuzz actual payer | Position absent; pricing when reached valid | `BurnerLoans_NoCollateral()` | Unchanged; no committed logs | Same BurnerLoans_NoCollateral() with all earlier preview checks satisfied; assert no writes | Covered: [test_whenPositionAbsent_reverts][test_whenPositionAbsent_reverts] |
+| BLDEBT-REPAY-I04 | Fuzz actual payer | Position absent; price services may be unavailable | `BurnerLoans_NoCollateral()` | Unchanged; no committed logs | Same BurnerLoans_NoCollateral() with all earlier preview checks satisfied; assert no writes | Covered: [test_whenPositionAbsent_reverts][test_whenPositionAbsent_reverts] |
 | BLDEBT-REPAY-I05 | Fuzz actual payer | Existing position with principal=0; fuzz positive amount in 1..MAX128; seed 1,MAX128 | `BurnerLoans_RepayExceedsDebt(amount,0)` | Unchanged; no committed logs | Same BurnerLoans_RepayExceedsDebt(amount,0) with all earlier preview checks satisfied; assert no writes | Covered: [test_givenZeroDebt_whenPositiveRepayment_reverts][test_givenZeroDebt_whenPositiveRepayment_reverts] |
 | BLDEBT-REPAY-I06 | Fuzz actual payer | Existing debt D in 1..MAX128-1; fuzz amount D+1..MAX128; seed D+1,MAX128 | `BurnerLoans_RepayExceedsDebt(amount,D)` | Unchanged; no committed logs | Same BurnerLoans_RepayExceedsDebt(amount,D) with all earlier preview checks satisfied; assert no writes | Covered: [test_givenAnyDebt_whenRepaymentExceedsIt_thenExactLiveDebtError][test_givenAnyDebt_whenRepaymentExceedsIt_thenExactLiveDebtError], [test_whenRepaymentExceedsDebt_reverts][test_whenRepaymentExceedsDebt_reverts], [test_givenOneUnitDebt_whenRepaymentExceedsByOne_reverts][test_givenOneUnitDebt_whenRepaymentExceedsByOne_reverts], [test_givenNearMaximumDebt_whenMaximumRepaid_reverts][test_givenNearMaximumDebt_whenMaximumRepaid_reverts] |
-| BLDEBT-REPAY-I07 | Fuzz actual payer | nowBlock<=lastBorrowBlock; otherwise valid debt/input | `BurnerLoans_SameBlockRepay(lastBorrowBlock)` | Unchanged; no committed logs | SameBlockRepay check precedes preview pricing; execution may fail earlier during partial-repay refresh; isolate each fault and cross them explicitly | Covered: [test_givenLatestBorrowBlock_whenRepaid_reverts][test_givenLatestBorrowBlock_whenRepaid_reverts] |
+| BLDEBT-REPAY-I07 | Fuzz actual payer | nowBlock<=lastBorrowBlock; otherwise valid debt/input | `BurnerLoans_SameBlockRepay(lastBorrowBlock)` | Unchanged; no committed logs | Same BurnerLoans_SameBlockRepay(lastBorrowBlock), including while pricing services fail; neither path attempts a price read | Covered: [test_givenLatestBorrowBlock_whenRepaid_reverts][test_givenLatestBorrowBlock_whenRepaid_reverts] |
 
 ## Numeric boundaries and servicing
 
 | ID | Caller | Input / pre-state | Execution / return | Accounting / events | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-REPAY-N01 | Fuzz actual payer | Partial repayment; D>1; fuzz amount 1..D-1; seed 1,D-1 and MAX128 where representable | `(D-amount, actual remaining health)` | Exact OHM payer→Inventory; FLOAN and Inventory principal -amount; maturity/collateral unchanged; Repaid | Assert quote independently, then compare corresponding action return fields under equal stored/refreshed snapshots and unchanged conversion; no preview writes | Covered: [test_givenAnyPrincipal_whenPartiallyRepaid_thenAggregatesAgree][test_givenAnyPrincipal_whenPartiallyRepaid_thenAggregatesAgree], [test_givenPartialDebt_whenAnyPayerRepays_thenExactAccounting][test_givenPartialDebt_whenAnyPayerRepays_thenExactAccounting], [test_whenOneRawUnitRepaid_thenExactRemainingDebt][test_whenOneRawUnitRepaid_thenExactRemainingDebt], [test_whenAllButOneRawUnitRepaid_thenOneRemains][test_whenAllButOneRawUnitRepaid_thenOneRemains], [test_whenOneUnitPartialRepayment_thenNoNarrowing][test_whenOneUnitPartialRepayment_thenNoNarrowing], [test_whenMaximumPartialRepayment_thenNoNarrowing][test_whenMaximumPartialRepayment_thenNoNarrowing] |
-| BLDEBT-REPAY-N02 | Fuzz actual payer | Full repayment amount=D; seed D=1 and MAX128 | `(0,MAX256)` | No pricing calls; debt episode/index cleared, collateral retained | Quote (0,MAX256) with Risk configured to reject all calls; execution matches without pricing | Covered: [test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear][test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear], [test_givenFullDebt_whenAnyPayerRepays_thenNoPricing][test_givenFullDebt_whenAnyPayerRepays_thenNoPricing], [test_whenOneUnitFullRepayment_thenNoNarrowing][test_whenOneUnitFullRepayment_thenNoNarrowing], [test_whenMaximumFullRepayment_thenNoNarrowing][test_whenMaximumFullRepayment_thenNoNarrowing] |
-| BLDEBT-REPAY-N03 | Fuzz actual payer | Expired position; full repayment | `(0,MAX256)` | No maturity admission gate | Assert quote independently, then compare corresponding action return fields under equal stored/refreshed snapshots and unchanged conversion; no preview writes | Covered: [test_givenExpiredDebt_whenFullyRepaid_thenAllowed][test_givenExpiredDebt_whenFullyRepaid_thenAllowed] |
-| BLDEBT-REPAY-N04 | Fuzz actual payer | Unhealthy position; partial repayment with valid prices | `Resulting health can remain <1e18` | No minimum-health gate | Quote remaining principal and H<WAD; action returns same H without minimum-health rejection | Covered: [test_givenUnhealthyDebt_whenPartiallyRepaid_thenHelpfulRepaymentAllowed][test_givenUnhealthyDebt_whenPartiallyRepaid_thenHelpfulRepaymentAllowed] |
-| BLDEBT-REPAY-N05 | Fuzz actual payer | Originations disabled | `Success` | Servicing remains open | Assert quote independently, then compare corresponding action return fields under equal stored/refreshed snapshots and unchanged conversion; no preview writes | Covered: [test_givenOriginationsDisabled_whenRepaid_thenAllowed][test_givenOriginationsDisabled_whenRepaid_thenAllowed] |
-| BLDEBT-REPAY-N06 | Fuzz actual payer | Collateral payout insolvent; full repayment | `(0,MAX256)` | No DM solvency gate | Assert quote independently, then compare corresponding action return fields under equal stored/refreshed snapshots and unchanged conversion; no preview writes | Covered: [test_givenInsolventCollateral_whenFullyRepaid_thenAllowed][test_givenInsolventCollateral_whenFullyRepaid_thenAllowed] |
-| BLDEBT-REPAY-N07 | Fuzz actual payer | Full repayment; Risk unavailable | `(0,MAX256)` | No Risk call | Assert quote independently, then compare corresponding action return fields under equal stored/refreshed snapshots and unchanged conversion; no preview writes | Covered: [test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear][test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear], [test_givenFullDebt_whenAnyPayerRepays_thenNoPricing][test_givenFullDebt_whenAnyPayerRepays_thenNoPricing], [test_whenOneUnitFullRepayment_thenNoNarrowing][test_whenOneUnitFullRepayment_thenNoNarrowing], [test_whenMaximumFullRepayment_thenNoNarrowing][test_whenMaximumFullRepayment_thenNoNarrowing] |
+| BLDEBT-REPAY-N01 | Fuzz actual payer | Partial repayment; fuzz D in 2..MAX128 and A in 1..D-1; seed A=1,D-1 and D=MAX128 with A=MAX128-1 | `D-amount` only | Exact OHM payer→Inventory; FLOAN and Inventory principal -amount; maturity/collateral unchanged; Repaid | Assert remaining principal independently as D-A, then compare the scalar execution return under unchanged debt; no preview writes or pricing reads | Covered: [test_givenAnyPrincipal_whenPartiallyRepaid_thenAggregatesAgree][test_givenAnyPrincipal_whenPartiallyRepaid_thenAggregatesAgree], [test_givenPartialDebt_whenAnyPayerRepays_thenExactAccounting][test_givenPartialDebt_whenAnyPayerRepays_thenExactAccounting], [test_whenOneRawUnitRepaid_thenExactRemainingDebt][test_whenOneRawUnitRepaid_thenExactRemainingDebt], [test_whenAllButOneRawUnitRepaid_thenOneRemains][test_whenAllButOneRawUnitRepaid_thenOneRemains], [test_whenOneUnitPartialRepayment_thenNoNarrowing][test_whenOneUnitPartialRepayment_thenNoNarrowing], [test_whenMaximumPartialRepayment_thenNoNarrowing][test_whenMaximumPartialRepayment_thenNoNarrowing] |
+| BLDEBT-REPAY-N02 | Fuzz actual payer | Full repayment amount=D; seed D=1 and MAX128 | `0` only | No pricing calls; debt episode/index cleared, collateral retained | Quote zero remaining principal with Risk configured to reject all calls; execution returns the same scalar without pricing | Covered: [test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear][test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear], [test_givenFullDebt_whenAnyPayerRepays_thenNoPricing][test_givenFullDebt_whenAnyPayerRepays_thenNoPricing], [test_whenOneUnitFullRepayment_thenNoNarrowing][test_whenOneUnitFullRepayment_thenNoNarrowing], [test_whenMaximumFullRepayment_thenNoNarrowing][test_whenMaximumFullRepayment_thenNoNarrowing] |
+| BLDEBT-REPAY-N03 | Fuzz actual payer | Expired position; full repayment | `0` only | No maturity admission gate | Assert remaining principal independently as D-A, then compare the scalar execution return under unchanged debt; no preview writes or pricing reads | Covered: [test_givenExpiredDebt_whenFullyRepaid_thenAllowed][test_givenExpiredDebt_whenFullyRepaid_thenAllowed] |
+| BLDEBT-REPAY-N04 | Fuzz actual payer | Unhealthy position; partial repayment; independent Lens reads before/after use valid prices | Return D-A only; repayment may leave health below 1e18 | Exact OHM collection and debt reduction; no minimum-health gate or price read by Debt | Quote D-A only; separately queried Lens health may remain below WAD and is not a repayment return | Covered: [payer fuzz and separate health][test_givenUnhealthyDebt_whenPartiallyRepaid_thenHelpfulRepaymentAllowed], [independent real health][test_givenRealUnhealthyPosition_whenPartiallyRepaid] |
+| BLDEBT-REPAY-N05 | Fuzz actual payer | Originations disabled | `Success` | Servicing remains open | Assert remaining principal independently as D-A, then compare the scalar execution return under unchanged debt; no preview writes or pricing reads | Covered: [test_givenOriginationsDisabled_whenRepaid_thenAllowed][test_givenOriginationsDisabled_whenRepaid_thenAllowed] |
+| BLDEBT-REPAY-N06 | Fuzz actual payer | Collateral payout insolvent; full repayment | `0` only | No DM solvency gate | Assert remaining principal independently as D-A, then compare the scalar execution return under unchanged debt; no preview writes or pricing reads | Covered: [test_givenInsolventCollateral_whenFullyRepaid_thenAllowed][test_givenInsolventCollateral_whenFullyRepaid_thenAllowed] |
+| BLDEBT-REPAY-N07 | Fuzz actual payer | Full repayment; Risk unavailable | `0` only | No Risk call | Assert remaining principal independently as D-A, then compare the scalar execution return under unchanged debt; no preview writes or pricing reads | Covered: [test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear][test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear], [test_givenFullDebt_whenAnyPayerRepays_thenNoPricing][test_givenFullDebt_whenAnyPayerRepays_thenNoPricing], [test_whenOneUnitFullRepayment_thenNoNarrowing][test_whenOneUnitFullRepayment_thenNoNarrowing], [test_whenMaximumFullRepayment_thenNoNarrowing][test_whenMaximumFullRepayment_thenNoNarrowing] |
 
 ## Transfer and dependency failures
 
 | ID | Caller | Input / pre-state | Execution / return | Accounting / events | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-REPAY-D04 | Fuzz actual payer | Partial repayment; snapshot invalid | `BurnerLoans_InvalidPrice()` | Unchanged; no committed logs | Quote without actual payer approval/receipt/transfer; compare conversion independently; only execution proves delivery, exact receipt and atomic rollback | Covered: [test_givenPartialDebt_whenPricingFails_reverts][test_givenPartialDebt_whenPricingFails_reverts], [test_givenRealStalePrice_whenRepayQuotedOrExecuted_reverts][test_givenRealStalePrice_whenRepayQuotedOrExecuted_reverts] |
-| BLDEBT-REPAY-D05 | Fuzz actual payer | OHM recipient delta differs from amount | `SafeERC20Exact_InexactTransferFrom(OHM,Inventory,amount,received)` | Unchanged; no committed logs | Quote without actual payer approval/receipt/transfer; compare conversion independently; only execution proves delivery, exact receipt and atomic rollback | Covered: [test_whenIncomingOhmInexact_thenDebtAndAllowanceRollBack][test_whenIncomingOhmInexact_thenDebtAndAllowanceRollBack] |
-| BLDEBT-REPAY-D06 | Fuzz actual payer | MINTR repayment burn fails | `Repayment succeeds` | OhmBurnFailed with exact failure data; burn amount remains surplus | Quote without actual payer approval/receipt/transfer; compare conversion independently; only execution proves delivery, exact receipt and atomic rollback | Covered: [test_givenMintrBurnFailure_whenRepaid_thenDebtReducedAndOhmRetained][test_givenMintrBurnFailure_whenRepaid_thenDebtReducedAndOhmRetained] |
-| BLDEBT-REPAY-D07 | Fuzz actual payer | MINTR approval restoration fails | `Repayment succeeds` | ApprovalRestorationFailed; safe funding-approval deficit remains | Quote without actual payer approval/receipt/transfer; compare conversion independently; only execution proves delivery, exact receipt and atomic rollback | Covered: [test_givenMintrApprovalFailure_whenRepaid_thenSafeApprovalDeficitRemains][test_givenMintrApprovalFailure_whenRepaid_thenSafeApprovalDeficitRemains] |
+| BLDEBT-REPAY-D04 | Fuzz actual payer | Partial repayment; Risk snapshot/refresh/health calls are configured to revert | Success; return D-A only | Exact OHM collection; FLOAN/Inventory principal reduced once; no Risk calls or cache writes | Quote D-A without calling Risk; no preview writes | Covered: [unit no-call proof][test_givenPartialDebt_whenPricingUnavailable], [stale-price execution][test_givenStalePrices_whenPartialRepaymentExecuted], [stale-price preview][test_givenStalePrices_whenPartialRepaymentQuoted] |
+| BLDEBT-REPAY-D05 | Fuzz actual payer | OHM recipient delta differs from amount | `SafeERC20Exact_InexactTransferFrom(OHM,Inventory,amount,received)` | Unchanged; no committed logs | Quote only remaining principal without payer funding/approval or pricing reads; only execution proves delivery, exact receipt and applicable rollback | Covered: [test_whenIncomingOhmInexact_thenDebtAndAllowanceRollBack][test_whenIncomingOhmInexact_thenDebtAndAllowanceRollBack] |
+| BLDEBT-REPAY-D06 | Fuzz actual payer | MINTR repayment burn fails | `Repayment succeeds` | OhmBurnFailed with exact failure data; burn amount remains surplus | Quote only remaining principal without payer funding/approval or pricing reads; only execution proves delivery, exact receipt and applicable rollback | Covered: [test_givenMintrBurnFailure_whenRepaid_thenDebtReducedAndOhmRetained][test_givenMintrBurnFailure_whenRepaid_thenDebtReducedAndOhmRetained] |
+| BLDEBT-REPAY-D07 | Fuzz actual payer | MINTR approval restoration fails | `Repayment succeeds` | ApprovalRestorationFailed; safe funding-approval deficit remains | Quote only remaining principal without payer funding/approval or pricing reads; only execution proves delivery, exact receipt and applicable rollback | Covered: [test_givenMintrApprovalFailure_whenRepaid_thenSafeApprovalDeficitRemains][test_givenMintrApprovalFailure_whenRepaid_thenSafeApprovalDeficitRemains] |
+
+## Pricing independence after dependency drift
+
+Action, Core and Inventory are active/enabled with the required settlement role. Drift Risk after successful activation; vary its Kernel activity and local enablement independently. Use partial repayment with D=100e9 and A=50e9. Payer funding and allowance are sufficient. No pricing service or health getter may be called in either preview or execution, including Core's `risk()` getter. These states do not relax action/Core/Inventory admission.
+
+| ID | Caller | Risk active | Risk enabled | Execution / return | Accounting / events | Preview / consistency | Test |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| BLDEBT-REPAY-D12 | Unrelated payer | true | true | Success; return 50e9 only, even when snapshot, refresh and health entry points revert | Exact payer debit and one 50e9 principal reduction; no pricing/cache effects | Quote 50e9; no Risk pointer/status/pricing reads or writes | Covered: [lifecycle fuzz][test_givenRiskLifecycleDrift_whenPartiallyRepaid], [exact state][test_givenRiskActiveEnabled_whenPartiallyRepaid] |
+| BLDEBT-REPAY-D13 | Unrelated payer | true | false | Success; return 50e9 only | Same exact settlement; no Risk lifecycle read | Quote 50e9; no writes | Covered: [lifecycle fuzz][test_givenRiskLifecycleDrift_whenPartiallyRepaid], [exact state][test_givenRiskActiveDisabled_whenPartiallyRepaid] |
+| BLDEBT-REPAY-D14 | Unrelated payer | false | true | Success; return 50e9 only | Same exact settlement; no Risk lifecycle read | Quote 50e9; no writes | Covered: [lifecycle fuzz][test_givenRiskLifecycleDrift_whenPartiallyRepaid], [exact state][test_givenRiskInactiveEnabled_whenPartiallyRepaid] |
+| BLDEBT-REPAY-D15 | Unrelated payer | false | false | Success; return 50e9 only | Same exact settlement; no Risk lifecycle read | Quote 50e9; no writes | Covered: [lifecycle fuzz][test_givenRiskLifecycleDrift_whenPartiallyRepaid], [exact state][test_givenRiskInactiveDisabled_whenPartiallyRepaid] |
 
 ## Shared assertions
 
-Action unit tests use mock Risk for snapshot, fee, health and reward responses used by this function. Assert exact method arguments and call counts, actual Core/FLOAN state and returned configured values; do not duplicate Risk arithmetic in action assertions. Debt-free or full-repayment price-free paths configure the mock to reject unexpected pricing calls. Risk’s suite independently proves math and rounding.
+Action unit tests configure Risk and pricing methods to reject unexpected calls for both partial and full repayment. Assert zero pricing calls, actual Core/FLOAN/Inventory state, exact scalar returns and one settlement. Do not call the preview or Risk arithmetic to generate expected principal; derive D-A independently. Existing Risk and Lens suites retain ownership of health arithmetic.
 
-Compare preview and independently calculated principal and WAD health for valid calls. Partial repayment refreshes one snapshot before rereading the position and validating debt bounds/same-block restrictions; snapshot health calculation performs no second oracle read. Full repayment performs no pricing calls. Token transfers are not performed by the view. Zero-borrower validation follows the action rules. Assert borrower token balances do not pay for unrelated callers. Include a mandatory OHM-transfer callback that reaches Core’s guard and propagates failure; assert repayment and token/accounting rollback.
-
-- [ ] Review these expectations.
-- [x] Implement named Foundry tests and boundary seed drivers.
-- [x] Map each row to passing tests.
+Compare preview and independently calculated remaining principal for valid calls, including one-unit repayment, all-but-one repayment, D=MAX128 and full repayment. Neither preview nor execution calculates health or refreshes prices. Assert Repaid(payer,asset,borrower,A,remainingPrincipal), canonical position/market/global debt deltas, funding settlement and retained collateral/maturity for partial repayment; full repayment clears the debt episode/index. Preview does not transfer tokens, write state, or require payer funds/allowance. Assert borrower/operator wallets are unchanged when distinct from the actual payer. Preserve exact invalid-input, same-block and settlement errors even with pricing services unavailable. Preserve the mandatory OHM-transfer callback that reaches Core’s guard and propagates failure, with complete token/accounting rollback.
 
 ## Real Risk integration
 
-Use repayIntegration.t.sol with real Risk, pricing/cache/backing, Core, FLOAN and relevant Inventory/custody dependencies. Use a fixed unrelated payer because permissionless admission is covered in unit scenarios. Derive expected economics independently from prices, decimal scales and actual settlement state. Use existing legacy math/price tests cited below as regression inputs, without marking the rewritten integration Covered.
+Use repayIntegration.t.sol with real Risk, pricing/cache/backing, Core, FLOAN and relevant Inventory/custody dependencies. Use a fixed unrelated payer because permissionless admission is covered in unit scenarios. Establish real debt with valid prices before introducing each outage; assert settlement directly rather than using the preview as the only oracle. For a separate health check, use Lens after reading canonical position amounts. Neither that read nor its failure is part of repayment settlement.
 
 | ID | Caller | Integration condition | Execution | Required proof | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-REPAY-P01 | Unrelated payer | Valid real snapshot; compatible custody and funding; independent economic boundary seeds from this function’s numeric rows | Successful operation | Actual balances, collateral/debt, WAD health match an independent calculation; preview agrees only with unchanged prices/conversion | Assert quote independently, then compare corresponding action return fields under equal stored/refreshed snapshots and unchanged conversion; no preview writes | Covered: [test_givenRealRisk_whenUnrelatedPayerPartiallyRepays_thenIndependentHealth][test_givenRealRisk_whenUnrelatedPayerPartiallyRepays_thenIndependentHealth] |
-| BLDEBT-REPAY-P02 | Unrelated payer | Pricing-dependent path; real feed/cache raises a configured failure; other admission checks pass | Exact configured dependency error | Atomic rollback of all affected contracts, allowances, events and cache writes; do not substitute a mock Risk error for real wiring proof | Real view pricing failure rejects preview; real refresh failure rejects execution; compare exact errors only when the same underlying dependency fails both paths | Covered: [test_givenRealStalePrice_whenRepayQuotedOrExecuted_reverts][test_givenRealStalePrice_whenRepayQuotedOrExecuted_reverts] |
+| BLDEBT-REPAY-P01 | Unrelated payer | Real pricing available; debt 100e9 OHM, collateral 2000e6; repay 50e9 from an unrelated payer | Success; return 50e9 principal only | Actual payer debit 50e9; canonical debt 50e9 and retained collateral 2000e6; separate Lens health is 32e18 (collateral USD 2000 / required backing USD 62.5); do not return health from repayment | Quote 50e9 independently, with no writes; a separate Lens read under valid prices reports health | Covered: [test_givenRealRisk_whenUnrelatedPayerPartiallyRepays_thenIndependentHealth][test_givenRealRisk_whenUnrelatedPayerPartiallyRepays_thenIndependentHealth] |
+| BLDEBT-REPAY-P02 | Unrelated payer | Real PRICE timestamps exceed the freshness limit; all repayment admission and token checks pass | Partial repayment succeeds; return D-A only | Exact payer debit, FLOAN/Inventory debt reduction and unchanged collateral/cache; a separate Lens health read reverts with BurnerLoans_InvalidPrice without undoing the successful repayment | Quote D-A despite stale prices; preview is read-only and agrees with successful settlement | Covered: [execution and separate health failure][test_givenStalePrices_whenPartialRepaymentExecuted], [read-only preview][test_givenStalePrices_whenPartialRepaymentQuoted] |
 
 ## Additional isolation coverage
 
 | ID | Caller | Pre-state / input | Expected outcome | Required accounting / preview proof | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLDEBT-REPAY-P03 | Unrelated payer | Two borrowers owe 100 OHM each in one market; fully repay only the first | First debt and episode cleared; second position unchanged | Market/global principal 100 OHM; active borrower list contains only the second; both collateral claims retained; exact payer debit; preview agrees | Covered: [test_givenTwoBorrowers_whenOneFullyRepaid][test_givenTwoBorrowers_whenOneFullyRepaid] |
-| BLDEBT-REPAY-P04 | Unrelated payer | Same borrower owes 100 OHM in each of two markets; repay 50 OHM in one | Target debt 50 OHM with health 32 WAD; other position unchanged | Market principals 50 and 100 OHM; Inventory principal 150 OHM; custody and both collateral claims retained; preview agrees | Covered: [test_givenTwoMarkets_whenOnePartiallyRepaid][test_givenTwoMarkets_whenOnePartiallyRepaid] |
+| BLDEBT-REPAY-P04 | Unrelated payer | Same borrower owes 100 OHM in each of two markets; repay 50 OHM in one | Return target debt 50e9 only; other position unchanged | Market principals 50e9 and 100e9; Inventory principal 150e9; custody and both collateral claims retained; preview agrees; separate Lens health for the target is 32e18 | Covered: [test_givenTwoMarkets_whenOnePartiallyRepaid][test_givenTwoMarkets_whenOnePartiallyRepaid] |
 
-## Adversarial cache callbacks before settlement
+## Adversarial cache callbacks are unreachable from repayment
 
-These cases use the test-only BurnerLoansCallbackCache, not production PriceCache. The fixture selects it using admin authority, then separately grants it borrower operator authority for nested authorized actions. This probes a synthetic hostile dependency; it does not establish callback support as a cache integration requirement. Core's transfer guard is not entered during Risk.refreshSnapshot, so these existing cases describe current behavior before settlement.
+Retain the existing test-only BurnerLoansCallbackCache setups and their borrower grants/funding. Arm each callback only after opening debt. Repayment must not invoke Risk.refreshSnapshot, Risk.snapshot, Risk.health or any cache entry point, so the armed nested operation cannot run. Preview must leave callback/cache state unchanged. For each row assert exact outer settlement once, unchanged cache callback state and unchanged nested-payer balances/allowances. The linked tests assert no pricing calls and successful outer settlement for each retained callback setup.
 
-| ID | Caller | Callback / operation | Execution | Effects | Preview / consistency | Test |
+| ID | Caller | Armed cache callback | Execution / return | Accounting / callback proof | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-REPAY-C01 | Borrower | Cache callback borrows for the same authorized borrower; lastBorrowBlock becomes this block; outer partial repay must reject SameBlockRepay and roll back nested debt/cache writes | BurnerLoans_SameBlockRepay(block.number); all nested/outer changes roll back | Successful call reflects actual state; rejected call restores Core/FLOAN/Inventory/DM/cache balances, allowances and logs | Stored-snapshot quote; no mutating refresh callback; compare only if callback leaves relevant prices/position unchanged | Covered: [test_givenCacheBorrows_whenPartialRepayRefreshes_thenLatestBorrowBlockRechecked][test_givenCacheBorrows_whenPartialRepayRefreshes_thenLatestBorrowBlockRechecked] |
+| BLDEBT-REPAY-C01 | Borrower | Authorized same-borrower borrow; previously changed lastBorrowBlock during refresh | Success; return D-A only | No nested borrow or latest-borrow-block mutation; exact outer repayment; cache not called | Quote D-A without callback | Covered: [test][test_givenAuthorizedBorrowCacheCallback_whenPartiallyRepaid] |
+| BLDEBT-REPAY-C03 | Borrower | Unauthorized nested borrow; cache configured to catch failure | Success; return D-A only | Nested action is never attempted; no caught rejection data; one outer settlement | Quote D-A without callback | Covered: [test][test_givenCatchingUnauthorizedCacheCallback_whenPartiallyRepaid] |
+| BLDEBT-REPAY-C04 | Borrower | Unauthorized nested borrow; cache configured to propagate failure | Success; return D-A only | No propagated cache error because cache is not called; one outer settlement | Quote D-A without callback | Covered: [test][test_givenPropagatingUnauthorizedCacheCallback_whenPartiallyRepaid] |
+| BLDEBT-REPAY-C05 | Borrower | Funded cache would fully repay the same position | Success; return D-A only | Nested full repayment is never attempted; nested payer funds/allowance retained; only outer principal reduced | Quote D-A without callback | Covered: [test][test_givenFullRepaymentCacheCallback_whenPartiallyRepaid] |
+| BLDEBT-REPAY-C06 | Borrower | Funded cache would partially repay and make outer amount exceed nested remaining debt | Success; return D-A only | Nested partial repayment is never attempted; no nested debt/allowance/balance changes; only outer principal reduced | Quote D-A without callback | Covered: [test][test_givenPartialRepaymentCacheCallback_whenPartiallyRepaid] |
 
-| ID | Caller | Callback / operation | Execution | Effects | Preview / consistency | Test |
-| --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-REPAY-C03 | Borrower | Nested cache action fails an authorization/input check; cache catches the exact nested error | Valid outer action succeeds | No nested mutation; one outer settlement | Stored-snapshot quote; no mutating refresh callback; compare only if callback leaves relevant prices/position unchanged | Covered: [test_givenCaughtUnauthorizedCacheBorrow_whenRepaying_thenOneRepayment][test_givenCaughtUnauthorizedCacheBorrow_whenRepaying_thenOneRepayment] |
-| BLDEBT-REPAY-C04 | Borrower | Same nested route and fault; cache propagates failure | Exact propagated error rejects outer action | Cache changes, transfers and accounting fully roll back | Stored-snapshot quote; no mutating refresh callback; compare only if callback leaves relevant prices/position unchanged | Covered: [test_givenPropagatedUnauthorizedCacheBorrow_whenRepaying_thenRollback][test_givenPropagatedUnauthorizedCacheBorrow_whenRepaying_thenRollback] |
-
-Retired BLDEBT-REPAY-C02 combined caught and propagated callback outcomes; the two independent cases above replace it.
-
-## Post-refresh debt reductions
-
-Use a one-shot cache callback with payer approvals. The outer request is a partial repayment before refresh; the nested repayment changes its debt boundary without requiring its own price refresh when full.
-
-| ID | Caller | Nested operation / live state | Outer result | Effects | Preview / consistency | Test |
-| --- | --- | --- | --- | --- | --- | --- |
-| BLDEBT-REPAY-C05 | Payer | Outer amount A>0; cache repays all remaining principal before outer reload | BurnerLoans_RepayExceedsDebt(A,0) | Nested OHM transfer/burn and FLOAN debt reduction roll back | Stored-snapshot quote; no mutating refresh callback; compare only if callback leaves relevant prices/position unchanged | Covered: [test_givenCacheFullyRepays_whenOuterReloads_thenExcessRepaymentRejected][test_givenCacheFullyRepays_whenOuterReloads_thenExcessRepaymentRejected] |
-| BLDEBT-REPAY-C06 | Payer | Cache partially repays; outer amount A exceeds reloaded debt Dnew; nested refresh made one-shot | BurnerLoans_RepayExceedsDebt(A,Dnew) | No stale debt arithmetic; full rollback of cache and both repayments | Stored-snapshot quote; no mutating refresh callback; compare only if callback leaves relevant prices/position unchanged | Covered: [test_givenCachePartiallyRepays_whenOuterAmountTooLarge_thenLiveDebtRechecked][test_givenCachePartiallyRepays_whenOuterAmountTooLarge_thenLiveDebtRechecked] |
+Retired BLDEBT-REPAY-C02 combined caught and propagated callback outcomes; C03 and C04 retain those separate setups.
 
 ## Transfer callbacks and reentrancy
 
@@ -160,68 +159,101 @@ Use an outer partial repayment and fund a nested repayment of the remaining debt
 | --- | --- | --- | --- | --- | --- | --- |
 | BLDEBT-REPAY-C08 | Fuzz all callers | Mandatory payer→Inventory OHM transferFrom attempts nested repayment | Nested `ReentrancyGuardReentrantCall()`; outer `ReentrantFeeToken.CallbackFailed()` | Exact pre-call OHM balances, FLOAN/Inventory principal, provider claims and payer allowance restored; no committed logs | Quote before arming callback; view performs no OHM transfer and cannot predict token failure | Covered: [test_givenOhmCallback_whenRepaid_thenMandatoryReceiptFailureRollsBack][test_givenOhmCallback_whenRepaid_thenMandatoryReceiptFailureRollsBack] |
 
-## Backing availability regressions
+## Backing and cache availability regressions
 
-Local policy and ordinary dependencies are active/enabled; callers satisfy the
-existing action authorization. Each fault varies backing readiness independently.
-Rejection preserves authoritative accounting, custody and emitted logs.
+Debt, Core and Inventory are active/enabled with a sufficient funded unrelated payer. Introduce each fault after opening real debt. Repayment and preview must not access the faulting service. Settlement succeeds once; independent health reads remain price-dependent.
 
-| ID | Scenario | Expected execution and preview | Test |
-| --- | --- | --- | --- |
-| BLDEBT-REPAY-D10 | Debt=100e9, repay=50e9, oracle disabled | Preview/execution: PolicyDependency_NotActive(oracle); principal/collateral/OHM unchanged | Covered: [test][test_givenBackingPaused_whenPartiallyRepaid_revertsWithoutSettlement] |
-| BLDEBT-REPAY-D11 | Debt=100e9, repay=100e9, oracle disabled | Preview/execution: zero remaining debt, uint256.max health; collateral retained | Covered: [test][test_givenBackingPaused_whenFullyRepaid_thenDebtCloses] |
+| ID | Caller | Scenario | Expected execution and preview | Required effects | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLDEBT-REPAY-D10 | Unrelated payer | Debt=100e9, repay=50e9, backing oracle disabled | Return 50e9 principal only | Exact 50e9 payer debit and debt reduction; collateral retained; no backing reads | Covered: [execution][test_givenPausedBacking_whenPartialRepaymentExecuted], [preview][test_givenPausedBacking_whenPartialRepaymentQuoted] |
+| BLDEBT-REPAY-D11 | Unrelated payer | Debt=100e9, repay=100e9, backing oracle disabled | Return zero principal only | Exact full repayment; episode/index cleared; collateral retained; no health sentinel or backing reads | Covered: [full repayment][test_givenBackingPaused_whenFullyRepaid_thenDebtCloses] |
+| BLDEBT-REPAY-D16 | Unrelated payer | Operational cache configured to revert on pricing/cache reads; partial repayment | Return D-A principal only | Exact OHM collection and debt reduction; no cache call or cache writes | Covered: [test][test_givenOperationalCacheFailure_whenPartiallyRepaid] |
+| BLDEBT-REPAY-D17 | Unrelated payer | Backing oracle operational but backing() reverts; partial repayment | Return D-A principal only | Exact OHM collection and debt reduction; no backing call | Covered: [test][test_givenBackingReadFailure_whenPartiallyRepaid] |
 
-[test_givenActionKernelGetterReverts_whenRepaid_thenGetterIsNotRead]: repay.t.sol#L411
-[test_givenActionReportedKernelMismatch_whenRepaid_thenGetterIsNotRead]: repay.t.sol#L398
-[test_givenActionRoleRevoked_whenRepaid_reverts]: repay.t.sol#L387
-[test_givenAnyDebt_whenRepaymentExceedsIt_thenExactLiveDebtError]: repay.t.sol#L641
-[test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear]: repay.t.sol#L541
-[test_givenAnyPrincipal_whenPartiallyRepaid_thenAggregatesAgree]: repay.t.sol#L490
-[test_givenCacheBorrows_whenPartialRepayRefreshes_thenLatestBorrowBlockRechecked]: repayPriceCallbacks.t.sol#L17
-[test_givenCacheFullyRepays_whenOuterReloads_thenExcessRepaymentRejected]: repayPriceCallbacks.t.sol#L51
-[test_givenCachePartiallyRepays_whenOuterAmountTooLarge_thenLiveDebtRechecked]: repayPriceCallbacks.t.sol#L83
-[test_givenCaughtUnauthorizedCacheBorrow_whenRepaying_thenOneRepayment]: repayPriceCallbacks.t.sol#L110
-[test_givenCoreUnavailable_whenCalled_thenDependencyIdentified]: repay.t.sol#L458
-[test_givenDisabledDebtAction_whenCalled_thenPauseWins]: repay.t.sol#L441
-[test_givenExpiredDebt_whenFullyRepaid_thenAllowed]: repay.t.sol#L137
-[test_givenFullDebt_whenAnyPayerRepays_thenNoPricing]: repay.t.sol#L104
-[test_givenInactiveDebtAction_whenCalled_thenSubjectIdentified]: repay.t.sol#L420
-[test_givenInactiveSubject_whenAdmissionAxesSeeded_thenExactError]: repay.t.sol#L701
+## Scalar return contract
+
+Use raw return data to prove both functions encode exactly one ABI word (32 bytes), decoded as uint128 remaining principal. This detects a leftover second health return, including on full repayment. Function input selectors are unchanged by removing return values; existing integrations expecting two words must update their ABI and decoding.
+
+| ID | Caller | Input / pre-state | Execution / return | Preview / consistency | Test |
+| --- | --- | --- | --- | --- | --- |
+| BLDEBT-REPAY-P05 | Unrelated payer | D=100e9, A=50e9; valid funding | Exactly 32 return bytes, decoded principal=50e9; normal exact settlement | Exactly 32 return bytes, decoded remainingPrincipal=50e9; no writes | Covered: [test][test_givenPartialRepayment_whenReturnDataInspected] |
+| BLDEBT-REPAY-P06 | Unrelated payer | D=100e9, A=100e9; pricing unavailable | Exactly 32 return bytes, decoded principal=0; no additional health sentinel | Exactly 32 return bytes, decoded remainingPrincipal=0; no writes | Covered: [test][test_givenFullRepayment_whenReturnDataInspected] |
+
+[test_givenActionKernelGetterReverts_whenRepaid_thenGetterIsNotRead]: repay.t.sol#L443
+[test_givenActionReportedKernelMismatch_whenRepaid_thenGetterIsNotRead]: repay.t.sol#L430
+[test_givenActionRoleRevoked_whenRepaid_reverts]: repay.t.sol#L419
+[test_givenAnyDebt_whenRepaymentExceedsIt_thenExactLiveDebtError]: repay.t.sol#L661
+[test_givenAnyPrincipal_whenFullyRepaid_thenEpisodeAndFundingClear]: repay.t.sol#L568
+[test_givenAnyPrincipal_whenPartiallyRepaid_thenAggregatesAgree]: repay.t.sol#L522
+[test_givenAuthorizedBorrowCacheCallback_whenPartiallyRepaid]: repayPriceCallbacks.t.sol#L16
+[test_givenFullRepaymentCacheCallback_whenPartiallyRepaid]: repayPriceCallbacks.t.sol#L34
+[test_givenPartialRepaymentCacheCallback_whenPartiallyRepaid]: repayPriceCallbacks.t.sol#L45
+[test_givenCatchingUnauthorizedCacheCallback_whenPartiallyRepaid]: repayPriceCallbacks.t.sol#L56
+[test_givenCoreUnavailable_whenCalled_thenDependencyIdentified]: repay.t.sol#L490
+[test_givenDisabledDebtAction_whenCalled_thenPauseWins]: repay.t.sol#L473
+[test_givenExpiredDebt_whenFullyRepaid_thenAllowed]: repay.t.sol#L121
+[test_givenFullDebt_whenAnyPayerRepays_thenNoPricing]: repay.t.sol#L99
+[test_givenInactiveDebtAction_whenCalled_thenSubjectIdentified]: repay.t.sol#L452
+[test_givenInactiveSubject_whenAdmissionAxesSeeded_thenExactError]: repay.t.sol#L721
 [test_givenInsolventCollateral_whenFullyRepaid_thenAllowed]: repay.t.sol#L165
-[test_givenInventoryUnavailable_whenRepaid_reverts]: repay.t.sol#L250
-[test_givenLatestBorrowBlock_whenRepaid_reverts]: repay.t.sol#L236
-[test_givenMintrApprovalFailure_whenRepaid_thenSafeApprovalDeficitRemains]: repay.t.sol#L344
-[test_givenMintrBurnFailure_whenRepaid_thenDebtReducedAndOhmRetained]: repay.t.sol#L309
-[test_givenNearMaximumDebt_whenMaximumRepaid_reverts]: repay.t.sol#L667
+[test_givenInventoryUnavailable_whenRepaid_reverts]: repay.t.sol#L252
+[test_givenLatestBorrowBlock_whenRepaid_reverts]: repay.t.sol#L237
+[test_givenMintrApprovalFailure_whenRepaid_thenSafeApprovalDeficitRemains]: repay.t.sol#L368
+[test_givenMintrBurnFailure_whenRepaid_thenDebtReducedAndOhmRetained]: repay.t.sol#L325
+[test_givenNearMaximumDebt_whenMaximumRepaid_reverts]: repay.t.sol#L687
 [test_givenOhmCallback_whenRepaid_thenMandatoryReceiptFailureRollsBack]: repayCallbacks.t.sol#L15
-[test_givenOneUnitDebt_whenRepaymentExceedsByOne_reverts]: repay.t.sol#L662
+[test_givenOneUnitDebt_whenRepaymentExceedsByOne_reverts]: repay.t.sol#L682
 [test_givenOriginationsDisabled_whenRepaid_thenAllowed]: repay.t.sol#L159
 [test_givenPartialDebt_whenAnyPayerRepays_thenExactAccounting]: repay.t.sol#L42
-[test_givenPartialDebt_whenPricingFails_reverts]: repay.t.sol#L265
-[test_givenPausedSubject_whenAdmissionAxesSeeded_thenExactError]: repay.t.sol#L725
-[test_givenPolicyReactivated_whenRepayExecuted_thenSucceeds]: repay.t.sol#L746
-[test_givenPropagatedUnauthorizedCacheBorrow_whenRepaying_thenRollback]: repayPriceCallbacks.t.sol#L124
-[test_givenReEnabled_whenRepayExecuted_thenSucceeds]: repay.t.sol#L753
-[test_givenRealRisk_whenUnrelatedPayerPartiallyRepays_thenIndependentHealth]: repayIntegration.t.sol#L110
-[test_givenRealStalePrice_whenRepayQuotedOrExecuted_reverts]: repayIntegration.t.sol#L140
-[test_givenTwoBorrowers_whenOneFullyRepaid]: repayIntegration.t.sol#L22
-[test_givenTwoMarkets_whenOnePartiallyRepaid]: repayIntegration.t.sol#L69
-[test_givenUnhealthyDebt_whenPartiallyRepaid_thenHelpfulRepaymentAllowed]: repay.t.sol#L143
-[test_givenZeroDebt_whenPositiveRepayment_reverts]: repay.t.sol#L202
-[test_whenAllButOneRawUnitRepaid_thenOneRemains]: repay.t.sol#L96
+[test_givenPartialDebt_whenPricingUnavailable]: repay.t.sol#L267
+[test_givenPausedSubject_whenAdmissionAxesSeeded_thenExactError]: repay.t.sol#L745
+[test_givenPolicyReactivated_whenRepayExecuted_thenSucceeds]: repay.t.sol#L766
+[test_givenPropagatingUnauthorizedCacheCallback_whenPartiallyRepaid]: repayPriceCallbacks.t.sol#L63
+[test_givenReEnabled_whenRepayExecuted_thenSucceeds]: repay.t.sol#L773
+[test_givenRealRisk_whenUnrelatedPayerPartiallyRepays_thenIndependentHealth]: repayIntegration.t.sol#L107
+[test_givenStalePrices_whenPartialRepaymentExecuted]: repayIntegration.t.sol#L154
+[test_givenTwoBorrowers_whenOneFullyRepaid]: repayIntegration.t.sol#L21
+[test_givenTwoMarkets_whenOnePartiallyRepaid]: repayIntegration.t.sol#L67
+[test_givenUnhealthyDebt_whenPartiallyRepaid_thenHelpfulRepaymentAllowed]: repay.t.sol#L127
+[test_givenZeroDebt_whenPositiveRepayment_reverts]: repay.t.sol#L203
+[test_whenAllButOneRawUnitRepaid_thenOneRemains]: repay.t.sol#L91
 [test_whenAmountZero_reverts]: repay.t.sol#L171
 [test_whenBorrowerZero_reverts]: repay.t.sol#L181
-[test_whenIncomingOhmInexact_thenDebtAndAllowanceRollBack]: repay.t.sol#L276
-[test_whenMaximumFullRepayment_thenNoNarrowing]: repay.t.sol#L592
-[test_whenMaximumPartialRepayment_thenNoNarrowing]: repay.t.sol#L609
-[test_whenOneRawUnitRepaid_thenExactRemainingDebt]: repay.t.sol#L91
-[test_whenOneUnitFullRepayment_thenNoNarrowing]: repay.t.sol#L587
-[test_whenOneUnitPartialRepayment_thenNoNarrowing]: repay.t.sol#L600
-[test_whenPayerIsInventory_thenQuoteSucceedsAndExactReceiptRejectsSelfTransfer]: repay.t.sol#L676
-[test_whenPayerIsZero_thenQuoteSucceedsAndTokenRejectsAllowance]: repay.t.sol#L618
+[test_whenIncomingOhmInexact_thenDebtAndAllowanceRollBack]: repay.t.sol#L284
+[test_whenMaximumFullRepayment_thenNoNarrowing]: repay.t.sol#L612
+[test_whenMaximumPartialRepayment_thenNoNarrowing]: repay.t.sol#L629
+[test_whenOneRawUnitRepaid_thenExactRemainingDebt]: repay.t.sol#L86
+[test_whenOneUnitFullRepayment_thenNoNarrowing]: repay.t.sol#L607
+[test_whenOneUnitPartialRepayment_thenNoNarrowing]: repay.t.sol#L620
+[test_whenPayerIsInventory_thenQuoteSucceedsAndExactReceiptRejectsSelfTransfer]: repay.t.sol#L696
+[test_whenPayerIsZero_thenQuoteSucceedsAndTokenRejectsAllowance]: repay.t.sol#L638
 [test_whenPositionAbsent_reverts]: repay.t.sol#L191
-[test_whenRepaymentExceedsDebt_reverts]: repay.t.sol#L221
+[test_whenRepaymentExceedsDebt_reverts]: repay.t.sol#L222
 
-[test_givenBackingPaused_whenPartiallyRepaid_revertsWithoutSettlement]: ./repayIntegration.t.sol#L159
+[test_givenPausedBacking_whenPartialRepaymentExecuted]: ./repayIntegration.t.sol#L198
 
-[test_givenBackingPaused_whenFullyRepaid_thenDebtCloses]: ./repayIntegration.t.sol#L180
+[test_givenBackingPaused_whenFullyRepaid_thenDebtCloses]: ./repayIntegration.t.sol#L140
+
+[test_givenStalePrices_whenPartialRepaymentQuoted]: repayIntegration.t.sol#L182
+
+[test_givenPausedBacking_whenPartialRepaymentQuoted]: repayIntegration.t.sol#L212
+
+[test_givenRealUnhealthyPosition_whenPartiallyRepaid]: repayIntegration.t.sol#L275
+
+[test_givenRiskLifecycleDrift_whenPartiallyRepaid]: repay.t.sol#L780
+
+[test_givenRiskActiveEnabled_whenPartiallyRepaid]: repay.t.sol#L804
+
+[test_givenRiskActiveDisabled_whenPartiallyRepaid]: repay.t.sol#L809
+
+[test_givenRiskInactiveEnabled_whenPartiallyRepaid]: repay.t.sol#L814
+
+[test_givenRiskInactiveDisabled_whenPartiallyRepaid]: repay.t.sol#L819
+
+[test_givenOperationalCacheFailure_whenPartiallyRepaid]: repayIntegration.t.sol#L305
+
+[test_givenBackingReadFailure_whenPartiallyRepaid]: repayIntegration.t.sol#L338
+
+[test_givenPartialRepayment_whenReturnDataInspected]: repayIntegration.t.sol#L228
+
+[test_givenFullRepayment_whenReturnDataInspected]: repayIntegration.t.sol#L251

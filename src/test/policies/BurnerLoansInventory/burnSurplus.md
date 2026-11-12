@@ -111,8 +111,8 @@ The mapped tests run in the focused Inventory suite. [Shared fixtures](BurnerLoa
 [test_givenReEnabledInventory_whenBurned]: burnSurplus.t.sol#L204
 [test_givenRepaymentBurnFailed_whenSurplusBurned_thenProviderIdleRemainsBacked]: burnSurplusIntegration.t.sol#L30
 [test_givenReplacedConfiguratorAndNoSurplus_whenBurned_reverts]: burnSurplus.t.sol#L218
-[test_givenSelectedConfigWithAdmin_whenSurplusBurned_thenBurnedOnce]: burnSurplusIntegration.t.sol#L87
-[test_givenSelectedConfigWithoutAdmin_whenSurplusBurned_thenIdleRemainsBacked]: burnSurplusIntegration.t.sol#L78
+[test_givenSelectedConfigWithAdmin_whenSurplusBurned_thenBurnedOnce]: burnSurplusIntegration.t.sol#L95
+[test_givenSelectedConfigWithoutAdmin_whenSurplusBurned_thenIdleRemainsBacked]: burnSurplusIntegration.t.sol#L86
 [test_givenUnauthorizedCaller_reverts]: burnSurplus.t.sol#L88
 [test_whenBurnBoundarySeeds]: burnSurplus.t.sol#L229
 

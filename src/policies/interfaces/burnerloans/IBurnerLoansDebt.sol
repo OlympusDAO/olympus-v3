@@ -143,17 +143,18 @@ interface IBurnerLoansDebt {
         address referrer
     ) external returns (BorrowPreview memory result);
 
-    /// @notice Repays from the caller's OHM and reports the borrower's resulting position health.
+    /// @notice Repays from the caller's OHM and returns remaining principal without requiring prices.
+    /// @dev Health is intentionally not calculated or returned so oracle outages cannot block repayment.
+    ///      Query BurnerLoansLens separately using the remaining position's collateral and debt.
     /// @param asset Configured collateral token identifying the borrower's market.
     /// @param amount Principal to repay, in OHM units.
     /// @param borrower Account whose principal is repaid; no operator grant is required.
     /// @return principal Outstanding principal after repayment, in OHM units.
-    /// @return resultingHealthFactor WAD-scaled health, or uint256.max when debt is fully repaid.
     function repay(
         address asset,
         uint128 amount,
         address borrower
-    ) external returns (uint128 principal, uint256 resultingHealthFactor);
+    ) external returns (uint128 principal);
 
     /// @notice Quotes new borrowing, the total origination fee and the resulting position for any borrower.
     /// @param asset_ Configured collateral asset.
@@ -172,17 +173,17 @@ interface IBurnerLoansDebt {
         address referrer_
     ) external view returns (IBurnerLoansDebt.BorrowPreview memory result);
 
-    /// @notice Quotes remaining principal and resulting health for a repayment.
+    /// @notice Quotes remaining principal without requiring prices.
+    /// @dev Health is intentionally not calculated or returned; query BurnerLoansLens separately.
     /// @param asset_ Configured collateral token identifying the borrower's market.
     /// @param amount_ Principal to repay, in OHM units.
     /// @param borrower_ Account whose principal would be reduced.
     /// @return remainingPrincipal Outstanding principal after repayment, in OHM units.
-    /// @return resultingHealthFactor WAD-scaled health, or uint256.max for full repayment.
     function previewRepay(
         address asset_,
         uint128 amount_,
         address borrower_
-    ) external view returns (uint128 remainingPrincipal, uint256 resultingHealthFactor);
+    ) external view returns (uint128 remainingPrincipal);
 
     /// @notice Extends an authorized borrower's maturity by whole configured terms and collects the total extension fee.
     /// @param asset Configured collateral token identifying the borrower's market.
