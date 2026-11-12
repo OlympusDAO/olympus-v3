@@ -62,17 +62,13 @@ contract BurnerLoansCollateralDepositCollateralPriceCallbacksTest is
         _ohm.approve(address(_core), 100e9);
         bytes32 beforeQuote = _accountingDigest(address(_asset));
         vm.prank(_borrower);
-        (, , uint256 quotedHealth) = _collateral.previewDepositCollateral(
+        (uint256 quotedCredit, uint256 quotedCollateral) = _collateral.previewDepositCollateral(
             address(_asset),
             1,
             _borrower
         );
-        // 2000.000001 assets / 125 required assets = 16.000000008 WAD.
-        assertEq(
-            quotedHealth,
-            16_000_000_008_000_000_000,
-            "Read-only quote retains pre-callback principal"
-        );
+        assertEq(quotedCredit, 1, "Read-only quote retains direct conversion");
+        assertEq(quotedCollateral, 2000e6 + 1, "Quote adds only estimated collateral");
         assertEq(
             _accountingDigest(address(_asset)),
             beforeQuote,

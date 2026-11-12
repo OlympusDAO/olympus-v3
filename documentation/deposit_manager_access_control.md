@@ -15,6 +15,7 @@
 | Config operator         | `rescue` | Normally DepositManagerConfigTimelock; delayed recovery permits local disablement and sends only unmanaged tokens to current TRSRY |
 | `emergency`             | `disable`, `disableAssetPeriod`, timelock cancellation                                                                                         | Immediate one-way shutdown and queued-action cancellation; cannot enable a period, create a route queue, change limits, or queue any configuration                               |
 | `deposit_operator`      | `deposit`, `withdraw`, `claimYield`, `borrowingWithdraw`, `borrowingRepay`, `borrowingDefault`                                                 | Restricted to the caller's operator namespace; possession is required before a route is created for the operator                                                                 |
+| Any address             | `donate` | Caller supplies its own underlying assets to a nonzero registered operator; target role, target lifecycle and asset-period enablement do not restrict recovery |
 | Any address             | Timelock execution after maturity; views and previews                                                                                          | Execution requires a valid, unexpired operation and matching lifecycle and pre-state; rescue previews require DM active and permit local disablement |
 
 DepositManager's `validateAddAssetPeriod` checks route prerequisites at DMCT queue time. Dispatch applies the same internal check. The asset must be configured and the period nonzero. The operator must be registered through `setOperatorName` and hold `deposit_operator` at dispatch. DMCT gains no ability to approve assets, register operators, or grant roles. Queued route
@@ -36,9 +37,9 @@ route that emergency disabled, while `deposit_manager_admin` must queue enableme
 
 DepositManager has three distinct lifecycle layers:
 
-1. Kernel activity gates ordinary custody and configuration actions, rescue, and enable/re-enable admission.
-2. The global enabled flag gates state-changing custody and configuration entrypoints.
-3. The asset-period enabled flag gates new deposits for one operator market.
+1. Kernel activity gates ordinary custody and configuration actions, donations, rescue, and enable/re-enable admission.
+2. The global enabled flag gates ordinary custody and configuration actions. Donations and rescue remain available while locally disabled.
+3. The asset-period enabled flag gates new receipt deposits for one operator market. Donations do not require an enabled period.
 
 The DepositManagerConfigTimelock requires both policies Kernel-active and requires itself locally enabled.
 Ordinary configuration also requires DepositManager enabled. Rescue-only queues and executions permit

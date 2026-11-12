@@ -38,8 +38,11 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
         vm.startPrank(_borrower);
         token_.approve(address(_core), type(uint256).max);
         bytes32 beforeState = _accountingDigest(address(token_));
-        (uint256 quote, uint256 quotedTotal, uint256 quotedHealth) = _collateral
-            .previewDepositCollateral(address(token_), amount_, _borrower);
+        (uint256 quote, uint256 quotedTotal) = _collateral.previewDepositCollateral(
+            address(token_),
+            amount_,
+            _borrower
+        );
         assertEq(
             _accountingDigest(address(token_)),
             beforeState,
@@ -55,7 +58,6 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
         assertEq(quotedTotal, quote, "New-position preview total equals estimated credit");
         assertEq(collateral, credit, "New-position total equals actual settled credit");
         assertEq(health, type(uint256).max, "Initial vault deposit remains debt-free");
-        assertEq(quotedHealth, type(uint256).max, "Debt-free vault quote");
         assertEq(
             _lens.getPosition(address(token_), _borrower).depositedCollateral,
             credit,
@@ -93,8 +95,11 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
         _price.setPrice(address(token), price_);
         token.mint(_borrower, 5);
         vm.prank(_borrower);
-        (uint256 quotedCredit, uint256 quotedCollateral, uint256 quotedHealth) = _collateral
-            .previewDepositCollateral(address(token), 5, _borrower);
+        (uint256 quotedCredit, uint256 quotedCollateral) = _collateral.previewDepositCollateral(
+            address(token),
+            5,
+            _borrower
+        );
         vm.prank(_borrower);
         (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
             address(token),
@@ -108,7 +113,6 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
         assertEq(health, expectedHealth_, "Independent real Risk health");
         assertEq(quotedCredit, credit, "Stable conversion credit matches quote");
         assertEq(quotedCollateral, collateral, "Stable canonical collateral matches quote");
-        assertEq(quotedHealth, expectedHealth_, "Independent quoted health");
         assertEq(
             _lens.getPosition(address(token), _borrower).debtOhm,
             debt_,
@@ -162,14 +166,13 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
             uint256 expectedQuote = (mintedShares * vault_.totalAssets()) / vault_.totalSupply();
             bytes32 beforeQuote = _accountingDigest(address(token_));
             vm.prank(_borrower);
-            (uint256 q, uint256 c, uint256 h) = _collateral.previewDepositCollateral(
+            (uint256 q, uint256 c) = _collateral.previewDepositCollateral(
                 address(token_),
                 amount_,
                 _borrower
             );
             assertEq(q, expectedQuote, "Independent pre-deposit conversion quote");
             assertEq(c, prior + expectedQuote, "Quoted total uses estimated credit");
-            assertEq(h, type(uint256).max, "Debt-free quoted health");
             assertEq(
                 _accountingDigest(address(token_)),
                 beforeQuote,

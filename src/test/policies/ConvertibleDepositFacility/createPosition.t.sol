@@ -6,8 +6,80 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacilityTest {
+    // Scenarios: DM-DEPOSIT-T03.
+    function test_givenRealDepositManagerNamespaceHasLoss_whenCreatingPosition_revertsAndRollsBack(
+        bool wrapped_
+    ) public givenLocallyActive {
+        reserveToken.mint(recipient, 108);
+        vm.prank(recipient);
+        reserveToken.approve(address(depositManager), 108);
+        vm.prank(recipient);
+        facility.deposit(iReserveToken, PERIOD_MONTHS, 100, wrapped_);
+        reserveToken.burn(address(vault), 20);
+        uint256 wrappedSupply = _getWrappedReceiptToken(iReserveToken, PERIOD_MONTHS).totalSupply();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_Insolvent.selector,
+                address(reserveToken),
+                uint256(108),
+                uint256(88),
+                uint256(0)
+            )
+        );
+        // The real facility calls the real DepositManager before minting a DEPOS position.
+        _createPosition(recipient, 8, CONVERSION_PRICE, false, wrapped_);
+
+        assertEq(reserveToken.balanceOf(recipient), 8, "Payer balance rolls back");
+        assertEq(
+            reserveToken.allowance(recipient, address(depositManager)),
+            8,
+            "Payer allowance rolls back"
+        );
+        assertEq(reserveToken.balanceOf(address(vault)), 80, "Vault backing rolls back");
+        assertEq(reserveToken.balanceOf(address(depositManager)), 0, "No manager residual");
+        assertEq(reserveToken.balanceOf(address(facility)), 0, "No facility residual");
+        assertEq(vault.balanceOf(address(depositManager)), 100, "Physical custody rolls back");
+        assertEq(vault.totalSupply(), 100, "Vault share supply rolls back");
+        (uint256 shares, uint256 assets) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(facility)
+        );
+        assertEq(shares, 100, "Facility recorded shares roll back");
+        assertEq(assets, 80, "Facility custody value rolls back");
+        assertEq(
+            depositManager.getOperatorLiabilities(iReserveToken, address(facility)),
+            100,
+            "Liabilities roll back"
+        );
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(facility)),
+            0,
+            "No borrowed principal"
+        );
+        assertEq(
+            depositManager.getAssetDepositCapStatus(iReserveToken).utilization,
+            100,
+            "Cap utilization rolls back"
+        );
+        _assertReceiptTokenBalance(recipient, 100, wrapped_);
+        assertEq(
+            _getWrappedReceiptToken(iReserveToken, PERIOD_MONTHS).totalSupply(),
+            wrappedSupply,
+            "Wrapper supply rolls back"
+        );
+        assertEq(convertibleDepositPositions.getPositionCount(), 0, "No DEPOS position created");
+        assertEq(
+            convertibleDepositPositions.getUserPositionIds(recipient).length,
+            0,
+            "No user position index"
+        );
+        _assertMintApproval(0);
+    }
+
     event CreatedDeposit(
         address indexed asset,
         address indexed depositor,

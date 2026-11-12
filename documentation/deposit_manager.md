@@ -117,6 +117,88 @@ credit reverts when it exceeds the asset's current aggregate headroom; a zero-cr
 returns zero. The preview does not reserve capacity. Vault state, the cap, or aggregate utilization
 can change before execution, so the value and cap check from a successful deposit are authoritative.
 
+## Solvency
+
+An ordinary deposit must leave its operator namespace solvent after custody and receipt liabilities
+update. Solvency means:
+
+```text
+value of recorded custody shares + outstanding borrowed principal >= receipt liabilities
+```
+
+The comparison combines all deposit periods for the same asset and operator. Another operator's
+deficit does not block a solvent namespace. Solvency measures accounting coverage, not immediate
+vault liquidity or guaranteed repayment of borrowed principal.
+
+The check runs after the deposit. It can catch a loss that the vault realizes during that call.
+If the check fails, the entire transaction reverts. The payer keeps its funds, and no new receipt,
+liability, cap usage or collateral credit survives.
+
+No new pre-deposit solvency check is required. A deposit can succeed if its vault interaction fully
+repairs an existing deficit. A normal proportional deposit increases custody and liabilities together,
+so it does not usually repair a loss. An exchange rate below one does not itself establish insolvency.
+
+DepositManager's conversion preview has no operator argument and does not check solvency.
+Burner Loans' collateral preview returns estimated credit and projected total collateral, without a
+health factor or pricing call. A successful quote does not prove the post-deposit solvency condition.
+Execution checks the authoritative final state and separately reports actual resulting health.
+
+## Donations
+
+`IDepositManagerV1_1` defines:
+
+```solidity
+function donate(
+    IERC20 asset_,
+    address operator_,
+    uint256 amount_
+) external returns (uint256 actualAmount, uint256 shares);
+```
+
+Any address can donate its own underlying assets to a nonzero, explicitly registered operator.
+DepositManager pulls tokens only from the caller. There is no arbitrary payer or recipient parameter.
+The donation uses the asset's immutable custody route:
+
+| Custody route | Donation behavior |
+| --- | --- |
+| Idle underlying | Retain the underlying and add the same raw quantity to the target's recorded shares. |
+| Standard ERC-4626 or ERC-7575 self-share vault | Deposit the underlying and record the exact received vault shares. |
+| ERC-7575 with a separate share token | Deposit through the configured vault and record its stored share token's exact balance increase. |
+| Synchronous deposit with asynchronous redemption | Deposit synchronously and value shares through `convertToAssets`. Donation does not request redemption. |
+
+Input and `actualAmount` use underlying-asset units. Returned `shares` uses the configured share
+token's raw units. Share decimals can differ from underlying decimals. The actual amount can be
+smaller than the input because of vault rounding or fees.
+
+The donation creates no receipt tokens or FLOAN collateral. It does not change liabilities,
+borrowed principal or aggregate deposit-cap utilization. Ordinary minimum deposits and principal caps
+do not restrict donations. Exact incoming underlying and exact received-share checks still apply.
+Zero input, zero shares and zero actual credited value reject atomically.
+
+The donor chooses an operator namespace, not an individual borrower. The donation backs that
+namespace's existing claims across all periods. It creates no refund right for the donor.
+Excess backing becomes operator surplus under the existing yield-claim rules.
+
+Donations accept overpayments rather than cap the input at the measured deficit. Vault rounding can
+consume a small overpayment or require extra input to mint a share. Actual received custody determines
+the repair. Partial and exact repairs create no claimable yield. An actual surplus can become
+claimable yield under the existing reserve and rounding rules. This matches repayment overpayments:
+the full input enters custody, while principal accounting changes only by its permitted amount.
+
+Partial repairs succeed even if the namespace remains insolvent. Ordinary deposits and exits can
+still reject until sufficient backing returns. For example, a namespace with 80 assets and 100
+liabilities needs 20 assets of additional backing. Donating 8 reduces the deficit to 12 without
+creating another liability.
+
+Donation requires DepositManager Kernel activity but permits local disablement and disabled periods.
+The donor needs no role. The registered target need not retain its deposit role or be operational.
+Donation does not reopen deposits or change product lifecycle flags.
+
+Underlying donation needs a working synchronous vault deposit and its valuation path. A frozen
+deposit path or failed valuation can block donation. Restored accounting coverage does not guarantee
+that the vault permits redemption. Direct transfers to DepositManager do not update operator shares.
+Donating underlying directly to a vault can benefit every shareholder, rather than one operator.
+
 ## Withdrawals
 
 Every withdrawal request is denominated in the underlying asset and reduces the corresponding

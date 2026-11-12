@@ -113,7 +113,7 @@ contract BurnerLoansShareHandler is Test {
         _ASSET.mint(actor, amount);
         uint256 custodyBefore = _SHARE.balanceOf(_CUSTODY);
         uint256 walletBefore = _ASSET.balanceOf(actor);
-        (uint256 quotedCredit, uint256 quotedCollateral, uint256 quotedHealth) = _services
+        (uint256 quotedCredit, uint256 quotedCollateral) = _services
             .collateral
             .previewDepositCollateral(address(_ASSET), amount, actor);
         assertEq(
@@ -138,7 +138,6 @@ contract BurnerLoansShareHandler is Test {
         );
         assertEq(_ASSET.balanceOf(actor), walletBefore - amount, "Actor funds the deposit");
         if (principal[actor] == 0) {
-            assertEq(quotedHealth, type(uint256).max, "Debt-free quote health");
             assertEq(health, type(uint256).max, "Debt-free deposit health");
         }
     }

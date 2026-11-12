@@ -7,6 +7,7 @@ pragma solidity ^0.8.20;
 
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 
 import {Kernel, Keycode, Permissions} from "src/Kernel.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
@@ -121,6 +122,37 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
             _assetPeriodKey(params.asset, params.depositPeriod, msg.sender)
         ];
         return (receiptTokenId, actualAmount);
+    }
+
+    function donate(
+        IERC20 asset_,
+        address operator_,
+        uint256 amount_
+    ) external override returns (uint256 actualAmount, uint256 shares) {
+        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        if (!configuration.isConfigured) revert IAssetManager.AssetManager_NotConfigured();
+        if (operator_ == address(0)) revert DepositManager_ZeroAddress();
+        if (amount_ == 0) revert IAssetManager.AssetManager_ZeroAmount();
+        SafeERC20Exact.safeTransferFromExact(
+            ERC20(address(asset_)),
+            msg.sender,
+            address(this),
+            amount_
+        );
+        if (configuration.vault == address(0)) {
+            shares = amount_;
+            actualAmount = amount_;
+        } else {
+            SafeERC20.forceApprove(ERC20(address(asset_)), configuration.vault, amount_);
+            shares = IERC4626(configuration.vault).deposit(amount_, address(this));
+            actualAmount = _assetAsyncRedeem[asset_]
+                ? IERC4626(configuration.vault).convertToAssets(shares)
+                : IERC4626(configuration.vault).previewRedeem(shares);
+        }
+        if (shares == 0 || actualAmount == 0) revert IAssetManager.AssetManager_ZeroAmount();
+        _operatorShares[_getOperatorKey(asset_, operator_)] += shares;
+        emit AssetDeposited(address(asset_), msg.sender, operator_, actualAmount, shares);
+        emit AssetDonated(address(asset_), msg.sender, operator_, amount_, actualAmount, shares);
     }
 
     function withdraw(

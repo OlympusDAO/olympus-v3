@@ -36,14 +36,13 @@ contract BurnerLoansCollateralWithdrawCollateralIntegrationTest is BurnerLoansCo
         MockERC4626 vault = new MockERC4626(OZERC20(address(token)), "Vault", "V");
         _admitVault(token, address(vault), shares_);
         vm.prank(_borrower);
-        (uint256 q, uint256 c, uint256 h) = _collateral.previewDepositCollateral(
+        (uint256 q, uint256 c) = _collateral.previewDepositCollateral(
             address(token),
             collateral_,
             _borrower
         );
         assertEq(q, collateral_, "Independent 1:1 vault deposit credit");
         assertEq(c, collateral_, "Independent projected vault collateral");
-        assertEq(h, type(uint256).max, "Independent debt-free vault health");
         _deposit(token, collateral_);
         vm.prank(_borrower);
         IBurnerLoansCollateral.WithdrawPreview memory quote = _collateral.previewWithdrawCollateral(

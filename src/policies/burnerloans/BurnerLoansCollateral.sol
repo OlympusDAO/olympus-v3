@@ -168,18 +168,13 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
 
     /// @inheritdoc IBurnerLoansCollateral
     /// @dev Permissionless. Retains borrower/input, action/Core admission, settlement role,
-    ///      custody, minimum-credit, overflow and health checks. Quotes do not
+    ///      custody, minimum-credit and overflow checks. Quotes do not read pricing or health,
     ///      authenticate the viewer or check a prospective payer's balances or approvals.
     function previewDepositCollateral(
         address asset_,
         uint128 amount_,
         address onBehalfOf_
-    )
-        external
-        view
-        override
-        returns (uint256 credit, uint256 collateral, uint256 resultingHealthFactor)
-    {
+    ) external view override returns (uint256 credit, uint256 collateral) {
         _requirePreviewOperational();
         _validateBorrower(onBehalfOf_);
         IFLOANv1.Position memory p = _validateDeposit(asset_, amount_, onBehalfOf_);
@@ -193,10 +188,6 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
         // Match FLOAN's checked uint128 addition, including its overflow error.
         p.collateral += credited;
         collateral = p.collateral;
-        IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansCore.PriceSnapshot memory snapshot;
-        if (p.principalDue != 0) snapshot = evaluator.snapshot(asset_);
-        resultingHealthFactor = LoanPositions.health(evaluator, snapshot, p);
     }
 
     /// @notice	Validates shared deposit inputs and returns the canonical position.

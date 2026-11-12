@@ -360,14 +360,13 @@ contract BurnerLoansCollateralDepositCollateralCallbacksTest is
     function _quoteDeposit(address caller_) internal {
         bytes32 beforeState = _accountingDigest(address(_token));
         vm.prank(caller_);
-        (uint256 q, uint256 c, uint256 h) = _collateral.previewDepositCollateral(
+        (uint256 q, uint256 c) = _collateral.previewDepositCollateral(
             address(_token),
             1e18,
             _borrower
         );
         assertEq(q, 1e18, "Independent 1:1 credit quote");
         assertEq(c, 11e18, "Independent total quote");
-        assertEq(h, type(uint256).max, "Debt-free quote");
         assertEq(
             _accountingDigest(address(_token)),
             beforeState,

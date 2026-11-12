@@ -7,7 +7,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 /// @title Deposit Manager V1.1
-/// @notice Adds token-aware output modes and conversion previews to DepositManager V1.
+/// @notice Adds token-aware outputs, conversion previews and donation recovery to DepositManager V1.
 /// @dev All requested amounts remain denominated in the configured underlying asset. When share
 ///      output is selected, `amountOut` is denominated in the returned vault share token, which can
 ///      differ from the vault entry-point address for ERC-7575 vaults.
@@ -16,6 +16,22 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 ///      Solidity excludes inherited functions from an interface ID.
 interface IDepositManagerV1_1 is IDepositManager {
     // ========== EVENTS ========== //
+
+    /// @notice Emitted when a donor adds custody backing to an operator without creating a claim.
+    /// @param asset The configured underlying asset.
+    /// @param donor The caller supplying the underlying asset.
+    /// @param operator The operator whose custody shares were credited.
+    /// @param amount The requested input in underlying-asset units.
+    /// @param actualAmount The asset value of the received shares in underlying-asset units.
+    /// @param shares The received quantity in the configured share token's raw units.
+    event AssetDonated(
+        address indexed asset,
+        address indexed donor,
+        address indexed operator,
+        uint256 amount,
+        uint256 actualAmount,
+        uint256 shares
+    );
 
     /// @notice Emitted when DepositManager processes a share-mode withdrawal request.
     /// @dev Share-output calls emit this six-argument event, including with zero `amountOut` when
@@ -126,6 +142,21 @@ interface IDepositManagerV1_1 is IDepositManager {
     ) external view;
 
     // ========== RECOVERY ========== //
+
+    /// @notice Adds the caller's underlying assets to a registered operator's custody backing.
+    /// @dev Creates no receipts, liabilities or borrowing changes and consumes no principal cap.
+    ///      The configured vault wraps the underlying when applicable. Partial repairs and excess
+    ///      donations are accepted; actual surplus is subject to the operator's existing yield rules.
+    /// @param asset_ The configured underlying asset.
+    /// @param operator_ The registered operator to receive the custody credit.
+    /// @param amount_ The requested underlying amount supplied by the caller.
+    /// @return actualAmount The asset value of the received shares in underlying-asset units.
+    /// @return shares The received custody quantity in share units, or asset units for idle custody.
+    function donate(
+        IERC20 asset_,
+        address operator_,
+        uint256 amount_
+    ) external returns (uint256 actualAmount, uint256 shares);
 
     /// @notice Transfers the entire unmanaged token balance to the current Treasury.
     /// @param token_ The ERC-20 token to recover.

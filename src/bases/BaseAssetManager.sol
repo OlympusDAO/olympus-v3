@@ -73,6 +73,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     ///
     /// @param  asset_                  The asset to deposit
     /// @param  depositor_              The depositor
+    /// @param  operator_               The operator namespace receiving the custody shares
     /// @param  amount_                 The amount of assets to deposit
     /// @param  enforceDepositChecks_   Whether to enforce the minimum deposit requirement and deposit cap
     /// @return actualAmount    The actual amount of assets redeemable by the shares
@@ -80,10 +81,11 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     function _depositAsset(
         IERC20 asset_,
         address depositor_,
+        address operator_,
         uint256 amount_,
         bool enforceDepositChecks_
     ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
+        AssetConfiguration storage assetConfiguration = _assetConfigurations[asset_];
 
         // Validate that the deposit meets the minimum deposit requirement
         if (enforceDepositChecks_ && amount_ < assetConfiguration.minimumDeposit) {
@@ -96,8 +98,8 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
 
         // Pull the assets from the depositor
         ERC20 asset = ERC20(address(asset_));
-        // The calling operator is authorized to pull from the depositor through DepositManager's
-        // receipt-token and role checks; the depositor is intentionally distinct from msg.sender.
+        // Ordinary deposits/repayments authorize the operator's pull. Donations instead require
+        // the depositor to be the donor calling DepositManager.
         // forge-lint: disable-next-line(arbitrary-send-erc20)
         asset.safeTransferFromExact(depositor_, address(this), amount_);
 
@@ -143,9 +145,8 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
             _assetDepositCapUtilization[asset_] += actualAmount;
         }
 
-        // Update the shares deposited by the caller (operator).
-        _operatorShares[_getOperatorKey(asset_, msg.sender)] += shares;
-        emit AssetDeposited(address(asset_), depositor_, msg.sender, actualAmount, shares);
+        _operatorShares[_getOperatorKey(asset_, operator_)] += shares;
+        emit AssetDeposited(address(asset_), depositor_, operator_, actualAmount, shares);
     }
 
     /// @notice Withdraw assets or transfer the corresponding vault shares
@@ -164,7 +165,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
         uint256 amount_,
         bool withdrawAsShares_
     ) internal returns (uint256 shares, IERC20 tokenOut, uint256 amountOut) {
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
+        AssetConfiguration storage assetConfiguration = _assetConfigurations[asset_];
         if (!assetConfiguration.isConfigured) revert AssetManager_NotConfigured();
         tokenOut = _getAssetWithdrawalToken(asset_, assetConfiguration, withdrawAsShares_);
 
@@ -222,9 +223,9 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
         shares = _operatorShares[_getOperatorKey(asset_, operator_)];
 
         // Convert from shares to assets
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
-        if (assetConfiguration.vault == address(0)) return (shares, shares);
-        sharesInAssets = _convertSharesToAssets(IERC4626(assetConfiguration.vault), shares);
+        address vault = _assetConfigurations[asset_].vault;
+        if (vault == address(0)) return (shares, shares);
+        sharesInAssets = _convertSharesToAssets(IERC4626(vault), shares);
 
         return (shares, sharesInAssets);
     }
@@ -522,7 +523,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     /// @notice Validates the requested withdrawal mode before action-specific external calls.
     /// @dev Unconfigured assets remain subject to each entry point's existing error ordering.
     function _validateWithdrawalMode(IERC20 asset_, bool withdrawAsShares_) internal view {
-        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        AssetConfiguration storage configuration = _assetConfigurations[asset_];
         if (!configuration.isConfigured) return;
         _validateWithdrawalMode(asset_, configuration, withdrawAsShares_);
     }
@@ -531,7 +532,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     /// @return tokenOut The token delivered by a valid withdrawal mode.
     function _validateWithdrawalMode(
         IERC20 asset_,
-        AssetConfiguration memory configuration_,
+        AssetConfiguration storage configuration_,
         bool withdrawAsShares_
     ) internal view returns (IERC20 tokenOut) {
         tokenOut = _getAssetWithdrawalToken(asset_, configuration_, withdrawAsShares_);
@@ -543,7 +544,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     /// @notice Resolves the token transferred for an already-loaded asset configuration.
     function _getAssetWithdrawalToken(
         IERC20 asset_,
-        AssetConfiguration memory configuration_,
+        AssetConfiguration storage configuration_,
         bool withdrawAsShares_
     ) internal view returns (IERC20 tokenOut) {
         if (!withdrawAsShares_) return asset_;
@@ -558,7 +559,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
         IERC20 asset_,
         bool withdrawAsShares_
     ) public view override returns (IERC20 tokenOut) {
-        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        AssetConfiguration storage configuration = _assetConfigurations[asset_];
         if (!configuration.isConfigured) revert AssetManager_NotConfigured();
         return _getAssetWithdrawalToken(asset_, configuration, withdrawAsShares_);
     }
@@ -567,7 +568,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     function isAssetShareWithdrawalRequired(
         IERC20 asset_
     ) public view override returns (bool required) {
-        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        AssetConfiguration storage configuration = _assetConfigurations[asset_];
         if (!configuration.isConfigured) revert AssetManager_NotConfigured();
         return _isAssetShareWithdrawalRequired(asset_, configuration);
     }
@@ -575,7 +576,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     /// @notice Returns the effective share-withdrawal requirement for a loaded configuration.
     function _isAssetShareWithdrawalRequired(
         IERC20 asset_,
-        AssetConfiguration memory configuration_
+        AssetConfiguration storage configuration_
     ) internal view returns (bool required) {
         if (_assetShareWithdrawalRequired[asset_]) return true;
         if (configuration_.vault == address(0)) return false;
@@ -594,7 +595,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
         IERC20 asset_,
         bool required_
     ) public view override {
-        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        AssetConfiguration storage configuration = _assetConfigurations[asset_];
         if (!configuration.isConfigured) revert AssetManager_NotConfigured();
         if (required_ && configuration.vault == address(0)) {
             revert AssetManager_VaultRequired(address(asset_));
@@ -617,7 +618,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
         IERC20 asset_,
         bool withdrawAsShares_
     ) public view override {
-        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        AssetConfiguration storage configuration = _assetConfigurations[asset_];
         if (!configuration.isConfigured) revert AssetManager_NotConfigured();
         _validateWithdrawalMode(asset_, configuration, withdrawAsShares_);
     }

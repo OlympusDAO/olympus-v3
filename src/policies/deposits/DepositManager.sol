@@ -189,6 +189,7 @@ contract DepositManager is
     ///             - The depositor has insufficient asset token balance
     ///             - The asset is a fee-on-transfer token
     ///             - Zero shares would be received from the vault
+    ///             - The operator is insolvent after custody and receipt liabilities are updated
     function deposit(
         DepositParams calldata params_
     )
@@ -212,6 +213,7 @@ contract DepositManager is
         (actualAmount, ) = _depositAsset(
             params_.asset,
             params_.depositor,
+            msg.sender,
             params_.amount,
             true // Enforce minimum deposit
         );
@@ -228,7 +230,43 @@ contract DepositManager is
         // Update the asset liabilities for the caller (operator)
         _assetLiabilities[_getAssetLiabilitiesKey(params_.asset, msg.sender)] += actualAmount;
 
+        _validateOperatorSolvency(params_.asset, msg.sender);
+
         return (receiptTokenId, actualAmount);
+    }
+
+    /// @inheritdoc IDepositManagerV1_1
+    /// @dev Available while locally disabled. Uses the same exact underlying/share receipt
+    ///      checks as deposits, without their minimum or cap.
+    ///      Partial repairs and overpayments are accepted; genuine surplus is claimable yield.
+    ///
+    ///      This function reverts if:
+    ///      - A guarded operation is already in progress.
+    ///      - This policy is Kernel-inactive.
+    ///      - The asset is not configured.
+    ///      - The operator is the zero address or has no registered name.
+    ///      - The input amount is zero.
+    ///      - The caller's underlying transfer fails or delivers an inexact amount.
+    ///      - The vault deposit or required share valuation fails.
+    ///      - The vault delivers zero or an inexact number of shares.
+    ///      - The received shares have zero underlying value.
+    function donate(
+        IERC20 asset_,
+        address operator_,
+        uint256 amount_
+    ) external nonReentrant returns (uint256 actualAmount, uint256 shares) {
+        _requireOwnPolicyActive();
+        _onlyConfiguredAsset(asset_);
+        if (operator_ == address(0)) revert DepositManager_ZeroAddress();
+        if (_operatorToName[operator_] == bytes3(0)) {
+            revert DepositManager_OperatorNameNotSet(operator_);
+        }
+        if (amount_ == 0) revert AssetManager_ZeroAmount();
+
+        (actualAmount, shares) = _depositAsset(asset_, msg.sender, operator_, amount_, false);
+        if (actualAmount == 0) revert AssetManager_ZeroAmount();
+
+        emit AssetDonated(address(asset_), msg.sender, operator_, amount_, actualAmount, shares);
     }
 
     /// @inheritdoc IDepositManager
@@ -241,11 +279,23 @@ contract DepositManager is
         uint256 operatorLiabilities = _assetLiabilities[assetLiabilitiesKey];
         uint256 borrowedAmount = _borrowedAmounts[assetLiabilitiesKey];
 
-        // Avoid reverting
-        // Adjust by 1 to account for the different behaviour in ERC4626.previewRedeem and ERC4626.previewWithdraw, which could leave the receipt token insolvent
-        if (depositedSharesInAssets + borrowedAmount < operatorLiabilities + 1) return 0;
+        // Compare net liabilities without adding custody and debt, which can overflow after a
+        // large donation. Retain the one-unit reserve for vault conversion rounding.
+        if (borrowedAmount <= operatorLiabilities) {
+            uint256 netLiabilities = operatorLiabilities - borrowedAmount;
+            return
+                depositedSharesInAssets > netLiabilities
+                    ? depositedSharesInAssets - netLiabilities - 1
+                    : 0;
+        }
 
-        return depositedSharesInAssets + borrowedAmount - operatorLiabilities - 1;
+        // Receipt redemptions can leave debt above remaining liabilities. Preserve that surplus
+        // too, saturating only when its mathematical value exceeds the return type.
+        uint256 excessBorrowed = borrowedAmount - operatorLiabilities;
+        if (depositedSharesInAssets > type(uint256).max - excessBorrowed) {
+            return type(uint256).max;
+        }
+        return depositedSharesInAssets + excessBorrowed - 1;
     }
 
     /// @inheritdoc IDepositManager
@@ -441,7 +491,7 @@ contract DepositManager is
         uint256 assetAmount_
     ) external view returns (uint256 estimatedCreditedAssets, uint256 estimatedCustodyShares) {
         _onlyConfiguredAsset(asset_);
-        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        AssetConfiguration storage configuration = _assetConfigurations[asset_];
         if (configuration.vault == address(0)) {
             estimatedCreditedAssets = assetAmount_;
             estimatedCustodyShares = assetAmount_;
@@ -471,7 +521,7 @@ contract DepositManager is
         uint256 assetAmount_,
         bool withdrawAsShares_
     ) external view returns (IERC20 tokenOut, uint256 amountOut) {
-        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        AssetConfiguration storage configuration = _assetConfigurations[asset_];
         if (!configuration.isConfigured) revert AssetManager_NotConfigured();
         tokenOut = _validateWithdrawalMode(asset_, configuration, withdrawAsShares_);
         if (configuration.vault == address(0)) {
@@ -529,13 +579,12 @@ contract DepositManager is
         return keccak256(abi.encode(address(asset_), operator_));
     }
 
-    /// @notice Validates that an operator remains solvent after a withdrawal
+    /// @notice Validates the settled backing of an operator's receipt liabilities
     /// @dev    This function ensures that operator assets + borrowed amount >= operator liabilities
     ///         This is the core solvency constraint for the DepositManager
     ///
-    ///         Notes:
-    ///         - The solvency checks assume that the value of each vault share is increasing, and will not reduce.
-    ///         - In a situation where the assets per share reduces below 1 (at the appropriate decimal scale), the solvency check will fail.
+    ///         A vault loss can create a deficit at any share price. Donation can restore backing
+    ///         without creating additional receipt liabilities.
     ///
     /// @param asset_ The asset to validate solvency for
     /// @param operator_ The operator to validate solvency for
@@ -545,7 +594,10 @@ contract DepositManager is
         uint256 operatorLiabilities = _assetLiabilities[assetLiabilitiesKey];
         uint256 borrowedAmount = _borrowedAmounts[assetLiabilitiesKey];
 
-        if (operatorLiabilities > depositedSharesInAssets + borrowedAmount) {
+        if (
+            operatorLiabilities > depositedSharesInAssets &&
+            operatorLiabilities - depositedSharesInAssets > borrowedAmount
+        ) {
             revert DepositManager_Insolvent(
                 address(asset_),
                 operatorLiabilities,
@@ -581,11 +633,9 @@ contract DepositManager is
         if (bytes(name_).length != _OPERATOR_NAME_LENGTH) {
             revert DepositManager_OperatorNameInvalid();
         }
-        // Validate that the characters are a-z, 0-9
-        if (!_isValidOperatorName(bytes(name_))) revert DepositManager_OperatorNameInvalid();
-
         /// forge-lint: disable-next-line(unsafe-typecast)
         bytes3 nameBytes3 = bytes3(bytes(name_));
+        if (!_isValidOperatorName(nameBytes3)) revert DepositManager_OperatorNameInvalid();
         // Validate that the name isn't in use by another operator
         if (_operatorNames[nameBytes3]) revert DepositManager_OperatorNameInUse(name_);
 
@@ -600,7 +650,7 @@ contract DepositManager is
     }
 
     /// @notice Returns whether every operator-name character is lowercase alphanumeric ASCII.
-    function _isValidOperatorName(bytes memory name_) internal pure returns (bool) {
+    function _isValidOperatorName(bytes3 name_) internal pure returns (bool) {
         for (uint256 i = 0; i < _OPERATOR_NAME_LENGTH; i++) {
             bytes1 character = name_[i];
             bool isLowercaseLetter = character >= 0x61 && character <= 0x7A;
@@ -644,7 +694,7 @@ contract DepositManager is
     ///             - minimumDeposit_ > depositCap_
     ///
     ///             Notes:
-    ///             - A limitation of the current implementation is that the vault is assumed to be monotonically-increasing in value.
+    ///             - A vault loss can block deposits and exits until the operator's backing is restored.
     ///             - The pairing of the asset and vault is immutable, to prevent a governance attack on user deposits.
     function addAsset(
         IERC20 asset_,
@@ -765,10 +815,12 @@ contract DepositManager is
         _onlyConfiguredAsset(asset_);
         if (operator_ == address(0)) revert DepositManager_ZeroAddress();
         if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
-        if (isAssetPeriod(asset_, depositPeriod_, operator_).isConfigured) {
+        if (
+            _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].asset != address(0)
+        ) {
             revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_, operator_);
         }
-        if (bytes(getOperatorName(operator_)).length == 0) {
+        if (_operatorToName[operator_] == bytes3(0)) {
             revert DepositManager_OperatorNameNotSet(operator_);
         }
         if (!_hasRole(operator_, DEPOSIT_OPERATOR_ROLE)) {
@@ -1006,6 +1058,7 @@ contract DepositManager is
         (actualAmount, ) = _depositAsset(
             params_.asset,
             params_.payer,
+            msg.sender,
             params_.amount,
             false // Do not enforce minimum deposit
         );

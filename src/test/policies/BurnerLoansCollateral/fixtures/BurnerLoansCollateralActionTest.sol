@@ -163,14 +163,13 @@ abstract contract BurnerLoansCollateralActionTest is BurnerLoansModularTest {
         bytes32 beforeQuote = _accountingDigest(address(_asset));
         IBurnerLoansCore.Position memory position = _lens.getPosition(address(_asset), _borrower);
         vm.prank(caller_);
-        (uint256 q, uint256 c, uint256 h) = _collateral.previewDepositCollateral(
+        (uint256 q, uint256 c) = _collateral.previewDepositCollateral(
             address(_asset),
             amount_,
             _borrower
         );
         assertEq(q, amount_, "Direct preview credit equals requested units");
         assertEq(c, uint256(prior_) + amount_, "Independent preview total");
-        assertEq(h, type(uint256).max, "Debt-free preview health");
         assertEq(
             _accountingDigest(address(_asset)),
             beforeQuote,
@@ -273,14 +272,13 @@ abstract contract BurnerLoansCollateralActionTest is BurnerLoansModularTest {
     ) internal {
         bytes32 beforeState = _accountingDigest(asset_);
         vm.prank(_borrower);
-        (uint256 credit, uint256 collateral, uint256 health) = _collateral.previewDepositCollateral(
+        (uint256 credit, uint256 collateral) = _collateral.previewDepositCollateral(
             asset_,
             amount_,
             _borrower
         );
         assertEq(credit, expectedCredit_, "Independent initial credit quote");
         assertEq(collateral, expectedCredit_, "Independent new-position collateral quote");
-        assertEq(health, type(uint256).max, "New-position quote is debt-free");
         assertEq(
             _accountingDigest(asset_),
             beforeState,

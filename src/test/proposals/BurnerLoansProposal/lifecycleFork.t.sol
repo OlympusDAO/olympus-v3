@@ -318,7 +318,7 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
         uint256 custodySharesBefore = IERC20(vault_).balanceOf(_graph.depositManager);
         // This assertion checks vault credit and collateral; debt-free health is asserted separately.
         // forge-lint: disable-next-item(unused-return)
-        (uint256 quotedCredit, uint256 quotedCollateral, ) = _collateral.previewDepositCollateral(
+        (uint256 quotedCredit, uint256 quotedCollateral) = _collateral.previewDepositCollateral(
             asset_,
             4_000e18,
             borrower_

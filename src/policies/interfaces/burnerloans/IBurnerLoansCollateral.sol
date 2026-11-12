@@ -87,18 +87,18 @@ interface IBurnerLoansCollateral {
         address recipient
     ) external returns (WithdrawPreview memory result);
 
-    /// @notice Quotes collateral credit and the resulting position for any borrower.
+    /// @notice Estimates collateral credit and the resulting collateral for any borrower.
+    /// @dev Uses the current custody conversion without evaluating pricing, health or final deposit solvency.
     /// @param asset_ Configured underlying collateral asset.
     /// @param amount_ Requested deposit in underlying token units.
     /// @param onBehalfOf_ Borrower whose position would receive credit, independently of the quote requester or execution payer.
     /// @return credit Estimated collateral credit in underlying units.
     /// @return collateral Projected total collateral in underlying units.
-    /// @return resultingHealthFactor Projected WAD health; uint256.max when debt-free.
     function previewDepositCollateral(
         address asset_,
         uint128 amount_,
         address onBehalfOf_
-    ) external view returns (uint256 credit, uint256 collateral, uint256 resultingHealthFactor);
+    ) external view returns (uint256 credit, uint256 collateral);
 
     /// @notice Quotes withdrawal output and the resulting position for any borrower.
     /// @param asset_ Configured underlying collateral asset.

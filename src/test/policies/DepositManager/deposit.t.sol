@@ -1010,11 +1010,212 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
     // ========== ERC-7540 AND ERC-7575 TESTS ========== //
 
+    // Scenarios: DM-DEPOSIT-I02, DM-DEPOSIT-P08.
+    function test_givenInsolventOperator_whenDepositing_revertsAndPreservesCustody(
+        bool existingWrapped_,
+        bool newWrapped_
+    ) public {
+        _configureExternalVault(true);
+        _depositVariant(10e18, existingWrapped_);
+        _externalVault.setAssetsPerShare(8e11);
+        _approveSpendingAsset(DEPOSITOR, 8e18);
+        uint256 payerBalance = asset.balanceOf(DEPOSITOR);
+        bytes32 stateBefore = _depositStateHash(IERC4626(address(_externalVault)), _externalShare);
+        uint256 custody = _externalShare.balanceOf(address(depositManager));
+
+        // Existing shares = 10e6 (6 decimals), now worth 8e18 assets (18 decimals).
+        // New 8e18 input -> 10e6 shares -> 8e18 credit. Final assets=16e18, liabilities=18e18.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_Insolvent.selector,
+                address(asset),
+                uint256(18e18),
+                uint256(16e18),
+                uint256(0)
+            )
+        );
+        _executeVariant(8e18, newWrapped_);
+        assertEq(
+            _depositStateHash(IERC4626(address(_externalVault)), _externalShare),
+            stateBefore,
+            "Full external-share state rolls back"
+        );
+        assertEq(asset.balanceOf(DEPOSITOR), payerBalance, "Payer funds roll back");
+        assertEq(_externalShare.balanceOf(address(depositManager)), custody, "Custody rolls back");
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            10e18,
+            "No new liability survives"
+        );
+        assertEq(
+            depositManager.getAssetDepositCapStatus(iAsset).utilization,
+            10e18,
+            "No new principal utilization survives"
+        );
+    }
+
     uint256 internal constant _ASSETS_PER_SHARE = 1e12;
     uint256 internal constant _DEPOSIT_AMOUNT = 10e18;
 
     MockERC7540ExternalShareVault internal _externalVault;
     IERC20 internal _externalShare;
+
+    function _depositStateHash(IERC4626 vault_, IERC20 share_) internal view returns (bytes32) {
+        bytes32 custody = keccak256(
+            abi.encode(
+                asset.balanceOf(DEPOSITOR),
+                asset.allowance(DEPOSITOR, address(depositManager)),
+                asset.balanceOf(address(depositManager)),
+                asset.balanceOf(address(vault_)),
+                asset.totalSupply(),
+                share_.balanceOf(address(depositManager)),
+                share_.totalSupply(),
+                asset.allowance(address(depositManager), address(vault_))
+            )
+        );
+        (uint256 receipt, address wrapper) = depositManager.getReceiptToken(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+        bytes32 receipts = keccak256(
+            abi.encode(
+                receiptTokenManager.balanceOf(DEPOSITOR, receipt),
+                receiptTokenManager.balanceOf(wrapper, receipt),
+                IERC20(wrapper).balanceOf(DEPOSITOR),
+                IERC20(wrapper).totalSupply()
+            )
+        );
+        (uint256 shares, uint256 assets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        return
+            keccak256(
+                abi.encode(
+                    custody,
+                    receipts,
+                    shares,
+                    assets,
+                    depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+                    depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+                    depositManager.getAssetDepositCapStatus(iAsset).utilization
+                )
+            );
+    }
+
+    function _depositVariant(uint256 amount_, bool wrapped_) internal returns (uint256 credit) {
+        _approveSpendingAsset(DEPOSITOR, amount_);
+        return _executeVariant(amount_, wrapped_);
+    }
+
+    function _executeVariant(uint256 amount_, bool wrapped_) internal returns (uint256 credit) {
+        vm.prank(DEPOSIT_OPERATOR);
+        (, credit) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: wrapped_
+            })
+        );
+    }
+
+    // Scenarios: DM-DEPOSIT-P08.
+    function test_givenSynchronousExternalShareVaultLoss_whenDepositing_reverts(
+        bool existingWrapped_,
+        bool newWrapped_
+    ) public {
+        _configureExternalVault(false);
+        assertEq(
+            _depositVariant(10e18, existingWrapped_),
+            10e18,
+            "Solvent external-share baseline"
+        );
+        _externalVault.setAssetsPerShare(8e11);
+        _approveSpendingAsset(DEPOSITOR, 8e18);
+        uint256 balanceBefore = asset.balanceOf(DEPOSITOR);
+        bytes32 stateBefore = _depositStateHash(IERC4626(address(_externalVault)), _externalShare);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_Insolvent.selector,
+                address(asset),
+                uint256(18e18),
+                uint256(16e18),
+                uint256(0)
+            )
+        );
+        _executeVariant(8e18, newWrapped_);
+        assertEq(
+            _depositStateHash(IERC4626(address(_externalVault)), _externalShare),
+            stateBefore,
+            "Full external-share state rolls back"
+        );
+        assertEq(asset.balanceOf(DEPOSITOR), balanceBefore, "External-share payer rolls back");
+        assertEq(
+            _externalShare.balanceOf(address(depositManager)),
+            10e6,
+            "Configured external share custody rolls back"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            10e18,
+            "External-share liabilities roll back"
+        );
+    }
+
+    // Scenarios: DM-DEPOSIT-P08.
+    function test_givenAsyncRedeemSelfShareVaultLoss_whenDepositing_reverts(
+        bool existingWrapped_,
+        bool newWrapped_
+    ) public {
+        ERC7540SyncDepositAsyncRedeemVault selfShareVault = new ERC7540SyncDepositAsyncRedeemVault(
+            OZIERC20(address(asset))
+        );
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.addAsset(iAsset, IERC4626(address(selfShareVault)), type(uint256).max, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+        assertEq(_depositVariant(100, existingWrapped_), 100, "Solvent async self-share baseline");
+        asset.burn(address(selfShareVault), 20);
+        _approveSpendingAsset(DEPOSITOR, 8);
+        uint256 balanceBefore = asset.balanceOf(DEPOSITOR);
+        bytes32 stateBefore = _depositStateHash(
+            IERC4626(address(selfShareVault)),
+            IERC20(address(selfShareVault))
+        );
+        // OZ virtual asset/share: floor(8*101/81)=9 new shares;
+        // credit=floor(9*89/110)=7, recorded custody=floor(109*89/110)=88.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_Insolvent.selector,
+                address(asset),
+                uint256(107),
+                uint256(88),
+                uint256(0)
+            )
+        );
+        _executeVariant(8, newWrapped_);
+        assertEq(
+            _depositStateHash(IERC4626(address(selfShareVault)), IERC20(address(selfShareVault))),
+            stateBefore,
+            "Full async self-share state rolls back"
+        );
+        assertEq(asset.balanceOf(DEPOSITOR), balanceBefore, "Async self-share payer rolls back");
+        assertEq(
+            selfShareVault.balanceOf(address(depositManager)),
+            100,
+            "Async self-share custody rolls back"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            100,
+            "Async self-share liabilities roll back"
+        );
+    }
 
     function _configureExternalVault(bool asyncRedeem_) internal {
         _externalVault = new MockERC7540ExternalShareVault(asset, false, asyncRedeem_, true);
