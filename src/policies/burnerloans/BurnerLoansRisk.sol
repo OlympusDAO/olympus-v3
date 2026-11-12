@@ -192,6 +192,8 @@ contract BurnerLoansRisk is
     ///      - Risk is inactive or locally disabled.
     ///      - A required dependency read or numeric conversion fails.
     /// @dev Reads without state changes; errors from dependency views propagate.
+    /// @dev PRICE and PriceCache timestamps can differ from the update times of the underlying feeds.
+    ///      The PRICE configuration must include sufficient guards for price volatility and feed freshness.
     function snapshot(
         address asset_
     ) external view onlyOperational returns (IBurnerLoansCore.PriceSnapshot memory prices) {
@@ -223,6 +225,7 @@ contract BurnerLoansRisk is
     ///      - Risk is inactive or locally disabled.
     ///      - A required dependency read or numeric conversion fails.
     ///      Permissionless cache maintenance, like PriceCache; calculators never refresh or reread backing.
+    /// @dev Shares the timestamp behavior and PRICE configuration requirements documented in snapshot().
     function refreshSnapshot(
         address asset_
     ) external onlyOperational returns (IBurnerLoansCore.PriceSnapshot memory snapshot) {
