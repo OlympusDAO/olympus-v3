@@ -470,16 +470,18 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param caller The rejected caller.
     error IYieldRepurchaseFacilityV2_OnlyConfigurator(address caller);
 
-    /// @notice Thrown when the configurator is unset, is not an active policy of the
-    ///         facility's kernel, does not report that kernel as its own, does not
-    ///         advertise `IYieldRepurchaseFacilityV2Config`, or is not bound to the
-    ///         facility.
+    /// @notice Thrown when the configurator is unset, does not advertise
+    ///         `IYieldRepurchaseFacilityV2Config`, or is not bound to the facility. A
+    ///         configurator that does not report the facility's kernel or is not an active
+    ///         policy of it is rejected with the errors of the implementation's dependency
+    ///         check.
     /// @param configurator The rejected configurator address.
     error IYieldRepurchaseFacilityV2_InvalidConfigurator(address configurator);
 
-    /// @notice Thrown when a proposed backing oracle is the zero address, does not report
-    ///         the facility's kernel as its own, or, on the admin setter path, is not an
-    ///         active policy of the kernel.
+    /// @notice Thrown when a proposed backing oracle is the zero address. An oracle that does
+    ///         not report the facility's kernel or, on the admin setter path, is not an
+    ///         active policy of it is rejected with the errors of the implementation's
+    ///         dependency check.
     /// @param backingOracle The rejected backing oracle address.
     error IYieldRepurchaseFacilityV2_InvalidBackingOracle(address backingOracle);
 
