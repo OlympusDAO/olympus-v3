@@ -220,17 +220,23 @@ contract BackingOracleConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
-    /// @dev	Cancellation remains available while paused and never reads the target.
+    /// @dev	Cancellation remains available while paused and never reads the target. Until the
+    ///      action expires, ADMIN, EMERGENCY and its proposer (matched by address, not by role)
+    ///      may cancel; once the block timestamp is past `expiresAt`, any caller may.
     /// @dev	Reverts if:
     ///      - This queue is not active in its Kernel.
-    ///      - The caller does not hold EMERGENCY.
+    ///      - The action has not expired and the caller holds neither ADMIN nor EMERGENCY and
+    ///        is not its proposer.
     function _validateCancellation(
         address caller_,
         uint64,
-        ITimelockBatchQueue.QueuedAction storage
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
         _requireOwnActive();
-        _requireRole(caller_, EMERGENCY_ROLE);
+        if (_getBlockTimestamp() > action_.expiresAt) return;
+        _requireAuthorized(
+            !_isAdmin(caller_) && !_hasRole(caller_, EMERGENCY_ROLE) && caller_ != action_.proposer
+        );
     }
 
     /// @notice	Require active/enabled target and current selection at runtime.
