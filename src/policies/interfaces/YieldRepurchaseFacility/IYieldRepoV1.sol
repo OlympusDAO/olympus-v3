@@ -5,7 +5,9 @@ pragma solidity ^0.8.24;
 /// @notice The subset of the deployed YieldRepurchaseFacility v1.2 surface used by the
 ///         migration to the multi-asset v2.
 /// @dev `shutdown` is declared with `address[]`, which is ABI-identical to the
-///      `ERC20[]` parameter of the deployed contract.
+///      `ERC20[]` parameter of the deployed contract. `sReserve` and `reserve` are declared
+///      with `address`, which is ABI-identical to the contract types the deployed contract
+///      returns.
 interface IYieldRepoV1 {
     /// @notice Returns the running epoch counter.
     /// @return The epoch counter.
@@ -29,6 +31,14 @@ interface IYieldRepoV1 {
     ///         amount redeemable for 1e18 sUSDS shares.
     /// @return The conversion rate snapshot.
     function lastConversionRate() external view returns (uint256);
+
+    /// @notice Returns the ERC4626 vault of the reserve: sUSDS.
+    /// @return The vault address.
+    function sReserve() external view returns (address);
+
+    /// @notice Returns the reserve token: the asset of `sReserve`, USDS.
+    /// @return The reserve token address.
+    function reserve() external view returns (address);
 
     /// @notice Shuts the facility down: burns its OHM balance and transfers the listed
     ///         token balances to the treasury.
