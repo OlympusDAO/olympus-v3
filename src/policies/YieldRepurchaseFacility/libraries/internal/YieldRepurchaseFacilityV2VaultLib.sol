@@ -2,11 +2,11 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
+import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
 import {IERC7540Redeem} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7540.sol";
 
 // Libraries
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 
 /// @title YieldRepurchaseFacilityV2VaultLib

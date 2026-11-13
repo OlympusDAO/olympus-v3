@@ -2,15 +2,15 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC7540Deposit} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7540.sol";
 import {IERC7575} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7575.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2ValidationLib.sol";

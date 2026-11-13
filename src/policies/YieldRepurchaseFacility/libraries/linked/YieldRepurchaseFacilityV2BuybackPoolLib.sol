@@ -2,14 +2,14 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Steps} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Steps.sol";
 
 // Libraries
-import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
-import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+import {Math} from "@openzeppelin-5.7.0/utils/math/Math.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2VaultLib.sol";

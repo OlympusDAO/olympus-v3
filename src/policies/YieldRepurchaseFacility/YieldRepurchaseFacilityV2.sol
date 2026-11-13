@@ -4,10 +4,10 @@ pragma solidity ^0.8.24;
 // Interfaces
 import {IBondCallback} from "src/interfaces/IBondCallback.sol";
 import {IBurnableERC20} from "src/interfaces/IBurnableERC20.sol";
-import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
-import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
@@ -19,7 +19,7 @@ import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchas
 
 // Libraries
 import {SafeCall} from "src/libraries/SafeCall.sol";
-import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
 import {YieldRepurchaseFacilityV2BondMarketLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2BondMarketLib.sol";
 import {YieldRepurchaseFacilityV2BuybackPoolLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2BuybackPoolLib.sol";
@@ -44,7 +44,7 @@ import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {ReEnabler} from "src/bases/ReEnabler.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
 
 // Constants
 import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
