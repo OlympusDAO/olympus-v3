@@ -244,7 +244,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - `bondAuctioneer_` is the zero address or reports the zero address as its
     ///        teller (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`).
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
-    ///      - `stepGasLimit_` is below `1_100_000` or above `5_000_000`.
+    ///      - `stepGasLimit_` is below `800_000` or above `5_000_000`.
     /// @param kernel_ The Olympus Kernel.
     /// @param ohm_ The OHM token address.
     /// @param backingOracle_ The OHM backing oracle policy address.
@@ -1334,13 +1334,13 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if:
     ///      - The caller holds neither the yrf_admin role nor the admin role.
-    ///      - `stepGasLimit_` is below `1_100_000` or above `5_000_000`.
+    ///      - `stepGasLimit_` is below `800_000` or above `5_000_000`.
     function setStepGasLimit(uint32 stepGasLimit_) external override onlyYrfAdminOrAdminRole {
         _setStepGasLimit(stepGasLimit_);
     }
 
     /// @notice Sets the gas limit of an isolated step.
-    /// @dev Reverts if `stepGasLimit_` is below `1_100_000` or above `5_000_000`.
+    /// @dev Reverts if `stepGasLimit_` is below `800_000` or above `5_000_000`.
     function _setStepGasLimit(uint32 stepGasLimit_) private {
         if (
             stepGasLimit_ < YieldRepurchaseFacilityV2Constants.MIN_STEP_GAS_LIMIT ||
