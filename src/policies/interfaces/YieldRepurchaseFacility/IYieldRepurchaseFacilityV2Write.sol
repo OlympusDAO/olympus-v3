@@ -222,7 +222,7 @@ interface IYieldRepurchaseFacilityV2Write {
     ///         processing of the purchased OHM, the daily cycle of a vault, and the sweep
     ///         of a vault by `returnFundsToTreasury` each run with this amount of gas.
     /// @dev Callable by the admin and yrf_admin roles, while the facility is enabled or
-    ///      disabled. The limit must lie between `1_100_000` and `5_000_000`, inclusive.
+    ///      disabled. The limit must lie between `800_000` and `5_000_000`, inclusive.
     ///      The bounds guard against a mis-entered value and do not guarantee that a
     ///      step fits into the limit: a step that needs more gas than the limit fails and
     ///      is skipped with its skip event, and a nested call of a daily cycle that is

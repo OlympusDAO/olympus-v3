@@ -366,7 +366,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///         above `MAX_GRACE_PERIOD`.
     error IYieldRepurchaseFacilityV2_GracePeriodTooLong();
 
-    /// @notice Thrown when the step gas limit is below `1_100_000` or above `5_000_000`.
+    /// @notice Thrown when the step gas limit is below `800_000` or above `5_000_000`.
     error IYieldRepurchaseFacilityV2_StepGasLimitOutOfBounds();
 
     /// @notice Thrown when the gas remaining before an isolated step does not cover the

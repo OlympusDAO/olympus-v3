@@ -64,7 +64,7 @@ library YieldRepurchaseFacilityV2Constants {
     ///      transaction. It does not guarantee that a step fits into the limit: the gas a
     ///      step needs depends on the vault, on the feeds the PRICE module resolves for
     ///      the reserve, and on the bond contracts.
-    uint32 internal constant MIN_STEP_GAS_LIMIT = 1_100_000;
+    uint32 internal constant MIN_STEP_GAS_LIMIT = 800_000;
 
     /// @notice Upper bound of the step gas limit, inclusive, in gas units.
     /// @dev A beat runs up to `2 * N + 1` isolated steps for `N` enabled vaults, and
