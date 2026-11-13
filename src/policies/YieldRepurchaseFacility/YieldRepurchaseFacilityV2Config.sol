@@ -33,9 +33,12 @@ import {ADMIN_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      which validates the call, stores the value, and emits the event. The operator setters
 ///      accept the config operator of `ConfigOperatorSingleStep`, meant to be
 ///      `YieldRepurchaseFacilityV2ConfigTimelock`, and the admin role; the admin setters accept
-///      the admin role only. Every setter requires this policy to be enabled, and none requires
-///      the facility to be enabled: the facility applies its configuration setters while
-///      disabled, so a correction can be applied before the facility is re-enabled.
+///      the admin role only. Every setter requires this policy to be an active policy of its
+///      kernel and to be enabled, and none requires the facility to be enabled: the facility
+///      applies its configuration setters while disabled, so a correction can be applied before
+///      the facility is re-enabled. `setConfigOperator` (admin) requires this policy to be an
+///      active policy of its kernel and does not depend on the enabled state, so the config
+///      operator can be rotated or revoked while this policy is disabled.
 ///
 ///      The validation functions apply the value rules of the operator setters
 ///      (`YieldRepurchaseFacilityV2ValidationLib`, which the facility compiles as well) to the
@@ -45,9 +48,11 @@ import {ADMIN_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      executes, and stays the final check.
 ///
 ///      Lifecycle: `enable` (admin) and `reEnable` (yrf_admin, within the grace window) require
-///      the bound facility to be an active policy of this policy's kernel, to report that kernel
-///      as its own, and to name this policy as its configurator; `disable` (emergency or admin)
-///      leaves the binding and the config operator in place. The grace window is strictly
+///      this policy to be an active policy of its kernel, and the bound facility to be an active
+///      policy of that kernel, to report it as its own, and to name this policy as its
+///      configurator; `disable` (emergency or admin) leaves the binding and the config operator
+///      in place and is available while this policy is not an active policy of its kernel.
+///      `enable` and `disable` accept only an empty payload. The grace window is strictly
 ///      shorter than one weekly cycle of the facility (`MAX_GRACE_PERIOD`). The facility is
 ///      bound once through `setFacility`, while this policy is disabled.
 ///
@@ -131,7 +136,14 @@ contract YieldRepurchaseFacilityV2Config is
         return (1, 0);
     }
 
-    // ========== ROLE GATES ========== //
+    // ========== GATES ========== //
+
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2Config_PolicyNotActive` unless this
+    ///         policy is an active policy of its kernel.
+    modifier givenActive() {
+        _requireActive();
+        _;
+    }
 
     /// @notice Reverts with `NotAuthorised` unless the caller is the config operator or holds
     ///         the admin role.
@@ -148,6 +160,8 @@ contract YieldRepurchaseFacilityV2Config is
     ///      policy reports it as its `facility()`.
     ///
     ///      Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is enabled.
     ///      - The caller does not hold the admin role.
     ///      - A facility is already bound.
@@ -158,8 +172,10 @@ contract YieldRepurchaseFacilityV2Config is
     ///      - `facility_` does not advertise `IYieldRepurchaseFacilityV2Write` and
     ///        `IYieldRepurchaseFacilityV2View` through ERC165.
     // `_requireFacilityActive` rejects the zero address
-    // forge-lint: disable-next-line(missing-zero-check)
-    function setFacility(address facility_) external override givenDisabled onlyAdminRole {
+    // forge-lint: disable-next-item(missing-zero-check)
+    function setFacility(
+        address facility_
+    ) external override givenActive givenDisabled onlyAdminRole {
         if (facility != address(0)) revert IYieldRepurchaseFacilityV2Config_FacilityAlreadySet();
         _requireFacilityActive(facility_);
 
@@ -177,58 +193,74 @@ contract YieldRepurchaseFacilityV2Config is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The facility rejects the call (see
     ///        `YieldRepurchaseFacilityV2.addAsset`).
     function addAsset(
         IYieldRepurchaseFacilityV2.AddAssetParams calldata params_
-    ) external override givenEnabled onlyAdminRole {
+    ) external override givenActive givenEnabled onlyAdminRole {
         _facility().addAsset(params_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.removeAsset`).
-    function removeAsset(address vault_) external override givenEnabled onlyAdminRole {
+    function removeAsset(address vault_) external override givenActive givenEnabled onlyAdminRole {
         _facility().removeAsset(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.setSellShares`).
     function setSellShares(
         address vault_,
         bool sellShares_
-    ) external override givenEnabled onlyAdminRole {
+    ) external override givenActive givenEnabled onlyAdminRole {
         _facility().setSellShares(vault_, sellShares_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The facility rejects the call (see
     ///        `YieldRepurchaseFacilityV2.refreshAsyncRedeem`).
-    function refreshAsyncRedeem(address vault_) external override givenEnabled onlyAdminRole {
+    function refreshAsyncRedeem(
+        address vault_
+    ) external override givenActive givenEnabled onlyAdminRole {
         _facility().refreshAsyncRedeem(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.setBackingVault`).
-    function setBackingVault(address vault_) external override givenEnabled onlyAdminRole {
+    function setBackingVault(
+        address vault_
+    ) external override givenActive givenEnabled onlyAdminRole {
         _facility().setBackingVault(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The facility rejects the call (see
@@ -236,19 +268,21 @@ contract YieldRepurchaseFacilityV2Config is
     function setClearinghouseOffset(
         address clearinghouse_,
         uint256 offset_
-    ) external override givenEnabled onlyAdminRole {
+    ) external override givenActive givenEnabled onlyAdminRole {
         _facility().setClearinghouseOffset(clearinghouse_, offset_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The facility rejects the call (see
     ///        `YieldRepurchaseFacilityV2.includeClearinghouse`).
     function includeClearinghouse(
         address clearinghouse_
-    ) external override givenEnabled onlyAdminRole {
+    ) external override givenActive givenEnabled onlyAdminRole {
         _facility().includeClearinghouse(clearinghouse_);
     }
 
@@ -256,6 +290,8 @@ contract YieldRepurchaseFacilityV2Config is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller is neither the config operator nor an admin.
     ///      - The facility rejects the call (see
@@ -263,34 +299,40 @@ contract YieldRepurchaseFacilityV2Config is
     function setYieldBuybackShare(
         address vault_,
         uint256 newShare_
-    ) external override givenEnabled onlyConfigOperatorOrAdmin {
+    ) external override givenActive givenEnabled onlyConfigOperatorOrAdmin {
         _facility().setYieldBuybackShare(vault_, newShare_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller is neither the config operator nor an admin.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.setInitialDiscount`).
     function setInitialDiscount(
         uint256 initialDiscount_
-    ) external override givenEnabled onlyConfigOperatorOrAdmin {
+    ) external override givenActive givenEnabled onlyConfigOperatorOrAdmin {
         _facility().setInitialDiscount(initialDiscount_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller is neither the config operator nor an admin.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.setMaxPricePremium`).
     function setMaxPricePremium(
         uint256 maxPricePremium_
-    ) external override givenEnabled onlyConfigOperatorOrAdmin {
+    ) external override givenActive givenEnabled onlyConfigOperatorOrAdmin {
         _facility().setMaxPricePremium(maxPricePremium_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller is neither the config operator nor an admin.
     ///      - The facility rejects the call (see
@@ -298,12 +340,14 @@ contract YieldRepurchaseFacilityV2Config is
     function increaseClearinghouseOffset(
         address clearinghouse_,
         uint256 additionalOffset_
-    ) external override givenEnabled onlyConfigOperatorOrAdmin {
+    ) external override givenActive givenEnabled onlyConfigOperatorOrAdmin {
         _facility().increaseClearinghouseOffset(clearinghouse_, additionalOffset_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller is neither the config operator nor an admin.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.decreaseNextYield`).
@@ -311,37 +355,47 @@ contract YieldRepurchaseFacilityV2Config is
         address vault_,
         uint256 expectedNextYield_,
         uint256 newNextYield_
-    ) external override givenEnabled onlyConfigOperatorOrAdmin {
+    ) external override givenActive givenEnabled onlyConfigOperatorOrAdmin {
         _facility().decreaseNextYield(vault_, expectedNextYield_, newNextYield_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller is neither the config operator nor an admin.
     ///      - The facility rejects the call (see
     ///        `YieldRepurchaseFacilityV2.excludeClearinghouse`).
     function excludeClearinghouse(
         address clearinghouse_
-    ) external override givenEnabled onlyConfigOperatorOrAdmin {
+    ) external override givenActive givenEnabled onlyConfigOperatorOrAdmin {
         _facility().excludeClearinghouse(clearinghouse_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller is neither the config operator nor an admin.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.enableAsset`).
-    function enableAsset(address vault_) external override givenEnabled onlyConfigOperatorOrAdmin {
+    function enableAsset(
+        address vault_
+    ) external override givenActive givenEnabled onlyConfigOperatorOrAdmin {
         _facility().enableAsset(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller is neither the config operator nor an admin.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.disableAsset`).
-    function disableAsset(address vault_) external override givenEnabled onlyConfigOperatorOrAdmin {
+    function disableAsset(
+        address vault_
+    ) external override givenActive givenEnabled onlyConfigOperatorOrAdmin {
         _facility().disableAsset(vault_);
     }
 
@@ -460,12 +514,15 @@ contract YieldRepurchaseFacilityV2Config is
     /// @dev The hook reverts on failure, so the mix-in never reports
     ///      `ConfigOperator_Unauthorized` through this policy; the mix-in then rejects the
     ///      operator already set, the zero address included, with `ConfigOperator_Unchanged`.
+    ///      The enabled state is not read: the config operator can be rotated, or revoked with
+    ///      the zero address, while this policy is disabled. The candidate is not called.
     ///
     ///      Reverts if:
-    ///      - The contract is disabled.
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The caller does not hold the admin role.
     function _authorizeSetConfigOperator() internal view override returns (bool authorized) {
-        _requireEnabled();
+        _requireActive();
         _requireRole(msg.sender, ADMIN_ROLE);
         return true;
     }
@@ -473,15 +530,28 @@ contract YieldRepurchaseFacilityV2Config is
     // ========== ENABLE / DISABLE ========== //
 
     /// @inheritdoc EnablerV2
-    /// @dev The payload is not used.
-    ///
-    ///      Reverts if:
+    /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
+    ///      - `data_` is not empty (`IYieldRepurchaseFacilityV2Config_InvalidEnablerData`).
     ///      - The facility is unset (`IYieldRepurchaseFacilityV2Config_InvalidFacility`).
     ///      - The facility does not report this policy's kernel through a readable
     ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
     ///      - The facility does not name this policy as its configurator.
-    function _beforeEnable(bytes calldata) internal view override {
+    function _beforeEnable(bytes calldata data_) internal view override {
+        _requireActive();
+        _requireEmptyEnablerData(data_);
         _validateConfiguration();
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev The hook reads neither the Kernel nor the facility, so this policy can be disabled
+    ///      while it is not an active policy of its kernel.
+    ///
+    ///      Reverts if:
+    ///      - `data_` is not empty (`IYieldRepurchaseFacilityV2Config_InvalidEnablerData`).
+    function _beforeDisable(bytes calldata data_) internal pure override {
+        _requireEmptyEnablerData(data_);
     }
 
     /// @notice Authorizes a re-enable transition during the grace window.
@@ -497,12 +567,15 @@ contract YieldRepurchaseFacilityV2Config is
     ///         re-enabled.
     /// @dev Reverts if:
     ///      - The grace window since the last transition has elapsed (`GracePeriod_Expired`).
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The facility is unset (`IYieldRepurchaseFacilityV2Config_InvalidFacility`).
     ///      - The facility does not report this policy's kernel through a readable
     ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
     ///      - The facility does not name this policy as its configurator.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
+        _requireActive();
         _validateConfiguration();
     }
 
@@ -516,16 +589,33 @@ contract YieldRepurchaseFacilityV2Config is
     ///      cycle of the facility (`MAX_GRACE_PERIOD`).
     ///
     ///      Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2Config_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - `period_` is zero.
     ///      - `period_` is not less than `MAX_GRACE_PERIOD`.
-    function setGracePeriod(uint32 period_) public override givenEnabled {
+    function setGracePeriod(uint32 period_) public override givenActive givenEnabled {
         _requireValidGracePeriod(period_);
         super.setGracePeriod(period_);
     }
 
     // ========== INTERNAL HELPERS ========== //
+
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2Config_PolicyNotActive` unless this
+    ///         policy is an active policy of its kernel.
+    /// @dev `disable`, the validation functions, the views, and the Kernel hooks of `Policy`
+    ///      do not call it.
+    function _requireActive() private view {
+        if (!kernel.isPolicyActive(this))
+            revert IYieldRepurchaseFacilityV2Config_PolicyNotActive(address(this));
+    }
+
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2Config_InvalidEnablerData` unless the
+    ///         payload of `enable` or `disable` is empty.
+    function _requireEmptyEnablerData(bytes calldata data_) private pure {
+        if (data_.length != 0) revert IYieldRepurchaseFacilityV2Config_InvalidEnablerData();
+    }
 
     /// @notice Returns the bound facility as its state-changing surface.
     function _facility() internal view returns (IYieldRepurchaseFacilityV2Write) {

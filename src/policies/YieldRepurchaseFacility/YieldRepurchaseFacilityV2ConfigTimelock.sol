@@ -26,7 +26,7 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
 // Constants
-import {EMERGENCY_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, EMERGENCY_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title YieldRepurchaseFacilityV2ConfigTimelock
 /// @notice The timelock policy through which the yrf_admin role queues the operator setters of
@@ -37,17 +37,17 @@ import {EMERGENCY_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions
 ///      read from the configuration policy, which binds it once; the facility address is part
 ///      of every state hash preimage.
 ///
-///      Queueing requires this policy and the configuration policy to be enabled, the caller
-///      to hold the yrf_admin role, and the configuration policy to name this policy as its
-///      config operator. Every sub-action must target the configuration policy with a
-///      supported operator setter and a payload whose canonical re-encoding equals the stored
-///      bytes, and must pass the validation function of the configuration policy for the
-///      forwarded setter, which applies the value rules of the facility setter to the
-///      facility's live state. Execution is permissionless once the delay elapses and
-///      requires the same enabled states and the config operator binding; the shared base
-///      then checks the reserved keys and the state hashes before each dispatch. The facility
-///      may be disabled at queue and execution time: its configuration setters apply while it
-///      is disabled.
+///      Queueing requires this policy to be an active policy of its kernel, this policy and
+///      the configuration policy to be enabled, the caller to hold the yrf_admin role, and the
+///      configuration policy to name this policy as its config operator. Every sub-action must
+///      target the configuration policy with a supported operator setter and a payload whose
+///      canonical re-encoding equals the stored bytes, and must pass the validation function
+///      of the configuration policy for the forwarded setter, which applies the value rules of
+///      the facility setter to the facility's live state. Execution is permissionless once the
+///      delay elapses and requires the same active and enabled states and the config operator
+///      binding; the shared base then checks the reserved keys and the state hashes before
+///      each dispatch. The facility may be disabled at queue and execution time: its
+///      configuration setters apply while it is disabled.
 ///
 ///      The domains, keys, and hash preimages are those documented by
 ///      `IYieldRepurchaseFacilityV2ConfigTimelock`, scoped to the configuration policy. An
@@ -59,15 +59,21 @@ import {EMERGENCY_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions
 ///      de-registered and registered again between queueing and execution is not
 ///      distinguished from its original registration: the hashes read only the guarded
 ///      fields, so an action whose guarded fields match the new registration executes
-///      against it. Cancellation is available whether or not this policy is enabled and
-///      whether or not the action has expired.
+///      against it. Cancellation requires this policy to be an active policy of its kernel and
+///      the caller to hold the emergency role; it is available whether or not this policy is
+///      enabled and whether or not the action has expired, and reads neither the configuration
+///      policy nor its config operator.
 ///
 ///      `enable` and `setTimelockDelay` are restricted to the admin role, `disable` to the
 ///      emergency or admin role, `reEnable` to the yrf_admin role within the grace window, and
-///      `setGracePeriod` to the admin role while enabled. The grace window is strictly shorter
-///      than one weekly cycle of the facility (`MAX_GRACE_PERIOD`). The admin role is expected
-///      to be held only by the OCG timelock, so every admin-gated function of this contract is
-///      de-facto timelocked.
+///      `setGracePeriod` to the admin role while enabled. Each of them except `disable` requires
+///      this policy to be an active policy of its kernel (`_requireOwnActive`); `enable` and
+///      `reEnable` also require the configuration policy to be an active policy of that kernel
+///      and to name this policy as its config operator, and do not read whether the
+///      configuration policy is enabled. `enable` and `disable` accept only an empty payload.
+///      The grace window is strictly shorter than one weekly cycle of the facility
+///      (`MAX_GRACE_PERIOD`). The admin role is expected to be held only by the OCG timelock, so
+///      every admin-gated function of this contract is de-facto timelocked.
 contract YieldRepurchaseFacilityV2ConfigTimelock is
     Policy,
     ReEnablerGracePeriod,
@@ -234,6 +240,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -256,6 +264,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -277,6 +287,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -298,6 +310,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -321,6 +335,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -344,6 +360,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -365,6 +383,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -384,6 +404,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -409,6 +431,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      reverts the whole batch.
     ///
     ///      Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -439,10 +463,14 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      held only by the OCG timelock, so the change is de-facto timelocked.
     ///
     ///      Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - The caller does not hold the admin role.
     ///      - `delay_` is outside `[MIN_TIMELOCK_DELAY, MAX_TIMELOCK_DELAY]`
     ///        (`ITimelockBatchQueue_TimelockDelayInvalid`).
-    function setTimelockDelay(uint48 delay_) external override onlyAdminRole {
+    function setTimelockDelay(uint48 delay_) external override {
+        _requireOwnActive();
+        _requireRole(msg.sender, ADMIN_ROLE);
         _setTimelockDelay(delay_);
     }
 
@@ -450,12 +478,15 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc ConfigTimelockBatchQueue
     /// @dev Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled (`NotEnabled`).
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - `caller_` does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     function _validateConfigQueue(address caller_) internal view override {
+        _requireOwnActive();
         _requireEnabled();
         _requireConfigActiveAndEnabled();
         _requireRole(caller_, YRF_ADMIN_ROLE);
@@ -605,20 +636,27 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc ConfigTimelockBatchQueue
     /// @dev The hash preimages are, with `facility` the facility bound to the configuration
-    ///      policy:
-    ///      - initial discount: `abi.encode(INITIAL_DISCOUNT_DOMAIN, facility,
+    ///      policy and `operator` the `configOperator()` of the configuration policy at the
+    ///      time of the read:
+    ///      - initial discount: `abi.encode(INITIAL_DISCOUNT_DOMAIN, facility, operator,
     ///        initialDiscount)`;
-    ///      - max price premium: `abi.encode(MAX_PRICE_PREMIUM_DOMAIN, facility,
+    ///      - max price premium: `abi.encode(MAX_PRICE_PREMIUM_DOMAIN, facility, operator,
     ///        maxPricePremium)`;
-    ///      - yield buyback share: `abi.encode(YIELD_BUYBACK_SHARE_DOMAIN, facility, vault,
-    ///        yieldBuybackShare)`;
-    ///      - asset status: `abi.encode(ASSET_STATUS_DOMAIN, facility, vault, isAssetEnabled,
-    ///        backingVault == vault)`;
-    ///      - next yield: `abi.encode(NEXT_YIELD_DOMAIN, facility, vault, nextYield)`;
+    ///      - yield buyback share: `abi.encode(YIELD_BUYBACK_SHARE_DOMAIN, facility, operator,
+    ///        vault, yieldBuybackShare)`;
+    ///      - asset status: `abi.encode(ASSET_STATUS_DOMAIN, facility, operator, vault,
+    ///        isAssetEnabled, backingVault == vault)`;
+    ///      - next yield: `abi.encode(NEXT_YIELD_DOMAIN, facility, operator, vault,
+    ///        nextYield)`;
     ///      - Clearinghouse offset: `abi.encode(CLEARINGHOUSE_OFFSET_DOMAIN, facility,
-    ///        clearinghouse, offset)`;
+    ///        operator, clearinghouse, offset)`;
     ///      - Clearinghouse inclusion: `abi.encode(CLEARINGHOUSE_INCLUSION_DOMAIN, facility,
-    ///        clearinghouse, isIncluded)`.
+    ///        operator, clearinghouse, isIncluded)`.
+    ///
+    ///      The config operator is hashed next to the live check of `_validateConfigQueue` and
+    ///      `_validateExecution`, which require it to be this policy. The hash carries no
+    ///      history: an operator or a guarded field that changes and returns to its queue-time
+    ///      value before the execution produces the queue-time hash again.
     ///
     ///      The per-vault fields are read through `getAssetConfig`, which reverts for a
     ///      de-registered vault: the action then cannot execute and holds its domains until
@@ -641,17 +679,28 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32 stateHash) {
         IYieldRepurchaseFacilityV2View facility = _facility();
+        address operator = _configOperator();
 
         if (key_ == INITIAL_DISCOUNT_DOMAIN) {
             return
                 keccak256(
-                    abi.encode(INITIAL_DISCOUNT_DOMAIN, facility, facility.initialDiscount())
+                    abi.encode(
+                        INITIAL_DISCOUNT_DOMAIN,
+                        facility,
+                        operator,
+                        facility.initialDiscount()
+                    )
                 );
         }
         if (key_ == MAX_PRICE_PREMIUM_DOMAIN) {
             return
                 keccak256(
-                    abi.encode(MAX_PRICE_PREMIUM_DOMAIN, facility, facility.maxPricePremium())
+                    abi.encode(
+                        MAX_PRICE_PREMIUM_DOMAIN,
+                        facility,
+                        operator,
+                        facility.maxPricePremium()
+                    )
                 );
         }
 
@@ -662,6 +711,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
                     abi.encode(
                         YIELD_BUYBACK_SHARE_DOMAIN,
                         facility,
+                        operator,
                         entity,
                         facility.getAssetConfig(entity).yieldBuybackShare
                     )
@@ -676,6 +726,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
                     abi.encode(
                         ASSET_STATUS_DOMAIN,
                         facility,
+                        operator,
                         entity,
                         assetConfig.isAssetEnabled,
                         facility.backingVault() == entity
@@ -688,6 +739,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
                     abi.encode(
                         NEXT_YIELD_DOMAIN,
                         facility,
+                        operator,
                         entity,
                         facility.getAssetConfig(entity).nextYield
                     )
@@ -699,6 +751,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
                     abi.encode(
                         CLEARINGHOUSE_OFFSET_DOMAIN,
                         facility,
+                        operator,
                         entity,
                         facility.clearinghouseOffset(entity)
                     )
@@ -710,6 +763,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
                     abi.encode(
                         CLEARINGHOUSE_INCLUSION_DOMAIN,
                         facility,
+                        operator,
                         entity,
                         facility.isClearinghouseIncluded(entity)
                     )
@@ -786,6 +840,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      enabled.
     ///
     ///      Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled (`NotEnabled`).
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
@@ -795,6 +851,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
+        _requireOwnActive();
         _requireEnabled();
         _requireConfigActiveAndEnabled();
         _requireOperatorOfConfig();
@@ -802,16 +859,21 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @inheritdoc TimelockBatchQueue
     /// @dev Cancellation is available while this policy is disabled and after the action has
-    ///      expired, so the configuration keys of a stale or expired action can always be
-    ///      released.
+    ///      expired, and reads neither the configuration policy nor its config operator: the
+    ///      configuration keys of a stale or expired action are released without restoring the
+    ///      enabled state of either policy. A policy that the Kernel has deactivated has to be
+    ///      activated again before its actions can be cancelled.
     ///
     ///      Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - `caller_` does not hold the emergency role.
     function _validateCancellation(
         address caller_,
         uint64,
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
+        _requireOwnActive();
         _requireRole(caller_, EMERGENCY_ROLE);
     }
 
@@ -833,14 +895,34 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     // ========== ENABLE / DISABLE ========== //
 
     /// @inheritdoc EnablerV2
-    /// @dev The payload is not used.
+    /// @dev The enabled state of the configuration policy is not read, so this policy can be
+    ///      enabled while the configuration policy is disabled.
     ///
     ///      Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
+    ///      - `data_` is not empty
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_InvalidEnablerData`).
     ///      - The configuration policy does not report this policy's kernel through a
     ///        readable `kernel()`, or is not an active policy of it (`PolicyDependency`
     ///        errors).
-    function _beforeEnable(bytes calldata) internal view override {
+    ///      - The configuration policy does not name this policy as its config operator.
+    function _beforeEnable(bytes calldata data_) internal view override {
+        _requireOwnActive();
+        _requireEmptyEnablerData(data_);
         _requireConfigActive();
+        _requireOperatorOfConfig();
+    }
+
+    /// @inheritdoc EnablerV2
+    /// @dev The hook reads neither the Kernel nor the configuration policy, so this policy can
+    ///      be disabled while it is not an active policy of its kernel.
+    ///
+    ///      Reverts if:
+    ///      - `data_` is not empty
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_InvalidEnablerData`).
+    function _beforeDisable(bytes calldata data_) internal pure override {
+        _requireEmptyEnablerData(data_);
     }
 
     /// @notice Authorizes a re-enable transition during the grace window.
@@ -854,14 +936,21 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
 
     /// @notice Validates the grace window and the configuration policy binding before this
     ///         policy is re-enabled.
-    /// @dev Reverts if:
+    /// @dev The enabled state of the configuration policy is not read.
+    ///
+    ///      Reverts if:
     ///      - The grace window since the last transition has elapsed (`GracePeriod_Expired`).
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - The configuration policy does not report this policy's kernel through a
     ///        readable `kernel()`, or is not an active policy of it (`PolicyDependency`
     ///        errors).
+    ///      - The configuration policy does not name this policy as its config operator.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
+        _requireOwnActive();
         _requireConfigActive();
+        _requireOperatorOfConfig();
     }
 
     /// @notice Authorizes a grace window update.
@@ -874,11 +963,15 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      cycle of the facility (`MAX_GRACE_PERIOD`).
     ///
     ///      Reverts if:
+    ///      - This policy is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - `period_` is zero.
     ///      - `period_` is not less than `MAX_GRACE_PERIOD`.
-    function setGracePeriod(uint32 period_) public override givenEnabled {
+    function setGracePeriod(uint32 period_) public override {
+        _requireOwnActive();
+        _requireEnabled();
         _requireValidGracePeriod(period_);
         super.setGracePeriod(period_);
     }
@@ -917,10 +1010,29 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         PolicyDependency.requireActive(address(_CONFIG), address(kernel));
     }
 
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive` unless
+    ///         this policy is an active policy of its kernel.
+    /// @dev `disable`, the views, and the Kernel hooks of `Policy` do not call it.
+    function _requireOwnActive() private view {
+        if (!kernel.isPolicyActive(this))
+            revert IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive(address(this));
+    }
+
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2ConfigTimelock_InvalidEnablerData`
+    ///         unless the payload of `enable` or `disable` is empty.
+    function _requireEmptyEnablerData(bytes calldata data_) private pure {
+        if (data_.length != 0) revert IYieldRepurchaseFacilityV2ConfigTimelock_InvalidEnablerData();
+    }
+
+    /// @notice Returns the config operator the configuration policy names.
+    function _configOperator() private view returns (address) {
+        return IConfigOperator(address(_CONFIG)).configOperator();
+    }
+
     /// @notice Reverts with `IYieldRepurchaseFacilityV2ConfigTimelock_NotConfigOperator` unless
     ///         the configuration policy names this policy as its config operator.
     function _requireOperatorOfConfig() internal view {
-        address currentConfigOperator = IConfigOperator(address(_CONFIG)).configOperator();
+        address currentConfigOperator = _configOperator();
         if (currentConfigOperator != address(this))
             revert IYieldRepurchaseFacilityV2ConfigTimelock_NotConfigOperator(
                 currentConfigOperator
