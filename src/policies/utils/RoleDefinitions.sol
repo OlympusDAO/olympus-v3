@@ -16,8 +16,8 @@ bytes32 constant HEART_ROLE = "heart";
 ///      rescuing tokens from the facility. Typically assigned to a multisig/council.
 bytes32 constant YRF_ADMIN_ROLE = "yrf_admin";
 
-/// @dev BackingOracle operational access, e.g. queueing timelocked updates of the OHM
-///      backing value. Typically assigned to a multisig/council.
+/// @dev Proposes bounded updates through BackingOracleConfigTimelock and re-enables
+///      the backing oracle or its queue within their grace windows.
 bytes32 constant BACKING_ADMIN_ROLE = "backing_admin";
 
 /// @dev LZ bridge configurator role. Gates the privileged configuration mutators on
