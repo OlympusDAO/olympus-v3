@@ -82,12 +82,13 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     ///
     ///      Reverts if:
     ///      - A dependency is not installed in the Kernel (`Policy_ModuleDoesNotExist`).
-    ///      - Any of the TRSRY, PRICE, CHREG, or ROLES modules does not report major
-    ///        version 1 (`Policy_WrongModuleVersion`).
-    ///      - The PRICE module reports a minor version below 2
-    ///        (`Policy_WrongModuleVersion`): the facility prices the assets through
-    ///        `PRICE.getPrice(asset, variant)` and `PRICE.getPriceIn`, which the PRICE
-    ///        surface provides from version 1.2.
+    ///      - Any of the TRSRY, CHREG, or ROLES modules does not report major version 1, or
+    ///        the PRICE module reports a major version other than 1 and 2
+    ///        (`Policy_WrongModuleVersion` with `abi.encode([1, 2, 1, 1])`).
+    ///      - The PRICE module reports major version 1 with a minor version below 2
+    ///        (`Policy_WrongModuleVersion` with `abi.encode([1, 2])`): the facility prices
+    ///        the assets through `PRICE.getPrice(asset, variant)` and `PRICE.getPriceIn`,
+    ///        which the PRICE module provides from version 1.2.
     ///      - `PRICE.decimals()` is not 18, the decimals of the backing value
     ///        (`IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals`).
     /// @param kernel_ The Kernel of the facility.
@@ -118,12 +119,17 @@ library YieldRepurchaseFacilityV2DependenciesLib {
         // ROLES compatibility depends only on its major version
         // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = ROLESv1(modules.roles).VERSION();
-        if (trsryMajor != 1 || priceMajor != 1 || chregMajor != 1 || rolesMajor != 1)
-            revert Policy.Policy_WrongModuleVersion(abi.encode([1, 1, 1, 1]));
+        if (
+            trsryMajor != 1 ||
+            (priceMajor != 1 && priceMajor != 2) ||
+            chregMajor != 1 ||
+            rolesMajor != 1
+        ) revert Policy.Policy_WrongModuleVersion(abi.encode([1, 2, 1, 1]));
 
         // `getPrice(asset, variant)` and `getPriceIn` are provided by the PRICE module from
         // version 1.2.
-        if (priceMinor < 2) revert Policy.Policy_WrongModuleVersion(abi.encode([1, 2]));
+        if (priceMajor == 1 && priceMinor < 2)
+            revert Policy.Policy_WrongModuleVersion(abi.encode([1, 2]));
 
         // The oracle price is compared against the 18-decimal backing value, so the
         // oracle must report 18 decimals.

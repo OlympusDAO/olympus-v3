@@ -282,11 +282,11 @@ contract YieldRepurchaseFacilityV2 is
     ///      `YieldRepurchaseFacilityV2DependenciesLib`.
     ///
     ///      Reverts if:
-    ///      - Any of the TRSRY, PRICE, CHREG, or ROLES modules does not report major
-    ///        version 1.
-    ///      - The PRICE module reports a minor version below 2. The facility prices the
-    ///        assets through `PRICE.getPrice(asset, variant)` and `PRICE.getPriceIn`, which
-    ///        the PRICE surface provides from version 1.2.
+    ///      - Any of the TRSRY, CHREG, or ROLES modules does not report major version 1.
+    ///      - The PRICE module reports a major version other than 1 and 2, or major version
+    ///        1 with a minor version below 2. The facility prices the assets through
+    ///        `PRICE.getPrice(asset, variant)` and `PRICE.getPriceIn`, which the PRICE
+    ///        module provides from version 1.2.
     ///      - `PRICE.decimals()` is not 18, the decimals of the backing value.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         YieldRepurchaseFacilityV2DependenciesLib.Modules memory modules;
