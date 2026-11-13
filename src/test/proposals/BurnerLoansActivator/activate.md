@@ -35,26 +35,72 @@ The constructor fixes all targets and the sole timelock caller. Launch accepts n
 | BLAUNCH-S08 | Disabled PriceConfig is rejected even if USDe is already approved | [test][test_givenPriceConfigDisabled_whenTimelockActivates_reverts] |
 | BLAUNCH-O03 | Inactive backing queue is rejected before mutations | [test][test_givenBackingQueueInactive_whenTimelockActivates_reverts] |
 
-[test_whenCallerIsNotTimelock_reverts]: ./activate.t.sol#L29
-[test_givenPreparedStack_whenTimelockActivates]: ./activate.t.sol#L43
-[test_givenAlreadyActivated_whenTimelockActivates_reverts]: ./activate.t.sol#L129
-[test_givenInactivePolicy_whenTimelockActivates_reverts]: ./activate.t.sol#L137
-[test_givenRiskPreviouslyEnabled_givenReferrerAllowed_whenTimelockActivates_reverts]: ./activate.t.sol#L280
-[test_givenLateTaskFailure_whenTimelockActivates_reverts]: ./activate.t.sol#L302
-[test_givenPriceSupportMissing_whenTimelockActivates_reverts]: ./activate.t.sol#L323
-[test_givenBackingOraclePreviouslyEnabled_whenTimelockActivates_reverts]: ./activate.t.sol#L342
-[test_whenTimelockIsZero_reverts]: ./activate.t.sol#L396
-[test_whenComponentHasNoCode_reverts]: ./activate.t.sol#L407
-[test_whenCreatedByAnyCaller]: ./activate.t.sol#L420
-[test_whenRevenueTaskBoundToDifferentDistributor_reverts]: ./activate.t.sol#L236
-[test_givenFreshBackingOracle_whenTimelockActivates]: ./activate.t.sol#L252
-[test_givenBackingOracleInactive_whenPreparationValidated_reverts]: ./activate.t.sol#L267
-[test_givenMissingRole_whenTimelockActivates_reverts]: ./activate.t.sol#L152
-[test_givenWrongTimelockTarget_whenTimelockActivates_reverts]: ./activate.t.sol#L184
+## Heart baseline acceptance criteria
 
-[test_whenAuthHasNoCode_reverts]: ./activate.t.sol#L212
-[test_whenAuthBoundToDifferentCore_reverts]: ./activate.t.sol#L224
+The timelock remains the sole caller. The activator has no Policy/enabled lifecycle of its own;
+Heart activity/enablement and all existing graph/freshness/role prerequisites remain mandatory.
+There are no new runtime numeric inputs, token transfers, previews or ongoing stateful invariants.
+The six reviewed mainnet identities are hard-coded in the activator, never supplied by the deployer
+or derived from Heart's current list.
+Selectors are fixed to zero, migrate(), zero, operate(), endEpoch(), zero. All six identities,
+positions and selectors must match before launch mutation or insertion; count must be exactly six.
+Reverts preserve the one-use flag, existing roles, task list, oracle, market, custody and queue state.
+The proposal fork additionally proves rollback of roles temporarily granted by OCG.
 
-[test_givenPriceConfigInactive_whenTimelockActivates_reverts]: ./activate.t.sol#L357
-[test_givenPriceConfigDisabled_whenTimelockActivates_reverts]: ./activate.t.sol#L383
-[test_givenBackingQueueInactive_whenTimelockActivates_reverts]: ./activate.t.sol#L370
+| ID | Scenario | Test |
+| --- | --- | --- |
+| BLAUNCH-H01 | Missing task at any index, or empty list, rejects | [test][test_givenMissingHeartTask_whenTimelockActivates_reverts], [test][test_givenEmptyHeartTasks_whenTimelockActivates_reverts] |
+| BLAUNCH-H02 | Extra task at any insertion point rejects | [test][test_givenExtraHeartTask_whenTimelockActivates_reverts] |
+| BLAUNCH-H03 | Swapping any adjacent pair rejects | [test][test_givenReorderedHeartTasks_whenTimelockActivates_reverts] |
+| BLAUNCH-H04 | Replacing any reviewed task identity rejects | [test][test_givenReplacedHeartTask_whenTimelockActivates_reverts] |
+| BLAUNCH-H05 | Changing any selector rejects | [test][test_givenChangedHeartSelector_whenTimelockActivates_reverts], [fork test][test_givenHeartSelectorDrift_whenGovernanceExecutes_reverts] |
+| BLAUNCH-H06 | Preinserted launch tasks, including count-preserving replacement, reject | [test][test_givenPreinsertedLaunchTask_whenTimelockActivates_reverts], [test][test_givenLaunchTaskReplacesOperator_whenTimelockActivates_reverts] |
+| BLAUNCH-H07 | Drift present before activator deployment is not accepted as the baseline | [test][test_givenHeartDriftBeforeDeployment_whenTimelockActivates_reverts] |
+| BLAUNCH-H08 | Restoring the genuine baseline permits retry, retaining every identity/selector | [test][test_givenRestoredHeartBaseline_whenTimelockActivates] |
+| BLAUNCH-H09 | Real OCG execution with selector drift rolls back temporary ADMIN and permanent launch role grants, flag and launch mutations | [test][test_givenHeartSelectorDrift_whenGovernanceExecutes_reverts] |
+| BLAUNCH-H10 | Failed and malformed Heart task reads fail closed with the Heart prerequisite error | [test][test_givenHeartReadFails_whenTimelockActivates_reverts], [test][test_givenMalformedHeartRead_whenTimelockActivates_reverts], [test][test_givenHeartReadHasTrailingData_whenTimelockActivates_reverts] |
+
+- [x] Heart regressions RED before implementation (eight failures against the unchanged activator).
+- [x] Simplified validation GREEN: 34 activator tests and 15 proposal/lifecycle fork tests.
+- [x] Real OCG role rollback and restored-baseline retry reverified.
+- [x] Deploy size, focused lint, formatting and scenario mapping reverified.
+- [x] Deploy profile: runtime 24,570 bytes (6 bytes EIP-170 headroom), creation 34,398 bytes;
+      constructor arguments included: 35,454 bytes (13,698 bytes EIP-3860 headroom).
+
+[test_whenCallerIsNotTimelock_reverts]: ./activate.t.sol#L30
+[test_givenPreparedStack_whenTimelockActivates]: ./activate.t.sol#L44
+[test_givenAlreadyActivated_whenTimelockActivates_reverts]: ./activate.t.sol#L314
+[test_givenInactivePolicy_whenTimelockActivates_reverts]: ./activate.t.sol#L322
+[test_givenRiskPreviouslyEnabled_givenReferrerAllowed_whenTimelockActivates_reverts]: ./activate.t.sol#L465
+[test_givenLateTaskFailure_whenTimelockActivates_reverts]: ./activate.t.sol#L487
+[test_givenPriceSupportMissing_whenTimelockActivates_reverts]: ./activate.t.sol#L508
+[test_givenBackingOraclePreviouslyEnabled_whenTimelockActivates_reverts]: ./activate.t.sol#L527
+[test_whenTimelockIsZero_reverts]: ./activate.t.sol#L581
+[test_whenComponentHasNoCode_reverts]: ./activate.t.sol#L592
+[test_whenCreatedByAnyCaller]: ./activate.t.sol#L605
+[test_whenRevenueTaskBoundToDifferentDistributor_reverts]: ./activate.t.sol#L421
+[test_givenFreshBackingOracle_whenTimelockActivates]: ./activate.t.sol#L437
+[test_givenBackingOracleInactive_whenPreparationValidated_reverts]: ./activate.t.sol#L452
+[test_givenMissingRole_whenTimelockActivates_reverts]: ./activate.t.sol#L337
+[test_givenWrongTimelockTarget_whenTimelockActivates_reverts]: ./activate.t.sol#L369
+
+[test_whenAuthHasNoCode_reverts]: ./activate.t.sol#L397
+[test_whenAuthBoundToDifferentCore_reverts]: ./activate.t.sol#L409
+
+[test_givenPriceConfigInactive_whenTimelockActivates_reverts]: ./activate.t.sol#L542
+[test_givenPriceConfigDisabled_whenTimelockActivates_reverts]: ./activate.t.sol#L568
+[test_givenBackingQueueInactive_whenTimelockActivates_reverts]: ./activate.t.sol#L555
+[test_givenMissingHeartTask_whenTimelockActivates_reverts]: ./activate.t.sol#L131
+[test_givenEmptyHeartTasks_whenTimelockActivates_reverts]: ./activate.t.sol#L137
+[test_givenExtraHeartTask_whenTimelockActivates_reverts]: ./activate.t.sol#L143
+[test_givenReorderedHeartTasks_whenTimelockActivates_reverts]: ./activate.t.sol#L153
+[test_givenReplacedHeartTask_whenTimelockActivates_reverts]: ./activate.t.sol#L162
+[test_givenChangedHeartSelector_whenTimelockActivates_reverts]: ./activate.t.sol#L174
+[test_givenPreinsertedLaunchTask_whenTimelockActivates_reverts]: ./activate.t.sol#L200
+[test_givenHeartDriftBeforeDeployment_whenTimelockActivates_reverts]: ./activate.t.sol#L249
+[test_givenRestoredHeartBaseline_whenTimelockActivates]: ./activate.t.sol#L258
+[test_givenHeartSelectorDrift_whenGovernanceExecutes_reverts]: ../BurnerLoansProposal/heartOrderFork.t.sol#L32
+[test_givenLaunchTaskReplacesOperator_whenTimelockActivates_reverts]: ./activate.t.sol#L186
+[test_givenHeartReadFails_whenTimelockActivates_reverts]: ./activate.t.sol#L212
+[test_givenMalformedHeartRead_whenTimelockActivates_reverts]: ./activate.t.sol#L224
+[test_givenHeartReadHasTrailingData_whenTimelockActivates_reverts]: ./activate.t.sol#L236

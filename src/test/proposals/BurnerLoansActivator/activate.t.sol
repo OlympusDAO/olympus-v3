@@ -21,6 +21,7 @@ import {ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE} from "src/p
 import {BurnerLoansActivatorTest} from "./fixtures/BurnerLoansActivatorTest.sol";
 import {Actions} from "src/Kernel.sol";
 import {BurnerLoansActivator} from "src/proposals/BurnerLoansActivator.sol";
+import {MockPeriodicTask} from "src/test/bases/PeriodicTaskManager/MockPeriodicTask.sol";
 
 contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     error LateFailure();
@@ -43,6 +44,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     function test_givenPreparedStack_whenTimelockActivates() public {
         assertLe(address(_activator).code.length, 24_576, "Activator fits EIP-170");
         _activate();
+        _assertLaunchedHeartTasks();
         assertEq(
             IBurnerLoansRisk(_graph.risk).priceCache(),
             _graph.priceCache,
@@ -123,6 +125,189 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             _graph.revenueDistributorTask,
             "Distribution immediately precedes Operator"
         );
+    }
+
+    // Scenarios: BLAUNCH-H01.
+    function test_givenMissingHeartTask_whenTimelockActivates_reverts(uint8 index_) public {
+        _heart.removePeriodicTaskAtIndex(bound(index_, 0, 5));
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H01.
+    function test_givenEmptyHeartTasks_whenTimelockActivates_reverts() public {
+        for (uint256 i; i < 6; ++i) _heart.removePeriodicTaskAtIndex(0);
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H02.
+    function test_givenExtraHeartTask_whenTimelockActivates_reverts(uint8 index_) public {
+        _heart.addPeriodicTaskAtIndex(
+            address(new MockPeriodicTask()),
+            bytes4(0),
+            bound(index_, 0, 6)
+        );
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H03.
+    function test_givenReorderedHeartTasks_whenTimelockActivates_reverts(uint8 index_) public {
+        uint256 index = bound(index_, 0, 4);
+        address task = _reviewedHeartTasks[index];
+        _heart.removePeriodicTask(task);
+        _heart.addPeriodicTaskAtIndex(task, _reviewedSelector(index), index + 1);
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H04.
+    function test_givenReplacedHeartTask_whenTimelockActivates_reverts(uint8 index_) public {
+        uint256 index = bound(index_, 0, 5);
+        _heart.removePeriodicTaskAtIndex(index);
+        _heart.addPeriodicTaskAtIndex(
+            address(new MockPeriodicTask()),
+            _reviewedSelector(index),
+            index
+        );
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H05.
+    function test_givenChangedHeartSelector_whenTimelockActivates_reverts(
+        uint8 index_,
+        bytes4 selector_
+    ) public {
+        uint256 index = bound(index_, 0, 5);
+        vm.assume(selector_ != _reviewedSelector(index));
+        _heart.removePeriodicTaskAtIndex(index);
+        _heart.addPeriodicTaskAtIndex(_reviewedHeartTasks[index], selector_, index);
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H06.
+    function test_givenLaunchTaskReplacesOperator_whenTimelockActivates_reverts(
+        uint8 task_
+    ) public {
+        address[3] memory tasks = [
+            _graph.seizerTask,
+            _graph.yieldClaimerTask,
+            _graph.revenueDistributorTask
+        ];
+        _heart.removePeriodicTaskAtIndex(3);
+        _heart.addPeriodicTaskAtIndex(tasks[bound(task_, 0, 2)], bytes4(0), 3);
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H06.
+    function test_givenPreinsertedLaunchTask_whenTimelockActivates_reverts(uint8 task_) public {
+        address[3] memory tasks = [
+            _graph.seizerTask,
+            _graph.yieldClaimerTask,
+            _graph.revenueDistributorTask
+        ];
+        uint256 index = bound(task_, 0, 2);
+        _heart.addPeriodicTaskAtIndex(tasks[index], bytes4(0), index + 3);
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H10.
+    function test_givenHeartReadFails_whenTimelockActivates_reverts() public {
+        vm.mockCallRevert(
+            _graph.heart,
+            abi.encodeCall(IPeriodicTaskManager.getPeriodicTasks, ()),
+            abi.encodeWithSelector(LateFailure.selector)
+        );
+        _expectHeartPrerequisite();
+        _activate();
+        _assertUnlaunched();
+    }
+
+    // Scenarios: BLAUNCH-H10.
+    function test_givenMalformedHeartRead_whenTimelockActivates_reverts() public {
+        vm.mockCall(
+            _graph.heart,
+            abi.encodeCall(IPeriodicTaskManager.getPeriodicTasks, ()),
+            hex"00"
+        );
+        _expectHeartPrerequisite();
+        _activate();
+        _assertUnlaunched();
+    }
+
+    // Scenarios: BLAUNCH-H10.
+    function test_givenHeartReadHasTrailingData_whenTimelockActivates_reverts() public {
+        (address[] memory tasks, bytes4[] memory selectors) = _heart.getPeriodicTasks();
+        vm.mockCall(
+            _graph.heart,
+            abi.encodeCall(IPeriodicTaskManager.getPeriodicTasks, ()),
+            bytes.concat(abi.encode(tasks, selectors), hex"00")
+        );
+        _expectHeartPrerequisite();
+        _activate();
+        _assertUnlaunched();
+    }
+
+    // Scenarios: BLAUNCH-H07.
+    function test_givenHeartDriftBeforeDeployment_whenTimelockActivates_reverts() public {
+        _heart.removePeriodicTaskAtIndex(3);
+        _heart.addPeriodicTaskAtIndex(_reviewedHeartTasks[3], bytes4(0x12345678), 3);
+        _activator = new BurnerLoansActivator(_timelock, _graph);
+        _rolesAdmin.grantRole(ADMIN_ROLE, address(_activator));
+        _assertHeartDriftRejected();
+    }
+
+    // Scenarios: BLAUNCH-H08.
+    function test_givenRestoredHeartBaseline_whenTimelockActivates() public {
+        _heart.removePeriodicTaskAtIndex(3);
+        _assertHeartDriftRejected();
+        _heart.addPeriodicTaskAtIndex(_reviewedHeartTasks[3], _reviewedSelector(3), 3);
+        _activate();
+        _assertLaunchedHeartTasks();
+    }
+
+    function _assertHeartDriftRejected() internal {
+        (address[] memory tasksBefore, bytes4[] memory selectorsBefore) = _heart.getPeriodicTasks();
+        _expectHeartPrerequisite();
+        _activate();
+        _assertUnlaunched();
+        (address[] memory tasksAfter, bytes4[] memory selectorsAfter) = _heart.getPeriodicTasks();
+        assertEq(
+            abi.encode(tasksAfter, selectorsAfter),
+            abi.encode(tasksBefore, selectorsBefore),
+            "Failed launch preserves the drifted Heart list"
+        );
+        assertTrue(_roles.hasRole(address(_activator), ADMIN_ROLE), "Existing ADMIN is retained");
+        assertTrue(_roles.hasRole(_graph.core, DEPOSIT_OPERATOR_ROLE), "Custody role is retained");
+        assertTrue(
+            _roles.hasRole(_graph.seizerTask, BURNER_LOANS_SEIZER_ROLE),
+            "Seizer role is retained"
+        );
+        assertFalse(_oracle.isEnabled(), "Oracle remains disabled");
+        assertEq(_oracle.backing(), 0, "Backing remains uninitialized");
+        assertEq(_oracle.configOperator(), address(0), "Oracle operator remains unset");
+        assertFalse(_oracleQueue.isEnabled(), "Oracle queue remains disabled");
+        assertFalse(IEnabler(_graph.seizerTask).isEnabled(), "Seizer remains disabled");
+        assertFalse(IEnabler(_graph.yieldClaimerTask).isEnabled(), "Yield task remains disabled");
+        assertFalse(
+            IEnabler(_graph.revenueDistributorTask).isEnabled(),
+            "Distributor task remains disabled"
+        );
+    }
+
+    function _expectHeartPrerequisite() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
+                _graph.heart
+            )
+        );
+    }
+
+    function _assertLaunchedHeartTasks() internal view {
+        assertEq(_heart.getPeriodicTaskCount(), 9, "Launch inserts exactly three tasks");
+        for (uint256 i; i < 6; ++i) {
+            (address task, bytes4 selector) = _heart.getPeriodicTaskAtIndex(i < 3 ? i : i + 3);
+            assertEq(task, _reviewedHeartTasks[i], "Every reviewed task retains relative order");
+            assertEq(selector, _reviewedSelector(i), "Every reviewed selector is retained");
+        }
     }
 
     // Scenarios: BLAUNCH-S01.

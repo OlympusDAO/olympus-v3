@@ -2,18 +2,21 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
-import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
-import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBackingOracleConfigTimelock} from "src/policies/interfaces/IBackingOracleConfigTimelock.sol";
+import {IOperator} from "src/policies/interfaces/IOperator.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
+import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
+import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
@@ -114,6 +117,7 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
     address internal immutable _revenueDistributorTimelock;
     address internal immutable _revenueDistributorTask;
     address internal immutable _heart;
+    bytes32 internal immutable _heartTasksHash;
     address internal immutable _usds;
     address internal immutable _usde;
     address internal immutable _susds;
@@ -161,6 +165,19 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
         _backingOracle = deployment_.backingOracle;
         _backingOracleTimelock = deployment_.backingOracleTimelock;
         _validateBindings();
+        // Reviewed mainnet baseline at block 25,973,712. Zero selects execute().
+        address[] memory tasks = new address[](6);
+        tasks[0] = 0xEBDe552D851DD6Dfd3D360C596D3F4aF6e5F9678; // ConvertibleDepositFacility
+        tasks[1] = 0x986b99579BEc7B990331474b66CcDB94Fa2419F5; // ReserveMigrator
+        tasks[2] = 0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9; // ReserveWrapper
+        tasks[3] = 0x6417F206a0a6628Da136C0Faa39026d0134D2b52; // Operator
+        tasks[4] = 0x271e35a8555a62F6bA76508E85dfD76D580B0692; // YieldRepurchaseFacility
+        tasks[5] = 0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff; // EmissionManager
+        bytes4[] memory selectors = new bytes4[](6);
+        selectors[1] = IReserveMigrator.migrate.selector;
+        selectors[3] = IOperator.operate.selector;
+        selectors[4] = IYieldRepo.endEpoch.selector;
+        _heartTasksHash = keccak256(abi.encode(tasks, selectors));
     }
 
     /// @dev Enumerates policies used by on-chain launch checks.
@@ -207,8 +224,15 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
             ) revert BurnerLoansActivator_InvalidPrerequisite(targets[i]);
         }
         // Heart must already be operational so the launch can extend its existing task list.
-        if (!installedKernel.isPolicyActive(Policy(_heart)) || !IEnabler(_heart).isEnabled())
-            revert BurnerLoansActivator_InvalidPrerequisite(_heart);
+        address heart = _heart;
+        if (!installedKernel.isPolicyActive(Policy(heart)) || !IEnabler(heart).isEnabled())
+            revert BurnerLoansActivator_InvalidPrerequisite(heart);
+        // Require the complete reviewed task list before any launch mutation or insertion.
+        (bool success, bytes memory tasks) = heart.staticcall(
+            abi.encodeCall(IPeriodicTaskManager.getPeriodicTasks, ())
+        );
+        if (!success || keccak256(tasks) != _heartTasksHash)
+            revert BurnerLoansActivator_InvalidPrerequisite(heart);
         // PRICE admission needs the existing configuration policy active and enabled even
         // when USDe is already registered and no addAsset call would otherwise exercise it.
         if (

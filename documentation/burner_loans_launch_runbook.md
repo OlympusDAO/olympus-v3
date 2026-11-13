@@ -163,6 +163,14 @@ after ConvertibleDepositFacility, ReserveMigrator and ReserveWrapper, immediatel
 seize defaults, collect yield, then distribute the resulting receipts. Existing task order and
 custom selectors are retained. Re-read the live list before approving deployment.
 
+The activator hard-codes the six reviewed mainnet identities and selectors shown below. It does
+not accept a deployer-supplied baseline or adopt Heart's live list as its expectation. At execution,
+before launch configuration or fixed-index insertions, it requires the full task list to match.
+Missing, extra, preinserted, reordered or replaced tasks and changed selectors revert with
+`BurnerLoansActivator_InvalidPrerequisite(heart)`. The entire OCG transaction, including role grants
+and the one-use flag, rolls back. If the live baseline legitimately changes, review the revised launch
+ordering and update the activator before deployment; do not bypass the check.
+
 <!-- prettier-ignore -->
 | Existing index | Launch index | Task | Address at the fork block | Call |
 | --- | --- | --- | --- | --- |

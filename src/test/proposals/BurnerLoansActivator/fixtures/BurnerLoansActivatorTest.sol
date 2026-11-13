@@ -3,6 +3,9 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20 as OZIERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {IOperator} from "src/policies/interfaces/IOperator.sol";
+import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
 
 // Libraries
@@ -43,6 +46,7 @@ abstract contract BurnerLoansActivatorTest is Test {
     MockPrice internal _price;
     MockPeriodicTaskManager internal _heart;
     MockPeriodicTask internal _existingTask;
+    address[6] internal _reviewedHeartTasks;
     BurnerLoansDeployHarness internal _deployer;
     BurnerLoansActivator internal _activator;
     IBurnerLoansActivator.Deployment internal _graph;
@@ -62,7 +66,17 @@ abstract contract BurnerLoansActivatorTest is Test {
         _oracleQueue = new BackingOracleConfigTimelock(_kernel, _oracle);
         _price = new MockPrice(_kernel, 18, 8 hours);
         _heart = new MockPeriodicTaskManager(_kernel);
-        _existingTask = new MockPeriodicTask();
+        _reviewedHeartTasks = [
+            0xEBDe552D851DD6Dfd3D360C596D3F4aF6e5F9678,
+            0x986b99579BEc7B990331474b66CcDB94Fa2419F5,
+            0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9,
+            0x6417F206a0a6628Da136C0Faa39026d0134D2b52,
+            0x271e35a8555a62F6bA76508E85dfD76D580B0692,
+            0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff
+        ];
+        bytes memory taskCode = address(new MockPeriodicTask()).code;
+        for (uint256 i; i < 6; ++i) vm.etch(_reviewedHeartTasks[i], taskCode);
+        _existingTask = MockPeriodicTask(_reviewedHeartTasks[0]);
         address deployerAddress = makeAddr("localDeployV3Harness");
         vm.etch(
             deployerAddress,
@@ -150,9 +164,9 @@ abstract contract BurnerLoansActivatorTest is Test {
         _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, _graph.yieldClaimerTask);
         _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, _graph.seizerTask);
         _heart.enable("");
-        _heart.addPeriodicTask(address(_existingTask));
-        // Match the six-task mainnet layout: three preparation tasks, Operator, then two tasks.
-        for (uint256 i; i < 5; ++i) _heart.addPeriodicTask(address(new MockPeriodicTask()));
+        // Use the six reviewed mainnet identities and their exact stored selectors.
+        for (uint256 i; i < 6; ++i)
+            _heart.addPeriodicTaskAtIndex(_reviewedHeartTasks[i], _reviewedSelector(i), i);
         _price.setPrice(address(_ohm), 20e18);
         _price.setPrice(address(_usds), 1e18);
         _price.setPrice(address(_usde), 1e18);
@@ -189,6 +203,13 @@ abstract contract BurnerLoansActivatorTest is Test {
     // forge-lint: disable-next-item(calls-loop)
     function _policy(string memory name_) internal view returns (address) {
         return _deployer.resolve(string.concat("olympus.policies.", name_));
+    }
+
+    function _reviewedSelector(uint256 index_) internal pure returns (bytes4) {
+        if (index_ == 1) return IReserveMigrator.migrate.selector;
+        if (index_ == 3) return IOperator.operate.selector;
+        if (index_ == 4) return IYieldRepo.endEpoch.selector;
+        return bytes4(0);
     }
 
     function _activate() internal {
