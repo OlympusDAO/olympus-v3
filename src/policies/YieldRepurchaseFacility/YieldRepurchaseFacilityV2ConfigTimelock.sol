@@ -243,9 +243,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateSetYieldBuybackShare` of the configuration policy rejects the arguments.
     ///      - The share domain of `vault_` is reserved by an unresolved action
@@ -267,9 +267,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateSetInitialDiscount` of the configuration policy rejects the argument.
     ///      - The initial discount domain is reserved by an unresolved action
@@ -290,9 +290,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateSetMaxPricePremium` of the configuration policy rejects the argument.
     ///      - The max price premium domain is reserved by an unresolved action
@@ -313,9 +313,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateIncreaseClearinghouseOffset` of the configuration policy rejects the
     ///        arguments.
@@ -338,9 +338,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateDecreaseNextYield` of the configuration policy rejects the arguments.
     ///      - The next yield domain of `vault_` is reserved by an unresolved action
@@ -363,9 +363,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateExcludeClearinghouse` of the configuration policy rejects the argument.
     ///      - The inclusion domain of `clearinghouse_` is reserved by an unresolved action
@@ -386,9 +386,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateEnableAsset` of the configuration policy rejects the argument.
     ///      - The status domain or the next yield domain of `vault_` is reserved by an
@@ -407,9 +407,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateDisableAsset` of the configuration policy rejects the argument.
     ///      - The status domain of `vault_` is reserved by an unresolved action
@@ -434,9 +434,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled.
+    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - The batch is empty (`ITimelockBatchQueue_BatchEmpty`) or holds more than the
     ///        maximum number of sub-actions (`ITimelockBatchQueue_BatchTooLarge`).
@@ -481,15 +481,15 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
     ///      - This policy is disabled (`NotEnabled`).
+    ///      - `caller_` does not hold the yrf_admin role.
     ///      - The configuration policy is disabled, is not an active policy of this policy's
     ///        kernel, or does not report that kernel (`PolicyDependency` errors).
-    ///      - `caller_` does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     function _validateConfigQueue(address caller_) internal view override {
         _requireOwnActive();
         _requireEnabled();
-        _requireConfigActiveAndEnabled();
         _requireRole(caller_, YRF_ADMIN_ROLE);
+        _requireConfigActiveAndEnabled();
         _requireOperatorOfConfig();
     }
 
