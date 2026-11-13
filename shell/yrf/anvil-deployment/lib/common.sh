@@ -97,9 +97,9 @@ fund() { cast rpc --rpc-url "$RPC" anvil_setBalance "$1" "$FUND_WEI_HEX" > /dev/
 #
 # The governor simulation of a proposal rolls the block number forward by about 93,600 blocks.
 # Forge 1.9.0 then reads every slot of the ring buffer of the contract, one request at a time,
-# and a fork that does not hold a slot fetches it from the upstream RPC: about four slots a
-# second, more than half an hour for the buffer. A slot written on the fork is answered by the
-# fork itself. Nothing the harness runs reads a block hash from the contract.
+# and a fork that does not hold a slot fetches it from the upstream RPC. A slot written on the
+# fork is answered by the fork itself. Nothing the harness runs reads a block hash from the
+# contract.
 prefill_block_hash_history() {
     local batch response written i
     batch="$(for ((i = 0; i < HISTORY_SERVE_WINDOW; i++)); do
