@@ -235,7 +235,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateSetYieldBuybackShare` of the configuration policy rejects the arguments.
@@ -256,7 +257,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateSetInitialDiscount` of the configuration policy rejects the argument.
@@ -276,7 +278,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateSetMaxPricePremium` of the configuration policy rejects the argument.
@@ -296,7 +299,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateIncreaseClearinghouseOffset` of the configuration policy rejects the
@@ -318,7 +322,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateDecreaseNextYield` of the configuration policy rejects the arguments.
@@ -340,7 +345,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateExcludeClearinghouse` of the configuration policy rejects the argument.
@@ -360,7 +366,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateEnableAsset` of the configuration policy rejects the argument.
@@ -378,7 +385,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc IYieldRepurchaseFacilityV2ConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - `validateDisableAsset` of the configuration policy rejects the argument.
@@ -402,7 +410,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///
     ///      Reverts if:
     ///      - This policy is disabled.
-    ///      - The configuration policy is disabled.
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     ///      - The batch is empty (`ITimelockBatchQueue_BatchEmpty`) or holds more than the
@@ -442,12 +451,13 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc ConfigTimelockBatchQueue
     /// @dev Reverts if:
     ///      - This policy is disabled (`NotEnabled`).
-    ///      - The configuration policy is disabled (`NotEnabled`).
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - `caller_` does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
     function _validateConfigQueue(address caller_) internal view override {
         _requireEnabled();
-        _requireConfigEnabled();
+        _requireConfigActiveAndEnabled();
         _requireRole(caller_, YRF_ADMIN_ROLE);
         _requireOperatorOfConfig();
     }
@@ -777,7 +787,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///
     ///      Reverts if:
     ///      - This policy is disabled (`NotEnabled`).
-    ///      - The configuration policy is disabled (`NotEnabled`).
+    ///      - The configuration policy is disabled, is not an active policy of this policy's
+    ///        kernel, or does not report that kernel (`PolicyDependency` errors).
     ///      - The configuration policy does not name this policy as its config operator.
     function _validateExecution(
         address,
@@ -785,7 +796,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
         _requireEnabled();
-        _requireConfigEnabled();
+        _requireConfigActiveAndEnabled();
         _requireOperatorOfConfig();
     }
 
@@ -880,9 +891,17 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         return IYieldRepurchaseFacilityV2View(_CONFIG.facility());
     }
 
-    /// @notice Reverts with `NotEnabled` unless the configuration policy is enabled.
-    function _requireConfigEnabled() internal view {
-        if (!IEnabler(address(_CONFIG)).isEnabled()) revert NotEnabled();
+    /// @notice Reverts unless the configuration policy reports this policy's kernel, is an
+    ///         active policy of it, and is enabled.
+    /// @dev Reverts if:
+    ///      - The `kernel()` or `isEnabled()` read of the configuration policy fails or returns
+    ///        a malformed word (`PolicyDependency_InvalidDependency`).
+    ///      - The configuration policy reports another kernel
+    ///        (`PolicyDependency_KernelMismatch`).
+    ///      - The configuration policy is not an active policy of this policy's kernel, or is
+    ///        disabled (`PolicyDependency_NotActive`).
+    function _requireConfigActiveAndEnabled() internal view {
+        PolicyDependency.requireActiveAndEnabled(address(_CONFIG), address(kernel));
     }
 
     /// @notice Reverts unless the configuration policy reports this policy's kernel and is an

@@ -62,10 +62,11 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///      the hashes read only the guarded fields, so an action whose guarded fields match the
 ///      new registration executes against it.
 ///
-///      Queueing requires this policy and the configuration policy to be enabled, the caller to
-///      hold the yrf_admin role, and the configuration policy to name this policy as its
-///      config operator. Execution is permissionless once the delay elapses and requires the
-///      same enabled states and the config operator binding; the facility itself may be
+///      Queueing requires this policy to be enabled, the configuration policy to report this
+///      policy's kernel, to be an active policy of it and to be enabled, the caller to hold the
+///      yrf_admin role, and the configuration policy to name this policy as its config
+///      operator. Execution is permissionless once the delay elapses and requires the same
+///      states of both policies and the config operator binding; the facility itself may be
 ///      disabled, since its configuration setters apply while it is disabled. Cancellation is
 ///      restricted to the emergency role and is available while this policy is disabled and
 ///      after the action has expired. Enabling and re-enabling this policy require the
