@@ -6,7 +6,6 @@ import {IBondCallback} from "src/interfaces/IBondCallback.sol";
 import {IBurnableERC20} from "src/interfaces/IBurnableERC20.sol";
 import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "@openzeppelin-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
@@ -219,6 +218,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - `kernel_` or `ohm_` is the zero address
     ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
+    ///      - The `decimals()` read of `ohm_` fails
+    ///        (`IYieldRepurchaseFacilityV2_DecimalsUnreadable`).
     ///      - `backingOracle_` is the zero address or does not report `kernel_` as its
     ///        kernel (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - The backing oracle does not report the 18 decimals of the backing value.
@@ -245,7 +246,9 @@ contract YieldRepurchaseFacilityV2 is
         _requireValidGracePeriod(gracePeriod_);
 
         _OHM = IERC20(ohm_);
-        _OHM_DECIMALS = IERC20Metadata(ohm_).decimals();
+        (bool ohmDecimalsRead, uint8 ohmDecimals) = IERC20(ohm_).tryGetDecimals();
+        if (!ohmDecimalsRead) revert IYieldRepurchaseFacilityV2_DecimalsUnreadable(ohm_);
+        _OHM_DECIMALS = ohmDecimals;
 
         // The deployment is not activated in the Kernel yet, so the registry activation of
         // the oracle is not required here
@@ -938,6 +941,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is already registered.
     ///      - The vault reports the zero address as its underlying asset
     ///        (`IYieldRepurchaseFacilityV2_VaultProbeZeroResult`).
+    ///      - The `decimals()` read of the reserve or the share token fails
+    ///        (`IYieldRepurchaseFacilityV2_DecimalsUnreadable`).
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
     ///        ERC165.

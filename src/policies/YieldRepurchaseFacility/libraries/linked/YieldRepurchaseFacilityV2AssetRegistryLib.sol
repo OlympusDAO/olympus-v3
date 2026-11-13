@@ -4,12 +4,12 @@ pragma solidity ^0.8.24;
 // Interfaces
 import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "@openzeppelin-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC7540Deposit} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7540.sol";
 import {IERC7575} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7575.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
@@ -72,6 +72,8 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
     ///      - The vault is already registered.
     ///      - The vault reports the zero address as its underlying asset
     ///        (`IYieldRepurchaseFacilityV2_VaultProbeZeroResult`).
+    ///      - The `decimals()` read of the reserve or the share token fails
+    ///        (`IYieldRepurchaseFacilityV2_DecimalsUnreadable`).
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
     ///        ERC165.
@@ -115,7 +117,7 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
                 IERC4626.asset.selector
             );
 
-        uint8 reserveDecimals = IERC20Metadata(reserve_).decimals();
+        uint8 reserveDecimals = _readDecimals(reserve_);
         if (reserveDecimals > YieldRepurchaseFacilityV2Constants.MAX_RESERVE_DECIMALS)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_UnsupportedDecimals();
 
@@ -123,7 +125,7 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
 
         // The conversion rate probe and the sell-shares market pricing both treat
         // `10 ** reserveDecimals` as one whole share.
-        if (IERC20Metadata(shareToken_).decimals() != reserveDecimals)
+        if (_readDecimals(shareToken_) != reserveDecimals)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
         _requireNoPoolConflict(registry_, context_.ohm, vault_, shareToken_, reserve_);
@@ -527,6 +529,20 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
             _probeVault(vault_, IERC4626.previewWithdraw.selector, oneUnit_);
         }
         _probeVault(vault_, IERC4626.previewDeposit.selector, oneUnit_);
+    }
+
+    /// @notice Reads the decimals of a token.
+    /// @dev The read returns at most one word into scratch memory, so a token cannot inflate
+    ///      the memory cost of the registration.
+    ///
+    ///      Reverts with `IYieldRepurchaseFacilityV2_DecimalsUnreadable` if the call
+    ///      reverts, the address holds no code, or the returned word is missing or exceeds
+    ///      `uint8`.
+    function _readDecimals(address token_) private view returns (uint8 decimals_) {
+        bool success;
+        (success, decimals_) = SafeERC20.tryGetDecimals(IERC20(token_));
+        if (!success)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_DecimalsUnreadable(token_);
     }
 
     /// @notice Probes a conversion function of a vault with a single amount argument.
