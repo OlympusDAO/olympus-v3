@@ -221,21 +221,28 @@ owned by the executing batch, including a key belonging to a later sub-action.
 `_validateCancellation` defines cancellation authority. After authorization, the shared base
 releases every key and removes every guard record.
 
-Expiry is a timestamp condition, not a state transition. An expired action keeps its keys until an
-authorized caller cancels it. Cancellation can occur after expiry, subject to the product's lifecycle
-gates. Burner Loans and Revenue Distributor config timelocks require themselves enabled and
-Kernel-active; target state and operator selection do not gate cancellation. Restore the timelock
-before cancelling if it is disabled or inactive.
+Expiry is a timestamp condition, not a state transition. An expired action keeps its keys until a
+caller that the product permits cancels it. Cancellation can occur after expiry, subject to the
+product's lifecycle gates. Burner Loans and Revenue Distributor config timelocks require themselves
+enabled and Kernel-active; target state and operator selection do not gate cancellation. Restore
+the timelock before cancelling if it is disabled or inactive.
 
 `YieldRepurchaseFacilityV2ConfigTimelock` and `BackingOracleConfigTimelock` require themselves
-Kernel-active and the caller to hold the `emergency` role, and have no enabled gate: cancellation
-stays available while the timelock is disabled, and it makes no call to the target or to its config
-operator. A timelock that the Kernel has deactivated must be activated again before its actions can
-be cancelled.
+Kernel-active and have no enabled gate: cancellation stays available while the timelock is
+disabled, and it makes no call to the target or to its config operator. A timelock that the Kernel
+has deactivated must be activated again before its actions can be cancelled, whoever the caller is
+and whether or not the action has expired.
 
-`CCIPTokenPoolConfigTimelock` is the exception: `cancelQueuedAction` has no enabled or
-Kernel-active gate, so an authorized caller releases the keys without first restoring the timelock.
-See [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for its cancellation authority.
+Both timelocks share one cancellation authority. While an action has not expired, the `admin`
+role, the `emergency` role, and the proposer of the action can cancel it. The proposer is matched
+by address: the account that queued the action keeps this right after it loses the role that
+queues, and another holder of that role cannot cancel the action. Once the block timestamp is past
+`expiresAt`, any address can cancel the action. `expiresAt` is the last timestamp at which the
+action can execute, so the execution window and the cancellation by any address do not overlap.
+
+`CCIPTokenPoolConfigTimelock` has the same cancellation authority and no lifecycle gate:
+`cancelQueuedAction` has no enabled or Kernel-active gate, so a permitted caller releases the keys
+without first restoring the timelock. See [CCIP access control](bridge/ccip/ACCESS_CONTROL.md).
 
 ## Implement a subclass
 

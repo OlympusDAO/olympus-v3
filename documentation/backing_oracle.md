@@ -19,7 +19,7 @@ convert currencies or derive reserve values.
 | Select, rotate or revoke config operator | ADMIN | Oracle active; may be paused |
 | Queue backing update | backing_admin or ADMIN | Both policies active/enabled; queue selected |
 | Execute queued update | Anyone | Both policies active/enabled; queue selected |
-| Cancel queued update | EMERGENCY | Queue active; may be paused; no oracle reads |
+| Cancel queued update | Until the update expires: ADMIN, EMERGENCY or its proposer. After expiry: anyone | Queue active; may be paused; no oracle reads |
 | Enable queue | ADMIN | Queue active/disabled; compatible same-Kernel active oracle and selected queue; oracle may be paused |
 | Re-enable either policy | ADMIN or backing_admin | Previously initialized, own policy active/disabled, within grace; queue revalidates target identity/activity/selection |
 | Set re-enable grace | ADMIN | Own policy active and enabled; nonzero period |
@@ -78,6 +78,13 @@ Execution is permitted throughout the inclusive interval from `executableAt` to
 `executableAt + 7 days`. Before that interval the action is not ready; after it the
 action is expired. An expired action retains its reservation until cancellation.
 
+Until an action expires, ADMIN, EMERGENCY and the action's proposer can cancel it.
+The proposer is matched by address: the account that queued the action can cancel
+it after losing `backing_admin`, and another `backing_admin` holder cannot. Once
+the action is expired, anyone can cancel it, so public cancellation never overlaps
+the execution interval. Every cancellation requires the queue to be active in its
+Kernel; the queue may be paused, and the oracle is not read.
+
 The queue uses the shared `ConfigTimelockBatchQueue`. The typed `queueSetBacking`
 helper creates one action for the immutable oracle's `setBacking(uint256)` selector
 and its ABI-encoded uint256 parameter. No public arbitrary-target or batch entry
@@ -94,15 +101,15 @@ proposal checks current backing bounds before acquiring it. Execution verifies
 current lifecycle, selected operator, recorded destination and committed pre-state
 before dispatch. The oracle then enforces live authority and numeric bounds.
 Failure reverts the entire execution, preserving the action, payload and key.
-Success or EMERGENCY cancellation releases the key.
+Success or cancellation releases the key.
 
 | Change during notice | Result |
 | --- | --- |
 | ADMIN changes backing | State commitment mismatch; pending intent retained |
-| ADMIN replaces/revokes operator | Old queue cannot execute; EMERGENCY can still cancel |
+| ADMIN replaces/revokes operator | Old queue cannot execute; ADMIN, EMERGENCY or the proposer can still cancel |
 | Oracle or queue paused/inactive | Ordinary execution blocked; restore readiness within original window to retry |
 | Backing/operator changes away and back | Current-state commitment may match again; no historical epoch invalidation |
-| Action expires | Execution rejected; cancellation releases the reservation |
+| Action expires | Execution rejected; anyone can cancel, which releases the reservation |
 
 Reservations are local to each queue instance. Replacing the selected operator is
 the authority boundary between old and new queues; an old reservation cannot block
@@ -128,9 +135,10 @@ To replace a queue, deploy and activate a replacement for the same oracle, then
 ADMIN selects it and enables it. Rotation is immediate and is available while the
 oracle is paused. Zero revokes delegation. Re-selecting the current address reverts
 after authorization. Selection does not query the candidate queue's readiness.
-Cancel old pending intents with EMERGENCY when the old queue is active; its local
-pause or broken target metadata does not prevent cancellation. No backing is moved
-or copied during replacement.
+ADMIN, EMERGENCY or the proposer can cancel old pending intents, and anyone can
+cancel them once expired, while the old queue is active; its local pause or broken
+target metadata does not prevent cancellation. No backing is moved or copied
+during replacement.
 
 ## Interfaces and origin
 

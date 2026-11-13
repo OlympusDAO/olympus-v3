@@ -7,7 +7,7 @@ This document describes the roles that are used in the Olympus protocol.
 | Role | Policy | Actions |
 |------|----------|-------------|
 | admin | BackingOracle | Enable the policy with the initial backing, set the backing directly within the change bound, select, rotate or revoke the config operator, set the grace period, re-enable the policy within the grace window, enable/disable the policy |
-| admin | BackingOracleConfigTimelock | Queue backing updates, set the grace period, re-enable the policy within the grace window, enable/disable the policy |
+| admin | BackingOracleConfigTimelock | Queue backing updates, cancel queued backing updates (also while the policy is disabled), set the grace period, re-enable the policy within the grace window, enable/disable the policy |
 | admin | CCIPBurnMintTokenPool | Enable/disable contract |
 | admin | CCIPTokenPoolConfig | Accept/transfer the token pool ownership, set the config operator, set the router, set the rate-limit admin, set the rebalancer and transfer liquidity (lock/release pool only), set the grace period, call the route configuration functions directly (add/remove chain, set remote token, add/remove remote pool, apply allowlist updates, set chain rate limits), contain routes through `disableChain` / `disableAllChains` (also while the policy is disabled), enable/disable contract |
 | admin | CCIPTokenPoolConfigTimelock | Set the timelock delay, set the grace period, cancel queued actions (also while the policy is disabled), enable/disable contract. Not a queue proposer |
@@ -29,9 +29,9 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | ReserveWrapper | Enable/disable contract |
 | admin | YieldRepurchaseFacilityV2 | Enable the facility (a full restart with the seeded yields) and seed the cycle, set the configurator while disabled, set the backing oracle and the bond contracts, set the grace period, set the step gas limit, return funds to the treasury while disabled, rescue tokens, disable the facility |
 | admin | YieldRepurchaseFacilityV2Config | Bind the facility while disabled, add/remove assets, set the sell-shares mode and the backing vault, refresh the asynchronous-redemption flag of a vault, set Clearinghouse offsets and inclusions, call the operator setters directly, rotate or revoke the config operator (also while the policy is disabled), set the grace period, enable/disable the policy |
-| admin | YieldRepurchaseFacilityV2ConfigTimelock | Set the timelock delay and the grace period, enable/disable the policy |
+| admin | YieldRepurchaseFacilityV2ConfigTimelock | Set the timelock delay and the grace period, cancel queued actions (also while the policy is disabled), enable/disable the policy. Not a queue proposer |
 | backing_admin | BackingOracle | Re-enable the policy within the grace window |
-| backing_admin | BackingOracleConfigTimelock | Queue backing updates, re-enable the policy within the grace window |
+| backing_admin | BackingOracleConfigTimelock | Queue backing updates, re-enable the policy within the grace window. The account that queued an update can cancel it (also while the policy is disabled); this right belongs to the proposer address, not to the role |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CCIPTokenPoolConfig | Contain routes through `disableChain` / `disableAllChains`, also while the policy is disabled. Call `reEnable` within the grace period |
 | bridge_admin | CCIPTokenPoolConfigTimelock | Queue the timelocked route configuration actions (`queueAddChain`, `queueRemoveChain`, `queueSetRemoteToken`, `queueAddRemotePool`, `queueRemoveRemotePool`, `queueApplyAllowListUpdates`, `queueSetChainRateLimits`, `queueBatch`). Call `reEnable` within the grace period |
@@ -76,7 +76,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | ReserveWrapper | Disable contract |
 | emergency | YieldRepurchaseFacilityV2 | Disable the facility, return funds to the treasury while disabled |
 | emergency | YieldRepurchaseFacilityV2Config | Disable the policy |
-| emergency | YieldRepurchaseFacilityV2ConfigTimelock | Disable the policy, cancel queued actions |
+| emergency | YieldRepurchaseFacilityV2ConfigTimelock | Disable the policy, cancel queued actions (also while the policy is disabled) |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
@@ -105,7 +105,7 @@ This document describes the roles that are used in the Olympus protocol.
 | treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
 | yrf_admin | YieldRepurchaseFacilityV2 | Re-enable the facility within the grace window after a disable, set the step gas limit, rescue tokens |
 | yrf_admin | YieldRepurchaseFacilityV2Config | Re-enable the policy within the grace window after a disable |
-| yrf_admin | YieldRepurchaseFacilityV2ConfigTimelock | Queue timelocked operator setters of the config policy (yield buyback share, initial discount, max price premium, Clearinghouse offset increases and exclusions, next yield decreases, asset enable/disable), re-enable the policy within the grace window after a disable |
+| yrf_admin | YieldRepurchaseFacilityV2ConfigTimelock | Queue timelocked operator setters of the config policy (yield buyback share, initial discount, max price premium, Clearinghouse offset increases and exclusions, next yield decreases, asset enable/disable), re-enable the policy within the grace window after a disable. The account that queued an action can cancel it (also while the policy is disabled); this right belongs to the proposer address, not to the role |
 
 ## Role Allocations
 
