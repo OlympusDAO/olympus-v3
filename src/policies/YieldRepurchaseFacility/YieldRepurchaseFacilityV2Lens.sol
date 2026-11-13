@@ -2,12 +2,10 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 import {IClearinghouseReserve} from "src/policies/interfaces/IClearinghouseReserve.sol";
 import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Lens} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Lens.sol";
@@ -15,6 +13,7 @@ import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepur
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 
 // Libraries
+import {YieldRepurchaseFacilityV2BackingOracleLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2BackingOracleLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2MathLib.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2VaultLib.sol";
@@ -34,9 +33,10 @@ import {Policy} from "src/Kernel.sol";
 /// @dev The lens holds no state. It reads the raw getters of the facility, the registered
 ///      vaults, the treasury, the Clearinghouse registry, the PRICE module, the backing
 ///      oracle, and the bond auctioneer, and computes through the internal libraries the
-///      facility computes with: `YieldRepurchaseFacilityV2MathLib` and
-///      `YieldRepurchaseFacilityV2VaultLib`. The Clearinghouse scan repeats the registry
-///      loop of the facility through its offset and inclusion getters.
+///      facility computes with: `YieldRepurchaseFacilityV2MathLib`,
+///      `YieldRepurchaseFacilityV2VaultLib`, and `YieldRepurchaseFacilityV2BackingOracleLib`.
+///      The Clearinghouse scan repeats the registry loop of the facility through its offset
+///      and inclusion getters.
 contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
     /// @notice The facility the lens reads.
     IYieldRepurchaseFacilityV2View internal immutable _FACILITY;
@@ -233,6 +233,17 @@ contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Lens
+    /// @dev The backing is read through
+    ///      `YieldRepurchaseFacilityV2BackingOracleLib.readBacking` with the Kernel the
+    ///      facility reports, the read the facility itself performs.
+    ///
+    ///      Reverts if:
+    ///      - The `PRICE.getPriceIn` read of the backing reserve reverts.
+    ///      - The `kernel()` read of the backing oracle fails, returns a malformed word, or
+    ///        reports a kernel other than the facility's (`PolicyDependency` errors).
+    ///      - The `isEnabled()` read of the backing oracle fails or returns a malformed word
+    ///        (`PolicyDependency_InvalidDependency`).
+    ///      - The `backing()` read of an active and enabled backing oracle reverts.
     function priceGate()
         external
         view
@@ -242,7 +253,10 @@ contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
         IYieldRepurchaseFacilityV2.Context memory context_ = _FACILITY.context();
 
         gatePrice = PRICEv2(context_.price).getPriceIn(context_.ohm, context_.backingReserve);
-        backing = _gateBacking(context_.backingOracle);
+        backing = YieldRepurchaseFacilityV2BackingOracleLib.readBacking(
+            address(Policy(address(_FACILITY)).kernel()),
+            context_.backingOracle
+        );
         open = backing != 0 && gatePrice != 0 && gatePrice >= backing;
     }
 
@@ -302,17 +316,6 @@ contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
         return
             _FACILITY.isClearinghouseIncluded(clearinghouse_) ||
             _readClearinghouseReserve(clearinghouse_) == backingReserve_;
-    }
-
-    /// @notice Returns the backing value the price gate compares against: the backing of the
-    ///         oracle, or zero while the oracle is not an active policy of the facility's
-    ///         Kernel or is disabled.
-    function _gateBacking(address backingOracle_) private view returns (uint256) {
-        if (
-            !Policy(address(_FACILITY)).kernel().isPolicyActive(Policy(backingOracle_)) ||
-            !IEnabler(backingOracle_).isEnabled()
-        ) return 0;
-        return IBackingOracle(backingOracle_).backing();
     }
 
     /// @notice Returns the number of daily cycles remaining in the week at the next daily

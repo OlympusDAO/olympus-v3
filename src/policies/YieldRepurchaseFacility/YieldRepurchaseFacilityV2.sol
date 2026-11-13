@@ -7,8 +7,6 @@ import {IBurnableERC20} from "src/interfaces/IBurnableERC20.sol";
 import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
@@ -60,7 +58,18 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      treasury withdrawal priced by the backing oracle. Markets are not opened while
 ///      the OHM price in the backing reserve is below the backing, and neither markets
 ///      are opened nor OHM is burned while the backing oracle is not an active policy of
-///      the Kernel, is disabled, or reports a zero backing.
+///      the Kernel, is disabled, or reports a zero backing. A daily cycle that opens no
+///      markets because of this price gate emits `PriceGateClosed`.
+///
+///      A closed price gate stops the creation of markets and the burn that needs a
+///      backing value, and nothing else. A market opened by an earlier daily cycle stays
+///      purchasable until it concludes, 24 hours after its creation: `callback` does not
+///      read the backing oracle, so disabling the oracle does not stop the purchases on a
+///      live market. The purchases stop with the `disable` of the facility, which closes
+///      the live markets (best-effort) and makes `callback` revert. The weekly reset does
+///      not depend on the gate either: it keeps withdrawing the stored yield from the
+///      treasury into the buyback pools while the gate is closed, so the daily bids that
+///      follow the reopening are sized from the larger pools.
 ///
 ///      The reserve-side accounting is balance-based: the facility's balances of a
 ///      vault's shares and of its reserve token are the vault's buyback pool, and the
@@ -223,7 +232,8 @@ contract YieldRepurchaseFacilityV2 is
     ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The `decimals()` read of `ohm_` fails
     ///        (`IYieldRepurchaseFacilityV2_DecimalsUnreadable`).
-    ///      - `backingOracle_` is the zero address
+    ///      - `backingOracle_` is the zero address, or does not advertise `IBackingOracle`
+    ///        and `IEnabler` through ERC165
     ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - `backingOracle_` does not report `kernel_` through a readable `kernel()`
     ///        (`PolicyDependency` errors).
@@ -343,6 +353,11 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The configurator does not advertise `IYieldRepurchaseFacilityV2Config`, or
     ///        does not report this facility as its `facility()`
     ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
+    ///      - The backing oracle does not advertise `IBackingOracle` and `IEnabler` through
+    ///        ERC165 (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///      - The backing oracle does not report the facility's kernel through a readable
+    ///        `kernel()`, its `isEnabled()` is not readable, or it is not an active policy
+    ///        of the kernel or is disabled (`PolicyDependency` errors).
     ///      - The facility is not authorized as a market callback on the bond
     ///        auctioneer.
     ///      - The initial discount is not less than 100% (`1e18`).
@@ -355,7 +370,11 @@ contract YieldRepurchaseFacilityV2 is
         if (data_.length < _MIN_ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
-        YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator);
+        YieldRepurchaseFacilityV2DependenciesLib.validateActivation(
+            kernel,
+            configurator,
+            backingOracle
+        );
         YieldRepurchaseFacilityV2DependenciesLib.requireCallbackAuthorized(bondAuctioneer);
 
         (
@@ -422,7 +441,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      regardless of the downtime. The grace-window check runs through `super`. The
     ///      callback authorization is not re-checked: a missing authorization degrades
     ///      to market submissions the auctioneer rejects. The configurator binding is
-    ///      re-checked with the conditions of `setConfigurator`.
+    ///      re-checked with the conditions of `setConfigurator`, and the backing oracle
+    ///      with the conditions of `enable`.
     ///
     ///      Reverts if:
     ///      - The grace window since the disable has elapsed.
@@ -432,9 +452,18 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The configurator does not advertise `IYieldRepurchaseFacilityV2Config`, or
     ///        does not report this facility as its `facility()`
     ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
+    ///      - The backing oracle does not advertise `IBackingOracle` and `IEnabler` through
+    ///        ERC165 (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///      - The backing oracle does not report the facility's kernel through a readable
+    ///        `kernel()`, its `isEnabled()` is not readable, or it is not an active policy
+    ///        of the kernel or is disabled (`PolicyDependency` errors).
     function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
         super._beforeReEnable();
-        YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator);
+        YieldRepurchaseFacilityV2DependenciesLib.validateActivation(
+            kernel,
+            configurator,
+            backingOracle
+        );
     }
 
     /// @inheritdoc ReEnablerGracePeriod
@@ -551,13 +580,19 @@ contract YieldRepurchaseFacilityV2 is
     ///      surface loudly. A backing oracle that is not an active policy of the Kernel or
     ///      is disabled counts as a zero backing (see `_backing`), and a zero backing
     ///      closes the gate: the daily markets are skipped without a revert, and the
-    ///      processing of the purchased OHM keeps it accumulated.
+    ///      processing of the purchased OHM keeps it accumulated. A daily cycle whose gate
+    ///      is closed (a zero backing, a zero gate price, or a gate price below the
+    ///      backing) emits `PriceGateClosed` with the two values compared; the event
+    ///      follows the weekly reset and the processing of the purchased OHM, which do not
+    ///      depend on the gate.
     ///
     ///      Reverts if:
     ///      - The caller does not hold the heart role.
     ///      - The `PRICE.getPriceIn` read of the backing reserve reverts, including when
     ///        no backing vault is designated (the PRICE module rejects the zero address).
-    ///      - The `isEnabled()` or `backing()` read of the backing oracle reverts.
+    ///      - The backing oracle does not report the facility's kernel through a readable
+    ///        `kernel()`, or its `isEnabled()` is not readable (`PolicyDependency` errors).
+    ///      - The `backing()` read of an active and enabled backing oracle reverts.
     ///      - The gas remaining before an isolated step is below the step requirement
     ///        (`IYieldRepurchaseFacilityV2_InsufficientStepGas`).
     function execute() external override nonReentrant onlyRole(HEART_ROLE) {
@@ -586,7 +621,10 @@ contract YieldRepurchaseFacilityV2 is
         // floor to compare against, so a zero backing skips the markets as well.
         uint256 gatePrice = _reservePrice(_backingReserve());
         uint256 backing = _backing();
-        if (backing == 0 || gatePrice == 0 || gatePrice < backing) return;
+        if (backing == 0 || gatePrice == 0 || gatePrice < backing) {
+            emit PriceGateClosed(gatePrice, backing);
+            return;
+        }
 
         // In the range [1, 7]: the weekly reset has wrapped the epoch to zero
         uint256 daysRemaining = YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK -
@@ -1068,16 +1106,24 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      The setter additionally requires the oracle to be an active policy of the
     ///      kernel: a rotation runs after the deployment is activated, unlike the
-    ///      constructor wiring.
+    ///      constructor wiring. The enabled state of the oracle is not required: until the
+    ///      oracle is enabled the price gate stays closed and the purchased OHM stays
+    ///      accumulated (see `execute`).
     ///
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
-    ///      - `backingOracle_` is the zero address
+    ///      - `backingOracle_` is the stored backing oracle
+    ///        (`IYieldRepurchaseFacilityV2_BackingOracleUnchanged`); the candidate is not
+    ///        called.
+    ///      - `backingOracle_` is the zero address, or does not advertise `IBackingOracle`
+    ///        and `IEnabler` through ERC165
     ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - `backingOracle_` does not report the facility's kernel through a readable
     ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
     ///      - The oracle does not report the 18 decimals of the backing value.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
+        if (backingOracle_ == backingOracle)
+            revert IYieldRepurchaseFacilityV2_BackingOracleUnchanged();
         _setBackingOracle(backingOracle_, true);
     }
 
@@ -1089,6 +1135,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - The contract is enabled.
     ///      - The caller does not hold the admin role.
+    ///      - `configurator_` is the stored configurator, the zero address included while
+    ///        no configurator is set (`IYieldRepurchaseFacilityV2_ConfiguratorUnchanged`);
+    ///        the candidate is not called.
     ///      - `configurator_` is the zero address
     ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
     ///      - `configurator_` does not report the facility's kernel through a readable
@@ -1098,6 +1147,8 @@ contract YieldRepurchaseFacilityV2 is
     ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
     // forge-lint: disable-next-item(missing-zero-check)
     function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
+        if (configurator_ == configurator)
+            revert IYieldRepurchaseFacilityV2_ConfiguratorUnchanged();
         YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator_);
 
         configurator = configurator_;
@@ -1186,11 +1237,17 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
+    ///      - `bondAuctioneer_` is the stored bond auctioneer
+    ///        (`IYieldRepurchaseFacilityV2_BondAuctioneerUnchanged`); no market is closed
+    ///        and the auctioneer is not called.
     ///      - `bondAuctioneer_` is the zero address, or it reports the zero address as
     ///        its teller (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`).
     ///      - The facility is enabled and is not authorized as a market callback on the
     ///        supplied auctioneer.
     function setBondContracts(address bondAuctioneer_) external override onlyAdminRole {
+        if (bondAuctioneer_ == bondAuctioneer)
+            revert IYieldRepurchaseFacilityV2_BondAuctioneerUnchanged();
+
         // The context carries the outgoing auctioneer, on which the markets were created; the
         // function is gated to the admin role
         // forge-lint: disable-next-line(reentrancy-no-eth)
@@ -1201,7 +1258,8 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Sets the backing oracle after the validation of the linked
     ///         `YieldRepurchaseFacilityV2DependenciesLib`.
     /// @dev Reverts if:
-    ///      - `backingOracle_` is the zero address
+    ///      - `backingOracle_` is the zero address, or does not advertise `IBackingOracle`
+    ///        and `IEnabler` through ERC165
     ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - The oracle does not report the facility's kernel through a readable
     ///        `kernel()`, or, when `requireActive_` is set, is not an active policy of it
@@ -1563,14 +1621,13 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Reads the backing value from the backing oracle, in 18 decimals, or returns
     ///         zero while the oracle is not an active policy of the Kernel or is disabled.
-    /// @dev The oracle keeps serving `backing()` while it is inactive or disabled: zero
-    ///      before its first enable, the last value after a disable. The facility uses
-    ///      neither.
+    /// @dev The read is performed by the linked `YieldRepurchaseFacilityV2DependenciesLib`
+    ///      through `YieldRepurchaseFacilityV2BackingOracleLib.readBacking`, the read the
+    ///      lens performs: an oracle that is not ready reads as zero, and an oracle whose
+    ///      `kernel()` is unreadable or reports another kernel, or whose `isEnabled()` is
+    ///      unreadable, reverts with the `PolicyDependency` errors.
     function _backing() private view returns (uint256) {
-        address backingOracle_ = backingOracle;
-        if (!kernel.isPolicyActive(Policy(backingOracle_)) || !IEnabler(backingOracle_).isEnabled())
-            return 0;
-        return IBackingOracle(backingOracle_).backing();
+        return YieldRepurchaseFacilityV2DependenciesLib.readBacking(kernel, backingOracle);
     }
 
     /// @notice Returns the live OHM price denominated in `reserve_`, in oracle decimals.

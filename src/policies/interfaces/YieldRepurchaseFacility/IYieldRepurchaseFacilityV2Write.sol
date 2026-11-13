@@ -23,6 +23,24 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 ///      `stepGasLimit`: a step that fails is skipped with its skip event, and the call
 ///      reverts with `IYieldRepurchaseFacilityV2_InsufficientStepGas` when the remaining
 ///      gas does not cover a step.
+///
+///      A daily cycle opens markets only while its price gate is open: the backing value
+///      is non-zero and the OHM price denominated in the backing reserve is non-zero and
+///      at or above it. The backing value counts as zero while the backing oracle is not
+///      an active policy of the facility's kernel or is disabled, and the purchased OHM
+///      then stays accumulated instead of being burned. A daily cycle whose gate is closed
+///      emits `PriceGateClosed`. The gate governs the creation of markets only: a market
+///      that is already live stays purchasable until it concludes, 24 hours after its
+///      creation. The purchases stop when the facility itself is disabled:
+///      `IEnabler.disable` closes the live markets on a best-effort basis, and
+///      `IBondCallback.callback` reverts while the facility is disabled. The weekly reset
+///      keeps withdrawing the stored yield into the buyback pools while the gate is
+///      closed, so the daily markets that follow the reopening are sized from the larger
+///      pools.
+///
+///      `IEnabler.enable` and `IReEnabler.reEnable` require the backing oracle to
+///      advertise `IBackingOracle` and `IEnabler` through ERC165, to report the facility's
+///      kernel, and to be an active policy of it and enabled.
 interface IYieldRepurchaseFacilityV2Write {
     /// @notice Registers an ERC4626 vault as a reserve asset, optionally seeding its next
     ///         yield and designating it as the backing vault.
@@ -116,12 +134,15 @@ interface IYieldRepurchaseFacilityV2Write {
 
     /// @notice Sets the backing oracle consulted for the market price floor gate and for
     ///         pricing the burn of the purchased OHM.
-    /// @dev Callable by the admin role. The oracle must be an active policy of the
-    ///      facility's kernel and report the backing as an 18-decimal reserve-per-OHM
-    ///      value: an oracle whose `decimals()` is not 18 is rejected. Emits
-    ///      `BackingOracleSet`.
+    /// @dev Callable by the admin role. The oracle must advertise `IBackingOracle` and
+    ///      `IEnabler` through ERC165, be an active policy of the facility's kernel, and
+    ///      report the backing as an 18-decimal reserve-per-OHM value: an oracle whose
+    ///      `decimals()` is not 18 is rejected. The oracle is not required to be enabled:
+    ///      until it is, the daily cycles open no markets and the purchased OHM stays
+    ///      accumulated. Emits `BackingOracleSet`.
     /// @param backingOracle_ The backing oracle policy; must not be the zero address
-    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`), and must differ from the
+    ///        backing oracle in use (`IYieldRepurchaseFacilityV2_BackingOracleUnchanged`).
     function setBackingOracle(address backingOracle_) external;
 
     /// @notice Sets the configurator: the configuration policy that is the only caller of
@@ -131,7 +152,8 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      kernel as its own, advertise `IYieldRepurchaseFacilityV2Config` through ERC165,
     ///      and report this facility as its `facility()`. `enable` and `reEnable` check the
     ///      same conditions. Emits `ConfiguratorSet`.
-    /// @param configurator_ The configuration policy.
+    /// @param configurator_ The configuration policy; must differ from the configurator
+    ///        in place (`IYieldRepurchaseFacilityV2_ConfiguratorUnchanged`).
     function setConfigurator(address configurator_) external;
 
     /// @notice Sets whether the vault's bond markets pay out the vault shares instead of
@@ -191,7 +213,9 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      enabled facility revert without the authorization, while a revocation after
     ///      the fact degrades to market submissions the auctioneer rejects, skipped with
     ///      `MarketCreationFailed`. Emits `BondContractsSet`.
-    /// @param bondAuctioneer_ The SDA auctioneer.
+    /// @param bondAuctioneer_ The SDA auctioneer; must differ from the auctioneer in use
+    ///        (`IYieldRepurchaseFacilityV2_BondAuctioneerUnchanged`), in which case no
+    ///        market is closed.
     function setBondContracts(address bondAuctioneer_) external;
 
     /// @notice Sets the gas limit of an isolated step: the weekly reset of a vault, the
