@@ -135,7 +135,8 @@ exclude_lints = [
     "uninitialized-local",
     "pragma-inconsistent",
 ]
-# Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports all of them.
+# Builds do not print lint diagnostics. `forge lint`, which CI runs, reports them at Forge's default
+# severities (high, medium and low); `--severity info gas` adds the informational and gas lints.
 lint_on_build = false
 
 [rpc_endpoints]
