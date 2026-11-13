@@ -12,6 +12,11 @@
 #   [--verifier <all|both|etherscan|sourcify|blockscout>] (default: all)
 #   [--resume <false>]
 #   [--env <env-file>]
+#   [--script <path:contract>] (default: ./src/scripts/deploy/DeployV3.s.sol:DeployV3)
+#
+# A script passed with --script must inherit DeployV3, which provides the deploy(string)
+# entry point. YieldRepurchaseFacilityV2 is deployed through
+# ./src/scripts/deploy/DeployYieldRepurchaseFacilityV2.s.sol:DeployYieldRepurchaseFacilityV2.
 #
 # Source verification uses Etherscan, Sourcify and Blockscout by default.
 # Etherscan requires ETHERSCAN_API_KEY; Blockscout requires BLOCKSCOUT_API_KEY.
@@ -31,6 +36,7 @@ load_env
 BROADCAST=${broadcast:-false}
 VERIFY=${verify:-false}
 RESUME=${resume:-false}
+DEPLOY_SCRIPT=${script:-./src/scripts/deploy/DeployV3.s.sol:DeployV3}
 
 # Validate named arguments
 echo ""
@@ -44,6 +50,7 @@ echo "Validating environment variables"
 
 echo ""
 echo "Summary:"
+echo "  Deployment script: $DEPLOY_SCRIPT"
 echo "  Deployment sequence: $sequence"
 echo "  Chain: $chain"
 
@@ -57,7 +64,7 @@ validate_and_set_account "$account" "$ledger"
 # Deploy using script
 echo ""
 echo "Running forge script"
-FORGE_ARGS=(./src/scripts/deploy/DeployV3.s.sol:DeployV3
+FORGE_ARGS=("$DEPLOY_SCRIPT"
     --sig "deploy(string)()" "$sequence" --rpc-url "$chain"
     $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv --sender "$ACCOUNT_ADDRESS" $BROADCAST_FLAG)
 FOUNDRY_PROFILE=deploy forge script "${FORGE_ARGS[@]}" $RESUME_FLAG

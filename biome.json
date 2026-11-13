@@ -15,7 +15,7 @@
             "**/*.{json,yaml,yml,js}",
             "!src/test/sim/{in,out}/*.json",
             "!broadcast/**/*.{json,yaml,yml,js}",
-            "broadcast/{DeployUsdsMocks.sol,DeployV2.sol,DeployV3.s.sol,L2Deploy.s.sol,LZBridgeTestnetDeploy.s.sol}/**/run-*.json",
+            "broadcast/{DeployUsdsMocks.sol,DeployV2.sol,DeployV3.s.sol,DeployYieldRepurchaseFacilityV2.s.sol,L2Deploy.s.sol,LZBridgeTestnetDeploy.s.sol}/**/run-*.json",
             "!broadcast/**/{31337,dry-run}/**",
             "!broadcast/**/*-latest.json",
             "!!**/{node_modules,dependencies,cache,coverage,docs,lib,out,.gen-perms}/**",

@@ -1,24 +1,19 @@
 {
     "sequence": [
         {
-            "name": "BackingOracle",
+            "name": "YieldRepurchaseFacilityV2Config",
             "args": {}
         },
         {
-            "name": "YieldRepurchaseFacilityConfigTimelock",
-            "args": {
-                "timelockDelay": 86400,
-                "gracePeriod": 432000
-            }
+            "name": "YieldRepurchaseFacilityV2ConfigTimelock",
+            "args": {}
         },
         {
             "name": "YieldRepurchaseFacilityV2",
-            "args": {
-                "gracePeriod": 432000
-            }
+            "args": {}
         },
         {
-            "name": "YieldRepurchaseFacilityV2Activator",
+            "name": "YieldRepurchaseFacilityV2Lens",
             "args": {}
         }
     ]

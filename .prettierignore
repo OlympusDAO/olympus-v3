@@ -26,6 +26,9 @@ broadcast/**
 !broadcast/DeployV3.s.sol/
 !broadcast/DeployV3.s.sol/**/
 !broadcast/DeployV3.s.sol/**/run-*.json
+!broadcast/DeployYieldRepurchaseFacilityV2.s.sol/
+!broadcast/DeployYieldRepurchaseFacilityV2.s.sol/**/
+!broadcast/DeployYieldRepurchaseFacilityV2.s.sol/**/run-*.json
 !broadcast/L2Deploy.s.sol/
 !broadcast/L2Deploy.s.sol/**/
 !broadcast/L2Deploy.s.sol/**/run-*.json
