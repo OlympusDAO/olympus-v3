@@ -157,6 +157,8 @@ contract YieldRepurchaseFacilityV2Config is
     ///        or is not an active policy of it (`PolicyDependency` errors).
     ///      - `facility_` does not advertise `IYieldRepurchaseFacilityV2Write` and
     ///        `IYieldRepurchaseFacilityV2View` through ERC165.
+    // `_requireFacilityActive` rejects the zero address
+    // forge-lint: disable-next-line(missing-zero-check)
     function setFacility(address facility_) external override givenDisabled onlyAdminRole {
         if (facility != address(0)) revert IYieldRepurchaseFacilityV2Config_FacilityAlreadySet();
         _requireFacilityActive(facility_);

@@ -38,6 +38,9 @@ library YieldRepurchaseFacilityV2VaultLib {
     /// @param asyncRedeem_ Whether the asset is flagged `asyncRedeem`.
     /// @param shares_ The share amount to value.
     /// @return The value, in reserve units.
+    // Reached from loops over the registered vaults, which only the configurator adds, and over
+    // admin-supplied seeds.
+    // forge-lint: disable-next-item(calls-loop)
     function sharesToAssets(
         address vault_,
         bool asyncRedeem_,
@@ -59,6 +62,8 @@ library YieldRepurchaseFacilityV2VaultLib {
     /// @param asyncRedeem_ Whether the asset is flagged `asyncRedeem`.
     /// @param assets_ The reserve amount to cover.
     /// @return shares The share amount.
+    // Reached from a loop over admin-supplied seeds.
+    // forge-lint: disable-next-item(calls-loop)
     function assetsToShares(
         address vault_,
         bool asyncRedeem_,
