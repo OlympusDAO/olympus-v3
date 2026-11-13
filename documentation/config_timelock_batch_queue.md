@@ -227,10 +227,15 @@ gates. Burner Loans and Revenue Distributor config timelocks require themselves 
 Kernel-active; target state and operator selection do not gate cancellation. Restore the timelock
 before cancelling if it is disabled or inactive.
 
-`CCIPTokenPoolConfigTimelock` and `YieldRepurchaseFacilityV2ConfigTimelock` are the exceptions:
-`cancelQueuedAction` has no enabled or Kernel-active gate, so an authorized caller releases the keys
-without first restoring the timelock. See [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for
-the cancellation authority of the CCIP timelock; the YRF v2 timelock requires the `emergency` role.
+`YieldRepurchaseFacilityV2ConfigTimelock` and `BackingOracleConfigTimelock` require themselves
+Kernel-active and the caller to hold the `emergency` role, and have no enabled gate: cancellation
+stays available while the timelock is disabled, and it makes no call to the target or to its config
+operator. A timelock that the Kernel has deactivated must be activated again before its actions can
+be cancelled.
+
+`CCIPTokenPoolConfigTimelock` is the exception: `cancelQueuedAction` has no enabled or
+Kernel-active gate, so an authorized caller releases the keys without first restoring the timelock.
+See [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for its cancellation authority.
 
 ## Implement a subclass
 
