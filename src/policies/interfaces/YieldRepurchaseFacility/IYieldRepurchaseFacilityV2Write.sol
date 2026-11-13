@@ -18,6 +18,16 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 ///      after a disable; and `IBasicRescueable.rescue`, restricted to the yrf_admin and
 ///      admin roles.
 ///
+///      The functions of this interface, `IBondCallback.callback`, `IEnabler.enable`,
+///      `IReEnabler.reEnable`, and `IGracePeriod.setGracePeriod` revert with
+///      `IYieldRepurchaseFacilityV2_PolicyNotActive` while the facility is not an active
+///      policy of its kernel, except `returnFundsToTreasury` and `setStepGasLimit`, which stay
+///      available in that state together with `IEnabler.disable` and
+///      `IBasicRescueable.rescue`. `IPeriodicTask.execute` does not revert in that state: it
+///      returns without any effect, as it does while the facility is disabled, and in both
+///      states it does not read the role of its caller. `IEnabler.disable` accepts only an
+///      empty payload.
+///
 ///      `IPeriodicTask.execute` runs the per-vault work and the processing of the
 ///      purchased OHM as isolated steps, each with the gas limit returned by
 ///      `stepGasLimit`: a step that fails is skipped with its skip event, and the call
@@ -33,10 +43,10 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 ///      that is already live stays purchasable until it concludes, 24 hours after its
 ///      creation. The purchases stop when the facility itself is disabled:
 ///      `IEnabler.disable` closes the live markets on a best-effort basis, and
-///      `IBondCallback.callback` reverts while the facility is disabled. The weekly reset
-///      keeps withdrawing the stored yield into the buyback pools while the gate is
-///      closed, so the daily markets that follow the reopening are sized from the larger
-///      pools.
+///      `IBondCallback.callback` reverts while the facility is disabled or is not an active
+///      policy of its kernel. The weekly reset keeps withdrawing the stored yield into the
+///      buyback pools while the gate is closed, so the daily markets that follow the
+///      reopening are sized from the larger pools.
 ///
 ///      `IEnabler.enable` and `IReEnabler.reEnable` require the backing oracle to
 ///      advertise `IBackingOracle` and `IEnabler` through ERC165, to report the facility's

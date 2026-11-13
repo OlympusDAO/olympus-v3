@@ -270,6 +270,14 @@ interface IYieldRepurchaseFacilityV2 {
     ///         NextYieldSeed[] seeds)` encoding.
     error IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
+    /// @notice Thrown when `disable` is called with a non-empty payload.
+    error IYieldRepurchaseFacilityV2_InvalidDisableDataLength();
+
+    /// @notice Thrown when a function that requires the facility to be an active policy of its
+    ///         kernel is called while it is not.
+    /// @param policy The address of the facility.
+    error IYieldRepurchaseFacilityV2_PolicyNotActive(address policy);
+
     /// @notice Thrown when a function targets a vault that is not registered.
     /// @param vault The unregistered vault.
     error IYieldRepurchaseFacilityV2_AssetNotRegistered(address vault);
