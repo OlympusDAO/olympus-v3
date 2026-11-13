@@ -182,6 +182,8 @@ interface IYieldRepurchaseFacilityV2Lens {
     /// @return open Whether the daily cycles open markets.
     /// @return gatePrice The current OHM price denominated in the backing reserve, in
     ///         oracle decimals.
-    /// @return backing The backing value the gate compares against, in 18 decimals.
+    /// @return backing The backing value the gate compares against, in 18 decimals: the
+    ///         value the backing oracle reports (USD per OHM), not converted at the price
+    ///         of the backing reserve.
     function priceGate() external view returns (bool open, uint256 gatePrice, uint256 backing);
 }

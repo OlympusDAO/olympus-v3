@@ -67,8 +67,8 @@ interface IYieldRepurchaseFacilityV2View is IYieldRepurchaseFacilityV2 {
     /// @return The auctioneer address.
     function bondAuctioneer() external view returns (address);
 
-    /// @notice Returns the backing oracle providing the 18-decimal reserve-per-OHM
-    ///         backing value.
+    /// @notice Returns the backing oracle providing the backing value (USD per OHM, in 18
+    ///         decimals).
     /// @return The backing oracle policy address.
     function backingOracle() external view returns (address);
 

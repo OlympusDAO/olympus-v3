@@ -26,7 +26,10 @@ interface IYieldRepurchaseFacilityV2Steps {
     /// @notice Burns the purchased OHM against a backing withdrawal; the withdrawn
     ///         backing vault shares join the backing vault's buyback pool.
     /// @dev Intended to be callable by the facility itself, with the gas limit returned
-    ///      by `stepGasLimit`, on each daily beat of `IPeriodicTask.execute`.
+    ///      by `stepGasLimit`, on each daily beat of `IPeriodicTask.execute`. The
+    ///      withdrawal is sized as the purchased OHM multiplied by the backing value, taken
+    ///      as an amount of the backing reserve per OHM; the price of the backing reserve
+    ///      is not read.
     function selfProcessOhmPurchases() external;
 
     /// @notice Runs the daily cycle of a single vault: sizes the daily bid from the
