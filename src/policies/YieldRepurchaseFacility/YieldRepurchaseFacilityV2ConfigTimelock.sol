@@ -53,16 +53,18 @@ import {ADMIN_ROLE, EMERGENCY_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/Rol
 ///      `IYieldRepurchaseFacilityV2ConfigTimelock`, scoped to the configuration policy. An
 ///      action whose guarded state changed after queueing, through a direct admin call on the
 ///      configuration policy or through the facility's own cycle, and an action whose vault
-///      was de-registered, cannot execute and hold their domains until the emergency role
-///      cancels them; so does an action whose execution this policy rejects because the
-///      configuration policy names another config operator or none. A vault that is
-///      de-registered and registered again between queueing and execution is not
-///      distinguished from its original registration: the hashes read only the guarded
-///      fields, so an action whose guarded fields match the new registration executes
-///      against it. Cancellation requires this policy to be an active policy of its kernel and
-///      the caller to hold the emergency role; it is available whether or not this policy is
-///      enabled and whether or not the action has expired, and reads neither the configuration
-///      policy nor its config operator.
+///      was de-registered, cannot execute and hold their domains until they are cancelled; so
+///      does an action whose execution this policy rejects because the configuration policy
+///      names another config operator or none. A vault that is de-registered and registered
+///      again between queueing and execution is not distinguished from its original
+///      registration: the hashes read only the guarded fields, so an action whose guarded
+///      fields match the new registration executes against it. Cancellation requires this
+///      policy to be an active policy of its kernel. While the action has not expired it is
+///      restricted to the admin role, the emergency role, and the proposer of the action, the
+///      account that queued it, whether or not that account still holds the yrf_admin role;
+///      once the block timestamp is past `expiresAt`, any caller may cancel the action.
+///      Cancellation is available whether or not this policy is enabled, and reads neither the
+///      configuration policy nor its config operator.
 ///
 ///      `enable` and `setTimelockDelay` are restricted to the admin role, `disable` to the
 ///      emergency or admin role, `reEnable` to the yrf_admin role within the grace window, and
@@ -858,23 +860,33 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
-    /// @dev Cancellation is available while this policy is disabled and after the action has
-    ///      expired, and reads neither the configuration policy nor its config operator: the
-    ///      configuration keys of a stale or expired action are released without restoring the
-    ///      enabled state of either policy. A policy that the Kernel has deactivated has to be
-    ///      activated again before its actions can be cancelled.
+    /// @dev Cancellation is available while this policy is disabled, and reads neither the
+    ///      configuration policy nor its config operator: the configuration keys of a stale or
+    ///      expired action are released without restoring the enabled state of either policy. A
+    ///      policy that the Kernel has deactivated has to be activated again before its actions
+    ///      can be cancelled, whoever the caller is and whether or not the action has expired.
+    ///
+    ///      While the action has not expired, cancellation is restricted to the admin role, the
+    ///      emergency role, and the proposer of the action. The proposer is compared by
+    ///      address, whether or not it still holds the yrf_admin role. Once the block timestamp
+    ///      is past `expiresAt`, the last timestamp at which the action can execute, any caller
+    ///      may cancel it.
     ///
     ///      Reverts if:
     ///      - This policy is not an active policy of its kernel
     ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive`).
-    ///      - `caller_` does not hold the emergency role.
+    ///      - The action has not expired and `caller_` holds neither the admin role nor the
+    ///        emergency role and is not the proposer of the action (`NotAuthorised`).
     function _validateCancellation(
         address caller_,
         uint64,
-        ITimelockBatchQueue.QueuedAction storage
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
         _requireOwnActive();
-        _requireRole(caller_, EMERGENCY_ROLE);
+        if (_getBlockTimestamp() > action_.expiresAt) return;
+        _requireAuthorized(
+            !_isAdmin(caller_) && !_hasRole(caller_, EMERGENCY_ROLE) && caller_ != action_.proposer
+        );
     }
 
     /// @inheritdoc TimelockBatchQueue

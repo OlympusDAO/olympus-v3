@@ -75,10 +75,12 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///      name this policy as its config operator. Execution is permissionless once the delay
 ///      elapses and requires the same states of both policies and the config operator binding;
 ///      the facility itself may be disabled, since its configuration setters apply while it is
-///      disabled. Cancellation is restricted to the emergency role and requires this policy to
-///      be an active policy of its kernel; it is available while this policy is disabled and
-///      after the action has expired, and reads neither the configuration policy nor its
-///      config operator. Enabling and re-enabling this policy require it to be an active policy
+///      disabled. Cancellation requires this policy to be an active policy of its kernel. While
+///      the action has not expired it is restricted to the admin role, the emergency role, and
+///      the proposer of the action, identified by address; once the block timestamp is past
+///      `expiresAt` of the action, any caller may cancel it. Cancellation is available while
+///      this policy is disabled, and reads neither the configuration policy nor its config
+///      operator. Enabling and re-enabling this policy require it to be an active policy
 ///      of its kernel, the configuration policy to report that kernel and to be an active
 ///      policy of it, and the configuration policy to name this policy as its config operator;
 ///      the configuration policy may be disabled. `enable` and `disable` accept only an empty
