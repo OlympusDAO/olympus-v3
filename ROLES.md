@@ -6,7 +6,8 @@ This document describes the roles that are used in the Olympus protocol.
 
 | Role | Policy | Actions |
 |------|----------|-------------|
-| admin | BackingOracle | Enable the policy with the initial backing, set the backing directly within the change bound, queue backing updates, set the timelock delay, enable/disable the policy |
+| admin | BackingOracle | Enable the policy with the initial backing, set the backing directly within the change bound, select, rotate or revoke the config operator, set the grace period, re-enable the policy within the grace window, enable/disable the policy |
+| admin | BackingOracleConfigTimelock | Queue backing updates, set the grace period, re-enable the policy within the grace window, enable/disable the policy |
 | admin | CCIPBurnMintTokenPool | Enable/disable contract |
 | admin | CCIPTokenPoolConfig | Accept/transfer the token pool ownership, set the config operator, set the router, set the rate-limit admin, set the rebalancer and transfer liquidity (lock/release pool only), set the grace period, call the route configuration functions directly (add/remove chain, set remote token, add/remove remote pool, apply allowlist updates, set chain rate limits), contain routes through `disableChain` / `disableAllChains` (also while the policy is disabled), enable/disable contract |
 | admin | CCIPTokenPoolConfigTimelock | Set the timelock delay, set the grace period, cancel queued actions (also while the policy is disabled), enable/disable contract. Not a queue proposer |
@@ -29,7 +30,8 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | YieldRepurchaseFacilityV2 | Enable the facility (a full restart with the seeded yields) and seed the cycle, set the configurator while disabled, set the backing oracle and the bond contracts, set the grace period, set the step gas limit, return funds to the treasury while disabled, rescue tokens, disable the facility |
 | admin | YieldRepurchaseFacilityV2Config | Bind the facility while disabled, add/remove assets, set the sell-shares mode and the backing vault, refresh the asynchronous-redemption flag of a vault, set Clearinghouse offsets and inclusions, call the operator setters directly, rotate the config operator, set the grace period, enable/disable the policy |
 | admin | YieldRepurchaseFacilityV2ConfigTimelock | Set the timelock delay and the grace period, enable/disable the policy |
-| backing_admin | BackingOracle | Queue timelocked backing updates |
+| backing_admin | BackingOracle | Re-enable the policy within the grace window |
+| backing_admin | BackingOracleConfigTimelock | Queue backing updates, re-enable the policy within the grace window |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CCIPTokenPoolConfig | Contain routes through `disableChain` / `disableAllChains`, also while the policy is disabled. Call `reEnable` within the grace period |
 | bridge_admin | CCIPTokenPoolConfigTimelock | Queue the timelocked route configuration actions (`queueAddChain`, `queueRemoveChain`, `queueSetRemoteToken`, `queueAddRemotePool`, `queueRemoveRemotePool`, `queueApplyAllowListUpdates`, `queueSetChainRateLimits`, `queueBatch`). Call `reEnable` within the grace period |
@@ -53,7 +55,8 @@ This document describes the roles that are used in the Olympus protocol.
 | deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
-| emergency | BackingOracle | Disable the policy, cancel queued backing updates |
+| emergency | BackingOracle | Disable the policy |
+| emergency | BackingOracleConfigTimelock | Disable the policy, cancel queued backing updates (also while the policy is disabled) |
 | emergency | CCIPBurnMintTokenPool | Disable contract |
 | emergency | CCIPTokenPoolConfig | Disable contract. Contain routes through `disableChain` / `disableAllChains`, also while the policy is disabled |
 | emergency | CCIPTokenPoolConfigTimelock | Disable contract. Cancel queued actions, also while the policy is disabled |

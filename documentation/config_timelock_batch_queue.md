@@ -440,6 +440,8 @@ Product-specific keys and hashes belong with each product's configuration docume
 [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for the authority of the CCIP token pool
 config timelock.
 
+`BackingOracleConfigTimelock` requires both policies active and enabled when queueing or executing backing updates. See [Backing oracle](backing_oracle.md) for its separate role and fixed one-day notice.
+
 ## Observability
 
 `IConfigTimelockBatchQueue` exposes the shared guard state:
