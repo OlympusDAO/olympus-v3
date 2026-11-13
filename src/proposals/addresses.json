@@ -95,6 +95,16 @@
         "name": "external-tokens-susds"
     },
     {
+        "addr": "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+        "chainId": 1,
+        "name": "external-tokens-usde"
+    },
+    {
+        "addr": "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497",
+        "chainId": 1,
+        "name": "external-tokens-susde"
+    },
+    {
         "addr": "0x73df08CE9dcC8d74d22F23282c4d49F13b4c795E",
         "chainId": 1,
         "name": "olympus-policy-bondcallback"
@@ -355,7 +365,7 @@
         "name": "olympus-policy-morpho-oracle-factory-1_0"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd",
         "chainId": 1,
         "name": "olympus-policy-price-config-2_0"
     },
@@ -363,5 +373,40 @@
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
         "name": "olympus-policy-price-cache-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-backing-oracle"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-backing-oracle-config-timelock"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-yieldrepurchasefacility-2_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-yieldrepurchasefacility-config-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-yieldrepurchasefacility-config-timelock-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-periphery-yieldrepurchasefacility-lens"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-proposal-yieldrepurchasefacility-v2-activator"
     }
 ]

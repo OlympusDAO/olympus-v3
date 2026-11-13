@@ -15,6 +15,12 @@ concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# One optimized compiler graph uses less peak memory than the overlapping default-profile graphs.
+# Generate gas snapshots only in the gas-snapshots job.
+env:
+    FOUNDRY_PROFILE: deploy
+    FOUNDRY_GAS_SNAPSHOT_EMIT: "false"
+
 jobs:
     build:
         runs-on: ubuntu-latest
@@ -48,6 +54,75 @@ jobs:
                       cache/solidity-files-cache.json
                   if-no-files-found: error
                   retention-days: 1
+
+    size-check:
+        needs: build
+        runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours.
+        timeout-minutes: 30
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: foundry-build
+                  path: .
+
+            # Report the complete cached graph: --skip filters can omit cached contracts.
+            # Forge excludes dev contracts and fails on oversized runtime or initcode.
+            - name: Contract Size
+              run: forge build --sizes
+
+    gas-snapshots:
+        # test:gas needs an RPC secret for its fork suite. GitHub withholds that secret from
+        # external forks and Dependabot PRs, so only trusted PRs and branch pushes run this job.
+        if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
+        needs: build
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        env:
+            FOUNDRY_GAS_SNAPSHOT_EMIT: "true"
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run gas snapshot tests
+              run: pnpm run test:gas
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+
+            - name: Check gas snapshots
+              run: |
+                  # Include newly-created snapshot files in the diff as intent-to-add entries.
+                  git add --intent-to-add snapshots/
+
+                  if git diff --quiet -- snapshots; then
+                    exit 0
+                  fi
+
+                  echo "::error title=Gas snapshots are out of date::Run 'pnpm run test:gas' and commit the updated files under snapshots/."
+                  git diff -- snapshots
+                  exit 1
 
     permission-lists:
         runs-on: ubuntu-latest

@@ -20,6 +20,9 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 // Contracts
+import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
+import {BackingOracle} from "src/policies/BackingOracle.sol";
+import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
 import {Kernel, Module} from "src/Kernel.sol";
 
 // Bridge
@@ -1560,6 +1563,38 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(lzBridgeAndDelegateConfig), "olympus.policies");
+    }
+
+    function _getKernel() private view returns (Kernel) {
+        return Kernel(_getAddressNotZero("olympus.Kernel"));
+    }
+
+    /// @notice Deploys the shared backing oracle without an initial backing value.
+    function deployBackingOracle() public returns (address, string memory) {
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        console2.log("BackingOracle parameters:");
+        console2.log("  kernel", address(kernel));
+        vm.broadcast();
+        BackingOracle oracle = new BackingOracle(kernel);
+        console2.log("BackingOracle deployed at", address(oracle));
+        return (address(oracle), "olympus.policies");
+    }
+
+    /// @notice Deploys the immutable backing-update queue.
+    function deployBackingOracleConfigTimelock() public returns (address, string memory) {
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBackingOracle oracle = IBackingOracle(
+            _getAddressNotZero("olympus.policies.BackingOracle")
+        );
+        console2.log("BackingOracleConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  backingOracle", address(oracle));
+        vm.broadcast();
+        BackingOracleConfigTimelock queue = new BackingOracleConfigTimelock(kernel, oracle);
+        console2.log("BackingOracleConfigTimelock deployed at", address(queue));
+        return (address(queue), "olympus.policies");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

@@ -154,16 +154,24 @@ contract OracleProposalTest is ProposalTest {
 
         // 3. Deploy PriceConfigv2 policy if not already installed
         address priceConfig = _safeGetAddress("olympus-policy-price-config-2_0");
-        if (priceConfig == address(0) || !Policy(priceConfig).isActive()) {
+        // The shared registry can contain a deployment newer than this historical fork.
+        if (
+            priceConfig == address(0) ||
+            priceConfig.code.length == 0 ||
+            !Policy(priceConfig).isActive()
+        ) {
             console2.log("Deploying PriceConfigv2");
             PriceConfigv2 config = new PriceConfigv2(Kernel(kernelAddr));
-            addresses.addAddress("olympus-policy-price-config-2_0", address(config));
+            if (priceConfig == address(0)) {
+                addresses.addAddress("olympus-policy-price-config-2_0", address(config));
+            } else {
+                addresses.changeAddress("olympus-policy-price-config-2_0", address(config));
+            }
 
             // Activate the policy
             kernel.executeAction(Actions.ActivatePolicy, address(config));
         } else {
             console2.log("PriceConfigv2 already active");
-            addresses.addAddress("olympus-policy-price-config-2_0", priceConfig);
         }
 
         // 4. Deploy and activate oracle policies so their dependencies are configured

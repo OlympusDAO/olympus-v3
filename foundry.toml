@@ -7,7 +7,7 @@ ast = false
 # developer and CI diverge silently. Forge cannot auto-resolve a release newer than the list built
 # into its binary, but an explicitly pinned version is fetched from the live release list on demand.
 solc_version = "0.8.36"
-# Forge 1.8.1 defaults to the osaka EVM version. Pin the target that the deployment chains run.
+# Forge's default EVM version moves with its releases. Pin the target the deployment chains run.
 evm_version = "prague"
 legacy_assertions = true
 assertions_revert = false
@@ -38,6 +38,10 @@ gas_snapshot_emit = false
 # generating their ABI encoding/decoding assembly.
 additional_compiler_profiles = [{ name = "optimized", optimizer = true, optimizer_runs = 400 }]
 compilation_restrictions = [
+    # The YRF v2 fork tests exhaust the stack unoptimized (the E2E integer model). The facility
+    # itself must compile without the optimizer, so the restriction is on its tests, not on
+    # `YieldRepurchaseFacilityV2.sol`.
+    { paths = "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacility/**", optimizer_runs = 400 },
     { paths = "src/external/governance/GovernorBravoDelegate.sol", optimizer_runs = 400 },
     { paths = "src/policies/BondCallback.sol", optimizer_runs = 400 },
     { paths = "src/policies/BoostedLiquidity/BLVaultLido.sol", optimizer_runs = 400 },
@@ -74,8 +78,8 @@ script_execution_protection = false
 [profile.multisig]
 script_execution_protection = false
 # A Safe batch runs internal calls in one transaction paid for by its relayer. Isolation instead
-# treats each pranked call as a transaction from the Safe. Forge 1.8.1 can then charge OP Stack L1
-# data fees to the Safe and reject an unfunded Safe before the target contract executes.
+# runs each pranked call as a separate transaction from the Safe, with its own base transaction
+# cost and with transient storage cleared between the calls.
 isolate = false
 
 # Used by `forge coverage`, which recompiles from scratch every run and keeps nothing in `out/`.
@@ -131,7 +135,8 @@ exclude_lints = [
     "uninitialized-local",
     "pragma-inconsistent",
 ]
-# Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports all of them.
+# Builds do not print lint diagnostics. `forge lint`, which CI runs, reports them at Forge's default
+# severities (high, medium and low); `--severity info gas` adds the informational and gas lints.
 lint_on_build = false
 
 [rpc_endpoints]
@@ -189,3 +194,5 @@ solidity-http = { version = "0.0.7", git = "https://github.com/Recon-Fuzz/solidi
 "@layerzerolabs-lz-evm-v1-0-7" = "3.0.162"
 uniswap-v3-core = { version = "1.0.1", git = "https://github.com/Uniswap/v3-core.git", rev = "6562c52e8f75f0c10f9deaf44861847585fc8129" }
 uniswap-v3-periphery = { version = "1.4.2", git = "https://github.com/Uniswap/v3-periphery.git", rev = "b325bb0905d922ae61fcc7df85ee802e8df5e96c" }
+openzeppelin-community-contracts = { version = "0.0.1", git = "https://github.com/OpenZeppelin/openzeppelin-community-contracts.git", rev = "92f252851c41449bd8417a6ebdcc8db95c8f66c9" }
+openzeppelin-5-7 = { version = "5.7.0", git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git", rev = "cab19933c33c2ad1d4c7a84864a3601dddfd16f3" }
