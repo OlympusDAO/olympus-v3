@@ -218,6 +218,16 @@ interface IYieldRepurchaseFacilityV2 {
     ///        256 bytes; empty when the processing ran out of gas.
     event OhmPurchasesProcessingSkipped(bytes reason);
 
+    /// @notice Emitted by a daily cycle that opens no markets because its price gate is
+    ///         closed: the backing value is zero, the OHM price denominated in the backing
+    ///         reserve is zero, or that price is below the backing value.
+    /// @param gatePrice The OHM price denominated in the backing reserve, in oracle
+    ///        decimals.
+    /// @param backing The backing value the gate compared against, in 18 decimals; zero
+    ///        while the backing oracle is not an active policy of the facility's kernel or
+    ///        is disabled.
+    event PriceGateClosed(uint256 gatePrice, uint256 backing);
+
     /// @notice Emitted when the wrap of a sell-shares vault's idle reserve balance into
     ///         vault shares reverts and is skipped; the reserve stays with the facility
     ///         and the wrap is retried at the following daily cycle.
@@ -286,6 +296,18 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Thrown when `setSellShares` supplies the mode the vault already has.
     error IYieldRepurchaseFacilityV2_SellSharesUnchanged();
+
+    /// @notice Thrown when `setBackingOracle` supplies the backing oracle the facility
+    ///         already uses.
+    error IYieldRepurchaseFacilityV2_BackingOracleUnchanged();
+
+    /// @notice Thrown when `setConfigurator` supplies the configurator the facility already
+    ///         has, the zero address included while no configurator is set.
+    error IYieldRepurchaseFacilityV2_ConfiguratorUnchanged();
+
+    /// @notice Thrown when `setBondContracts` supplies the bond auctioneer the facility
+    ///         already uses.
+    error IYieldRepurchaseFacilityV2_BondAuctioneerUnchanged();
 
     /// @notice Thrown when an asset whose vault redeems asynchronously would not sell
     ///         shares: at registration, when the sell-shares mode is unset, and when the
@@ -478,10 +500,12 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param configurator The rejected configurator address.
     error IYieldRepurchaseFacilityV2_InvalidConfigurator(address configurator);
 
-    /// @notice Thrown when a proposed backing oracle is the zero address. An oracle that does
-    ///         not report the facility's kernel or, on the admin setter path, is not an
-    ///         active policy of it is rejected with the errors of the implementation's
-    ///         dependency check.
+    /// @notice Thrown when a backing oracle is the zero address or does not advertise
+    ///         `IBackingOracle` and `IEnabler` through ERC165: when it is proposed, and when
+    ///         `enable` or `reEnable` re-checks the stored one. An oracle that does not
+    ///         report the facility's kernel, is not an active policy of it where that is
+    ///         required, or is disabled where `enable` and `reEnable` require it enabled is
+    ///         rejected with the errors of the implementation's dependency check.
     /// @param backingOracle The rejected backing oracle address.
     error IYieldRepurchaseFacilityV2_InvalidBackingOracle(address backingOracle);
 

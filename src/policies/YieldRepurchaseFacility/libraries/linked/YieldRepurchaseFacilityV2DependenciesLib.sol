@@ -4,12 +4,14 @@ pragma solidity ^0.8.24;
 // Interfaces
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+import {YieldRepurchaseFacilityV2BackingOracleLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2BackingOracleLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
@@ -24,7 +26,8 @@ import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 /// @title YieldRepurchaseFacilityV2DependenciesLib
 /// @notice An external library that resolves and validates the dependencies of the
 ///         YieldRepurchaseFacilityV2: the Kernel modules and their versions, the
-///         configurator, the backing oracle, and the bond contracts.
+///         configurator, the backing oracle, and the bond contracts. It also reads the
+///         backing value of the backing oracle for the facility.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      facility is `address(this)` and the errors belong to the facility interface. The
 ///      library holds no state: the facility passes its Kernel and stores what the library
@@ -156,7 +159,7 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     ///      A configurator that does not implement `facility()` reverts in the call itself.
     /// @param kernel_ The Kernel of the facility.
     /// @param configurator_ The configuration policy to validate.
-    function validateConfigurator(Kernel kernel_, address configurator_) external view {
+    function validateConfigurator(Kernel kernel_, address configurator_) public view {
         if (configurator_ == address(0))
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidConfigurator(
                 configurator_
@@ -173,17 +176,53 @@ library YieldRepurchaseFacilityV2DependenciesLib {
             );
     }
 
+    /// @notice Validates the policy dependencies of the facility before it is enabled or
+    ///         re-enabled: the configurator binding, and the compatibility and the readiness
+    ///         of the backing oracle.
+    /// @dev The configurator is validated first, with the conditions of
+    ///      `validateConfigurator`. The backing oracle is then checked for the interfaces
+    ///      and the Kernel binding `validateBackingOracle` requires, and for its readiness;
+    ///      its `decimals()` are not read again.
+    ///
+    ///      Reverts if:
+    ///      - `validateConfigurator` reverts for `configurator_`.
+    ///      - `backingOracle_` does not advertise `IBackingOracle` and `IEnabler` through
+    ///        ERC165 (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///      - The `kernel()` or the `isEnabled()` read of the oracle fails or returns a
+    ///        malformed word (`PolicyDependency_InvalidDependency`).
+    ///      - The oracle reports a kernel other than `kernel_`
+    ///        (`PolicyDependency_KernelMismatch`).
+    ///      - The oracle is not an active policy of `kernel_`, or is disabled
+    ///        (`PolicyDependency_NotActive`).
+    /// @param kernel_ The Kernel of the facility.
+    /// @param configurator_ The configuration policy of the facility.
+    /// @param backingOracle_ The backing oracle policy of the facility.
+    function validateActivation(
+        Kernel kernel_,
+        address configurator_,
+        address backingOracle_
+    ) external view {
+        validateConfigurator(kernel_, configurator_);
+
+        _requireBackingOracleInterfaces(backingOracle_);
+        PolicyDependency.requireActiveAndEnabled(backingOracle_, address(kernel_));
+    }
+
     /// @notice Validates a backing oracle before the facility stores it.
-    /// @dev The registry activation is checked only when `requireActive_` is set: the
+    /// @dev The compatibility of the candidate is checked before its Kernel membership. The
+    ///      registry activation is checked only when `requireActive_` is set: the
     ///      constructor of the facility runs this validation before the deployment is
-    ///      activated in the Kernel, the admin setter after.
+    ///      activated in the Kernel, the admin setter after. The enabled state of the oracle
+    ///      is not read.
     ///
     ///      Reverts if:
     ///      - `backingOracle_` is the zero address
     ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///      - `backingOracle_` does not advertise `IBackingOracle` and `IEnabler` through
+    ///        ERC165 (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`), see
+    ///        `_requireBackingOracleInterfaces`.
     ///      - The `kernel()` read of the oracle fails or returns a malformed word
-    ///        (`PolicyDependency_InvalidDependency`): an address without a Kernel (for
-    ///        example a token whose `decimals()` also reports 18) is rejected here.
+    ///        (`PolicyDependency_InvalidDependency`).
     ///      - The oracle reports a kernel other than `kernel_`
     ///        (`PolicyDependency_KernelMismatch`).
     ///      - `requireActive_` is set and the oracle is not an active policy of `kernel_`
@@ -204,6 +243,7 @@ library YieldRepurchaseFacilityV2DependenciesLib {
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidBackingOracle(
                 backingOracle_
             );
+        _requireBackingOracleInterfaces(backingOracle_);
 
         if (requireActive_) PolicyDependency.requireActive(backingOracle_, address(kernel_));
         else PolicyDependency.requireSameKernel(backingOracle_, address(kernel_));
@@ -212,6 +252,25 @@ library YieldRepurchaseFacilityV2DependenciesLib {
             IBackingOracle(backingOracle_).decimals() !=
             YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS
         ) revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
+    }
+
+    /// @notice Returns the backing value of the backing oracle, in 18 decimals, or zero
+    ///         while the oracle is not an active policy of `kernel_` or is disabled.
+    /// @dev The read is `YieldRepurchaseFacilityV2BackingOracleLib.readBacking`, compiled
+    ///      into this library for the facility and into the lens.
+    ///
+    ///      Reverts if:
+    ///      - The `kernel()` or the `isEnabled()` read of the oracle fails or returns a
+    ///        malformed word (`PolicyDependency_InvalidDependency`).
+    ///      - The oracle reports a kernel other than `kernel_`
+    ///        (`PolicyDependency_KernelMismatch`).
+    ///      - The `backing()` read of an active and enabled oracle reverts.
+    /// @param kernel_ The Kernel of the facility.
+    /// @param backingOracle_ The backing oracle policy of the facility.
+    /// @return The backing value, in 18 decimals, or zero.
+    function readBacking(Kernel kernel_, address backingOracle_) external view returns (uint256) {
+        return
+            YieldRepurchaseFacilityV2BackingOracleLib.readBacking(address(kernel_), backingOracle_);
     }
 
     /// @notice Resolves the teller of a bond auctioneer before the facility stores the pair.
@@ -250,6 +309,21 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     function requireCallbackAuthorized(address bondAuctioneer_) public view {
         if (!IBondAuctioneer(bondAuctioneer_).callbackAuthorized(address(this)))
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_CallbackNotAuthorized();
+    }
+
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2_InvalidBackingOracle` unless
+    ///         `backingOracle_` advertises `IBackingOracle` and `IEnabler` through ERC165.
+    /// @dev The queries run through `ERC165Checker`, which reads a failed query as an
+    ///      unsupported interface: an address without code, a `supportsInterface` call that
+    ///      reverts, and a response shorter than one word are rejected with the same error.
+    function _requireBackingOracleInterfaces(address backingOracle_) private view {
+        if (
+            !ERC165Checker.supportsInterface(backingOracle_, type(IBackingOracle).interfaceId) ||
+            !ERC165Checker.supportsInterface(backingOracle_, type(IEnabler).interfaceId)
+        )
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidBackingOracle(
+                backingOracle_
+            );
     }
 
     /// @notice Returns the address of an installed module.

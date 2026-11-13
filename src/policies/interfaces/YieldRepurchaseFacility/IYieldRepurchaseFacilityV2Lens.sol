@@ -162,11 +162,15 @@ interface IYieldRepurchaseFacilityV2Lens {
     ///         and the two values compared.
     /// @dev Mirrors the gate of `IPeriodicTask.execute`, and reverts where it reverts:
     ///      when the `PRICE.getPriceIn` read of the backing reserve reverts (no backing
-    ///      vault designated, or a stale feed of the backing reserve), or when a backing
-    ///      oracle read reverts. A revert here means the next `execute` reverts for the
-    ///      same reason: a configuration error to resolve, not a defect of the view. The
+    ///      vault designated, or a stale feed of the backing reserve), when the backing
+    ///      oracle does not report the facility's Kernel through a readable `kernel()`,
+    ///      when its `isEnabled()` is not readable, or when its `backing()` read reverts.
+    ///      A revert here means the next daily cycle of `execute` reverts for the same
+    ///      reason: a configuration error to resolve, not a defect of the view. The
     ///      backing is zero, and the gate closed, while the backing oracle is not an active
-    ///      policy of the facility's Kernel or is disabled.
+    ///      policy of the facility's Kernel or is disabled. A daily cycle that finds the
+    ///      gate closed emits `PriceGateClosed` with the `gatePrice` and `backing` it
+    ///      compared.
     /// @return open Whether the daily cycles open markets.
     /// @return gatePrice The OHM price denominated in the backing reserve, in oracle
     ///         decimals.
