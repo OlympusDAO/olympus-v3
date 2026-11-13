@@ -233,12 +233,14 @@ contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Lens
-    /// @dev The backing is read through
+    /// @dev The gate price is `PRICE.getPriceIn(OHM, backingReserve)`, the current prices
+    ///      of both assets; the facility prices a daily beat with the OHM observation of
+    ///      the block when the PRICE module holds one. The backing is read through
     ///      `YieldRepurchaseFacilityV2BackingOracleLib.readBacking` with the Kernel the
     ///      facility reports, the read the facility itself performs.
     ///
     ///      Reverts if:
-    ///      - The `PRICE.getPriceIn` read of the backing reserve reverts.
+    ///      - The `PRICE.getPriceIn` read of OHM in the backing reserve reverts.
     ///      - The `kernel()` read of the backing oracle fails, returns a malformed word, or
     ///        reports a kernel other than the facility's (`PolicyDependency` errors).
     ///      - The `isEnabled()` read of the backing oracle fails or returns a malformed word

@@ -138,8 +138,8 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
             asyncRedeem_
         );
 
-        // The daily cycles price the vault's markets through `PRICE.getPriceIn`, so the
-        // reserve must resolve against OHM at registration; a PRICE revert (for example
+        // The daily cycles price the vault's markets by the OHM price denominated in the
+        // reserve, so the pair must resolve at registration; a PRICE revert (for example
         // an unregistered reserve) bubbles up.
         if (PRICEv2(context_.price).getPriceIn(context_.ohm, reserve_) == 0)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ReserveNotPriceable(

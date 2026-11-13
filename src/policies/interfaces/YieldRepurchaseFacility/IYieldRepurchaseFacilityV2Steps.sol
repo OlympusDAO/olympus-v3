@@ -30,14 +30,21 @@ interface IYieldRepurchaseFacilityV2Steps {
     function selfProcessOhmPurchases() external;
 
     /// @notice Runs the daily cycle of a single vault: sizes the daily bid from the
-    ///         buyback pool and opens the vault's bond market, priced by the live OHM
-    ///         price denominated in the vault's reserve.
+    ///         buyback pool and opens the vault's bond market, priced by the OHM price of
+    ///         the beat denominated in the vault's reserve at the current price of the
+    ///         reserve in the PRICE module.
     /// @dev Intended to be callable by the facility itself, with the gas limit returned
     ///      by `stepGasLimit`, on each daily beat of `IPeriodicTask.execute`.
     /// @param vault_ The vault to process.
     /// @param daysRemaining_ The number of daily cycles remaining in the week, including
     ///        this one.
-    function selfProcessVaultDaily(address vault_, uint256 daysRemaining_) external;
+    /// @param ohmPrice_ The OHM price the beat read from the PRICE module, in 18 decimals
+    ///        (units of account per OHM).
+    function selfProcessVaultDaily(
+        address vault_,
+        uint256 daysRemaining_,
+        uint256 ohmPrice_
+    ) external;
 
     /// @notice Deposits the reserve into the vault and verifies the minted shares against
     ///         the preview.

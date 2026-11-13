@@ -14,9 +14,12 @@ pragma solidity ^0.8.24;
 ///      shares: the token returned by `share()` for a vault that advertises ERC7575,
 ///      and the vault itself otherwise.
 ///      Percentage parameters are scaled by `1e18` (`1e18` = 100%). The oracle price of
-///      an asset is the OHM price denominated in its reserve token, resolved live
-///      through the PRICE module per daily cycle; the oracle prices and the backing
-///      value are 18-decimal reserve-per-OHM quotes.
+///      an asset is the OHM price denominated in its reserve token, resolved through the
+///      PRICE module per daily cycle: the OHM price of the daily beat (the observation
+///      the module stored for OHM in the block of the beat, or the current OHM price of
+///      the module when there is no such observation) divided by the current price of
+///      the reserve token. The oracle prices and the backing value are 18-decimal
+///      reserve-per-OHM quotes.
 ///
 ///      The reserve-side accounting is balance-based: the facility's holdings of a
 ///      vault's shares and of its reserve token form the vault's buyback pool, and the
