@@ -1,4 +1,5 @@
 /out/
+.context/
 cache/
 .gen-perms/
 .gen_perms.*.sol
