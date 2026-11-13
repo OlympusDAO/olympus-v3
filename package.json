@@ -11,8 +11,8 @@
     "scripts": {
         "anvil:fork": "anvil --fork-url mainnet --port 8545 --auto-impersonate",
         "build": "forge build",
-        "forge-lint": "forge lint --report-unused-suppressions",
-        "forge-lint:check": "forge lint --report-unused-suppressions",
+        "forge-lint": "forge lint",
+        "forge-lint:check": "forge lint",
         "format": "prettier --cache --cache-strategy content --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html' && biome check --write && shfmt -w . && taplo fmt",
         "format:biome": "biome check --write --no-errors-on-unmatched",
         "format:check": "prettier --cache --cache-strategy content --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html' && biome check && shfmt -l . && taplo fmt --check",
