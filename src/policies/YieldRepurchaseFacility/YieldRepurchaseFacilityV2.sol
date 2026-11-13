@@ -114,6 +114,16 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///        epoch counter and seeds the running week's buyback pools with treasury
 ///        withdrawals.
 ///
+///      Kernel activity: while the facility is not an active policy of its Kernel,
+///      `execute` returns without any effect, as it does while the facility is disabled,
+///      and `callback`, the configurator setters, `setBackingOracle`, `setConfigurator`,
+///      `setBondContracts`, `seedCycle`, `setGracePeriod`, `enable`, and `reEnable` revert
+///      with `IYieldRepurchaseFacilityV2_PolicyNotActive`. `disable`,
+///      `returnFundsToTreasury`, `rescue`, and `setStepGasLimit` do not read the Kernel
+///      activity. The Kernel revokes the TRSRY permissions of a deactivated policy, and
+///      the modules the facility calls are those resolved by its last
+///      `configureDependencies`.
+///
 ///      The configuration setters are callable only by the configurator, the
 ///      configuration policy bound through `setConfigurator`. The gas limit of the
 ///      isolated steps is set on the facility itself, through `setStepGasLimit`
@@ -326,10 +336,17 @@ contract YieldRepurchaseFacilityV2 is
         _;
     }
 
-    /// @notice Reverts unless the caller is the configurator and the reentrancy guard is not
-    ///         held.
+    /// @notice Reverts unless the reentrancy guard is not held, the facility is an active
+    ///         policy of its kernel, and the caller is the configurator.
     modifier onlyConfigurator() {
         _requireConfigurator();
+        _;
+    }
+
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2_PolicyNotActive` unless the facility is
+    ///         an active policy of its kernel.
+    modifier givenActive() {
+        _requireActive();
         _;
     }
 
@@ -347,6 +364,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      `reEnable`.
     ///
     ///      Reverts if:
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
     ///      - The payload is shorter than the minimum
     ///        `abi.encode(uint256, uint256, NextYieldSeed[])`.
     ///      - The payload does not `abi.decode` as `(uint256, uint256, NextYieldSeed[])`.
@@ -370,6 +389,7 @@ contract YieldRepurchaseFacilityV2 is
     ///        `convertToAssets` for an asset with asynchronous redemption) or a
     ///        `balanceOf` read of its share token reverts.
     function _beforeEnable(bytes calldata data_) internal override {
+        _requireActive();
         if (data_.length < _MIN_ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
@@ -418,9 +438,14 @@ contract YieldRepurchaseFacilityV2 is
     ///      outlives the disable; the funds and the accounting state are left in place so
     ///      that `reEnable` can resume the interrupted week. Use `returnFundsToTreasury`
     ///      to sweep the funds after a disable when holding them on the facility is a
-    ///      concern. The auctioneer is external, so a revert there is absorbed and never
-    ///      blocks the disable.
-    function _beforeDisable(bytes calldata) internal override {
+    ///      concern. A revert of the auctioneer, which is external, is absorbed and does
+    ///      not revert the disable. The Kernel activity is not read, so the facility can be
+    ///      disabled while it is not an active policy of its kernel.
+    ///
+    ///      Reverts if:
+    ///      - `data_` is not empty (`IYieldRepurchaseFacilityV2_InvalidDisableDataLength`).
+    function _beforeDisable(bytes calldata data_) internal override {
+        if (data_.length != 0) revert IYieldRepurchaseFacilityV2_InvalidDisableDataLength();
         _markets.closeAllVaultMarkets(_context(), _registry.vaults);
     }
 
@@ -449,6 +474,8 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if:
     ///      - The grace window since the disable has elapsed.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
     ///      - The configurator is unset (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
     ///      - The configurator does not report the facility's kernel through a readable
     ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
@@ -462,6 +489,7 @@ contract YieldRepurchaseFacilityV2 is
     ///        of the kernel or is disabled (`PolicyDependency` errors).
     function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
         super._beforeReEnable();
+        _requireActive();
         YieldRepurchaseFacilityV2DependenciesLib.validateActivation(
             kernel,
             configurator,
@@ -482,11 +510,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      cycle (`MAX_GRACE_PERIOD`).
     ///
     ///      Reverts if:
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - `period_` is zero.
     ///      - `period_` is not less than `MAX_GRACE_PERIOD`.
-    function setGracePeriod(uint32 period_) public override givenEnabled {
+    function setGracePeriod(uint32 period_) public override givenActive givenEnabled {
         _requireValidGracePeriod(period_);
         super.setGracePeriod(period_);
     }
@@ -506,6 +536,11 @@ contract YieldRepurchaseFacilityV2 is
     ///      balances in place, and is retried by the next call. The OHM burn and
     ///      transfer are not isolated: OHM is a protocol-owned token whose balance
     ///      always covers the tracked purchased amount.
+    ///
+    ///      The Kernel activity is not read: the function burns the OHM held by the
+    ///      facility and transfers the balances to the TRSRY module resolved by the last
+    ///      `configureDependencies`, and calls no permissioned module function, so it
+    ///      also runs while the facility is not an active policy of its kernel.
     ///
     ///      Reverts if:
     ///      - The contract is enabled.
@@ -605,8 +640,14 @@ contract YieldRepurchaseFacilityV2 is
     ///      values compared; the event follows the weekly reset and the processing of the
     ///      purchased OHM, which do not depend on the gate.
     ///
+    ///      A facility that is disabled or is not an active policy of its kernel leaves
+    ///      the call without any effect and without an event, whoever the caller is: the
+    ///      role of the caller is read only past that check, so a beat of the heart does
+    ///      not revert on such a facility.
+    ///
     ///      Reverts if:
-    ///      - The caller does not hold the heart role.
+    ///      - The facility is enabled and an active policy of its kernel, and the caller
+    ///        does not hold the heart role.
     ///      - The observation of the block is not used and the read of the current OHM
     ///        price reverts.
     ///      - The read of the current price of the backing reserve reverts, including when
@@ -616,8 +657,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The `backing()` read of an active and enabled backing oracle reverts.
     ///      - The gas remaining before an isolated step is below the step requirement
     ///        (`IYieldRepurchaseFacilityV2_InsufficientStepGas`).
-    function execute() external override nonReentrant onlyRole(HEART_ROLE) {
-        if (!isEnabled) return;
+    function execute() external override nonReentrant {
+        // The enabled flag is read first: it is a storage read, the activity a Kernel call
+        if (!isEnabled || !_isActive()) return;
+        _requireRole(msg.sender, HEART_ROLE);
         _epoch += 1;
 
         if (_epoch % YieldRepurchaseFacilityV2Constants.EPOCHS_PER_DAY != 0) return;
@@ -946,8 +989,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      reverts on an insufficient balance.
     ///
     ///      Reverts if:
-    ///      - The caller is not the teller.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
     ///      - The contract is disabled.
+    ///      - The caller is not the teller.
     ///      - The market was not created by this facility on the current auctioneer.
     ///      - The market is not the tracked live market of its vault.
     ///      - The market's asset is disabled.
@@ -958,9 +1003,9 @@ contract YieldRepurchaseFacilityV2 is
         uint256 inputAmount_,
         uint256 outputAmount_
     ) external override nonReentrant {
-        _requireCaller(bondTeller);
-
+        _requireActive();
         _requireEnabled();
+        _requireCaller(bondTeller);
 
         address auctioneer = bondAuctioneer;
         address vault = _markets.marketVaults[auctioneer][id_];
@@ -1019,8 +1064,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      `YieldRepurchaseFacilityV2AssetRegistryLib`.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault address is the zero address
     ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The vault is already registered.
@@ -1070,6 +1117,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      and retried at the following weekly reset.
     ///
     ///      Reverts if:
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The seeding window is closed: the restart has already been seeded, or a
@@ -1081,7 +1130,7 @@ contract YieldRepurchaseFacilityV2 is
     function seedCycle(
         uint48 epoch_,
         BuybackPoolSeed[] calldata poolSeeds_
-    ) external override nonReentrant givenEnabled onlyAdminRole {
+    ) external override nonReentrant givenActive givenEnabled onlyAdminRole {
         if (!_cycleSeedable) revert IYieldRepurchaseFacilityV2_CycleNotSeedable();
         _cycleSeedable = false;
 
@@ -1117,8 +1166,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      treasury here, before the de-registration.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault is not registered.
     ///      - The vault is currently enabled.
     ///      - The vault is currently set as the `backingVault`.
@@ -1143,6 +1194,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      accumulated (see `execute`).
     ///
     ///      Reverts if:
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
     ///      - The caller does not hold the admin role.
     ///      - `backingOracle_` is the stored backing oracle
     ///        (`IYieldRepurchaseFacilityV2_BackingOracleUnchanged`); the candidate is not
@@ -1153,7 +1206,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - `backingOracle_` does not report the facility's kernel through a readable
     ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
     ///      - The oracle does not report the 18 decimals of the backing value.
-    function setBackingOracle(address backingOracle_) external override onlyAdminRole {
+    function setBackingOracle(address backingOracle_) external override givenActive onlyAdminRole {
         if (backingOracle_ == backingOracle)
             revert IYieldRepurchaseFacilityV2_BackingOracleUnchanged();
         _setBackingOracle(backingOracle_, true);
@@ -1165,6 +1218,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      `reEnable`.
     ///
     ///      Reverts if:
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
     ///      - The contract is enabled.
     ///      - The caller does not hold the admin role.
     ///      - `configurator_` is the stored configurator, the zero address included while
@@ -1178,7 +1233,9 @@ contract YieldRepurchaseFacilityV2 is
     ///        does not report this facility as its `facility()`
     ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
     // forge-lint: disable-next-item(missing-zero-check)
-    function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
+    function setConfigurator(
+        address configurator_
+    ) external override givenActive givenDisabled onlyAdminRole {
         if (configurator_ == configurator)
             revert IYieldRepurchaseFacilityV2_ConfiguratorUnchanged();
         YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator_);
@@ -1203,8 +1260,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      bid opens no market.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault is not registered.
     ///      - The stored mode already equals `sellShares_`.
     ///      - `sellShares_` is set while the vault is the backing vault.
@@ -1237,8 +1296,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      asset revert.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault is not registered.
     ///      - The mode the vault advertises equals the stored flag.
     ///      - The vault advertises asynchronous redemption while the asset does not sell
@@ -1249,8 +1310,10 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault is not registered.
     ///      - The asset is disabled.
     ///      - The asset sells vault shares.
@@ -1268,6 +1331,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      outgoing teller).
     ///
     ///      Reverts if:
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
     ///      - The caller does not hold the admin role.
     ///      - `bondAuctioneer_` is the stored bond auctioneer
     ///        (`IYieldRepurchaseFacilityV2_BondAuctioneerUnchanged`); no market is closed
@@ -1276,7 +1341,7 @@ contract YieldRepurchaseFacilityV2 is
     ///        its teller (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`).
     ///      - The facility is enabled and is not authorized as a market callback on the
     ///        supplied auctioneer.
-    function setBondContracts(address bondAuctioneer_) external override onlyAdminRole {
+    function setBondContracts(address bondAuctioneer_) external override givenActive onlyAdminRole {
         if (bondAuctioneer_ == bondAuctioneer)
             revert IYieldRepurchaseFacilityV2_BondAuctioneerUnchanged();
 
@@ -1334,9 +1399,9 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
-    /// @dev The setter does not depend on the enabled state: the limit also applies to
-    ///      the sweep of `returnFundsToTreasury`, which runs only while the facility is
-    ///      disabled.
+    /// @dev The setter depends neither on the enabled state nor on the Kernel activity:
+    ///      the limit also applies to the sweep of `returnFundsToTreasury`, which runs only
+    ///      while the facility is disabled and does not read the Kernel activity.
     ///
     ///      Reverts if:
     ///      - The caller holds neither the yrf_admin role nor the admin role.
@@ -1366,8 +1431,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      the projected yield.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The Clearinghouse is the zero address
     ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The offset exceeds the current `principalReceivables` of the Clearinghouse.
@@ -1383,8 +1450,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      `YieldRepurchaseFacilityV2AssetRegistryLib`.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault is not registered.
     ///      - The share exceeds 100% (`1e18`).
     function setYieldBuybackShare(
@@ -1400,8 +1469,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      (`DailyCycleSkipped` or `MarketCreationFailed`) and does not block the beat.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The initial discount is not less than 100% (`1e18`).
     function setInitialDiscount(uint256 initialDiscount_) external override onlyConfigurator {
         _setInitialDiscount(initialDiscount_);
@@ -1422,8 +1493,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      live keep the band they were created with.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The max price premium is above 1,000% (`10e18`).
     function setMaxPricePremium(uint256 maxPricePremium_) external override onlyConfigurator {
         _setMaxPricePremium(maxPricePremium_);
@@ -1451,8 +1524,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      the offset is lowered through `setClearinghouseOffset`.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The Clearinghouse is the zero address
     ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The resulting offset exceeds the current `principalReceivables`.
@@ -1478,8 +1553,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      stored by the linked `YieldRepurchaseFacilityV2YieldLib`.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault is not registered.
     ///      - The stored next yield does not equal `expectedNextYield_`.
     ///      - `newNextYield_` is not lower than the stored value.
@@ -1515,8 +1592,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      to a zero contribution instead of blocking the reset.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The Clearinghouse is already included.
     ///      - `clearinghouse_` is not present in the CHREG registry.
     ///      - The `principalReceivables()` read reverts.
@@ -1530,8 +1609,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      the exclusion is applied.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The Clearinghouse is not included.
     function excludeClearinghouse(address clearinghouse_) external override onlyConfigurator {
         _clearinghouses.exclude(clearinghouse_);
@@ -1546,8 +1627,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      weekly reset.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
     function enableAsset(address vault_) external override onlyConfigurator {
@@ -1565,8 +1648,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      disabled asset.
     ///
     ///      Reverts if:
-    ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The facility is not an active policy of its kernel
+    ///        (`IYieldRepurchaseFacilityV2_PolicyNotActive`).
+    ///      - The caller is not the configurator.
     ///      - The vault is not registered.
     ///      - The vault is already disabled.
     ///      - The vault is the backing vault.
@@ -1697,14 +1782,30 @@ contract YieldRepurchaseFacilityV2 is
         return IERC20(token_).balanceOf(account_);
     }
 
-    /// @notice Reverts unless the caller is the configurator and the reentrancy guard is not
-    ///         held.
-    /// @dev The guard is held by `execute`, `callback`, and `seedCycle`, so a configurator
-    ///      call made during one of them reverts with `ReentrancyGuardReentrantCall`.
+    /// @notice Reverts unless the reentrancy guard is not held, the facility is an active
+    ///         policy of its kernel, and the caller is the configurator.
+    /// @dev The checks run in that order. The guard is held by `execute`, `callback`, and
+    ///      `seedCycle`, so a call made during one of them reverts with
+    ///      `ReentrancyGuardReentrantCall`, whoever the caller is.
     function _requireConfigurator() private view {
+        if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
+        _requireActive();
         if (msg.sender != configurator)
             revert IYieldRepurchaseFacilityV2_OnlyConfigurator(msg.sender);
-        if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
+    }
+
+    /// @notice Returns whether the facility is an active policy of its kernel.
+    function _isActive() private view returns (bool) {
+        return kernel.isPolicyActive(this);
+    }
+
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2_PolicyNotActive` unless the facility is
+    ///         an active policy of its kernel.
+    /// @dev `execute` reads `_isActive` and returns instead of reverting. `disable`,
+    ///      `returnFundsToTreasury`, `rescue`, `setStepGasLimit`, the views, and the Kernel
+    ///      hooks of `Policy` do not read the activity.
+    function _requireActive() private view {
+        if (!_isActive()) revert IYieldRepurchaseFacilityV2_PolicyNotActive(address(this));
     }
 
     /// @notice Performs an isolated self-call that runs one step with exactly
@@ -1912,6 +2013,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault, the share token, and the reserve token of a registered asset
     ///        are rejected: the share and reserve balances are the asset's buyback pool.
     ///      - Any other token is swept in full.
+    ///
+    ///      The Kernel activity is not read: the transfer goes to the TRSRY module
+    ///      resolved by the last `configureDependencies`.
     ///
     ///      Reverts if:
     ///      - The caller holds neither the yrf_admin role nor the admin role.
