@@ -107,6 +107,12 @@ verify_deployment() {
 # @description Sets the resume flag based on the value of the variable
 # @param {boolean} $1 The resume boolean
 # @sideEffects Sets the RESUME_FLAG global variable
+#
+# Forge refuses --resume after a reverted transaction with operations left, and refuses
+# --broadcast over an unfinished previous run. The wrappers do not pass the fix: once no
+# transaction of that run is pending, rerun the forge script command with
+# --broadcast --start-fresh, which archives the run and broadcasts the script anew, deployments
+# that already landed included unless the sequence skips them.
 set_resume_flag() {
     local lowercase=$(echo "$1" | tr '[:upper:]' '[:lower:]')
     if [ "$lowercase" = "true" ]; then
