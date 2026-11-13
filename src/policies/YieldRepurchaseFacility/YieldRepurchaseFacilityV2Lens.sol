@@ -7,6 +7,7 @@ import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 import {IClearinghouseReserve} from "src/policies/interfaces/IClearinghouseReserve.sol";
 import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Lens} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Lens.sol";
@@ -21,6 +22,9 @@ import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFac
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
+
+// Contracts
+import {Policy} from "src/Kernel.sol";
 
 /// @title YieldRepurchaseFacilityV2Lens
 /// @notice The derived read-only views of one YieldRepurchaseFacilityV2: the live yield
@@ -238,8 +242,8 @@ contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
         IYieldRepurchaseFacilityV2.Context memory context_ = _FACILITY.context();
 
         gatePrice = PRICEv2(context_.price).getPriceIn(context_.ohm, context_.backingReserve);
-        backing = IBackingOracle(context_.backingOracle).backing();
-        open = gatePrice != 0 && gatePrice >= backing;
+        backing = _gateBacking(context_.backingOracle);
+        open = backing != 0 && gatePrice != 0 && gatePrice >= backing;
     }
 
     // ============ HELPERS ============ //
@@ -298,6 +302,17 @@ contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
         return
             _FACILITY.isClearinghouseIncluded(clearinghouse_) ||
             _readClearinghouseReserve(clearinghouse_) == backingReserve_;
+    }
+
+    /// @notice Returns the backing value the price gate compares against: the backing of the
+    ///         oracle, or zero while the oracle is not an active policy of the facility's
+    ///         Kernel or is disabled.
+    function _gateBacking(address backingOracle_) private view returns (uint256) {
+        if (
+            !Policy(address(_FACILITY)).kernel().isPolicyActive(Policy(backingOracle_)) ||
+            !IEnabler(backingOracle_).isEnabled()
+        ) return 0;
+        return IBackingOracle(backingOracle_).backing();
     }
 
     /// @notice Returns the number of daily cycles remaining in the week at the next daily

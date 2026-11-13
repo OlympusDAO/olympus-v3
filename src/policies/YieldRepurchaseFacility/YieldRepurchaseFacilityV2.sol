@@ -7,6 +7,7 @@ import {IBurnableERC20} from "src/interfaces/IBurnableERC20.sol";
 import {IERC4626} from "@openzeppelin-5.7.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
@@ -57,7 +58,9 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      pools. Each vault's market is priced by the live OHM price denominated in its
 ///      reserve token (`PRICE.getPriceIn`). The purchased OHM is burned against a
 ///      treasury withdrawal priced by the backing oracle. Markets are not opened while
-///      the OHM price in the backing reserve is below the backing.
+///      the OHM price in the backing reserve is below the backing, and neither markets
+///      are opened nor OHM is burned while the backing oracle is not an active policy of
+///      the Kernel, is disabled, or reports a zero backing.
 ///
 ///      The reserve-side accounting is balance-based: the facility's balances of a
 ///      vault's shares and of its reserve token are the vault's buyback pool, and the
@@ -542,16 +545,19 @@ contract YieldRepurchaseFacilityV2 is
     ///      vault's daily cycle.
     ///
     ///      The price gate compares the OHM price denominated in the backing reserve
-    ///      against the backing value. The gate read and the backing oracle read are
+    ///      against the backing value. The gate read and the backing oracle reads are
     ///      deliberately not isolated: both are protocol-owned dependencies of the
     ///      backing accounting, and a failure there is a configuration error that should
-    ///      surface loudly.
+    ///      surface loudly. A backing oracle that is not an active policy of the Kernel or
+    ///      is disabled counts as a zero backing (see `_backing`), and a zero backing
+    ///      closes the gate: the daily markets are skipped without a revert, and the
+    ///      processing of the purchased OHM keeps it accumulated.
     ///
     ///      Reverts if:
     ///      - The caller does not hold the heart role.
     ///      - The `PRICE.getPriceIn` read of the backing reserve reverts, including when
     ///        no backing vault is designated (the PRICE module rejects the zero address).
-    ///      - The backing oracle `backing()` read reverts.
+    ///      - The `isEnabled()` or `backing()` read of the backing oracle reverts.
     ///      - The gas remaining before an isolated step is below the step requirement
     ///        (`IYieldRepurchaseFacilityV2_InsufficientStepGas`).
     function execute() external override nonReentrant onlyRole(HEART_ROLE) {
@@ -576,10 +582,11 @@ contract YieldRepurchaseFacilityV2 is
         // is skipped for every vault. Skipping before any redeem also keeps the reserve
         // in the yield-earning vaults; the unspent pool rolls into the following days.
         // The gate compares like for like: the backing value and the gate price are
-        // both denominated in the backing reserve.
+        // both denominated in the backing reserve. Without a backing value there is no
+        // floor to compare against, so a zero backing skips the markets as well.
         uint256 gatePrice = _reservePrice(_backingReserve());
         uint256 backing = _backing();
-        if (gatePrice == 0 || gatePrice < backing) return;
+        if (backing == 0 || gatePrice == 0 || gatePrice < backing) return;
 
         // In the range [1, 7]: the weekly reset has wrapped the epoch to zero
         uint256 daysRemaining = YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK -
@@ -791,7 +798,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
     ///      `execute`. Without a backing vault, or when the scaled backing amount, the
     ///      withdrawable share amount, or the pro-rated burn amount is zero, the
-    ///      accumulated OHM is kept for later processing and nothing is withdrawn. When
+    ///      accumulated OHM is kept for later processing and nothing is withdrawn. The
+    ///      backing amount is zero while the backing oracle is not an active policy of the
+    ///      Kernel or is disabled (see `_backing`). When
     ///      the treasury balance caps the withdrawal below the backing amount, the burn
     ///      is pro-rated down (floor) and the remainder stays accumulated, so the
     ///      withdrawal never exceeds the backing of the burned OHM by more than the
@@ -1552,9 +1561,16 @@ contract YieldRepurchaseFacilityV2 is
         YieldRepurchaseFacilityV2ValidationLib.requireAssetEnabled(config_.isAssetEnabled);
     }
 
-    /// @notice Reads the backing value from the backing oracle, in 18 decimals.
+    /// @notice Reads the backing value from the backing oracle, in 18 decimals, or returns
+    ///         zero while the oracle is not an active policy of the Kernel or is disabled.
+    /// @dev The oracle keeps serving `backing()` while it is inactive or disabled: zero
+    ///      before its first enable, the last value after a disable. The facility uses
+    ///      neither.
     function _backing() private view returns (uint256) {
-        return IBackingOracle(backingOracle).backing();
+        address backingOracle_ = backingOracle;
+        if (!kernel.isPolicyActive(Policy(backingOracle_)) || !IEnabler(backingOracle_).isEnabled())
+            return 0;
+        return IBackingOracle(backingOracle_).backing();
     }
 
     /// @notice Returns the live OHM price denominated in `reserve_`, in oracle decimals.

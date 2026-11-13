@@ -158,17 +158,18 @@ interface IYieldRepurchaseFacilityV2Lens {
     function marketReserve(uint256 marketId_) external view returns (address reserve);
 
     /// @notice Returns the price gate of the daily cycles: whether the OHM price
-    ///         denominated in the backing reserve is at or above the backing value, and
-    ///         the two values compared.
+    ///         denominated in the backing reserve is at or above a non-zero backing value,
+    ///         and the two values compared.
     /// @dev Mirrors the gate of `IPeriodicTask.execute`, and reverts where it reverts:
     ///      when the `PRICE.getPriceIn` read of the backing reserve reverts (no backing
-    ///      vault designated, or a stale feed of the backing reserve), or when the
-    ///      backing oracle read reverts. A revert here means the next `execute` reverts
-    ///      for the same reason: a configuration error to resolve, not a defect of the
-    ///      view.
+    ///      vault designated, or a stale feed of the backing reserve), or when a backing
+    ///      oracle read reverts. A revert here means the next `execute` reverts for the
+    ///      same reason: a configuration error to resolve, not a defect of the view. The
+    ///      backing is zero, and the gate closed, while the backing oracle is not an active
+    ///      policy of the facility's Kernel or is disabled.
     /// @return open Whether the daily cycles open markets.
     /// @return gatePrice The OHM price denominated in the backing reserve, in oracle
     ///         decimals.
-    /// @return backing The backing value, in 18 decimals.
+    /// @return backing The backing value the gate compares against, in 18 decimals.
     function priceGate() external view returns (bool open, uint256 gatePrice, uint256 backing);
 }
