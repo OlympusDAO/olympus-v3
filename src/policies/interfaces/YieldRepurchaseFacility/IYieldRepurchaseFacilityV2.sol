@@ -445,6 +445,11 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the reserve token decimals exceed the supported maximum of 18.
     error IYieldRepurchaseFacilityV2_UnsupportedDecimals();
 
+    /// @notice Thrown when the `decimals()` read of a token fails: the call reverts, the
+    ///         address holds no code, or the returned word is missing or exceeds `uint8`.
+    /// @param token The token whose decimals were read.
+    error IYieldRepurchaseFacilityV2_DecimalsUnreadable(address token);
+
     /// @notice Thrown when the PRICE module or the backing oracle does not report the 18
     ///         decimals of the backing value.
     error IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
