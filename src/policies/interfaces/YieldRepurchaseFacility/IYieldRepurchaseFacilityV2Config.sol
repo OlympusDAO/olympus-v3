@@ -50,10 +50,11 @@ interface IYieldRepurchaseFacilityV2Config {
     /// @notice Thrown when `setFacility` is called while a facility is already bound.
     error IYieldRepurchaseFacilityV2Config_FacilityAlreadySet();
 
-    /// @notice Thrown when the facility is unset, is not an active policy of the policy's kernel,
-    ///         does not report that kernel as its own, does not advertise
+    /// @notice Thrown when the facility is unset, does not advertise
     ///         `IYieldRepurchaseFacilityV2Write` and `IYieldRepurchaseFacilityV2View`, or does
-    ///         not name this policy as its configurator.
+    ///         not name this policy as its configurator. A facility that does not report the
+    ///         policy's kernel or is not an active policy of it is rejected with the errors of
+    ///         the implementation's dependency check.
     /// @param facility The rejected facility address.
     error IYieldRepurchaseFacilityV2Config_InvalidFacility(address facility);
 

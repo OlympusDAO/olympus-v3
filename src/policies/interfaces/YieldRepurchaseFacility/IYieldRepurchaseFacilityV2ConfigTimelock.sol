@@ -69,8 +69,8 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///      disabled, since its configuration setters apply while it is disabled. Cancellation is
 ///      restricted to the emergency role and is available while this policy is disabled and
 ///      after the action has expired. Enabling and re-enabling this policy require the
-///      configuration policy to be an active policy of this policy's kernel, and the grace
-///      window of `reEnable` must be strictly shorter than `MAX_GRACE_PERIOD`.
+///      configuration policy to report this policy's kernel and to be an active policy of it,
+///      and the grace window of `reEnable` must be strictly shorter than `MAX_GRACE_PERIOD`.
 ///
 ///      The queue itself (`executeQueuedAction`, `cancelQueuedAction`, the stored actions,
 ///      `pendingActionId` and the other reservation views) is the `IConfigTimelockBatchQueue`
@@ -88,16 +88,6 @@ interface IYieldRepurchaseFacilityV2ConfigTimelock {
     ///         `IConfigOperator`, and `IEnabler` through ERC165.
     /// @param config The rejected configuration policy address.
     error IYieldRepurchaseFacilityV2ConfigTimelock_InvalidConfig(address config);
-
-    /// @notice Thrown when the configuration policy supplied at construction reports a kernel
-    ///         other than the kernel of this policy.
-    /// @param configKernel The kernel reported by the configuration policy.
-    error IYieldRepurchaseFacilityV2ConfigTimelock_KernelMismatch(address configKernel);
-
-    /// @notice Thrown when this policy is enabled or re-enabled while the configuration policy
-    ///         is not an active policy of this policy's kernel.
-    /// @param config The configuration policy address.
-    error IYieldRepurchaseFacilityV2ConfigTimelock_ConfigNotActive(address config);
 
     /// @notice Thrown when the configuration policy does not name this policy as its config
     ///         operator.

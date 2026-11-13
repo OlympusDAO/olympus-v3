@@ -11,6 +11,7 @@ import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepu
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2ValidationLib.sol";
 
@@ -150,8 +151,10 @@ contract YieldRepurchaseFacilityV2Config is
     ///      - The contract is enabled.
     ///      - The caller does not hold the admin role.
     ///      - A facility is already bound.
-    ///      - `facility_` is the zero address, is not an active policy of this policy's
-    ///        kernel, or does not report that kernel as its own.
+    ///      - `facility_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2Config_InvalidFacility`).
+    ///      - `facility_` does not report this policy's kernel through a readable `kernel()`,
+    ///        or is not an active policy of it (`PolicyDependency` errors).
     ///      - `facility_` does not advertise `IYieldRepurchaseFacilityV2Write` and
     ///        `IYieldRepurchaseFacilityV2View` through ERC165.
     function setFacility(address facility_) external override givenDisabled onlyAdminRole {
@@ -471,8 +474,9 @@ contract YieldRepurchaseFacilityV2Config is
     /// @dev The payload is not used.
     ///
     ///      Reverts if:
-    ///      - The facility is unset, is not an active policy of this policy's kernel, or does
-    ///        not report that kernel as its own.
+    ///      - The facility is unset (`IYieldRepurchaseFacilityV2Config_InvalidFacility`).
+    ///      - The facility does not report this policy's kernel through a readable
+    ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
     ///      - The facility does not name this policy as its configurator.
     function _beforeEnable(bytes calldata) internal view override {
         _validateConfiguration();
@@ -491,8 +495,9 @@ contract YieldRepurchaseFacilityV2Config is
     ///         re-enabled.
     /// @dev Reverts if:
     ///      - The grace window since the last transition has elapsed (`GracePeriod_Expired`).
-    ///      - The facility is unset, is not an active policy of this policy's kernel, or does
-    ///        not report that kernel as its own.
+    ///      - The facility is unset (`IYieldRepurchaseFacilityV2Config_InvalidFacility`).
+    ///      - The facility does not report this policy's kernel through a readable
+    ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
     ///      - The facility does not name this policy as its configurator.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
@@ -540,10 +545,12 @@ contract YieldRepurchaseFacilityV2Config is
     }
 
     /// @notice Validates the facility binding before the policy is enabled or re-enabled.
-    /// @dev Reverts with `IYieldRepurchaseFacilityV2Config_InvalidFacility` if:
-    ///      - The facility is unset, is not an active policy of this policy's kernel, or does
-    ///        not report that kernel as its own.
-    ///      - The facility does not name this policy as its configurator.
+    /// @dev Reverts if:
+    ///      - The facility is unset (`IYieldRepurchaseFacilityV2Config_InvalidFacility`).
+    ///      - The facility does not report this policy's kernel through a readable
+    ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
+    ///      - The facility does not name this policy as its configurator
+    ///        (`IYieldRepurchaseFacilityV2Config_InvalidFacility`).
     function _validateConfiguration() internal view {
         address facility_ = facility;
         _requireFacilityActive(facility_);
@@ -551,25 +558,20 @@ contract YieldRepurchaseFacilityV2Config is
             revert IYieldRepurchaseFacilityV2Config_InvalidFacility(facility_);
     }
 
-    /// @notice Reverts with `IYieldRepurchaseFacilityV2Config_InvalidFacility` unless
-    ///         `facility_` is a non-zero active policy of this policy's kernel that reports
-    ///         that kernel as its own.
+    /// @notice Reverts unless `facility_` is a non-zero active policy of this policy's kernel
+    ///         that reports that kernel as its own.
+    /// @dev Reverts if:
+    ///      - `facility_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2Config_InvalidFacility`).
+    ///      - The `kernel()` read of `facility_` fails or returns a malformed word
+    ///        (`PolicyDependency_InvalidDependency`).
+    ///      - `facility_` reports another kernel (`PolicyDependency_KernelMismatch`).
+    ///      - `facility_` is not an active policy of this policy's kernel
+    ///        (`PolicyDependency_NotActive`).
     function _requireFacilityActive(address facility_) internal view {
-        if (
-            facility_ == address(0) ||
-            !kernel.isPolicyActive(Policy(facility_)) ||
-            !_reportsKernel(facility_)
-        ) revert IYieldRepurchaseFacilityV2Config_InvalidFacility(facility_);
-    }
-
-    /// @notice Returns whether `policy_` reports this policy's kernel as its own.
-    /// @dev A `kernel()` read that reverts is reported as a mismatch.
-    function _reportsKernel(address policy_) internal view returns (bool) {
-        try Policy(policy_).kernel() returns (Kernel reportedKernel) {
-            return address(reportedKernel) == address(kernel);
-        } catch {
-            return false;
-        }
+        if (facility_ == address(0))
+            revert IYieldRepurchaseFacilityV2Config_InvalidFacility(facility_);
+        PolicyDependency.requireActive(facility_, address(kernel));
     }
 
     /// @notice Reverts unless the grace window is strictly shorter than `MAX_GRACE_PERIOD`.

@@ -9,6 +9,7 @@ import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRep
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
@@ -137,28 +138,35 @@ library YieldRepurchaseFacilityV2DependenciesLib {
 
     /// @notice Reverts unless `configurator_` is a configuration policy bound to the
     ///         calling facility.
-    /// @dev Reverts with `IYieldRepurchaseFacilityV2_InvalidConfigurator` if:
-    ///      - `configurator_` is the zero address.
-    ///      - `configurator_` is not an active policy of `kernel_`.
-    ///      - `configurator_` does not report `kernel_` as its own.
+    /// @dev Reverts if:
+    ///      - `configurator_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
+    ///      - The `kernel()` read of `configurator_` fails or returns a malformed word
+    ///        (`PolicyDependency_InvalidDependency`).
+    ///      - `configurator_` reports a kernel other than `kernel_`
+    ///        (`PolicyDependency_KernelMismatch`).
+    ///      - `configurator_` is not an active policy of `kernel_`
+    ///        (`PolicyDependency_NotActive`).
     ///      - `configurator_` does not advertise `IYieldRepurchaseFacilityV2Config` through
-    ///        ERC165, which includes a `supportsInterface` query that reverts.
-    ///      - `facility()` does not return the calling facility.
+    ///        ERC165, which includes a `supportsInterface` query that reverts
+    ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
+    ///      - `facility()` does not return the calling facility
+    ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
     ///
-    ///      An active policy that does not implement `kernel()` or `facility()` reverts in
-    ///      the call itself.
+    ///      A configurator that does not implement `facility()` reverts in the call itself.
     /// @param kernel_ The Kernel of the facility.
     /// @param configurator_ The configuration policy to validate.
     function validateConfigurator(Kernel kernel_, address configurator_) external view {
+        if (configurator_ == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidConfigurator(
+                configurator_
+            );
+        PolicyDependency.requireActive(configurator_, address(kernel_));
         if (
-            configurator_ == address(0) ||
-            !kernel_.isPolicyActive(Policy(configurator_)) ||
-            address(Policy(configurator_).kernel()) != address(kernel_) ||
             !ERC165Checker.supportsInterface(
                 configurator_,
                 type(IYieldRepurchaseFacilityV2Config).interfaceId
-            ) ||
-            IYieldRepurchaseFacilityV2Config(configurator_).facility() != address(this)
+            ) || IYieldRepurchaseFacilityV2Config(configurator_).facility() != address(this)
         )
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidConfigurator(
                 configurator_
@@ -173,12 +181,13 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     ///      Reverts if:
     ///      - `backingOracle_` is the zero address
     ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///      - The `kernel()` read of the oracle fails or returns a malformed word
+    ///        (`PolicyDependency_InvalidDependency`): an address without a Kernel (for
+    ///        example a token whose `decimals()` also reports 18) is rejected here.
+    ///      - The oracle reports a kernel other than `kernel_`
+    ///        (`PolicyDependency_KernelMismatch`).
     ///      - `requireActive_` is set and the oracle is not an active policy of `kernel_`
-    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
-    ///      - The oracle does not report `kernel_` as its own
-    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`). An oracle wired to a
-    ///        different Kernel, or an address without a Kernel (for example a token whose
-    ///        `decimals()` also reports 18), is rejected here.
+    ///        (`PolicyDependency_NotActive`).
     ///      - The oracle does not report the 18 decimals of the backing value
     ///        (`IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals`). The backing value
     ///        is compared against the 18-decimal oracle prices and scaled by the 18-decimal
@@ -196,15 +205,8 @@ library YieldRepurchaseFacilityV2DependenciesLib {
                 backingOracle_
             );
 
-        if (requireActive_ && !kernel_.isPolicyActive(Policy(backingOracle_)))
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidBackingOracle(
-                backingOracle_
-            );
-
-        if (address(Policy(backingOracle_).kernel()) != address(kernel_))
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidBackingOracle(
-                backingOracle_
-            );
+        if (requireActive_) PolicyDependency.requireActive(backingOracle_, address(kernel_));
+        else PolicyDependency.requireSameKernel(backingOracle_, address(kernel_));
 
         if (
             IBackingOracle(backingOracle_).decimals() !=

@@ -220,8 +220,10 @@ contract YieldRepurchaseFacilityV2 is
     ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The `decimals()` read of `ohm_` fails
     ///        (`IYieldRepurchaseFacilityV2_DecimalsUnreadable`).
-    ///      - `backingOracle_` is the zero address or does not report `kernel_` as its
-    ///        kernel (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///      - `backingOracle_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///      - `backingOracle_` does not report `kernel_` through a readable `kernel()`
+    ///        (`PolicyDependency` errors).
     ///      - The backing oracle does not report the 18 decimals of the backing value.
     ///      - `bondAuctioneer_` is the zero address or reports the zero address as its
     ///        teller (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`).
@@ -332,10 +334,12 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The payload is shorter than the minimum
     ///        `abi.encode(uint256, uint256, NextYieldSeed[])`.
     ///      - The payload does not `abi.decode` as `(uint256, uint256, NextYieldSeed[])`.
-    ///      - The configurator is unset, is not an active policy of the facility's
-    ///        kernel, does not report the facility's kernel as its own, does not
-    ///        advertise `IYieldRepurchaseFacilityV2Config`, or does not report this
-    ///        facility as its `facility()`.
+    ///      - The configurator is unset (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
+    ///      - The configurator does not report the facility's kernel through a readable
+    ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
+    ///      - The configurator does not advertise `IYieldRepurchaseFacilityV2Config`, or
+    ///        does not report this facility as its `facility()`
+    ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
     ///      - The facility is not authorized as a market callback on the bond
     ///        auctioneer.
     ///      - The initial discount is not less than 100% (`1e18`).
@@ -419,10 +423,12 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if:
     ///      - The grace window since the disable has elapsed.
-    ///      - The configurator is unset, is not an active policy of the facility's
-    ///        kernel, does not report the facility's kernel as its own, does not
-    ///        advertise `IYieldRepurchaseFacilityV2Config`, or does not report this
-    ///        facility as its `facility()`.
+    ///      - The configurator is unset (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
+    ///      - The configurator does not report the facility's kernel through a readable
+    ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
+    ///      - The configurator does not advertise `IYieldRepurchaseFacilityV2Config`, or
+    ///        does not report this facility as its `facility()`
+    ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
     function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
         super._beforeReEnable();
         YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator);
@@ -1057,9 +1063,10 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
-    ///      - `backingOracle_` is the zero address, is not an active policy of the
-    ///        kernel, or does not report the facility's kernel as its own
+    ///      - `backingOracle_` is the zero address
     ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
+    ///      - `backingOracle_` does not report the facility's kernel through a readable
+    ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
     ///      - The oracle does not report the 18 decimals of the backing value.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
         _setBackingOracle(backingOracle_, true);
@@ -1073,10 +1080,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - The contract is enabled.
     ///      - The caller does not hold the admin role.
-    ///      - `configurator_` is the zero address, is not an active policy of the
-    ///        facility's kernel, does not report the facility's kernel as its own, does
-    ///        not advertise `IYieldRepurchaseFacilityV2Config`, or does not report this
-    ///        facility as its `facility()`.
+    ///      - `configurator_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
+    ///      - `configurator_` does not report the facility's kernel through a readable
+    ///        `kernel()`, or is not an active policy of it (`PolicyDependency` errors).
+    ///      - `configurator_` does not advertise `IYieldRepurchaseFacilityV2Config`, or
+    ///        does not report this facility as its `facility()`
+    ///        (`IYieldRepurchaseFacilityV2_InvalidConfigurator`).
     // forge-lint: disable-next-item(missing-zero-check)
     function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
         YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator_);
@@ -1184,8 +1194,9 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Reverts if:
     ///      - `backingOracle_` is the zero address
     ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
-    ///      - `requireActive_` is set and the oracle is not an active policy of the kernel.
-    ///      - The oracle does not report the facility's kernel as its own.
+    ///      - The oracle does not report the facility's kernel through a readable
+    ///        `kernel()`, or, when `requireActive_` is set, is not an active policy of it
+    ///        (`PolicyDependency` errors).
     ///      - The oracle does not report the 18 decimals of the backing value.
     function _setBackingOracle(address backingOracle_, bool requireActive_) private {
         YieldRepurchaseFacilityV2DependenciesLib.validateBackingOracle(

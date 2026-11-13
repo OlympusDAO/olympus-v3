@@ -13,6 +13,7 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
+import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 
 // Contracts
@@ -152,7 +153,10 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - `config_` is the zero address, or does not advertise
     ///        `IYieldRepurchaseFacilityV2Config`, `IConfigOperator`, and `IEnabler` through
     ///        ERC165.
-    ///      - `config_` reports a kernel other than `kernel_`.
+    ///      - The `kernel()` read of `config_` fails or returns a malformed word
+    ///        (`PolicyDependency_InvalidDependency`).
+    ///      - `config_` reports a kernel other than `kernel_`
+    ///        (`PolicyDependency_KernelMismatch`).
     ///      - `initialTimelockDelay_` is outside `[MIN_TIMELOCK_DELAY, MAX_TIMELOCK_DELAY]`.
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
     /// @param kernel_ The Olympus Kernel.
@@ -182,9 +186,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         if (!ERC165Checker.supportsAllInterfaces(config_, configInterfaceIds))
             revert IYieldRepurchaseFacilityV2ConfigTimelock_InvalidConfig(config_);
 
-        address configKernel = address(Policy(config_).kernel());
-        if (configKernel != address(kernel_))
-            revert IYieldRepurchaseFacilityV2ConfigTimelock_KernelMismatch(configKernel);
+        PolicyDependency.requireSameKernel(config_, address(kernel_));
 
         _CONFIG = IYieldRepurchaseFacilityV2Config(config_);
 
@@ -823,7 +825,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @dev The payload is not used.
     ///
     ///      Reverts if:
-    ///      - The configuration policy is not an active policy of this policy's kernel.
+    ///      - The configuration policy does not report this policy's kernel through a
+    ///        readable `kernel()`, or is not an active policy of it (`PolicyDependency`
+    ///        errors).
     function _beforeEnable(bytes calldata) internal view override {
         _requireConfigActive();
     }
@@ -841,7 +845,9 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///         policy is re-enabled.
     /// @dev Reverts if:
     ///      - The grace window since the last transition has elapsed (`GracePeriod_Expired`).
-    ///      - The configuration policy is not an active policy of this policy's kernel.
+    ///      - The configuration policy does not report this policy's kernel through a
+    ///        readable `kernel()`, or is not an active policy of it (`PolicyDependency`
+    ///        errors).
     function _beforeReEnable() internal override {
         super._beforeReEnable();
         _requireConfigActive();
@@ -879,12 +885,17 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         if (!IEnabler(address(_CONFIG)).isEnabled()) revert NotEnabled();
     }
 
-    /// @notice Reverts with `IYieldRepurchaseFacilityV2ConfigTimelock_ConfigNotActive` unless
-    ///         the configuration policy is an active policy of this policy's kernel.
+    /// @notice Reverts unless the configuration policy reports this policy's kernel and is an
+    ///         active policy of it.
+    /// @dev Reverts if:
+    ///      - The `kernel()` read of the configuration policy fails or returns a malformed
+    ///        word (`PolicyDependency_InvalidDependency`).
+    ///      - The configuration policy reports another kernel
+    ///        (`PolicyDependency_KernelMismatch`).
+    ///      - The configuration policy is not an active policy of this policy's kernel
+    ///        (`PolicyDependency_NotActive`).
     function _requireConfigActive() internal view {
-        address configAddress = address(_CONFIG);
-        if (!kernel.isPolicyActive(Policy(configAddress)))
-            revert IYieldRepurchaseFacilityV2ConfigTimelock_ConfigNotActive(configAddress);
+        PolicyDependency.requireActive(address(_CONFIG), address(kernel));
     }
 
     /// @notice Reverts with `IYieldRepurchaseFacilityV2ConfigTimelock_NotConfigOperator` unless
