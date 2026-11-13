@@ -254,9 +254,6 @@ library YieldRepurchaseFacilityV2YieldLib {
 
     /// @notice Refreshes the conversion-rate and reserve-balance snapshots of a vault
     ///         configuration in place.
-    // Reached from the `restart` loop over the registered vaults, added only by the
-    // configurator.
-    // forge-lint: disable-next-item(calls-loop)
     function _refreshSnapshots(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
         IYieldRepurchaseFacilityV2.Context memory context_

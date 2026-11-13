@@ -1645,8 +1645,6 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Reverts unless the asset is enabled.
-    // Called from the `seedCycle` loop, where an invalid seed must reject the whole seeding
-    // forge-lint: disable-next-item(require-revert-in-loop)
     function _requireAssetEnabled(ReserveAsset storage config_) private view {
         YieldRepurchaseFacilityV2ValidationLib.requireAssetEnabled(config_.isAssetEnabled);
     }
