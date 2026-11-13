@@ -7,7 +7,7 @@ pragma solidity ^0.8.24;
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
-import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
+import {Math} from "@openzeppelin-5.7.0/utils/math/Math.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 
 /// @title YieldRepurchaseFacilityV2MathLib

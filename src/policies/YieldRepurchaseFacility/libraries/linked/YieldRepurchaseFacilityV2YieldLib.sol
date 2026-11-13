@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
