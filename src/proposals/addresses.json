@@ -355,7 +355,7 @@
         "name": "olympus-policy-morpho-oracle-factory-1_0"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd",
         "chainId": 1,
         "name": "olympus-policy-price-config-2_0"
     },
