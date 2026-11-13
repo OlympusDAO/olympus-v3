@@ -29,8 +29,10 @@ import {IYieldRepurchaseFacilityV2Lens} from "src/policies/interfaces/YieldRepur
 import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYieldRepurchaseFacilityV2Activator.sol";
 
 // Libraries
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 import {BackingOracleConfigLib} from "src/scripts/ops/lib/BackingOracleConfigLib.sol";
@@ -71,8 +73,9 @@ interface IBondAuctioneerOwner {
 ///           `enable` reverts.
 ///         - `checkReadiness` (read-only, any sender): the launch readiness report. A green
 ///           verdict means that everything that has to be done before the proposal is
-///           submitted, and can be checked without the proposal contracts, is done, and that
-///           `env.json` agrees with the chain.
+///           submitted is done, that `env.json` agrees with the chain, and that the deployed
+///           activator of the launch is bound to the stack, carries the values of `env.json`
+///           and finds its preconditions met.
 ///         - `deactivateV1` (DAO MS as the Kernel executor, after the proposal): deactivate
 ///           the YieldRepurchaseFacility v1.2 in the Kernel.
 ///
@@ -94,16 +97,17 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
     string internal constant DAO_MS_KEY = "olympus.multisig.dao";
     string internal constant EMERGENCY_MS_KEY = "olympus.multisig.emergency";
     string internal constant OCG_TIMELOCK_KEY = "olympus.governance.Timelock";
+    string internal constant ACTIVATOR_KEY = "olympus.proposals.YieldRepurchaseFacilityV2Activator";
+    string internal constant PRICE_CONFIG_KEY = "olympus.policies.OlympusPriceConfigV2";
+    string internal constant USDE_KEY = "external.tokens.USDe";
+    string internal constant SUSDE_KEY = "external.tokens.sUSDe";
 
-    /// @notice The freshness threshold the launch registers the USDe/USD feed with in the
-    ///         PRICE module, in seconds.
-    uint256 internal constant USDE_FEED_UPDATE_THRESHOLD = 1 days;
+    /// @notice The role `shutdown` of the YieldRepurchaseFacility v1.2 is gated to, which the
+    ///         launch proposal grants to the activator for its call.
+    bytes32 internal constant LOOP_DADDY_ROLE = "loop_daddy";
 
-    /// @notice The USDe price the launch expects of the feed at registration, in 18 decimals.
-    uint256 internal constant USDE_EXPECTED_PRICE = 1e18;
-
-    /// @notice The tolerance of the feed price around `USDE_EXPECTED_PRICE`, in basis points.
-    uint256 internal constant USDE_PRICE_TOLERANCE_BPS = 100;
+    /// @notice The number of assets the activator registers: the sUSDS and sUSDe vaults.
+    uint256 internal constant LAUNCH_ASSET_COUNT = 2;
 
     uint256 internal constant ONE_HUNDRED_PERCENT_BPS = 10_000;
 
@@ -284,9 +288,9 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
     ///      (a malformed `env.json`, an address that is not the expected contract) is one
     ///      failed line, and the report continues. Performs no state change on the chain.
     ///
-    ///      The feed constants (`USDE_FEED_UPDATE_THRESHOLD`, `USDE_EXPECTED_PRICE`,
-    ///      `USDE_PRICE_TOLERANCE_BPS`) are the parameters the launch registers USDe with in
-    ///      the PRICE module.
+    ///      The parameters the launch registers USDe with in the PRICE module (the update
+    ///      threshold of the feed, the expected price and its tolerance) are read from the
+    ///      activator recorded in `env.json`, which holds them as public constants.
     function checkReadiness() external {
         _loadEnv(ChainUtils._getChainName(block.chainid));
         _failures = 0;
@@ -301,6 +305,7 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
         _section(this._readinessPrice.selector, "PRICE");
         _section(this._readinessAssets.selector, "Assets");
         _section(this._readinessClearinghouses.selector, "Clearinghouses");
+        _section(this._readinessActivator.selector, "Activator");
         _section(this._readinessReverify.selector, "Values to verify again");
 
         console2.log(
@@ -619,6 +624,9 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
 
     /// @notice Readiness: the PRICE module the facility reads, and the USDe/USD feed the
     ///         launch registers.
+    /// @dev The price of the feed and the age of its answer are compared with the constants of
+    ///      the activator. Until the activator is recorded in `env.json`, the section fails on
+    ///      its absence and prints both values as an `[INFO]` line.
     function _readinessPrice() external {
         address kernel = _envAddressNotZero(KERNEL_KEY);
         address price = address(Kernel(kernel).getModuleForKeycode(toKeycode("PRICE")));
@@ -642,46 +650,76 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
         // forge-lint: disable-next-line(unused-return)
         (, int256 answer, , uint256 updatedAt, ) = feed.latestRoundData();
         uint8 feedDecimals = feed.decimals();
-        _check(
-            answer > 0 && feedDecimals <= PRICE_DECIMALS,
-            "the USDe/USD feed reports a positive answer with at most 18 decimals"
-        );
-        if (answer > 0 && feedDecimals <= PRICE_DECIMALS) {
-            // answer (feed decimals) * 10^(18 - feed decimals) -> price (18 decimals)
-            // casting to 'uint256' is safe because the answer is positive
+        bool readable = answer > 0 && feedDecimals <= PRICE_DECIMALS;
+        _check(readable, "the USDe/USD feed reports a positive answer with at most 18 decimals");
+        uint256 usdePrice = 0;
+        if (readable) {
+            // casting to 'uint256' is safe because a readable answer is positive
             // forge-lint: disable-next-line(unsafe-typecast)
-            uint256 usdePrice = uint256(answer) *
+            uint256 feedAnswer = uint256(answer);
+            // answer (feed decimals) * 10^(18 - feed decimals) -> price (18 decimals)
+            usdePrice =
+                feedAnswer *
                 YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** (PRICE_DECIMALS - feedDecimals);
-            uint256 deviation = usdePrice > USDE_EXPECTED_PRICE
-                ? usdePrice - USDE_EXPECTED_PRICE
-                : USDE_EXPECTED_PRICE - usdePrice;
+        }
+        uint256 age = vm.getBlockTimestamp() > updatedAt ? vm.getBlockTimestamp() - updatedAt : 0;
+
+        address activator = _envAddress(ACTIVATOR_KEY);
+        bool deployed = activator.code.length != 0;
+        _check(
+            deployed,
+            "the activator is recorded in env.json, so that the registration parameters of the USDe/USD feed can be read from it"
+        );
+        if (!deployed) {
+            // The bounds of the registration are constants of the activator: without it the
+            // answer of the feed is reported and compared with nothing
+            _info(
+                string.concat(
+                    "the USDe/USD feed price is ",
+                    vm.toString(usdePrice),
+                    " (18 decimals) and was updated ",
+                    vm.toString(age),
+                    " seconds ago; the tolerance and the update threshold are compared once the activator is deployed"
+                )
+            );
+            return;
+        }
+        uint256 updateThreshold = IYieldRepurchaseFacilityV2Activator(activator)
+            .USDE_FEED_UPDATE_THRESHOLD();
+        uint256 expectedPrice = IYieldRepurchaseFacilityV2Activator(activator)
+            .USDE_EXPECTED_PRICE();
+        uint256 toleranceBps = IYieldRepurchaseFacilityV2Activator(activator)
+            .USDE_PRICE_TOLERANCE_BPS();
+
+        if (readable) {
+            uint256 deviation = usdePrice > expectedPrice
+                ? usdePrice - expectedPrice
+                : expectedPrice - usdePrice;
             // deviation (18 decimals) * 10_000 <= expected (18 decimals) * tolerance (bps)
             _check(
-                deviation * ONE_HUNDRED_PERCENT_BPS <=
-                    USDE_EXPECTED_PRICE * USDE_PRICE_TOLERANCE_BPS,
+                deviation * ONE_HUNDRED_PERCENT_BPS <= expectedPrice * toleranceBps,
                 string.concat(
                     "the USDe/USD feed price ",
                     vm.toString(usdePrice),
                     " is within ",
-                    vm.toString(USDE_PRICE_TOLERANCE_BPS),
+                    vm.toString(toleranceBps),
                     " bps of the expected ",
-                    vm.toString(USDE_EXPECTED_PRICE)
+                    vm.toString(expectedPrice)
                 )
             );
         }
-        uint256 age = vm.getBlockTimestamp() > updatedAt ? vm.getBlockTimestamp() - updatedAt : 0;
         _check(
-            age <= USDE_FEED_UPDATE_THRESHOLD,
+            age <= updateThreshold,
             string.concat(
                 "the USDe/USD feed was updated ",
                 vm.toString(age),
                 " seconds ago; the threshold is ",
-                vm.toString(USDE_FEED_UPDATE_THRESHOLD),
+                vm.toString(updateThreshold),
                 " seconds",
-                age <= USDE_FEED_UPDATE_THRESHOLD
+                age <= updateThreshold
                     ? string.concat(
                         ", which leaves ",
-                        vm.toString(USDE_FEED_UPDATE_THRESHOLD - age),
+                        vm.toString(updateThreshold - age),
                         " seconds of margin (the proposal reverts on a stale feed and can be executed again inside its window)"
                     )
                     : ""
@@ -783,6 +821,56 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
 
         for (uint256 i = 0; i < desired.clearinghouses.length; ++i) {
             _checkClearinghouse(chreg, registryCount, desired.clearinghouses[i]);
+        }
+    }
+
+    /// @notice Readiness: the activator of the launch is deployed, accepts the OCG timelock,
+    ///         is bound to the stack of `env.json`, carries the launch values of `env.json`,
+    ///         is not activated, holds neither of the roles the proposal grants it, and finds
+    ///         the preconditions of the launch met.
+    function _readinessActivator() external {
+        address activatorAddress = _envAddress(ACTIVATOR_KEY);
+        bool deployed = ERC165Checker.supportsInterface(
+            activatorAddress,
+            type(IYieldRepurchaseFacilityV2Activator).interfaceId
+        );
+        _check(
+            deployed,
+            "the activator is recorded in env.json and advertises IYieldRepurchaseFacilityV2Activator"
+        );
+        if (!deployed) return;
+        IYieldRepurchaseFacilityV2Activator activator = IYieldRepurchaseFacilityV2Activator(
+            activatorAddress
+        );
+
+        _check(
+            activator.timelock() == _envAddressNotZero(OCG_TIMELOCK_KEY),
+            "the activator accepts the OCG timelock as the caller of activate"
+        );
+        _checkActivatorDeployment(activator.deployment());
+        _checkActivatorParameters(activator.launchParameters());
+        _check(!activator.isActivated(), "the activator is not activated");
+
+        ROLESv1 roles = _roles(_envAddressNotZero(KERNEL_KEY));
+        _check(
+            !roles.hasRole(activatorAddress, ADMIN_ROLE) &&
+                !roles.hasRole(activatorAddress, LOOP_DADDY_ROLE),
+            "the activator holds neither admin nor loop_daddy; the proposal grants both for its call and revokes them after it"
+        );
+
+        try activator.checkPreconditions() {
+            _check(
+                true,
+                "checkPreconditions() of the activator passes: the launch would execute now"
+            );
+        } catch (bytes memory revertData) {
+            _check(
+                false,
+                string.concat(
+                    "checkPreconditions() of the activator reverts with ",
+                    _describeActivatorError(revertData)
+                )
+            );
         }
     }
 
@@ -999,6 +1087,242 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
                 )
             );
         }
+    }
+
+    /// @notice Checks that the activator is bound to the contracts and tokens `env.json`
+    ///         records, one line per contract.
+    function _checkActivatorDeployment(
+        IYieldRepurchaseFacilityV2Activator.Deployment memory deployment_
+    ) internal {
+        _checkBound("the Kernel", deployment_.kernel, _envAddress(KERNEL_KEY));
+        _checkBound(ORACLE_NAME, deployment_.backingOracle, _envAddress(ORACLE_KEY));
+        _checkBound(
+            ORACLE_TIMELOCK_NAME,
+            deployment_.backingOracleConfigTimelock,
+            _envAddress(ORACLE_TIMELOCK_KEY)
+        );
+        _checkBound(CONFIG_NAME, deployment_.config, _envAddress(CONFIG_KEY));
+        _checkBound(TIMELOCK_NAME, deployment_.configTimelock, _envAddress(TIMELOCK_KEY));
+        _checkBound(FACILITY_NAME, deployment_.facility, _envAddress(FACILITY_KEY));
+        _checkBound(
+            "the YieldRepurchaseFacility v1.2",
+            deployment_.yieldRepoV1,
+            _envAddress(V1_KEY)
+        );
+        _checkBound("the Heart", deployment_.heart, _envAddress(HEART_KEY));
+        _checkBound("PriceConfig v2", deployment_.priceConfig, _envAddress(PRICE_CONFIG_KEY));
+        _checkBound("the bond auctioneer", deployment_.bondAuctioneer, _envAddress(AUCTIONEER_KEY));
+        _checkBound(
+            "the USDe/USD price feed",
+            deployment_.usdeUsdPriceFeed,
+            YieldRepurchaseFacilityV2ConfigLib.usdeUsdPriceFeed(env, chain)
+        );
+        _checkBound("OHM", deployment_.ohm, _envAddress(OHM_KEY));
+        _checkBound("USDS", deployment_.usds, _envAddress(USDS_KEY));
+        _checkBound("sUSDS", deployment_.sUsds, _envAddress(SUSDS_KEY));
+        _checkBound("USDe", deployment_.usde, _envAddress(USDE_KEY));
+        _checkBound("sUSDe", deployment_.sUsde, _envAddress(SUSDE_KEY));
+    }
+
+    function _checkBound(string memory name_, address bound_, address recorded_) internal {
+        _check(
+            recorded_ != address(0) && bound_ == recorded_,
+            string.concat("the activator is bound to ", name_, " of env.json")
+        );
+    }
+
+    /// @notice Checks that the launch values of the activator are the desired state of
+    ///         `env.json`: the backing, the bond market parameters, the two vaults and the
+    ///         Clearinghouses in the declared order.
+    function _checkActivatorParameters(
+        IYieldRepurchaseFacilityV2Activator.LaunchParameters memory parameters_
+    ) internal {
+        YieldRepurchaseFacilityV2ConfigLib.DesiredConfig
+            memory desired = YieldRepurchaseFacilityV2ConfigLib.desiredConfig(env, chain);
+
+        _check(
+            parameters_.backing == BackingOracleConfigLib.desiredBacking(env, chain),
+            string.concat(
+                "the activator enables the oracle with the backing of env.json, ",
+                vm.toString(parameters_.backing)
+            )
+        );
+        _check(
+            parameters_.initialDiscount == desired.parameters.initialDiscount &&
+                parameters_.maxPricePremium == desired.parameters.maxPricePremium,
+            string.concat(
+                "the activator enables the facility with the initialDiscount and the maxPricePremium of env.json, ",
+                vm.toString(parameters_.initialDiscount),
+                " and ",
+                vm.toString(parameters_.maxPricePremium)
+            )
+        );
+
+        (
+            bool sUsdsDeclared,
+            YieldRepurchaseFacilityV2ConfigLib.DesiredAsset memory sUsds
+        ) = YieldRepurchaseFacilityV2ConfigLib.findAsset(desired.assets, _envAddress(SUSDS_KEY));
+        (
+            bool sUsdeDeclared,
+            YieldRepurchaseFacilityV2ConfigLib.DesiredAsset memory sUsde
+        ) = YieldRepurchaseFacilityV2ConfigLib.findAsset(desired.assets, _envAddress(SUSDE_KEY));
+        _check(
+            desired.assets.length == LAUNCH_ASSET_COUNT &&
+                sUsdsDeclared &&
+                sUsdeDeclared &&
+                sUsds.enabled &&
+                sUsde.enabled &&
+                desired.backingVault == sUsds.vault,
+            "env.json declares exactly the two vaults the activator registers, sUSDS and sUSDe, both enabled, with sUSDS as the backing vault"
+        );
+        _check(
+            parameters_.sUsds.yieldBuybackShare == sUsds.yieldBuybackShare &&
+                parameters_.sUsds.sellShares == sUsds.sellShares &&
+                parameters_.sUsde.yieldBuybackShare == sUsde.yieldBuybackShare &&
+                parameters_.sUsde.sellShares == sUsde.sellShares,
+            "the activator registers both vaults with the yieldBuybackShare and the sellShares of env.json"
+        );
+
+        bool sameClearinghouses = parameters_.clearinghouses.length ==
+            desired.clearinghouses.length;
+        for (uint256 i = 0; sameClearinghouses && i < desired.clearinghouses.length; ++i) {
+            sameClearinghouses =
+                parameters_.clearinghouses[i].clearinghouse ==
+                desired.clearinghouses[i].clearinghouse &&
+                parameters_.clearinghouses[i].included == desired.clearinghouses[i].included &&
+                parameters_.clearinghouses[i].offset == desired.clearinghouses[i].offset;
+        }
+        _check(
+            sameClearinghouses,
+            string.concat(
+                "the activator lists the ",
+                vm.toString(desired.clearinghouses.length),
+                " Clearinghouses of env.json with their inclusions and offsets, in the declared order"
+            )
+        );
+    }
+
+    /// @notice Names the error of the activator a `checkPreconditions` revert carries, or
+    ///         returns the raw revert data for an error of another contract.
+    function _describeActivatorError(
+        bytes memory revertData_
+    ) internal pure returns (string memory description) {
+        if (revertData_.length < SELECTOR_LENGTH) {
+            return string.concat("data ", vm.toString(revertData_));
+        }
+        bytes4 selector = _selectorOf(revertData_);
+        string memory name = _activatorErrorName(selector);
+        if (bytes(name).length == 0) return string.concat("data ", vm.toString(revertData_));
+        return string.concat(name, " (data ", vm.toString(revertData_), ")");
+    }
+
+    /// @notice Returns the name of a precondition error of the activator, or an empty string.
+    // One branch per error of the interface; splitting the list would not make it clearer
+    // forge-lint: disable-next-item(cyclomatic-complexity)
+    function _activatorErrorName(bytes4 selector_) internal pure returns (string memory name) {
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_BindingMismatch
+                .selector
+        ) return "BindingMismatch";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_AlreadyActivated
+                .selector
+        ) return "AlreadyActivated";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_PolicyNotActive
+                .selector
+        ) return "PolicyNotActive";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_PolicyNotEnabled
+                .selector
+        ) return "PolicyNotEnabled";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_PolicyAlreadyEnabled
+                .selector
+        ) return "PolicyAlreadyEnabled";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_AlreadyBound
+                .selector
+        ) return "AlreadyBound";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_CallbackNotAuthorized
+                .selector
+        ) return "CallbackNotAuthorized";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_V1ShutDown
+                .selector
+        ) return "V1ShutDown";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_V1ConversionRateUnset
+                .selector
+        ) return "V1ConversionRateUnset";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_V1NotHeartTask
+                .selector
+        ) return "V1NotHeartTask";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_FacilityAlreadyHeartTask
+                .selector
+        ) return "FacilityAlreadyHeartTask";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_ClearinghouseRegistryMismatch
+                .selector
+        ) return "ClearinghouseRegistryMismatch";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_ClearinghouseReceivablesNotReadable
+                .selector
+        ) return "ClearinghouseReceivablesNotReadable";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_ClearinghouseOffsetTooHigh
+                .selector
+        ) return "ClearinghouseOffsetTooHigh";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_ReserveNotPriceable
+                .selector
+        ) return "ReserveNotPriceable";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_UsdeFeedNotReadable
+                .selector
+        ) return "UsdeFeedNotReadable";
+        if (
+            selector_ ==
+            IYieldRepurchaseFacilityV2Activator
+                .YieldRepurchaseFacilityV2Activator_UsdePriceOutOfBounds
+                .selector
+        ) return "UsdePriceOutOfBounds";
+        return "";
     }
 
     // =========== PLANNING HELPERS =========== //

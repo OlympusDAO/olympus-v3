@@ -15,6 +15,10 @@
         {
             "name": "YieldRepurchaseFacilityV2Lens",
             "args": {}
+        },
+        {
+            "name": "YieldRepurchaseFacilityV2Activator",
+            "args": {}
         }
     ]
 }

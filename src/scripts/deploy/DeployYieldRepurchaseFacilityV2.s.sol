@@ -189,7 +189,148 @@ contract DeployYieldRepurchaseFacilityV2 is DeployV3 {
         return (address(lens), "olympus.periphery");
     }
 
+    /// @notice Deploys the one-use activator of the launch, bound to the stack and to the
+    ///         launch values of `env.json`.
+    /// @dev The five policies of the stack must be deployed first, in this sequence or in
+    ///      `env.json`: the constructor of the activator reads their bindings. The launch values
+    ///      are the desired state of the chain: `olympus.config.BackingOracle.backing` and, under
+    ///      `olympus.config.YieldRepurchaseFacilityV2`, `initialDiscount`, `maxPricePremium`,
+    ///      `assets` and `clearinghouses`, read through `BackingOracleConfigLib` and
+    ///      `YieldRepurchaseFacilityV2ConfigLib` with their bounds. A value that changes after
+    ///      this deployment requires another activator: the launch proposal rejects an
+    ///      activator whose values differ from `env.json`.
+    ///
+    ///      Reverts if `env.json` does not declare exactly the sUSDS vault and the sUSDe vault,
+    ///      declares one of them with `enabled: false`, or names another backing vault than the
+    ///      sUSDS vault: the activator registers these two vaults, both enabled, with the sUSDS
+    ///      vault as the backing vault.
+    function deployYieldRepurchaseFacilityV2Activator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address timelock = _getAddressNotZero("olympus.governance.Timelock");
+        IYieldRepurchaseFacilityV2Activator.Deployment memory deployment;
+        deployment.kernel = _getAddressNotZero("olympus.Kernel");
+        deployment.backingOracle = _getAddressNotZero("olympus.policies.BackingOracle");
+        deployment.backingOracleConfigTimelock = _getAddressNotZero(
+            "olympus.policies.BackingOracleConfigTimelock"
+        );
+        deployment.config = _getAddressNotZero("olympus.policies.YieldRepurchaseFacilityV2Config");
+        deployment.configTimelock = _getAddressNotZero(
+            "olympus.policies.YieldRepurchaseFacilityV2ConfigTimelock"
+        );
+        deployment.facility = _getAddressNotZero("olympus.policies.YieldRepurchaseFacilityV2");
+        deployment.yieldRepoV1 = _getAddressNotZero("olympus.policies.YieldRepurchaseFacility");
+        deployment.heart = _getAddressNotZero("olympus.policies.OlympusHeart");
+        deployment.priceConfig = _getAddressNotZero("olympus.policies.OlympusPriceConfigV2");
+        deployment.bondAuctioneer = _getAddressNotZero(
+            "external.bond-protocol.BondFixedTermAuctioneer"
+        );
+        deployment.usdeUsdPriceFeed = YieldRepurchaseFacilityV2ConfigLib.usdeUsdPriceFeed(
+            env,
+            chain
+        );
+        deployment.ohm = _getAddressNotZero("olympus.legacy.OHM");
+        deployment.usds = _getAddressNotZero("external.tokens.USDS");
+        deployment.sUsds = _getAddressNotZero("external.tokens.sUSDS");
+        deployment.usde = _getAddressNotZero("external.tokens.USDe");
+        deployment.sUsde = _getAddressNotZero("external.tokens.sUSDe");
+
+        IYieldRepurchaseFacilityV2Activator.LaunchParameters
+            memory parameters = _readLaunchParameters(deployment.sUsds, deployment.sUsde);
+
+        // Log parameters
+        console2.log("YieldRepurchaseFacilityV2Activator parameters:");
+        console2.log("  timelock", timelock);
+        console2.log("  usdeUsdPriceFeed", deployment.usdeUsdPriceFeed);
+        console2.log("  backing", parameters.backing);
+        console2.log("  initialDiscount", parameters.initialDiscount);
+        console2.log("  maxPricePremium", parameters.maxPricePremium);
+        console2.log("  sUSDS yieldBuybackShare", parameters.sUsds.yieldBuybackShare);
+        console2.log("  sUSDS sellShares", parameters.sUsds.sellShares);
+        console2.log("  sUSDe yieldBuybackShare", parameters.sUsde.yieldBuybackShare);
+        console2.log("  sUSDe sellShares", parameters.sUsde.sellShares);
+        for (uint256 i = 0; i < parameters.clearinghouses.length; ++i) {
+            console2.log("  clearinghouse", parameters.clearinghouses[i].clearinghouse);
+            console2.log("    included", parameters.clearinghouses[i].included);
+            console2.log("    offset", parameters.clearinghouses[i].offset);
+        }
+
+        // Deploy
+        vm.broadcast();
+        YieldRepurchaseFacilityV2Activator activator = new YieldRepurchaseFacilityV2Activator(
+            timelock,
+            deployment,
+            parameters
+        );
+
+        return (address(activator), "olympus.proposals");
+    }
+
     // ========== HELPERS ========== //
+
+    /// @notice Reads the launch values of the activator from the desired state of `env.json`.
+    /// @dev Reverts if the desired state is malformed (see
+    ///      `YieldRepurchaseFacilityV2ConfigLib` and `BackingOracleConfigLib`), or if it does
+    ///      not declare exactly the two vaults, both enabled, with `sUsds_` as the backing
+    ///      vault.
+    /// @param sUsds_ The sUSDS vault.
+    /// @param sUsde_ The sUSDe vault.
+    function _readLaunchParameters(
+        address sUsds_,
+        address sUsde_
+    )
+        internal
+        view
+        returns (IYieldRepurchaseFacilityV2Activator.LaunchParameters memory parameters)
+    {
+        YieldRepurchaseFacilityV2ConfigLib.DesiredConfig
+            memory desired = YieldRepurchaseFacilityV2ConfigLib.desiredConfig(env, chain);
+
+        (
+            bool sUsdsDeclared,
+            YieldRepurchaseFacilityV2ConfigLib.DesiredAsset memory sUsds
+        ) = YieldRepurchaseFacilityV2ConfigLib.findAsset(desired.assets, sUsds_);
+        (
+            bool sUsdeDeclared,
+            YieldRepurchaseFacilityV2ConfigLib.DesiredAsset memory sUsde
+        ) = YieldRepurchaseFacilityV2ConfigLib.findAsset(desired.assets, sUsde_);
+        require(
+            desired.assets.length == _LAUNCH_ASSET_COUNT && sUsdsDeclared && sUsdeDeclared,
+            "The activator registers the sUSDS and sUSDe vaults: olympus.config.YieldRepurchaseFacilityV2.assets must declare exactly these two"
+        );
+        require(
+            sUsds.enabled && sUsde.enabled,
+            "The activator registers both vaults enabled: olympus.config.YieldRepurchaseFacilityV2.assets must not declare enabled: false"
+        );
+        require(
+            desired.backingVault == sUsds_,
+            "The activator designates the sUSDS vault as the backing vault: olympus.config.YieldRepurchaseFacilityV2.backingVault must name sUSDS"
+        );
+
+        parameters.backing = BackingOracleConfigLib.desiredBacking(env, chain);
+        parameters.initialDiscount = desired.parameters.initialDiscount;
+        parameters.maxPricePremium = desired.parameters.maxPricePremium;
+        parameters.sUsds = IYieldRepurchaseFacilityV2Activator.AssetParameters({
+            yieldBuybackShare: sUsds.yieldBuybackShare,
+            sellShares: sUsds.sellShares
+        });
+        parameters.sUsde = IYieldRepurchaseFacilityV2Activator.AssetParameters({
+            yieldBuybackShare: sUsde.yieldBuybackShare,
+            sellShares: sUsde.sellShares
+        });
+        parameters
+            .clearinghouses = new IYieldRepurchaseFacilityV2Activator.ClearinghouseParameters[](
+            desired.clearinghouses.length
+        );
+        for (uint256 i = 0; i < desired.clearinghouses.length; ++i) {
+            parameters.clearinghouses[i] = IYieldRepurchaseFacilityV2Activator
+                .ClearinghouseParameters({
+                    clearinghouse: desired.clearinghouses[i].clearinghouse,
+                    included: desired.clearinghouses[i].included,
+                    offset: desired.clearinghouses[i].offset
+                });
+        }
+    }
 
     /// @notice Reads the re-enable grace period of a deployment, in seconds.
     function _readGracePeriod(string memory deploymentName_) internal view returns (uint32) {
