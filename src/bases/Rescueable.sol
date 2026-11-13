@@ -12,7 +12,7 @@ import {ERC7528Constants} from "src/libraries/ERC7528Constants.sol";
 import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
-import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
+import {ERC165} from "@openzeppelin-5.7.0/utils/introspection/ERC165.sol";
 
 /// @title Rescueable
 /// @notice An abstract base for contracts that expose a privileged `rescue()` to sweep
