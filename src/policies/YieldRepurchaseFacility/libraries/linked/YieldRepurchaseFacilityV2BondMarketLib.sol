@@ -303,10 +303,7 @@ library YieldRepurchaseFacilityV2BondMarketLib {
             callData
         );
 
-        // The literals make the failure and the success return shapes explicit
-        // forge-lint: disable-start(boolean-cst)
         if (!success) return (false, 0, returned);
         return (true, abi.decode(returned, (uint256)), "");
-        // forge-lint: disable-end(boolean-cst)
     }
 }
