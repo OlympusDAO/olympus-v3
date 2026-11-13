@@ -23,16 +23,20 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 ///
 ///      The setters form two groups. The operator setters are callable by the config operator
 ///      of `IConfigOperator`, meant to be the config timelock, or by the admin role; the admin
-///      setters only by the admin role. Every setter requires this policy to be enabled and
-///      forwards while the facility is disabled as well, so that a correction can be applied
-///      before the facility is re-enabled. `setConfigOperator` of `IConfigOperator` is intended
-///      to be callable only by the admin role while the policy is enabled.
+///      setters only by the admin role. Every setter requires this policy to be an active policy
+///      of its kernel and to be enabled, and forwards while the facility is disabled as well, so
+///      that a correction can be applied before the facility is re-enabled. `setConfigOperator`
+///      of `IConfigOperator` is intended to be callable only by the admin role while the policy
+///      is an active policy of its kernel, whether or not it is enabled: the config operator
+///      can be rotated, or revoked with the zero address, while the policy is disabled.
 ///
 ///      The lifecycle is that of `IEnabler`, `IReEnabler`, and `IGracePeriod`: `enable` is
 ///      intended for the admin role, `disable` for the emergency or admin role, `reEnable` for
 ///      the yrf_admin role within the grace window after a disable, and `setGracePeriod` for the
 ///      admin role while the policy is enabled. The grace window must be strictly shorter than
-///      `MAX_GRACE_PERIOD`. Enabling and re-enabling require the bound facility to be an active
+///      `MAX_GRACE_PERIOD`. `enable`, `reEnable`, and `setGracePeriod` require this policy to be
+///      an active policy of its kernel; `disable` does not. `enable` and `disable` accept only
+///      an empty payload. Enabling and re-enabling require the bound facility to be an active
 ///      policy of the same kernel, to report that kernel as its own, and to name this policy as
 ///      its configurator.
 interface IYieldRepurchaseFacilityV2Config {
@@ -46,6 +50,14 @@ interface IYieldRepurchaseFacilityV2Config {
 
     /// @notice Thrown when the kernel supplied at construction is the zero address.
     error IYieldRepurchaseFacilityV2Config_ZeroAddress();
+
+    /// @notice Thrown when a function that requires this policy to be an active policy of its
+    ///         kernel is called while it is not.
+    /// @param policy The address of this policy.
+    error IYieldRepurchaseFacilityV2Config_PolicyNotActive(address policy);
+
+    /// @notice Thrown when `enable` or `disable` is called with a non-empty payload.
+    error IYieldRepurchaseFacilityV2Config_InvalidEnablerData();
 
     /// @notice Thrown when `setFacility` is called while a facility is already bound.
     error IYieldRepurchaseFacilityV2Config_FacilityAlreadySet();
@@ -155,7 +167,7 @@ interface IYieldRepurchaseFacilityV2Config {
     // ============ ADMIN FUNCTIONS ============ //
 
     /// @notice Binds the facility, once. Intended to be callable only by the admin role while the
-    ///         policy is disabled.
+    ///         policy is an active policy of its kernel and disabled.
     /// @dev The facility must be an active policy of the policy's kernel, report that kernel as
     ///      its own, and advertise `IYieldRepurchaseFacilityV2Write` and
     ///      `IYieldRepurchaseFacilityV2View` through ERC165. A bound facility cannot be replaced:

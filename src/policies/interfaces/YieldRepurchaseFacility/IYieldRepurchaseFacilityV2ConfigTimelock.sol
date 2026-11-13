@@ -19,26 +19,33 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///      configuration of its own.
 ///
 ///      The domains, their destination-local keys, and the preimages of their state hashes
-///      are, with `facility` the facility bound to the configuration policy:
+///      are, with `facility` the facility bound to the configuration policy and `operator` the
+///      config operator the configuration policy names when the hash is taken:
 ///      - the initial discount: key `INITIAL_DISCOUNT_DOMAIN`, preimage
-///        `abi.encode(INITIAL_DISCOUNT_DOMAIN, facility, initialDiscount)`;
+///        `abi.encode(INITIAL_DISCOUNT_DOMAIN, facility, operator, initialDiscount)`;
 ///      - the max price premium: key `MAX_PRICE_PREMIUM_DOMAIN`, preimage
-///        `abi.encode(MAX_PRICE_PREMIUM_DOMAIN, facility, maxPricePremium)`;
+///        `abi.encode(MAX_PRICE_PREMIUM_DOMAIN, facility, operator, maxPricePremium)`;
 ///      - the yield buyback share of a vault: key
 ///        `keccak256(abi.encode(YIELD_BUYBACK_SHARE_DOMAIN, vault))`, preimage
-///        `abi.encode(YIELD_BUYBACK_SHARE_DOMAIN, facility, vault, yieldBuybackShare)`;
+///        `abi.encode(YIELD_BUYBACK_SHARE_DOMAIN, facility, operator, vault,
+///        yieldBuybackShare)`;
 ///      - the status of a vault: key `keccak256(abi.encode(ASSET_STATUS_DOMAIN, vault))`,
-///        preimage `abi.encode(ASSET_STATUS_DOMAIN, facility, vault, isAssetEnabled,
+///        preimage `abi.encode(ASSET_STATUS_DOMAIN, facility, operator, vault, isAssetEnabled,
 ///        isBackingVault)`, where `isBackingVault` is whether the vault is the backing vault;
 ///      - the stored next yield of a vault: key
 ///        `keccak256(abi.encode(NEXT_YIELD_DOMAIN, vault))`, preimage
-///        `abi.encode(NEXT_YIELD_DOMAIN, facility, vault, nextYield)`;
+///        `abi.encode(NEXT_YIELD_DOMAIN, facility, operator, vault, nextYield)`;
 ///      - the receivables offset of a Clearinghouse: key
 ///        `keccak256(abi.encode(CLEARINGHOUSE_OFFSET_DOMAIN, clearinghouse))`, preimage
-///        `abi.encode(CLEARINGHOUSE_OFFSET_DOMAIN, facility, clearinghouse, offset)`;
+///        `abi.encode(CLEARINGHOUSE_OFFSET_DOMAIN, facility, operator, clearinghouse, offset)`;
 ///      - the inclusion of a Clearinghouse: key
 ///        `keccak256(abi.encode(CLEARINGHOUSE_INCLUSION_DOMAIN, clearinghouse))`, preimage
-///        `abi.encode(CLEARINGHOUSE_INCLUSION_DOMAIN, facility, clearinghouse, isIncluded)`.
+///        `abi.encode(CLEARINGHOUSE_INCLUSION_DOMAIN, facility, operator, clearinghouse,
+///        isIncluded)`.
+///
+///      The hashes compare the state at queue time with the state at execution: a config
+///      operator or a guarded field that changes and returns to its queue-time value before
+///      the execution produces the queue-time hash again.
 ///
 ///      `setInitialDiscount` and `setMaxPricePremium` reserve their global domain;
 ///      `setYieldBuybackShare` the share domain of its vault; `disableAsset` the status domain
@@ -62,16 +69,22 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///      the hashes read only the guarded fields, so an action whose guarded fields match the
 ///      new registration executes against it.
 ///
-///      Queueing requires this policy to be enabled, the configuration policy to report this
-///      policy's kernel, to be an active policy of it and to be enabled, the caller to hold the
-///      yrf_admin role, and the configuration policy to name this policy as its config
-///      operator. Execution is permissionless once the delay elapses and requires the same
-///      states of both policies and the config operator binding; the facility itself may be
-///      disabled, since its configuration setters apply while it is disabled. Cancellation is
-///      restricted to the emergency role and is available while this policy is disabled and
-///      after the action has expired. Enabling and re-enabling this policy require the
-///      configuration policy to report this policy's kernel and to be an active policy of it,
-///      and the grace window of `reEnable` must be strictly shorter than `MAX_GRACE_PERIOD`.
+///      Queueing requires this policy to be an active policy of its kernel and enabled, the
+///      configuration policy to report this policy's kernel, to be an active policy of it and
+///      to be enabled, the caller to hold the yrf_admin role, and the configuration policy to
+///      name this policy as its config operator. Execution is permissionless once the delay
+///      elapses and requires the same states of both policies and the config operator binding;
+///      the facility itself may be disabled, since its configuration setters apply while it is
+///      disabled. Cancellation is restricted to the emergency role and requires this policy to
+///      be an active policy of its kernel; it is available while this policy is disabled and
+///      after the action has expired, and reads neither the configuration policy nor its
+///      config operator. Enabling and re-enabling this policy require it to be an active policy
+///      of its kernel, the configuration policy to report that kernel and to be an active
+///      policy of it, and the configuration policy to name this policy as its config operator;
+///      the configuration policy may be disabled. `enable` and `disable` accept only an empty
+///      payload, and `disable` is available while this policy is not an active policy of its
+///      kernel. The grace window of `reEnable` must be strictly shorter than
+///      `MAX_GRACE_PERIOD`.
 ///
 ///      The queue itself (`executeQueuedAction`, `cancelQueuedAction`, the stored actions,
 ///      `pendingActionId` and the other reservation views) is the `IConfigTimelockBatchQueue`
@@ -83,6 +96,14 @@ interface IYieldRepurchaseFacilityV2ConfigTimelock {
 
     /// @notice Thrown when the kernel supplied at construction is the zero address.
     error IYieldRepurchaseFacilityV2ConfigTimelock_ZeroAddress();
+
+    /// @notice Thrown when a function that requires this policy to be an active policy of its
+    ///         kernel is called while it is not.
+    /// @param policy The address of this policy.
+    error IYieldRepurchaseFacilityV2ConfigTimelock_PolicyNotActive(address policy);
+
+    /// @notice Thrown when `enable` or `disable` is called with a non-empty payload.
+    error IYieldRepurchaseFacilityV2ConfigTimelock_InvalidEnablerData();
 
     /// @notice Thrown when the configuration policy supplied at construction is the zero
     ///         address or does not advertise `IYieldRepurchaseFacilityV2Config`,
@@ -264,8 +285,8 @@ interface IYieldRepurchaseFacilityV2ConfigTimelock {
     // ============ CONFIGURATION ============ //
 
     /// @notice Sets the delay applied to actions queued afterwards. Already queued actions keep
-    ///         their stored timestamps. Intended to be callable only by the admin role, whether
-    ///         or not the timelock is enabled.
+    ///         their stored timestamps. Intended to be callable only by the admin role while the
+    ///         timelock is an active policy of its kernel, whether or not it is enabled.
     /// @param delay_ The new delay, in seconds, within the accepted bounds.
     function setTimelockDelay(uint48 delay_) external;
 }
