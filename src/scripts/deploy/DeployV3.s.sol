@@ -20,6 +20,9 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 // Contracts
+import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
+import {BackingOracle} from "src/policies/BackingOracle.sol";
+import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
 import {Kernel, Module} from "src/Kernel.sol";
 
 // Bridge
@@ -76,11 +79,6 @@ import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
-
-// Backing oracle
-import {BackingOracle} from "src/policies/BackingOracle.sol";
-import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 
 // Test mocks
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
@@ -1172,54 +1170,6 @@ contract DeployV3 is WithEnvironment {
         return (address(cache), "olympus.policies");
     }
 
-    // ========== BACKING ORACLE DEPLOYMENT FUNCTIONS ========== //
-
-    /// @notice Deploys the BackingOracle policy for the Kernel.
-    /// @dev The policy starts disabled, with no config operator and a re-enable grace window of
-    ///      seven days; the constructor takes no other parameter.
-    function deployBackingOracle() public returns (address, string memory) {
-        // Dependencies
-        console2.log("Checking dependencies");
-        address kernel = _getAddressNotZero("olympus.Kernel");
-
-        // Log parameters
-        console2.log("BackingOracle parameters:");
-        console2.log("  kernel", kernel);
-
-        // Deploy
-        vm.broadcast();
-        BackingOracle backingOracle = new BackingOracle(Kernel(kernel));
-
-        return (address(backingOracle), "olympus.policies");
-    }
-
-    /// @notice Deploys the BackingOracleConfigTimelock policy for the BackingOracle policy.
-    /// @dev The oracle must already be deployed (in this sequence or in `env.json`); the
-    ///      timelock constructor requires it to advertise `IBackingOracle`, `IConfigOperator`
-    ///      and `IEnabler` and to report the same Kernel. The policy starts disabled, with the
-    ///      fixed one-day notice and a re-enable grace window of seven days; the constructor
-    ///      takes no other parameter.
-    function deployBackingOracleConfigTimelock() public returns (address, string memory) {
-        // Dependencies
-        console2.log("Checking dependencies");
-        address kernel = _getAddressNotZero("olympus.Kernel");
-        address backingOracle = _getAddressNotZero("olympus.policies.BackingOracle");
-
-        // Log parameters
-        console2.log("BackingOracleConfigTimelock parameters:");
-        console2.log("  kernel", kernel);
-        console2.log("  backingOracle", backingOracle);
-
-        // Deploy
-        vm.broadcast();
-        BackingOracleConfigTimelock timelock = new BackingOracleConfigTimelock(
-            Kernel(kernel),
-            IBackingOracle(backingOracle)
-        );
-
-        return (address(timelock), "olympus.policies");
-    }
-
     // ========== MOCK PRICE FEED DEPLOYMENT FUNCTIONS ========== //
 
     function deploydaiEthPriceFeed() public returns (address, string memory) {
@@ -1613,6 +1563,38 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(lzBridgeAndDelegateConfig), "olympus.policies");
+    }
+
+    function _getKernel() private view returns (Kernel) {
+        return Kernel(_getAddressNotZero("olympus.Kernel"));
+    }
+
+    /// @notice Deploys the shared backing oracle without an initial backing value.
+    function deployBackingOracle() public returns (address, string memory) {
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        console2.log("BackingOracle parameters:");
+        console2.log("  kernel", address(kernel));
+        vm.broadcast();
+        BackingOracle oracle = new BackingOracle(kernel);
+        console2.log("BackingOracle deployed at", address(oracle));
+        return (address(oracle), "olympus.policies");
+    }
+
+    /// @notice Deploys the immutable backing-update queue.
+    function deployBackingOracleConfigTimelock() public returns (address, string memory) {
+        console2.log("Checking dependencies");
+        Kernel kernel = _getKernel();
+        IBackingOracle oracle = IBackingOracle(
+            _getAddressNotZero("olympus.policies.BackingOracle")
+        );
+        console2.log("BackingOracleConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  backingOracle", address(oracle));
+        vm.broadcast();
+        BackingOracleConfigTimelock queue = new BackingOracleConfigTimelock(kernel, oracle);
+        console2.log("BackingOracleConfigTimelock deployed at", address(queue));
+        return (address(queue), "olympus.policies");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
