@@ -157,23 +157,31 @@ interface IYieldRepurchaseFacilityV2Lens {
     ///         created by the facility on the current bond auctioneer.
     function marketReserve(uint256 marketId_) external view returns (address reserve);
 
-    /// @notice Returns the price gate of the daily cycles: whether the OHM price
-    ///         denominated in the backing reserve is at or above a non-zero backing value,
-    ///         and the two values compared.
-    /// @dev Mirrors the gate of `IPeriodicTask.execute`, and reverts where it reverts:
-    ///      when the `PRICE.getPriceIn` read of the backing reserve reverts (no backing
-    ///      vault designated, or a stale feed of the backing reserve), when the backing
-    ///      oracle does not report the facility's Kernel through a readable `kernel()`,
-    ///      when its `isEnabled()` is not readable, or when its `backing()` read reverts.
-    ///      A revert here means the next daily cycle of `execute` reverts for the same
-    ///      reason: a configuration error to resolve, not a defect of the view. The
-    ///      backing is zero, and the gate closed, while the backing oracle is not an active
-    ///      policy of the facility's Kernel or is disabled. A daily cycle that finds the
-    ///      gate closed emits `PriceGateClosed` with the `gatePrice` and `backing` it
-    ///      compared.
+    /// @notice Returns the price gate of the daily cycles at the current prices: whether
+    ///         the current OHM price denominated in the backing reserve is at or above a
+    ///         non-zero backing value, and the two values compared.
+    /// @dev Mirrors the gate of `IPeriodicTask.execute` with the current OHM price of the
+    ///      PRICE module (`PRICE.getPriceIn`). A daily beat takes the OHM price from the
+    ///      observation the PRICE module stored for OHM in the block of the beat when there
+    ///      is one, which is the current price as resolved when it was stored while the
+    ///      module does not include the moving average in the current OHM price; with the
+    ///      moving average included, the gate price of such a beat can differ from the one
+    ///      returned here.
+    ///
+    ///      The view reverts when the `PRICE.getPriceIn` read reverts (no backing vault
+    ///      designated, or a price of OHM or of the backing reserve that cannot be
+    ///      resolved, such as a stale feed), when the backing oracle does not report the
+    ///      facility's Kernel through a readable `kernel()`, when its `isEnabled()` is not
+    ///      readable, or when its `backing()` read reverts. A daily cycle of `execute`
+    ///      reverts for the same reasons, except that a beat pricing with the observation
+    ///      of its block does not read the current OHM price. A revert here is a
+    ///      configuration error to resolve, not a defect of the view. The backing is zero,
+    ///      and the gate closed, while the backing oracle is not an active policy of the
+    ///      facility's Kernel or is disabled. A daily cycle that finds the gate closed
+    ///      emits `PriceGateClosed` with the `gatePrice` and `backing` it compared.
     /// @return open Whether the daily cycles open markets.
-    /// @return gatePrice The OHM price denominated in the backing reserve, in oracle
-    ///         decimals.
+    /// @return gatePrice The current OHM price denominated in the backing reserve, in
+    ///         oracle decimals.
     /// @return backing The backing value the gate compares against, in 18 decimals.
     function priceGate() external view returns (bool open, uint256 gatePrice, uint256 backing);
 }

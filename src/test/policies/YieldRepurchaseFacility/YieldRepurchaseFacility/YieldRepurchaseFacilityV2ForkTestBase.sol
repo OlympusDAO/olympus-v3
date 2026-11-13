@@ -191,8 +191,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     uint256 internal constant MAX_PRICE_PREMIUM = 10e16;
     uint32 internal constant GRACE_PERIOD = 5 days;
     /// @notice The gas limit of one isolated step of the facility.
-    /// @dev About twice the limit the costliest step measured on the pinned block needs:
-    ///      about 1_040_000 gas for a daily cycle when the OHM price feeds are not mocked.
+    /// @dev Nearly three times the gas the costliest step measured on the pinned block needs:
+    ///      about 693_000 for a daily cycle when the price feeds are not mocked.
     uint32 internal constant STEP_GAS_LIMIT = 2_000_000;
     /// @notice The delay of the config timelock: the minimum accepted, so that an action
     ///         queued after a daily beat is executable after the following day's beat.
@@ -971,15 +971,16 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     /// @notice The oracle price of the sUSDS asset and of the price gate at the pending
-    ///         beat: the live `getPriceIn(OHM, USDS)` resolution, evaluated on the same
-    ///         mocked feeds the facility reads. USDS is pinned to exactly 1e18, so the
-    ///         value equals the steered OHM/USD price.
+    ///         beat: `getPriceIn(OHM, USDS)` at the current prices, evaluated on the mocked
+    ///         feeds from which the Heart stores the OHM observation the facility prices the
+    ///         beat with. USDS is pinned to exactly 1e18, so the value equals the steered
+    ///         OHM/USD price.
     function _expectedOraclePrice() internal view returns (uint256) {
         return priceV2.getPriceIn(OHM, USDS);
     }
 
-    /// @notice The oracle price of the sUSDe asset at the pending beat: the live
-    ///         `getPriceIn(OHM, USDe)` resolution on the same mocked feeds.
+    /// @notice The oracle price of the sUSDe asset at the pending beat:
+    ///         `getPriceIn(OHM, USDe)` at the current prices, on the same mocked feeds.
     function _expectedSusdeOraclePrice() internal view returns (uint256) {
         return priceV2.getPriceIn(OHM, USDE);
     }
@@ -1275,6 +1276,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     function _assertBeat(uint256 marketCountBefore_) internal view {
         assertEq(yieldRepo.epoch(), modelEpoch, "epoch");
         assertEq(price.getLastPrice(), _expectedOraclePrice(), "oracle price");
+        // The Heart stored the OHM observation of the block before it ran the facility, so
+        // the facility priced the beat with that observation
+        (, uint48 observedAt) = priceV2.getPrice(OHM, IPRICEv2.Variant.LAST);
+        assertEq(observedAt, vm.getBlockTimestamp(), "OHM observation of the beat block");
         assertEq(
             aggregator.marketCounter(),
             marketCountBefore_ + modelPendingMarkets,

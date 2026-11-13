@@ -59,11 +59,11 @@ library YieldRepurchaseFacilityV2Constants {
     /// @notice Lower bound of the step gas limit, inclusive, in gas units.
     /// @dev The bound guards against a mis-entered value: it stands above the gas the
     ///      costliest step measured on a mainnet fork (block 25_680_000) needs, about
-    ///      1_040_000 for a daily cycle that wraps an idle reserve, closes the previous
+    ///      693_000 for a daily cycle that wraps an idle reserve, closes the previous
     ///      market, and creates a market on bond contracts not accessed earlier in the
     ///      transaction. It does not guarantee that a step fits into the limit: the gas a
-    ///      step needs depends on the vault, on the feeds the PRICE module resolves, and
-    ///      on the bond contracts.
+    ///      step needs depends on the vault, on the feeds the PRICE module resolves for
+    ///      the reserve, and on the bond contracts.
     uint32 internal constant MIN_STEP_GAS_LIMIT = 1_100_000;
 
     /// @notice Upper bound of the step gas limit, inclusive, in gas units.

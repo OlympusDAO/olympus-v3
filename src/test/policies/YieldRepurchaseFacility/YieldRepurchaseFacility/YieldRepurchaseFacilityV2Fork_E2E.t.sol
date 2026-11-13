@@ -9,6 +9,7 @@ import {Vm} from "@forge-std-1.16.2/Vm.sol";
 
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2MathLib.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
@@ -332,6 +333,124 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         // 42 beats total: the epoch counter sits at 20, one beat away from the third
         // weekly reset.
         assertEq(yieldRepo.epoch(), RESTART_EPOCH, "final epoch");
+    }
+
+    // ============ OHM PRICE OF THE BEAT ============ //
+
+    /// @notice The parameters of a created market that the oracle price and the bid determine.
+    struct MarketParameters {
+        uint256 capacity;
+        uint256 minPrice;
+        uint256 maxPayout;
+        uint256 scale;
+        uint256 initialPrice;
+    }
+
+    /// @notice Reads the parameters of the live market the facility tracks for the vault.
+    // Only the fields the oracle price and the bid determine are compared
+    // forge-lint: disable-next-item(unused-return)
+    function _trackedMarket(
+        address vault_
+    ) internal view returns (MarketParameters memory parameters) {
+        (bool tracked, uint256 marketId, bool live) = yieldRepoLens.getVaultMarket(vault_);
+        assertTrue(tracked, "market tracked");
+        assertTrue(live, "market live");
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            parameters.capacity,
+            ,
+            parameters.minPrice,
+            parameters.maxPayout,
+            ,
+            ,
+            parameters.scale
+        ) = auctioneer.markets(marketId);
+        parameters.initialPrice = auctioneer.marketPrice(marketId);
+    }
+
+    function _assertSameMarket(
+        MarketParameters memory actual_,
+        MarketParameters memory expected_,
+        string memory label_
+    ) internal pure {
+        assertEq(actual_.capacity, expected_.capacity, string.concat(label_, ": capacity"));
+        assertEq(actual_.minPrice, expected_.minPrice, string.concat(label_, ": minPrice"));
+        assertEq(actual_.maxPayout, expected_.maxPayout, string.concat(label_, ": maxPayout"));
+        assertEq(actual_.scale, expected_.scale, string.concat(label_, ": scale"));
+        assertEq(
+            actual_.initialPrice,
+            expected_.initialPrice,
+            string.concat(label_, ": initial price")
+        );
+    }
+
+    function test_execute_ohmObservationOfTheBlock_pricesTheMarketsAsTheCurrentPrice() public {
+        // The first daily beat runs three times from the same state, as a direct `execute`
+        // call in the fork block, where the feed mocks of the setup are fresh
+        uint256 snapshotId = vm.snapshotState();
+
+        // Without an OHM observation of the block the facility reads the current OHM price
+        (uint256 observation, uint48 observedAt) = priceV2.getPrice(OHM, IPRICEv2.Variant.LAST);
+        assertLt(observedAt, vm.getBlockTimestamp(), "current price: no observation of the block");
+        uint256 susdsOraclePrice = priceV2.getPriceIn(OHM, USDS);
+        uint256 susdeOraclePrice = priceV2.getPriceIn(OHM, USDE);
+        uint256 susdeConversionRate = susde.previewRedeem(ONE_SHARE);
+        vm.prank(HEART);
+        yieldRepo.execute();
+        MarketParameters memory susdsMarket = _trackedMarket(SUSDS);
+        MarketParameters memory susdeMarket = _trackedMarket(SUSDE);
+
+        // The markets are priced by the values `getPriceIn` reports in the block.
+        // sUSDS pays out USDS: the oracle price is OHM in USDS (18 decimals).
+        (uint256 initialPrice, uint256 minPrice, ) = _mirrorMarketPricing(susdsOraclePrice);
+        assertEq(susdsMarket.initialPrice, initialPrice, "current price: sUSDS initial price");
+        assertEq(susdsMarket.minPrice, minPrice, "current price: sUSDS minPrice");
+        // sUSDe pays out shares: oraclePrice (18 decimals, USDe per OHM) * 1e18
+        // / conversionRate (18 decimals, USDe per share) -> 18 decimals, shares per OHM (floor).
+        (initialPrice, minPrice, ) = _mirrorMarketPricing(
+            susdeOraclePrice.mulDiv(ONE_SHARE, susdeConversionRate)
+        );
+        assertEq(susdeMarket.initialPrice, initialPrice, "current price: sUSDe initial price");
+        assertEq(susdeMarket.minPrice, minPrice, "current price: sUSDe minPrice");
+
+        // With the OHM observation of the block, stored as the Heart stores it before its
+        // tasks, the facility prices with the observation. It equals the current OHM price of
+        // the block, so the markets are the same.
+        assertTrue(vm.revertToState(snapshotId), "snapshot revert failed");
+        vm.prank(HEART);
+        price.updateMovingAverage();
+        (observation, observedAt) = priceV2.getPrice(OHM, IPRICEv2.Variant.LAST);
+        assertEq(observedAt, vm.getBlockTimestamp(), "observation: of the block");
+        assertEq(observation, priceV2.getPrice(OHM), "observation: equals the current price");
+        vm.prank(HEART);
+        yieldRepo.execute();
+        _assertSameMarket(_trackedMarket(SUSDS), susdsMarket, "observation: sUSDS");
+        _assertSameMarket(_trackedMarket(SUSDE), susdeMarket, "observation: sUSDe");
+
+        // The current OHM price moves after the observation of the block is stored: the
+        // markets stay priced by the observation.
+        // movedPrice = ohmPriceUsd * (10000 - 300) / 10000 (18 decimals, floor).
+        assertTrue(vm.revertToState(snapshotId), "snapshot revert failed");
+        vm.prank(HEART);
+        price.updateMovingAverage();
+        _applyPriceDeltaBps(-300);
+        _updateOracles();
+        assertEq(priceV2.getPrice(OHM), ohmPriceUsd, "moved price: current price");
+        assertLt(ohmPriceUsd, observation, "moved price: below the observation");
+        vm.prank(HEART);
+        yieldRepo.execute();
+        _assertSameMarket(_trackedMarket(SUSDS), susdsMarket, "moved price: sUSDS");
+        _assertSameMarket(_trackedMarket(SUSDE), susdeMarket, "moved price: sUSDe");
+        // The lens gate is evaluated at the current price.
+        // gatePrice = ohmPriceUsd (18 decimals) * 1e18 / USDS price (1e18) = ohmPriceUsd.
+        (bool gateOpen, uint256 gatePrice, uint256 gateBacking) = yieldRepoLens.priceGate();
+        assertTrue(gateOpen, "moved price: lens gate open");
+        assertEq(gatePrice, ohmPriceUsd, "moved price: lens gate price");
+        assertEq(gateBacking, BACKING, "moved price: lens gate backing");
     }
 
     // ============ DAY-SPECIFIC ASSERTIONS ============ //

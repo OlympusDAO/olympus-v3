@@ -5,11 +5,13 @@ pragma solidity ^0.8.24;
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {YieldRepurchaseFacilityV2BackingOracleLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2BackingOracleLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
@@ -27,7 +29,8 @@ import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 /// @notice An external library that resolves and validates the dependencies of the
 ///         YieldRepurchaseFacilityV2: the Kernel modules and their versions, the
 ///         configurator, the backing oracle, and the bond contracts. It also reads the
-///         backing value of the backing oracle for the facility.
+///         backing value of the backing oracle and the prices of the PRICE module for the
+///         facility.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      facility is `address(this)` and the errors belong to the facility interface. The
 ///      library holds no state: the facility passes its Kernel and stores what the library
@@ -55,6 +58,10 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     /// @notice The number of module permissions the facility requests.
     uint256 private constant _PERMISSION_COUNT = 2;
 
+    /// @notice One whole unit of a price of the PRICE module, whose prices carry the 18
+    ///         decimals `configureDependencies` requires.
+    uint256 private constant _PRICE_UNIT = 1e18;
+
     /// @notice The module handles resolved by `configureDependencies`.
     /// @param trsry The TRSRY module.
     /// @param price The PRICE module.
@@ -79,7 +86,8 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     ///        version 1 (`Policy_WrongModuleVersion`).
     ///      - The PRICE module reports a minor version below 2
     ///        (`Policy_WrongModuleVersion`): the facility prices the assets through
-    ///        `PRICE.getPriceIn`, which the PRICE surface provides from version 1.2.
+    ///        `PRICE.getPrice(asset, variant)` and `PRICE.getPriceIn`, which the PRICE
+    ///        surface provides from version 1.2.
     ///      - `PRICE.decimals()` is not 18, the decimals of the backing value
     ///        (`IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals`).
     /// @param kernel_ The Kernel of the facility.
@@ -113,7 +121,8 @@ library YieldRepurchaseFacilityV2DependenciesLib {
         if (trsryMajor != 1 || priceMajor != 1 || chregMajor != 1 || rolesMajor != 1)
             revert Policy.Policy_WrongModuleVersion(abi.encode([1, 1, 1, 1]));
 
-        // The `getPriceIn` surface is provided by the PRICE module from version 1.2
+        // `getPrice(asset, variant)` and `getPriceIn` are provided by the PRICE module from
+        // version 1.2.
         if (priceMinor < 2) revert Policy.Policy_WrongModuleVersion(abi.encode([1, 2]));
 
         // The oracle price is compared against the 18-decimal backing value, so the
@@ -271,6 +280,80 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     function readBacking(Kernel kernel_, address backingOracle_) external view returns (uint256) {
         return
             YieldRepurchaseFacilityV2BackingOracleLib.readBacking(address(kernel_), backingOracle_);
+    }
+
+    /// @notice Returns the OHM price a daily beat of the facility prices with, in 18
+    ///         decimals: the last observation the PRICE module stored for OHM when that
+    ///         observation carries the timestamp of the current block and a non-zero price,
+    ///         and the current OHM price of the module otherwise.
+    /// @dev `OlympusHeart.beat` stores the observations (`PRICE.updateMovingAverage`) before
+    ///      it runs the periodic tasks: while the module stores observations for OHM, a beat
+    ///      made through it reads the observation of its block here, and the module does not
+    ///      resolve the OHM feeds again.
+    ///
+    ///      The module stores an observation as the price it resolves from the feeds of the
+    ///      asset without the moving average. While the module does not include the moving
+    ///      average in the current OHM price (`useMovingAverage` unset), the observation is
+    ///      the current price as resolved when the observation was stored; with
+    ///      `useMovingAverage` set, the current price includes the moving average and the
+    ///      observation does not.
+    ///
+    ///      A revert of the observation read is not propagated, and the `catch` clause copies
+    ///      no return data: the current price is read instead, as it is for an observation
+    ///      of another block and for a zero observation. The module reverts that read with
+    ///      `PRICE_MovingAverageNotStored` while it stores no observations for OHM. A
+    ///      response that does not decode as a price and a 48-bit timestamp reverts.
+    ///
+    ///      Reverts if the current OHM price is read and that read reverts: OHM is not an
+    ///      approved asset of the module, or the module cannot resolve its price.
+    /// @param price_ The PRICE module.
+    /// @param ohm_ The OHM token.
+    /// @return The OHM price, in 18 decimals (units of account per OHM).
+    function readOhmPrice(address price_, address ohm_) external view returns (uint256) {
+        try PRICEv2(price_).getPrice(ohm_, IPRICEv2.Variant.LAST) returns (
+            uint256 lastPrice,
+            uint48 observedAt
+        ) {
+            // The equality selects the observation stored in the current block
+            // forge-lint: disable-next-line(block-timestamp)
+            if (observedAt == block.timestamp && lastPrice != 0) return lastPrice;
+        } catch {}
+
+        // The second value is the timestamp of the read, the block timestamp
+        // forge-lint: disable-next-line(unused-return)
+        (uint256 currentPrice, ) = PRICEv2(price_).getPrice(ohm_, IPRICEv2.Variant.CURRENT);
+        return currentPrice;
+    }
+
+    /// @notice Returns an OHM price denominated in a reserve token, in 18 decimals, at the
+    ///         current price of the reserve token in the PRICE module.
+    /// @dev The module resolves the current price from the feeds configured for the
+    ///      reserve, under their freshness thresholds.
+    ///
+    ///      ohmPrice_ (18 decimals, units of account per OHM) * 1e18 / reservePrice
+    ///      (18 decimals, units of account per reserve token) -> 18 decimals, reserve tokens
+    ///      per OHM, rounded down. It is the full-precision division `PRICE.getPriceIn`
+    ///      performs on the current prices of the two assets, so with the current OHM price
+    ///      as `ohmPrice_` the result is the value of `PRICE.getPriceIn(ohm, reserve_)`.
+    ///
+    ///      Reverts if:
+    ///      - The current price read of `reserve_` reverts: the reserve is not an approved
+    ///        asset of the module, or the module cannot resolve its price.
+    ///      - The division fails (a revert without data): the reserve price is zero, or the
+    ///        quotient does not fit in 256 bits.
+    /// @param price_ The PRICE module.
+    /// @param ohmPrice_ The OHM price, in 18 decimals (units of account per OHM).
+    /// @param reserve_ The reserve token.
+    /// @return The OHM price, in 18 decimals (reserve tokens per OHM).
+    function readPriceIn(
+        address price_,
+        uint256 ohmPrice_,
+        address reserve_
+    ) external view returns (uint256) {
+        // The second value is the timestamp of the read, the block timestamp
+        // forge-lint: disable-next-line(unused-return)
+        (uint256 reservePrice, ) = PRICEv2(price_).getPrice(reserve_, IPRICEv2.Variant.CURRENT);
+        return FullMath.mulDiv(ohmPrice_, _PRICE_UNIT, reservePrice);
     }
 
     /// @notice Resolves the teller of a bond auctioneer before the facility stores the pair.

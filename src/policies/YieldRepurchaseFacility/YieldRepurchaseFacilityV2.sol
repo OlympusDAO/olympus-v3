@@ -53,8 +53,11 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      every third epoch runs a daily cycle that opens 24-hour bond markets buying OHM
 ///      with the reserves, and the 21st epoch first runs the weekly reset, which
 ///      withdraws the projected yield from the treasury into the per-vault buyback
-///      pools. Each vault's market is priced by the live OHM price denominated in its
-///      reserve token (`PRICE.getPriceIn`). The purchased OHM is burned against a
+///      pools. Each vault's market is priced by the OHM price denominated in its
+///      reserve token. A daily beat reads the OHM price once: the observation the PRICE
+///      module stored for OHM in the block of the beat, or the current OHM price of the
+///      module when there is no such observation; each reserve token is priced by its
+///      current price in the module (see `execute`). The purchased OHM is burned against a
 ///      treasury withdrawal priced by the backing oracle. Markets are not opened while
 ///      the OHM price in the backing reserve is below the backing, and neither markets
 ///      are opened nor OHM is burned while the backing oracle is not an active policy of
@@ -282,8 +285,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      - Any of the TRSRY, PRICE, CHREG, or ROLES modules does not report major
     ///        version 1.
     ///      - The PRICE module reports a minor version below 2. The facility prices the
-    ///        assets through `PRICE.getPriceIn`, which the PRICE surface provides from
-    ///        version 1.2.
+    ///        assets through `PRICE.getPrice(asset, variant)` and `PRICE.getPriceIn`, which
+    ///        the PRICE surface provides from version 1.2.
     ///      - `PRICE.decimals()` is not 18, the decimals of the backing value.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         YieldRepurchaseFacilityV2DependenciesLib.Modules memory modules;
@@ -566,29 +569,45 @@ contract YieldRepurchaseFacilityV2 is
     ///      `stepGasLimit` is not skipped, the whole call reverts, and the beat succeeds
     ///      when repeated with more gas.
     ///
-    ///      Market pricing is per asset: each vault's daily cycle reads
-    ///      `PRICE.getPriceIn(OHM, reserve)`, a live resolution through which the PRICE
-    ///      module enforces the freshness thresholds of the configured feeds, reverting
-    ///      on a stale feed or an unregistered reserve. The read runs inside the vault's
-    ///      isolated self-call, so a price failure of one reserve skips only that
-    ///      vault's daily cycle.
+    ///      The OHM price is read once per daily beat, after the processing of the
+    ///      purchased OHM and before the price gate (see `_ohmPrice`): the last
+    ///      observation the PRICE module stored for OHM when that observation carries the
+    ///      timestamp of the block and a non-zero price, and the current OHM price of the
+    ///      module otherwise. `OlympusHeart.beat` stores the observations before it runs
+    ///      the periodic tasks: while the module stores observations for OHM, a beat made
+    ///      through it prices with the observation of its block. The observation is the
+    ///      price resolved from the OHM feeds without the moving average: it is the
+    ///      current price as resolved when it was stored while the module does not
+    ///      include the moving average in the current OHM price. An observation that is
+    ///      missing, of another block, or zero, and a read of the observation that
+    ///      reverts, do not revert the beat: the beat resolves the current OHM price
+    ///      instead.
+    ///
+    ///      Market pricing is per asset: the daily cycle of each vault denominates that
+    ///      OHM price in the vault's reserve at the current price of the reserve, which
+    ///      the PRICE module resolves under the freshness thresholds of the configured
+    ///      feeds, reverting on a stale feed or an unregistered reserve. The reserve
+    ///      price is read inside the vault's isolated self-call, so a price failure of
+    ///      one reserve skips only that vault's daily cycle.
     ///
     ///      The price gate compares the OHM price denominated in the backing reserve
-    ///      against the backing value. The gate read and the backing oracle reads are
-    ///      deliberately not isolated: both are protocol-owned dependencies of the
-    ///      backing accounting, and a failure there is a configuration error that should
-    ///      surface loudly. A backing oracle that is not an active policy of the Kernel or
-    ///      is disabled counts as a zero backing (see `_backing`), and a zero backing
-    ///      closes the gate: the daily markets are skipped without a revert, and the
-    ///      processing of the purchased OHM keeps it accumulated. A daily cycle whose gate
-    ///      is closed (a zero backing, a zero gate price, or a gate price below the
-    ///      backing) emits `PriceGateClosed` with the two values compared; the event
-    ///      follows the weekly reset and the processing of the purchased OHM, which do not
-    ///      depend on the gate.
+    ///      against the backing value. The reads of the OHM price and of the backing
+    ///      reserve price, and the backing oracle reads, are deliberately not isolated:
+    ///      they are protocol-owned dependencies of the backing accounting, and a failure
+    ///      there is a configuration error that should surface loudly. A backing oracle
+    ///      that is not an active policy of the Kernel or is disabled counts as a zero
+    ///      backing (see `_backing`), and a zero backing closes the gate: the daily markets
+    ///      are skipped without a revert, and the processing of the purchased OHM keeps it
+    ///      accumulated. A daily cycle whose gate is closed (a zero backing, a zero gate
+    ///      price, or a gate price below the backing) emits `PriceGateClosed` with the two
+    ///      values compared; the event follows the weekly reset and the processing of the
+    ///      purchased OHM, which do not depend on the gate.
     ///
     ///      Reverts if:
     ///      - The caller does not hold the heart role.
-    ///      - The `PRICE.getPriceIn` read of the backing reserve reverts, including when
+    ///      - The observation of the block is not used and the read of the current OHM
+    ///        price reverts.
+    ///      - The read of the current price of the backing reserve reverts, including when
     ///        no backing vault is designated (the PRICE module rejects the zero address).
     ///      - The backing oracle does not report the facility's kernel through a readable
     ///        `kernel()`, or its `isEnabled()` is not readable (`PolicyDependency` errors).
@@ -619,7 +638,8 @@ contract YieldRepurchaseFacilityV2 is
         // The gate compares like for like: the backing value and the gate price are
         // both denominated in the backing reserve. Without a backing value there is no
         // floor to compare against, so a zero backing skips the markets as well.
-        uint256 gatePrice = _reservePrice(_backingReserve());
+        uint256 ohmPrice = _ohmPrice();
+        uint256 gatePrice = _priceIn(ohmPrice, _backingReserve());
         uint256 backing = _backing();
         if (backing == 0 || gatePrice == 0 || gatePrice < backing) {
             emit PriceGateClosed(gatePrice, backing);
@@ -637,7 +657,7 @@ contract YieldRepurchaseFacilityV2 is
             if (!_registry.configs[vault].isAssetEnabled) continue;
 
             (bool success, bytes memory reason) = _callStep(
-                abi.encodeCall(this.selfProcessVaultDaily, (vault, daysRemaining))
+                abi.encodeCall(this.selfProcessVaultDaily, (vault, daysRemaining, ohmPrice))
             );
             if (!success) emit DailyCycleSkipped(vault, reason);
         }
@@ -646,21 +666,27 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2Steps
     /// @dev External only for the self-call isolation in `execute`. The function is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
-    ///      `execute`. The price is read first; the bid is then sized from the facility's
-    ///      balances by the linked `YieldRepurchaseFacilityV2BuybackPoolLib`, which wraps
-    ///      the idle reserve of a sell-shares asset and redeems the shares covering the
-    ///      reserve shortfall of the bid through the checked self-calls, and the market
-    ///      is opened by the linked `YieldRepurchaseFacilityV2BondMarketLib`. A zero bid
-    ///      or capacity opens no market.
+    ///      `execute`. `ohmPrice_` is denominated in the vault's reserve first, at the
+    ///      current price of the reserve (see `_priceIn`); the bid is then sized from the
+    ///      facility's balances by the linked `YieldRepurchaseFacilityV2BuybackPoolLib`,
+    ///      which wraps the idle reserve of a sell-shares asset and redeems the shares
+    ///      covering the reserve shortfall of the bid through the checked self-calls, and
+    ///      the market is opened by the linked `YieldRepurchaseFacilityV2BondMarketLib`. A
+    ///      zero bid or capacity opens no market.
     ///
     ///      Reverts if:
     ///      - The caller is not the facility itself.
-    ///      - The `PRICE.getPriceIn` read of the vault's reserve reverts.
-    function selfProcessVaultDaily(address vault_, uint256 daysRemaining_) external override {
+    ///      - The read of the current price of the vault's reserve reverts.
+    ///      - The division of `ohmPrice_` by the reserve price fails.
+    function selfProcessVaultDaily(
+        address vault_,
+        uint256 daysRemaining_,
+        uint256 ohmPrice_
+    ) external override {
         _requireCaller(address(this));
 
         ReserveAsset storage config = _registry.configs[vault_];
-        uint256 oraclePrice = _reservePrice(config.reserve);
+        uint256 oraclePrice = _priceIn(ohmPrice_, config.reserve);
 
         uint256 capacity = YieldRepurchaseFacilityV2BuybackPoolLib.dailyBid(config, daysRemaining_);
         if (capacity == 0) return;
@@ -1630,12 +1656,29 @@ contract YieldRepurchaseFacilityV2 is
         return YieldRepurchaseFacilityV2DependenciesLib.readBacking(kernel, backingOracle);
     }
 
-    /// @notice Returns the live OHM price denominated in `reserve_`, in oracle decimals.
-    /// @dev The `PRICE.getPriceIn` resolution is live: the PRICE module enforces the
-    ///      freshness thresholds of the configured feeds, and reverts when the price of
-    ///      either side of the pair cannot be determined.
-    function _reservePrice(address reserve_) private view returns (uint256) {
-        return PRICE.getPriceIn(address(_OHM), reserve_);
+    /// @notice Returns the OHM price a daily beat prices with, in 18 decimals: the
+    ///         observation the PRICE module stored for OHM in the current block, or the
+    ///         current OHM price of the module.
+    /// @dev The read is performed by the linked `YieldRepurchaseFacilityV2DependenciesLib`
+    ///      (`readOhmPrice`): the last observation is used when it carries the timestamp of
+    ///      the block and a non-zero price, a revert of its read is not propagated, and a
+    ///      revert of the read of the current price is.
+    function _ohmPrice() private view returns (uint256) {
+        return YieldRepurchaseFacilityV2DependenciesLib.readOhmPrice(address(PRICE), address(_OHM));
+    }
+
+    /// @notice Returns `ohmPrice_` denominated in `reserve_`, in 18 decimals, at the current
+    ///         price of `reserve_` in the PRICE module.
+    /// @dev The read and the division are performed by the linked
+    ///      `YieldRepurchaseFacilityV2DependenciesLib` (`readPriceIn`): the result is rounded
+    ///      down, and the call reverts when the price of the reserve cannot be determined.
+    function _priceIn(uint256 ohmPrice_, address reserve_) private view returns (uint256) {
+        return
+            YieldRepurchaseFacilityV2DependenciesLib.readPriceIn(
+                address(PRICE),
+                ohmPrice_,
+                reserve_
+            );
     }
 
     /// @notice Returns the `token_` balance of `account_`.
