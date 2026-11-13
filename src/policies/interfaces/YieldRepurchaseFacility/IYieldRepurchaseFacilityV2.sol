@@ -18,8 +18,14 @@ pragma solidity ^0.8.24;
 ///      PRICE module per daily cycle: the OHM price of the daily beat (the observation
 ///      the module stored for OHM in the block of the beat, or the current OHM price of
 ///      the module when there is no such observation) divided by the current price of
-///      the reserve token. The oracle prices and the backing value are 18-decimal
-///      reserve-per-OHM quotes.
+///      the reserve token. The oracle prices are 18-decimal reserve-per-OHM quotes.
+///
+///      The backing oracle reports the backing value as the USD reserve value per OHM, in
+///      18 decimals. The facility reads it as an amount of the backing reserve per OHM
+///      and does not convert it at the price of the backing reserve: the price gate
+///      compares it with the OHM price denominated in the backing reserve, and the burn
+///      of the purchased OHM values the treasury withdrawal at that amount of the backing
+///      reserve per OHM.
 ///
 ///      The reserve-side accounting is balance-based: the facility's holdings of a
 ///      vault's shares and of its reserve token form the vault's buyback pool, and the
@@ -226,9 +232,10 @@ interface IYieldRepurchaseFacilityV2 {
     ///         reserve is zero, or that price is below the backing value.
     /// @param gatePrice The OHM price denominated in the backing reserve, in oracle
     ///        decimals.
-    /// @param backing The backing value the gate compared against, in 18 decimals; zero
-    ///        while the backing oracle is not an active policy of the facility's kernel or
-    ///        is disabled.
+    /// @param backing The backing value the gate compared against, in 18 decimals: the
+    ///        value the backing oracle reports (USD per OHM), not converted at the price of
+    ///        the backing reserve; zero while the backing oracle is not an active policy of
+    ///        the facility's kernel or is disabled.
     event PriceGateClosed(uint256 gatePrice, uint256 backing);
 
     /// @notice Emitted when the wrap of a sell-shares vault's idle reserve balance into
@@ -611,7 +618,8 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param nextYield The initial stored next yield, in reserve units.
     /// @param sellShares Whether bond markets pay out the vault shares instead of the
     ///        reserve.
-    /// @param setAsBackingVault Whether the vault becomes the backing vault.
+    /// @param setAsBackingVault Whether the vault becomes the backing vault, which is
+    ///        intended to be a vault over a USD stablecoin.
     struct AddAssetParams {
         address vault;
         uint256 yieldBuybackShare;

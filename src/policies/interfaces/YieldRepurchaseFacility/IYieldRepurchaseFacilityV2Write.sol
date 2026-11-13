@@ -136,7 +136,7 @@ interface IYieldRepurchaseFacilityV2Write {
     ///         pricing the burn of the purchased OHM.
     /// @dev Callable by the admin role. The oracle must advertise `IBackingOracle` and
     ///      `IEnabler` through ERC165, be an active policy of the facility's kernel, and
-    ///      report the backing as an 18-decimal reserve-per-OHM value: an oracle whose
+    ///      report the backing value (USD per OHM) in 18 decimals: an oracle whose
     ///      `decimals()` is not 18 is rejected. The oracle is not required to be enabled:
     ///      until it is, the daily cycles open no markets and the purchased OHM stays
     ///      accumulated. Emits `BackingOracleSet`.
@@ -198,6 +198,8 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      sell-shares. The backing vault cannot be disabled or removed while
     ///      designated, and the designation can only be replaced, not cleared. Emits
     ///      `BackingVaultSet`.
+    ///
+    ///      The backing vault is intended to be a vault over a USD stablecoin.
     /// @param vault_ The vault to designate.
     function setBackingVault(address vault_) external;
 

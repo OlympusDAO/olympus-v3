@@ -237,7 +237,9 @@ contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
     ///      of both assets; the facility prices a daily beat with the OHM observation of
     ///      the block when the PRICE module holds one. The backing is read through
     ///      `YieldRepurchaseFacilityV2BackingOracleLib.readBacking` with the Kernel the
-    ///      facility reports, the read the facility itself performs.
+    ///      facility reports, the read the facility itself performs, and is compared with
+    ///      the gate price as an amount of the backing reserve per OHM, without a
+    ///      conversion at the price of the backing reserve.
     ///
     ///      Reverts if:
     ///      - The `PRICE.getPriceIn` read of OHM in the backing reserve reverts.

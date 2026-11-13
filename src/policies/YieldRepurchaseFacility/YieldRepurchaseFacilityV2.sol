@@ -591,8 +591,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      one reserve skips only that vault's daily cycle.
     ///
     ///      The price gate compares the OHM price denominated in the backing reserve
-    ///      against the backing value. The reads of the OHM price and of the backing
-    ///      reserve price, and the backing oracle reads, are deliberately not isolated:
+    ///      against the backing value, which is taken as an amount of the backing reserve
+    ///      per OHM and is not converted at the price of the backing reserve (see
+    ///      `_backing`). The reads of the OHM price and of the backing reserve price, and
+    ///      the backing oracle reads, are deliberately not isolated:
     ///      they are protocol-owned dependencies of the backing accounting, and a failure
     ///      there is a configuration error that should surface loudly. A backing oracle
     ///      that is not an active policy of the Kernel or is disabled counts as a zero
@@ -635,9 +637,10 @@ contract YieldRepurchaseFacilityV2 is
         // the reserve it spends, growing the pool on every cycle, so market creation
         // is skipped for every vault. Skipping before any redeem also keeps the reserve
         // in the yield-earning vaults; the unspent pool rolls into the following days.
-        // The gate compares like for like: the backing value and the gate price are
-        // both denominated in the backing reserve. Without a backing value there is no
-        // floor to compare against, so a zero backing skips the markets as well.
+        // The backing value (USD per OHM) is taken as an amount of the backing reserve per
+        // OHM, the unit of the gate price, and is not converted at the price of the
+        // backing reserve. Without a backing value there is no floor to compare against,
+        // so a zero backing skips the markets as well.
         uint256 ohmPrice = _ohmPrice();
         uint256 gatePrice = _priceIn(ohmPrice, _backingReserve());
         uint256 backing = _backing();
@@ -863,12 +866,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      `execute`. Without a backing vault, or when the scaled backing amount, the
     ///      withdrawable share amount, or the pro-rated burn amount is zero, the
     ///      accumulated OHM is kept for later processing and nothing is withdrawn. The
-    ///      backing amount is zero while the backing oracle is not an active policy of the
-    ///      Kernel or is disabled (see `_backing`). When
-    ///      the treasury balance caps the withdrawal below the backing amount, the burn
-    ///      is pro-rated down (floor) and the remainder stays accumulated, so the
-    ///      withdrawal never exceeds the backing of the burned OHM by more than the
-    ///      pro-rating rounding.
+    ///      backing amount is the purchased OHM multiplied by the backing value, taken as
+    ///      an amount of the backing reserve per OHM: the price of the backing reserve is
+    ///      not read. The backing amount is zero while the backing oracle is not an active
+    ///      policy of the Kernel or is disabled (see `_backing`). When the treasury balance
+    ///      caps the withdrawal below the backing amount, the burn is pro-rated down
+    ///      (floor) and the remainder stays accumulated, so the withdrawal never exceeds
+    ///      the backing of the burned OHM by more than the pro-rating rounding.
     ///
     ///      Reverts if the caller is not the facility itself.
     function selfProcessOhmPurchases() external override {
@@ -884,6 +888,8 @@ contract YieldRepurchaseFacilityV2 is
 
         // backingAmount18 = purchased (9 dec) * backingPerOhm (18 dec) / 10^9
         // backingAmount   = scaleBackingAmount(backingAmount18, reserveDecimals).
+        // backingPerOhm (USD per OHM) is applied as backing reserve per OHM, so the result
+        // is in backing reserve units without a read of the reserve price.
         uint256 backingAmount18 = YieldRepurchaseFacilityV2MathLib.backingAmount(
             purchased,
             backingPerOhm,
@@ -1647,7 +1653,11 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Reads the backing value from the backing oracle, in 18 decimals, or returns
     ///         zero while the oracle is not an active policy of the Kernel or is disabled.
-    /// @dev The read is performed by the linked `YieldRepurchaseFacilityV2DependenciesLib`
+    /// @dev The oracle reports the USD reserve value per OHM. The price gate and the
+    ///      processing of the purchased OHM take the value as an amount of the backing
+    ///      reserve per OHM: neither converts it at the price of the backing reserve.
+    ///
+    ///      The read is performed by the linked `YieldRepurchaseFacilityV2DependenciesLib`
     ///      through `YieldRepurchaseFacilityV2BackingOracleLib.readBacking`, the read the
     ///      lens performs: an oracle that is not ready reads as zero, and an oracle whose
     ///      `kernel()` is unreadable or reports another kernel, or whose `isEnabled()` is

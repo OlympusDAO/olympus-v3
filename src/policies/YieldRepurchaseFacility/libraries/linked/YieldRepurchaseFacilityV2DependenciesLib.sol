@@ -272,7 +272,9 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     /// @notice Returns the backing value of the backing oracle, in 18 decimals, or zero
     ///         while the oracle is not an active policy of `kernel_` or is disabled.
     /// @dev The read is `YieldRepurchaseFacilityV2BackingOracleLib.readBacking`, compiled
-    ///      into this library for the facility and into the lens.
+    ///      into this library for the facility and into the lens. The value is returned as
+    ///      the oracle reports it, the USD reserve value per OHM: it is not converted at
+    ///      the price of a reserve token.
     ///
     ///      Reverts if:
     ///      - The `kernel()` or the `isEnabled()` read of the oracle fails or returns a
@@ -282,7 +284,7 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     ///      - The `backing()` read of an active and enabled oracle reverts.
     /// @param kernel_ The Kernel of the facility.
     /// @param backingOracle_ The backing oracle policy of the facility.
-    /// @return The backing value, in 18 decimals, or zero.
+    /// @return The backing value (USD per OHM), in 18 decimals, or zero.
     function readBacking(Kernel kernel_, address backingOracle_) external view returns (uint256) {
         return
             YieldRepurchaseFacilityV2BackingOracleLib.readBacking(address(kernel_), backingOracle_);
