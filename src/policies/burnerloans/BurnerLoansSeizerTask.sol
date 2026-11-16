@@ -82,7 +82,7 @@ contract BurnerLoansSeizerTask is
     /// @param kernel_ Kernel shared with the Burner Loans target.
     /// @param seize_ Public Core-bound Seize entry point.
     /// @param lens_ Read-only scan helper bound to that same Core.
-    /// @param maxBorrowersToCheck_ Maximum positions checked per asset.
+    /// @param maxBorrowersToCheck_ Maximum distinct borrowers checked per asset visit.
     /// @param maxBorrowersToSeize_ Maximum eligible borrowers returned per batch.
     /// @param executionGasLimit_ Complete task self-call gas budget.
     constructor(
@@ -216,7 +216,7 @@ contract BurnerLoansSeizerTask is
     /// @dev Reverts if:
     ///      - This policy is Kernel-inactive, the caller holds neither ADMIN nor
     ///      burner_loans_admin, or the asset is unmanaged. A nonzero cursor uses a zero-sized
-    ///      Lens scan for canonical bounds validation; its errors propagate without writes.
+    ///      Lens scan for borrower bounds validation; its errors propagate without writes.
     ///      Zero resets need no downstream reads. Callable while disabled; unchanged valid
     ///      cursors emit no event.
     function setNextAssetBorrowerIndex(address asset_, uint256 index_) external override {
@@ -298,8 +298,8 @@ contract BurnerLoansSeizerTask is
         _scanAsset(asset, assetCursor[asset]);
     }
 
-    /// @dev Checks a nonzero cursor against the live borrower count before one bounded scan.
-    ///      Count, scan and seizure failures are isolated to this asset visit.
+    /// @dev Prioritizes one expired batch; an expiry-empty page may then use priced discovery.
+    ///      Count, scan and seizure failures remain isolated to this asset visit.
     function _scanAsset(address asset, uint256 startIndex) private {
         if (startIndex != 0) {
             try _LENS.getActiveBorrowerCount(asset) returns (uint256 population) {
@@ -308,14 +308,36 @@ contract BurnerLoansSeizerTask is
                     assetCursor[asset] = 0;
                 }
             } catch (bytes memory reason) {
-                // Only the error selector is reported; preserve the saved cursor on read failure.
+                // The count must be authoritative before repairing a stale cursor.
                 // forge-lint: disable-next-line(unsafe-typecast)
                 emit ScanFailed(asset, bytes4(reason));
                 return;
             }
         }
-        // Quote as this task, not Heart or the transaction sender: protocol seizers earn no keeper
-        // incentive. The Lens independently bounds inspected borrowers and the returned seizure batch.
+
+        uint256 expiredNextIndex;
+        try
+            _LENS.getExpiredBorrowersBoundedFor(
+                address(this),
+                asset,
+                startIndex,
+                maxBorrowersToCheck,
+                maxBorrowersToSeize
+            )
+        returns (address[] memory borrowers, uint256 scannedNextIndex, uint256) {
+            if (borrowers.length != 0) {
+                _seizeScannedBorrowers(asset, startIndex, borrowers, scannedNextIndex);
+                return;
+            }
+            expiredNextIndex = scannedNextIndex;
+        } catch (bytes memory reason) {
+            // FLOAN reads and custody/Risk quote failures retain the retry cursor.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            emit ScanFailed(asset, bytes4(reason));
+            return;
+        }
+
+        // No settlement occurred, so the same borrower page can now be checked for unhealthy debt.
         try
             _LENS.getSeizableBorrowersBoundedFor(
                 address(this),
@@ -325,33 +347,44 @@ contract BurnerLoansSeizerTask is
                 maxBorrowersToSeize
             )
         returns (address[] memory borrowers, uint256 scannedNextIndex, uint256) {
-            if (borrowers.length == 0) {
-                assetCursor[asset] = scannedNextIndex;
-                emit SeizureExecuted(asset, startIndex, scannedNextIndex, 0);
-                return;
-            }
-
-            // Cursor state must remain unchanged on failure. The bound policy cannot cross the
-            // self-only task boundary during a callback.
-            // forge-lint: disable-next-line(reentrancy-no-eth)
-            try seize.seize(asset, borrowers) {
-                // Debt closure removes up to one active-borrower entry per selected borrower.
-                // Rewind by that upper bound so swap-and-pop compaction cannot leave an
-                // out-of-range cursor. Earlier swapped entries remain reachable after wrap.
-                uint256 nextIndex = scannedNextIndex > borrowers.length
-                    ? scannedNextIndex - borrowers.length
-                    : 0;
-                assetCursor[asset] = nextIndex;
-                emit SeizureExecuted(asset, startIndex, nextIndex, borrowers.length);
-            } catch (bytes memory reason) {
-                // The event intentionally reports only the first four bytes of revert data.
-                // forge-lint: disable-next-line(unsafe-typecast)
-                emit SeizureFailed(asset, bytes4(reason));
-            }
+            _seizeScannedBorrowers(asset, startIndex, borrowers, scannedNextIndex);
         } catch (bytes memory reason) {
-            // The event intentionally reports only the first four bytes of revert data.
+            // Both cursors index the same unchanged active borrower list, never the filtered result arrays.
+            // Expiry discovery proved this page had no expired debt. Advance without inferring health.
+            assetCursor[asset] = expiredNextIndex;
             // forge-lint: disable-next-line(unsafe-typecast)
             emit ScanFailed(asset, bytes4(reason));
+        }
+    }
+
+    /// @dev Applies identical progress and atomic settlement rules to either discovery mode.
+    ///      Seize call failures are caught here; local failures escape to execute's self-call boundary.
+    function _seizeScannedBorrowers(
+        address asset_,
+        uint256 startIndex_,
+        address[] memory borrowers_,
+        uint256 scannedNextIndex_
+    ) private {
+        if (borrowers_.length == 0) {
+            assetCursor[asset_] = scannedNextIndex_;
+            emit SeizureExecuted(asset_, startIndex_, scannedNextIndex_, 0);
+            return;
+        }
+
+        // Cursor state must remain unchanged on failure. The bound policy cannot cross the
+        // self-only task boundary during a callback. Seize retains all operational/custody checks.
+        // forge-lint: disable-next-line(reentrancy-no-eth)
+        try seize.seize(asset_, borrowers_) {
+            // Rewind by the maximum number of removals so swap-and-pop cannot strand a suffix.
+            // Earlier swapped entries remain reachable after wrap; an end cursor stays zero.
+            uint256 nextIndex = scannedNextIndex_ > borrowers_.length
+                ? scannedNextIndex_ - borrowers_.length
+                : 0;
+            assetCursor[asset_] = nextIndex;
+            emit SeizureExecuted(asset_, startIndex_, nextIndex, borrowers_.length);
+        } catch (bytes memory reason) {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            emit SeizureFailed(asset_, bytes4(reason));
         }
     }
 
@@ -449,7 +482,7 @@ contract BurnerLoansSeizerTask is
     /// @dev Reverts if:
     ///      - Either limit is zero.
     ///      - The seizure limit exceeds the scan limit.
-    /// @param maxBorrowersToCheck_ Maximum positions checked per asset.
+    /// @param maxBorrowersToCheck_ Maximum distinct borrowers checked per asset visit.
     /// @param maxBorrowersToSeize_ Maximum eligible borrowers returned per batch.
     function _setScanLimits(uint16 maxBorrowersToCheck_, uint8 maxBorrowersToSeize_) private {
         if (

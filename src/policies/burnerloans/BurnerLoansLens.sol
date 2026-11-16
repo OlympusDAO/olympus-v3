@@ -151,7 +151,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
 
     /// @inheritdoc IBurnerLoansLens
     /// @dev Reverts if:
-    ///      - The starting offset is outside the current canonical borrower list.
+    ///      - The starting offset is outside the current active borrower list.
     ///      Reads without state changes; errors from dependency views propagate.
     function getSeizableBorrowersFor(
         address actor_,
@@ -159,7 +159,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 start_,
         uint256 count_
     ) public view override returns (address[] memory, uint256, uint256) {
-        Scan memory scan = _scan(asset_, start_, count_, type(uint256).max);
+        Scan memory scan = _scan(asset_, start_, count_, type(uint256).max, false);
         return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
     }
 
@@ -177,7 +177,22 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 count_,
         uint256 maxResults_
     ) external view override returns (address[] memory, uint256, uint256) {
-        Scan memory scan = _scan(asset_, start_, count_, maxResults_);
+        Scan memory scan = _scan(asset_, start_, count_, maxResults_, false);
+        return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
+    }
+
+    /// @inheritdoc IBurnerLoansLens
+    /// @dev Reverts if the asset/start is invalid, a FLOAN read or custody/reward quote fails,
+    ///      or prices needed by the reward calculation are unavailable. Asset/start checks precede
+    ///      zero-limit shortcuts. Core lifecycle does not gate this view; execution retains its own admission.
+    function getExpiredBorrowersBoundedFor(
+        address actor_,
+        address asset_,
+        uint256 start_,
+        uint256 count_,
+        uint256 maxResults_
+    ) external view override returns (address[] memory, uint256, uint256) {
+        Scan memory scan = _scan(asset_, start_, count_, maxResults_, true);
         return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
     }
 
@@ -216,17 +231,19 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
     /// @notice Builds a bounded list of currently seizable borrowers.
     /// @dev Reads without state changes; errors from dependency views propagate.
     /// @param asset_ Underlying collateral token identifying the market.
-    /// @param start_ Initial canonical borrower index.
-    /// @param count_ Maximum canonical borrowers examined in the remaining suffix.
+    /// @param start_ Initial borrower index in the active borrower list.
+    /// @param count_ Maximum active borrowers examined in the remaining suffix.
     /// @param maxResults_ Maximum eligible borrowers selected before stopping the scan.
-    /// @return scan Bounded selected borrowers, canonical cursor and aggregate position amounts.
-    // Canonical dependency reads are bounded by the clipped borrower suffix.
+    /// @param expiredOnly_ Select only positive expired debt without Risk or custody reads.
+    /// @return scan Bounded selected borrowers, active borrower list cursor and aggregate position amounts.
+    // Borrower dependency reads are bounded by the clipped borrower suffix.
     // forge-lint: disable-start(calls-loop)
     function _scan(
         address asset_,
         uint256 start_,
         uint256 count_,
-        uint256 maxResults_
+        uint256 maxResults_,
+        bool expiredOnly_
     ) private view returns (Scan memory scan) {
         IFLOANv1 floan = IFLOANv1(_CORE.floan());
         uint32 market = _CORE.marketId(asset_);
@@ -239,8 +256,12 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         // Clamp before allocating or adding: even uint256.max requests stay within this suffix.
         uint256 remaining = population - start_;
         if (count_ > remaining) count_ = remaining;
-        IBurnerLoansRisk evaluator = _risk();
-        IBurnerLoansRisk.PriceSnapshot memory snapshot = evaluator.snapshot(asset_);
+        IBurnerLoansRisk evaluator;
+        IBurnerLoansRisk.PriceSnapshot memory snapshot;
+        if (!expiredOnly_) {
+            evaluator = _risk();
+            snapshot = evaluator.snapshot(asset_);
+        }
         // count_ bounds inspected positions, while maxResults_ bounds selected borrowers. Healthy
         // positions still consume scan work and advance the cursor, but do not contribute to the reward.
         address[] memory candidates = new address[](count_ < maxResults_ ? count_ : maxResults_);
@@ -248,7 +269,11 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         for (uint256 checked; checked < count_ && returned < maxResults_; ++checked) {
             address borrower = floan.getActiveBorrowerAt(market, scan.cursor++);
             IFLOANv1.Position memory p = LoanPositions.getOrEmpty(floan, market, borrower);
-            if (!LoanPositions.isSeizable(evaluator, snapshot, market, p)) continue;
+            if (expiredOnly_) {
+                // Maturity equality qualifies independently of health. Unexpired debt is unclassified.
+                // forge-lint: disable-next-line(block-timestamp)
+                if (p.principalDue == 0 || block.timestamp < p.maturity) continue;
+            } else if (!LoanPositions.isSeizable(evaluator, snapshot, market, p)) continue;
             candidates[returned++] = borrower;
             scan.debt += p.principalDue;
             scan.collateral += p.collateral;

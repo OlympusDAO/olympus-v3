@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.supportsInterface coverage plan
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L435). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L471). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -30,10 +30,18 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 
 Compile the exact IDs listed above. Imported interfaces do not add advertised support.
 
-- [ ] Review these expectations.
+- [x] Review concrete branches and inherited guard order.
 - [ ] Implement named Foundry tests and boundary seed drivers.
 - [ ] Map each row to passing tests.
 
 ## Test organization
 
 [supportsInterface.t.sol](./supportsInterface.t.sol) uses the shared Kernel/ROLES fixture with controlled dependency responses.
+
+## Dependency and lifecycle independence
+
+Every existing P01-P11 identifier domain applies to fuzzed callers with local active/enabled independently false/true, a re-enabled state and broken operational-service getters. Check supported IDs using type(...).interfaceId, never handwritten signatures.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-ERC165-P12 | Fuzz all callers | Every supported identifier, zero,0xffffffff and unsupported fuzz domain; dependencies fail if read | Same true/false results as P01-P11, no dependency calls, logs or writes | Unmapped |

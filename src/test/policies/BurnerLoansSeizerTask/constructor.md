@@ -28,7 +28,7 @@ Fixed for this table: Other bindings and inputs valid; Accounting / events: No d
 | --- | --- | --- | --- | --- |
 | BLSZC-D01 | Fuzz all deployers | Seize lacks IBurnerLoansSeize | BurnerLoansSeizer_InvalidSeize(Seize) | Covered: [test][test_whenSeizeInterfaceInvalid_reverts] |
 | BLSZC-D02 | Fuzz all deployers | Seize ERC165 reverts | BurnerLoansSeizer_InvalidSeize(Seize) | Covered: [test][test_whenSeizeInterfaceInvalid_reverts] |
-| BLSZC-D03 | Fuzz all deployers | Seize ERC165 returns malformed data | BurnerLoansSeizer_InvalidSeize(Seize) | Covered: [test][test_whenSeizeInterfaceInvalid_reverts] |
+| BLSZC-D03 | Fuzz all deployers | Seize ERC165 returns short data (less than32 bytes) | BurnerLoansSeizer_InvalidSeize(Seize) | Covered: [test][test_whenSeizeInterfaceInvalid_reverts] |
 | BLSZC-D05 | Fuzz all deployers | Seize and Lens report different Cores | BurnerLoansSeizer_InvalidLens(Lens) | Covered: [test][test_whenLensReportsDifferentCore_reverts] |
 | BLSZC-D06 | Fuzz all deployers | Seize reports another Kernel | PolicyDependency_KernelMismatch(Seize,expectedKernel,reportedKernel) | Covered: [test][test_whenSeizeReportsDifferentKernel_reverts] |
 
@@ -48,7 +48,7 @@ Fixed for this table: Other bindings and inputs valid; Accounting / events: No d
 
 ## Numeric boundaries and arithmetic
 
-Fixed for this table: Other bindings and inputs valid; Accounting / events: No deployment or committed logs.
+Fixed for this table: other bindings and inputs valid; accepted values create the contract and initialize exact fields/events. Rejected values create no contract or committed logs.
 
 | ID | Caller | Numeric input / arithmetic condition | Execution / return | Test |
 | --- | --- | --- | --- | --- |
@@ -78,7 +78,7 @@ Constructor revert leaves no contract/state/events. Read exact zero/default fiel
 
 Co-located API assertions: `seize`, `lens`, and the Core derived through `seize().core()`. Assert each binding independently.
 
-- [ ] Review these expectations.
+- [x] Review concrete branches and inherited guard order.
 - [ ] Implement named Foundry tests and boundary seed drivers.
 - [ ] Map each row to passing tests.
 
@@ -111,6 +111,30 @@ Seize and Lens report the same Core; all other constructor inputs are valid. Cor
 | BLSZC-D11 | Fuzz deployers | Core interface probe returns short data | BurnerLoansSeizerTask_InvalidCore(Core) | Covered: [test][test_givenMalformedCoreInterface_whenConstructed_reverts] |
 | BLSZC-P06 | Fuzz deployers | Compatible Core; active/enabled flags independently false/true, with all four seeded | Success; initial Task defaults preserved | Covered: [test][test_givenCoreLifecycle_whenConstructed]; [seeds][test_whenCoreLifecycleStatesSeeded_thenAccepted] |
 
+## Binding reads and validation precedence
+
+Order: Seize address/ERC165, Seize.core(), Seize Kernel metadata, Lens code/core(), Core ERC165, scan limits, gas limit. Lens ERC165 is not probed. Its expiry API is required at execution; construction alone does not prove selector availability. Kernel is a trusted constructor input, compared with Seize metadata rather than independently code-validated.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSZC-D12 | Fuzz deployers | Seize kernel() reverts, returns short bytes or a noncanonical address; seed each shape | PolicyDependency_InvalidDependency(Seize); no deployment | Unmapped |
+| BLSZC-T02 | Fuzz deployers | Seize.core() returns short or noncanonical address data | ABI decode revert with empty data; no deployment | Unmapped |
+| BLSZC-T03 | Fuzz deployers | Lens.core() returns short or noncanonical address data | ABI decode revert with empty data; no deployment | Unmapped |
+| BLSZC-P07 | Fuzz deployers | Lens has code and matching core() but no ERC165 implementation | Binding accepted; no Lens interface probe; immutable lens()/seize() getters exact | Unmapped |
+| BLSZC-I09 | Fuzz deployers | check=0 and seize=0; gas otherwise valid | BurnerLoansSeizer_InvalidScanLimits(0,0) | Unmapped |
+| BLSZC-I10 | Fuzz deployers | Invalid scan tuple plus gas0 | InvalidScanLimits(check,seize) before gas validation | Unmapped |
+| BLSZC-D13 | Fuzz deployers | Readable foreign Seize Kernel plus Seize inactive/disabled; all earlier checks pass | KernelMismatch(Seize,expected,reported), not a readiness failure | Unmapped |
+| BLSZC-D14 | Fuzz deployers | Invalid Seize interface plus zero scan/gas limits | InvalidSeize before numeric validation | Unmapped |
+
+## Trusted Kernel and scan capability boundaries
+
+Kernel code is not independently validated by this constructor. A helper with matching core() is not probed for the expiry selector; deployments must select the updated Lens API. These rows describe current admission, not a proposal to add a new API or readiness gate.
+
+| ID | Caller | Input boundary | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSZC-P08 | Fuzz deployers | Kernel zero or EOA/MAX160; Seize test double reports that exact Kernel; other bindings valid | Constructor stores matching Kernel without a code/membership read; no promise of operational usability | Unmapped |
+| BLSZC-P09 | Fuzz deployers | Lens has code and matching core(), but lacks getExpiredBorrowersBoundedFor | Constructor accepts binding; execution behavior is covered by execute D23; no Lens ERC165 check | Unmapped |
+
 [test_givenSeizeLifecycleState_whenDeployed_thenBindingStillSucceeds]: ./constructor.t.sol#L166
 [test_whenBindingsMatch_thenCoreIsDerived]: ./constructor.t.sol#L26
 [test_whenConstructorBoundariesSeeded_thenAccepted]: ./constructor.t.sol#L256
@@ -127,18 +151,11 @@ Seize and Lens report the same Core; all other constructor inputs are valid. Cor
 [test_whenSeizeLimitZero_reverts]: ./constructor.t.sol#L223
 [test_whenSeizeReportsDifferentKernel_reverts]: ./constructor.t.sol#L121
 [test_whenSeizeZero_reverts]: ./constructor.t.sol#L68
-
 [test_whenCoreLifecycleUnreadable_thenDeploymentUsesSeizeBinding]: ./constructor.t.sol#L140
-
 [test_givenZeroCore_whenConstructed_reverts]: ./constructor.t.sol#L321
-
 [test_givenEoaCore_whenConstructed_reverts]: ./constructor.t.sol#L329
-
 [test_givenMissingCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L338
-
 [test_givenRevertingCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L350
-
 [test_givenMalformedCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L362
-
 [test_givenCoreLifecycle_whenConstructed]: ./constructor.t.sol#L374
 [test_whenCoreLifecycleStatesSeeded_thenAccepted]: ./constructor.t.sol#L384

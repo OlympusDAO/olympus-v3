@@ -20,7 +20,7 @@ import {SeizerTaskProgressHandler} from "../fixtures/SeizerTaskProgressHandler.s
 contract BurnerLoansSeizerTaskProgressInvariantTest is BurnerLoansSeizerTaskProgressTest {
     SeizerTaskProgressHandler internal _handler;
 
-    function setUp() public override {
+    function setUp() public virtual override {
         super.setUp();
         _task.addAsset(address(_asset));
         _task.addAsset(address(_otherAsset));

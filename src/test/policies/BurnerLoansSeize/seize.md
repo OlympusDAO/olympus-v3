@@ -296,9 +296,12 @@ The distinction in D25/D26 is intentional: an unhealthy position that is also ex
 health read. A mixed batch only requires health pricing when at least one position is unexpired.
 An expired-only protocol selection remains seizable when the D25 batch cannot execute.
 
-Automation discovery remains open: when an unexpired borrower precedes an expired borrower in
-an outage, should Lens return the expired borrower while leaving the unexpired one unclassified,
-or may the mixed scan fail and require a separate expired-only selection? No API is assumed yet.
+Automation first requests an explicit [expired-only bounded Lens selection](../BurnerLoansLens/getExpiredBorrowersBoundedFor.md)
+for the task actor and quotes its zero reward. A nonempty selection is settled as the visit's only
+batch, without pricing. Canonical, custody and Risk quote failures remain errors. Only an empty
+expiry page proceeds to priced discovery from the same start; a priced failure advances the proven
+empty-expiry cursor without classifying health. Priced Lens APIs and Seize admission are unchanged:
+ordinary execution still requires prices and protocol all-expired selections receive zero reward.
 
 [invariant_modelMatchesEveryAuthoritativeLedger]: accounting.invariants.t.sol#L39
 [invariant_shareCustodyAndPositionAccountingConserve]: seizeShares.invariant.t.sol#L203

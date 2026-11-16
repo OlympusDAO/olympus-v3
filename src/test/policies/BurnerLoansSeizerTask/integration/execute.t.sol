@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
 import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurnerLoansSeizerTask.sol";
 
 // Libraries
@@ -29,7 +30,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _task.addAsset(address(_otherAsset));
     }
 
-    // Scenarios: BLSEIZ-EXECUTE-P05, BLSEIZ-SELF-EXECUTE-P02, BLSEIZ-SELF-EXECUTE-P03.
+    // Scenarios: BLSEIZ-EXECUTE-P05, BLSEIZ-SELF-EXECUTE-P02, BLSEIZ-SELF-EXECUTE-P03, BLSEIZ-SELF-EXECUTE-P17.
     function test_givenFiftyBorrowers_whenBatchLimitIsTwentyFive_thenAssetsRotateAndAllDebtSettles()
         public
     {
@@ -94,7 +95,6 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
     // Scenarios: BLSEIZ-SELF-EXECUTE-P05.
     function test_givenStaleCursor_whenAssetVisited_thenRecoveryAndSettlementShareOneTurn() public {
         _seedDebt(_ALICE, 10e6, 1e9);
-        _mature();
         vm.mockCall(
             address(_lens),
             _boundedScan(address(_asset), 0),
@@ -102,9 +102,33 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         );
         _task.execute();
         vm.clearMockedCalls();
+        assertEq(_task.assetCursor(address(_asset)), 3, "Recovery begins with a stale cursor");
+        assertEq(_inventory.activePrincipalOhm(), 1e9, "Debt remains before recovery");
+        assertEq(
+            _lens.getActiveBorrowerCount(address(_asset)),
+            1,
+            "Saved cursor exceeds live count"
+        );
+        _mature();
         _task.execute(); // B receives its turn before A repairs the stale cursor.
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 3), uint64(0));
-        vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
+        vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(0));
+        vm.expectCall(
+            address(_lens),
+            abi.encodeCall(
+                IBurnerLoansLens.getExpiredBorrowersBoundedFor,
+                (address(_task), address(_asset), uint256(3), uint256(500), uint256(25))
+            ),
+            uint64(0)
+        );
+        vm.expectCall(
+            address(_lens),
+            abi.encodeCall(
+                IBurnerLoansLens.getExpiredBorrowersBoundedFor,
+                (address(_task), address(_asset), uint256(0), uint256(500), uint256(25))
+            ),
+            uint64(1)
+        );
         _task.execute();
         assertEq(
             _inventory.activePrincipalOhm(),
@@ -199,7 +223,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         assertEq(_task.nextAssetIndex(), 1, "Suffix discovered on second A visit");
     }
 
-    // Scenarios: BLSEIZ-SELF-EXECUTE-P07, BLSEIZ-EXECUTE-P02.
+    // Scenarios: BLSEIZ-SELF-EXECUTE-P07, BLSEIZ-EXECUTE-P02, BLSEIZ-SELF-EXECUTE-D02.
     function test_givenSeizureReverts_whenExecuted_thenEntireBatchRemainsForRetry() public {
         _seedDebt(_ALICE, 10e6, 1e9);
         _mature();

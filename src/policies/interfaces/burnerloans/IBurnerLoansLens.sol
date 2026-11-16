@@ -7,12 +7,12 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 /// @notice Read-only positions, custody status, health and seizure scanning for one Core.
 /// @dev Lens has no policy lifecycle. Economic queries use Core's currently selected Risk.
 interface IBurnerLoansLens {
-    /// @notice The starting offset is outside the current canonical borrower list.
+    /// @notice The starting offset is outside the current active borrower list.
     /// @param start Requested zero-based offset.
     /// @param borrowerCount Current total active borrower count.
     error BurnerLoansLens_InvalidStart(uint256 start, uint256 borrowerCount);
 
-    /// @notice Returns the borrower's canonical position for an asset market.
+    /// @notice Returns the borrower's position for an asset market.
     /// @param asset_ Registered underlying collateral token.
     /// @param borrower_ Borrower whose position is queried.
     /// @return position Collateral, principal, expiry and last-borrow block; zero fields if absent.
@@ -26,7 +26,7 @@ interface IBurnerLoansLens {
     /// @return borrowers Unique active borrower addresses; order can change after debt closure.
     function getActiveBorrowers(address asset_) external view returns (address[] memory borrowers);
 
-    /// @notice Returns the canonical market's current number of active debt borrowers.
+    /// @notice Returns the market's current number of active debt borrowers.
     /// @param asset_ Registered collateral asset identifying the market.
     /// @return count Number of active borrowers, without allocating the borrower list.
     function getActiveBorrowerCount(address asset_) external view returns (uint256 count);
@@ -49,7 +49,7 @@ interface IBurnerLoansLens {
 
     /// @notice Returns whether a debt-bearing position is expired or unhealthy.
     /// @param asset_ Registered underlying collateral token.
-    /// @param borrower_ Borrower whose canonical position is queried.
+    /// @param borrower_ Borrower whose position is queried.
     /// @return seizable True at or after expiry, or when unexpired health is below 1e18.
     function isSeizable(address asset_, address borrower_) external view returns (bool seizable);
 
@@ -60,9 +60,9 @@ interface IBurnerLoansLens {
         address asset_
     ) external view returns (IBurnerLoansCore.AssetCollateralStatus memory collateralStatus);
 
-    /// @notice Scans canonical borrowers and quotes rewards for msg.sender.
+    /// @notice Scans active borrowers and quotes rewards for msg.sender.
     /// @param asset_ Registered underlying collateral token.
-    /// @param start_ Zero-based canonical offset; must be below the nonempty borrower count, or zero for an empty market.
+    /// @param start_ Zero-based offset in the active borrower list; must be below the nonempty borrower count, or zero for an empty market.
     /// @param count_ Maximum borrowers examined, clipped to the remaining suffix.
     /// @return borrowers All eligible borrowers in the examined forward-only page.
     /// @return nextCursor Next unexamined index, or zero at the end; this call never wraps.
@@ -73,10 +73,10 @@ interface IBurnerLoansLens {
         uint256 count_
     ) external view returns (address[] memory borrowers, uint256 nextCursor, uint256 keeperReward);
 
-    /// @notice Scans canonical borrowers and quotes rewards for an explicit actor.
+    /// @notice Scans active borrowers and quotes rewards for an explicit actor.
     /// @param actor_ Reward identity, independent of the caller; conveys no borrower authorization.
     /// @param asset_ Registered underlying collateral token.
-    /// @param start_ Zero-based canonical offset; must be below the nonempty borrower count, or zero for an empty market.
+    /// @param start_ Zero-based offset in the active borrower list; must be below the nonempty borrower count, or zero for an empty market.
     /// @param count_ Maximum borrowers examined, clipped to the remaining suffix.
     /// @return borrowers All eligible borrowers in the examined forward-only page.
     /// @return nextCursor Next unexamined index, or zero at the end; this call never wraps.
@@ -92,12 +92,32 @@ interface IBurnerLoansLens {
     /// @param actor_ Reward identity, independent of the caller.
     /// @param asset_ Registered underlying collateral token.
     /// @param start_ Zero-based offset, with the same validity rules as getSeizableBorrowersFor.
-    /// @param count_ Maximum canonical borrowers examined, clipped to the remaining suffix.
+    /// @param count_ Maximum active borrowers examined, clipped to the remaining suffix.
     /// @param maxResults_ Maximum eligible borrowers returned; zero performs no scan work.
     /// @return borrowers Eligible borrowers in scan order, up to maxResults_.
-    /// @return nextCursor First unexamined index, or zero at the end; no candidate is discarded.
+    /// @return nextCursor First unexamined borrower index in the active borrower list, or zero at the end; no candidate is discarded.
     /// @return keeperReward Estimated reward for actor_ over the returned borrowers.
     function getSeizableBorrowersBoundedFor(
+        address actor_,
+        address asset_,
+        uint256 start_,
+        uint256 count_,
+        uint256 maxResults_
+    ) external view returns (address[] memory borrowers, uint256 nextCursor, uint256 keeperReward);
+
+    /// @notice Selects only expired debt and quotes the aggregate reward for an explicit actor.
+    /// @dev Unexpired positions are skipped without classifying their health. Protocol actors receive
+    ///      zero without price reads. Risk owns reward pricing, including zero-configured-reward
+    ///      shortcuts. Selection and reward estimation do not assert Seize execution admission.
+    /// @param actor_ Reward identity, independent of the caller; conveys no execution authority.
+    /// @param asset_ Registered underlying collateral token.
+    /// @param start_ Zero-based offset, with the same validity rules as getSeizableBorrowersFor.
+    /// @param count_ Maximum active borrowers examined, clipped to the remaining suffix.
+    /// @param maxResults_ Maximum expired borrowers returned; zero performs no scan work.
+    /// @return borrowers Borrowers with positive principal and maturity at or before now, in scan order.
+    /// @return nextCursor First unexamined borrower index in the active borrower list, or zero at the end; no wrap within the call.
+    /// @return keeperReward Estimated aggregate reward for actor_, in withdrawal-output token units.
+    function getExpiredBorrowersBoundedFor(
         address actor_,
         address asset_,
         uint256 start_,

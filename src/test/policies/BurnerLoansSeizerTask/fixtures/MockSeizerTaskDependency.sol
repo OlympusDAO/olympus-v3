@@ -74,6 +74,16 @@ contract MockSeizerTaskDependency is Policy, IERC165 {
         return (_borrowers[asset_], _nextIndexes[asset_], 0);
     }
 
+    function getExpiredBorrowersBoundedFor(
+        address,
+        address asset_,
+        uint256,
+        uint256,
+        uint256
+    ) external view returns (address[] memory, uint256, uint256) {
+        return (new address[](0), _nextIndexes[asset_], 0);
+    }
+
     function seize(
         address asset_,
         address[] calldata

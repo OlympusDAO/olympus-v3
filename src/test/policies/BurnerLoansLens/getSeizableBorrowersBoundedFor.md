@@ -6,6 +6,12 @@ Scenario scope: `BLLENS-BOUNDED`. Plain permissionless Lens: caller and reward a
 
 The scan examines only the remaining forward suffix. Stop immediately when the result cap is reached: never select a larger page and discard candidates. The returned cursor is the first unexamined index, or zero at the end. An empty market, zero count or zero result cap avoids pricing work after asset/start validation. The existing unbounded scan APIs retain their behavior.
 
+Positive scans retain their priced eligibility and aggregate reward semantics, propagating dependency
+errors. Outage automation uses the separate [expired-only selection](./getExpiredBorrowersBoundedFor.md),
+which skips unexpired positions without classifying health and quotes the aggregate reward for
+the explicit actor. Risk owns reward pricing, including zero-configuration shortcuts. Ordinary
+Seize execution and its preview retain their pricing requirements.
+
 The fixed borrower list is `[Alice eligible, Bob healthy, Carol eligible, Dave healthy]`, at
 indices 0..3. `count` bounds entries examined, including healthy borrowers. `maxResults` bounds
 eligible borrowers returned. Those limits are independent: count=4 and maxResults=1 return only

@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.setGracePeriod coverage plan
 
-Source: [setGracePeriod](../../../bases/ReEnablerGracePeriod.sol#L74). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setGracePeriod](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L423), which applies own activity before the [inherited setter](../../../bases/ReEnablerGracePeriod.sol#L74). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -14,7 +14,7 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 
 ## Scenario setup
 
-Core and the selected Seize action are Kernel-active. Their local enablement does not gate this numeric setter; SeizerTask own activity is required. ROLES initialized. No caller label below stands for an unspecified permitted set. Unauthorized fuzzing excludes all holders of the named roles. `deadline=lastTransitionAt+gracePeriod`.
+Core and Seize lifecycle, metadata and operational services are not read by this numeric setter; SeizerTask own activity is required. ROLES initialized. No caller label below stands for an unspecified permitted set. Unauthorized fuzzing excludes all holders of the named roles. `deadline=lastTransitionAt+gracePeriod`.
 
 ## Authorization
 
@@ -59,7 +59,7 @@ Construct only reachable dependency drift: deactivation/local disable/migration 
 
 Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These must be asserted independently of the action return value.
 
-- [ ] Review these expectations.
+- [x] Review concrete branches and inherited guard order.
 - [ ] Implement named Foundry tests and boundary seed drivers.
 - [ ] Map each row to passing tests.
 
@@ -70,5 +70,15 @@ Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These
 ## Same grace period
 
 | ID | Caller | Proposed value | Execution | Effects | Test |
-| --- | --- | --- | --- | --- |--- |
+| --- | --- | --- | --- | --- | --- |
 | BLSEIZGR-P01 | Fuzz ADMIN_ROLE holder | period equals stored gracePeriod; fuzz 1..MAX32; seed 1,MAX32 | Success | GracePeriodSet(period) once; stored period unchanged; isEnabled and lastTransitionAt unchanged; positions/obligations/balances unchanged | Unmapped |
+
+## Service independence and local recovery
+
+Own Kernel activity precedes inherited enabled-state, ADMIN authorization and numeric validation. The same nonzero value emits once; no equality shortcut is required.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZGR-P02 | Fuzz ADMIN holder | Task active/enabled; Core/Seize/Lens services and metadata getters configured to fail | Set period1..MAX32 and emit once without those reads; preserve lastTransitionAt and accounting | Unmapped |
+| BLSEIZGR-P03 | Fuzz ADMIN holder | Task re-enabled or Kernel-reactivated; enabled=true; valid changed period | Exact getter/event; other settings, cursors and positions unchanged | Unmapped |
+| BLSEIZGR-L13 | Fuzz caller excluding ADMIN | Kernel-inactive and locally disabled; period0; cached ROLES broken | PolicyNotActive(Task), before local state/authorization/input | Unmapped |

@@ -20,9 +20,9 @@ Fixed for this table: Accounting / events: No effects.
 
 ## Shared assertions
 
-No VERSION API on four public action contracts.
+Assert both returned components directly: major=1 and minor=0. No dependency read, lifecycle change, event or token effect occurs.
 
-- [ ] Review these expectations.
+- [x] Review concrete branches and inherited guard order.
 - [ ] Implement named Foundry tests and boundary seed drivers.
 - [ ] Map each row to passing tests.
 

@@ -41,8 +41,8 @@ Fixed for this table: Accounting / events: No cursor change.
 Co-located API assertions: `isAssetManaged`, `getAssets`. These must be asserted independently of the action return value.
 
 - [x] Review these expectations.
-- [x] Implement named Foundry tests and boundary seed drivers.
-- [x] Map each row to passing tests.
+- [ ] Implement the remaining Unmapped tests and boundary seed drivers.
+- [ ] Map every remaining row to passing tests.
 
 ## Own policy activity
 
@@ -57,6 +57,18 @@ Previously activated then Kernel-deactivated, retaining ROLES and valid caller a
 [addAsset.t.sol](./addAsset.t.sol) uses the shared Kernel/ROLES fixture with controlled dependency responses.
 [addAsset integration tests](./integration/addAsset.t.sol) retain the real dependency and accounting interactions.
 
+## Dependency failures and registry transitions
+
+Local active=true; caller holds ADMIN; asset is not already managed unless stated. Set insertion occurs before the Core read, so a failed read must roll it back. Unchanged includes managed order, every borrower cursor, asset traversal, lifecycle, limits, principal, collateral and balances; reverts commit no logs.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-ADD-ASSET-T01 | ADMIN | Bound Seize.core() reverts with a fixed custom error | Propagate exact error; tentative membership insertion rolled back | Unmapped |
+| BLSEIZ-ADD-ASSET-T02 | ADMIN | Core.isAssetRegistered(asset) reverts with a fixed custom error | Propagate exact error; tentative membership insertion rolled back | Unmapped |
+| BLSEIZ-ADD-ASSET-T03 | ADMIN | Registration getter succeeds with malformed bool data | ABI decode revert with empty data; membership rolled back | Unmapped |
+| BLSEIZ-ADD-ASSET-P05 | ADMIN | Remove an asset with saved borrower progress, then register it again | Append once to current set order; its cursor starts0; other cursors/next asset unchanged | Unmapped |
+| BLSEIZ-ADD-ASSET-D01 | ADMIN | Asset duplicate; Seize.core()/registration reads configured to fail | AssetAlreadyManaged(asset) before those reads; no effects | Unmapped |
+
 [test_givenCoreUnavailable_whenRegisteredAssetAdded]: ./addAsset.t.sol#L113
 [test_givenDuplicateAsset_whenAdded_reverts]: ./addAsset.t.sol#L38
 [test_givenInactiveTask_whenAssetAdded_reverts]: ./addAsset.t.sol#L126
@@ -66,7 +78,6 @@ Previously activated then Kernel-deactivated, retaining ROLES and valid caller a
 [test_whenCallerIsUnauthorized_reverts]: ./addAsset.t.sol#L60
 [test_whenLifecycleStatesSeeded_thenRegisteredAssetAdded]: ./addAsset.t.sol#L103
 [test_whenUnregisteredAddressBoundaries_reverts]: ./addAsset.t.sol#L96
-
 [test_givenEnabled_whenAdminAddsRegisteredAsset]: ./addAsset.t.sol#L19
 [test_givenDisabled_whenAdminAddsRegisteredAsset]: ./addAsset.t.sol#L24
 [test_givenReEnabled_whenAdminAddsRegisteredAsset]: ./addAsset.t.sol#L31

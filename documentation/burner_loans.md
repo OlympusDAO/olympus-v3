@@ -132,7 +132,7 @@ crossover = (maxLtvBps / 10_000) * (backingMultiplierBps / 10_000)
 
 Risk owns `backingOracle`, `priceCache` and `priceCacheMaxAge`. Zero cache selects direct PRICE reads. A configured cache is used only while active and enabled; otherwise Risk uses PRICE. Cache compatibility and lifecycle errors remain distinct, including the shared Kernel-mismatch error.
 
-Views use a fresh cached snapshot or read PRICE without writing the cache. Price-dependent actions refresh an operational cache when necessary. An error from an operational cache propagates. Debt-free health does not need a price read. An unavailable backing oracle blocks borrowing, extensions, indebted collateral withdrawals, ordinary keeper seizures and selections containing unexpired debt, including their price-dependent previews. A HEART or Burner Loans seizer-role keeper can settle an explicit all-expired selection without price reads and receives no reward. Risk owns reward-price reads; Core receives the actual redemption output and forwards the reward inputs without a price snapshot. Bulk Lens discovery still requires prices. Collateral deposits, partial/full repayments and their previews require no prices or backing. Debt-free withdrawals also retain their pricing-independent path. Pause originations rather than backing to retain price-dependent servicing during wind-down.
+Views use a fresh cached snapshot or read PRICE without writing the cache. Price-dependent actions refresh an operational cache when necessary. An error from an operational cache propagates. Debt-free health does not need a price read. An unavailable backing oracle blocks borrowing, extensions, indebted collateral withdrawals, ordinary keeper seizures and selections containing unexpired debt, including their price-dependent previews. A HEART or Burner Loans seizer-role keeper can settle an explicit all-expired selection without price reads and receives no reward. Risk owns reward-price reads; Core receives the actual redemption output and forwards the reward inputs without a price snapshot. Priced Lens scans still require prices. `getExpiredBorrowersBoundedFor(actor,asset,start,count,maxResults)` provides a separate maturity-only selection, cursor and aggregate reward quote for the actor. It requires custody and Risk reward services; Risk owns reward pricing, so protocol actors and zero configured rewards need no prices. A selection and reward estimate do not attest execution admission: ordinary Seize still requires prices even for zero rewards. It skips unexpired debt, even before expired borrowers, and conveys no seizure authority. Collateral deposits, partial/full repayments and their previews require no prices or backing. Debt-free withdrawals also retain their pricing-independent path. Pause originations rather than backing to retain price-dependent servicing during wind-down.
 
 Repayment and `previewRepay` return only the remaining OHM principal. Full repayment returns zero. Neither function calculates or returns a health factor, so oracle outages cannot block an otherwise valid repayment. Existing lifecycle, Inventory, amount and same-block checks still apply. Exact OHM collection and mandatory settlement remain atomic.
 
@@ -229,6 +229,22 @@ Payout validates token code and destination restrictions, including zero, itself
 ## Seizure automation
 
 SeizerTask binds Lens and Seize directly. They must report the same Core, and Seize must belong to the task's Kernel. Adding an asset requires a configured market. The task visits one managed asset per `execute()` call, then rotates to the next asset even if that visit fails.
+
+The task first requests the explicit expired-only selection and its zero protocol reward quote.
+If that scan fails, it reports ScanFailed, retains the borrower cursor and stops the visit. If it
+returns borrowers, the task attempts that single batch and returns without invoking prices before
+or afterward. Only an expiry-empty page is scanned again for priced unhealthy eligibility from the
+same start and with the same limits. A priced-scan failure remains observable and advances to the
+expiry scan's empty-page cursor without classifying health. Expired debt takes priority; unexpired
+unhealthy borrowers remain reachable on later visits when the expired population is finite.
+
+Custody and Risk quote requirements remain intact. Seize retains its role, lifecycle, solvency and
+atomic custody admission. Failed settlements preserve retry progress; successful seizures retain
+compaction rewind. At most one batch is settled per visit. Each stage examines the same bounded
+active borrower page, so an expiry-empty page can incur two sets of position reads. The existing metered
+self-call and reserved outer cleanup gas contain task-body failures and rotate assets. A
+price-dependent gas exhaustion on an expiry-empty prefix can still roll back its borrower progress;
+ordinary dependency reverts allow cursor advancement. No Heart or freshness configuration changes.
 
 Within an asset, the scan has independent check and seizure limits. The task stores a borrower cursor per asset. Before a nonzero scan, it checks the current borrower count and resets an out-of-range cursor within the same visit. A successful seizure rewinds for borrower-list compaction. Scan or seizure failures retain borrower progress; a failed complete self-call still rotates the asset in the outer call.
 

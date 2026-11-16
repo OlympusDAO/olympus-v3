@@ -16,13 +16,13 @@ Fixed for this table: Accounting / events: No extras, duplicates or mutation.
 
 | ID | Caller | Operation / pre-state | Execution / return | Test |
 | --- | --- | --- | --- | --- |
-| BLSEIZ-PERMISSIONS-P01 | Fuzz all callers | Before/after activation,disable,migration | Exact ordered keycode/selector pairs and length | Unmapped |
+| BLSEIZ-PERMISSIONS-P01 | Fuzz all callers | Before/after activation,disable,migration | Return an empty Permissions array, length zero; no module selectors requested | Unmapped |
 
 ## Shared assertions
 
 No pricing/custody/configuration permissions added to public actions.
 
-- [ ] Review these expectations.
+- [x] Review concrete branches and inherited guard order.
 - [ ] Implement named Foundry tests and boundary seed drivers.
 - [ ] Map each row to passing tests.
 

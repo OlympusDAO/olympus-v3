@@ -16,6 +16,14 @@ Out-of-range start rejects before count=0/empty-list shortcuts or pricing. Expec
 
 The implementation uses the forward-only signature and validates the current canonical borrower count. Lens remains plain and its reads are independent of Core lifecycle. No Inventory lifecycle or solvency gate is added.
 
+These priced discovery/reward APIs still propagate pricing failures even for all-expired pages.
+During outages use [getExpiredBorrowersBoundedFor](./getExpiredBorrowersBoundedFor.md) for explicit
+maturity-only selection and an actor-specific aggregate reward quote. Protocol actors receive zero
+without prices. Risk owns reward pricing and retains its zero-configuration shortcuts; ordinary
+Seize execution and its preview still require valid prices even for zero rewards. SeizerTask prioritizes
+that separate expiry selection and runs priced discovery only for an expiry-empty page; it never
+classifies unexpired positions without prices.
+
 For **every row**, prank only the convenience call as caller C. Then call `getSeizableBorrowersFor(C,asset,start,count)` directly from the test contract, without a prank, under identical relevant state. Require the same borrowers, cursor and reward, or the same exact revert data. The For consistency column records this paired assertion. C is an explicit reward actor, never a forwarded authorization identity. Role-specific rows control C's grants independently of the unpranked test contract.
 
 Consumer integration: the Seize execution batch limit remains separate. SeizerTask must request a count no larger than the batch it can settle and must not discard candidates while advancing its cursor. It must also handle a cursor made invalid by repayment/default shrinking the borrower list: validate/reset before scanning or recover explicitly from InvalidStart; retaining an invalid cursor indefinitely would strand future scans. Lens performs no automatic normalization. A larger manual scan may need several seizure transactions; an aggregate reward quote need not equal separately rounded chunk quotes.

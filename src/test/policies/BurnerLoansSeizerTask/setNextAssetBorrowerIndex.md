@@ -26,6 +26,15 @@ Only the selected asset's borrower cursor changes. Asset traversal, other borrow
 - [x] Write named tests, then implement the recovery setter.
 - [x] Run focused tests, invariant, formatting/lint and reciprocal mapping checks.
 
+## Zero equality and failed validation
+
+The nonzero path validates before equality; zero bypasses Lens even when unchanged. Seize readiness and price health are not recovery prerequisites.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-BORROWER-CURSOR-P07 | ADMIN-only, BL-admin-only or both; seed each | Managed asset, current/proposed0; Lens fails | Event-free no-op without Lens, Risk or pricing reads; unrelated progress unchanged | Unmapped |
+| BLSEIZ-BORROWER-CURSOR-L02 | Fuzz unauthorized caller | Task inactive; unmanaged asset/indexMAX256; broken ROLES | PolicyNotActive(Task) before role/membership/Lens checks | Unmapped |
+
 [invariant_schedulerAndAccountingRemainConsistent]: ./integration/progress.invariant.t.sol#L46
 [test_givenInactiveTask_whenBorrowerCursorSet_reverts]: ./setNextAssetBorrowerIndex.t.sol#L208
 [test_givenLensReadFails_whenNonzeroBorrowerCursorSet_reverts]: ./setNextAssetBorrowerIndex.t.sol#L195
@@ -41,5 +50,4 @@ Only the selected asset's borrower cursor changes. Asset traversal, other borrow
 [test_whenInvalidBorrowerCursorBoundariesSeeded_reverts]: ./setNextAssetBorrowerIndex.t.sol#L155
 [test_whenRoleLifecycleAndNumericBoundariesSeeded]: ./setNextAssetBorrowerIndex.t.sol#L74
 [test_whenUnmanagedAssetBoundaries_whenBorrowerCursorSet_reverts]: ./setNextAssetBorrowerIndex.t.sol#L136
-
 [test_givenLoans_whenCursorValidationFails_thenAccountingIsPreserved]: ./integration/setNextAssetBorrowerIndex.t.sol#L65

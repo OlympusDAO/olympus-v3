@@ -43,8 +43,6 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
         public
     {
         _seedDebt(_ALICE, 10e6, 1e9);
-        vm.warp(_position(_ALICE).maturity);
-        _price.setTimestamp(uint48(block.timestamp));
         BurnerLoansSeizerTask task = _task(500);
         vm.mockCall(
             address(_lens),
@@ -60,7 +58,15 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
             3,
             "Retained cursor predates borrower-list shrinkage"
         );
+        assertEq(_inventory.activePrincipalOhm(), 1e9, "Debt remains before stale-cursor recovery");
+        assertEq(
+            _lens.getActiveBorrowerCount(address(_asset)),
+            1,
+            "Saved offset exceeds live count"
+        );
         vm.clearMockedCalls();
+        vm.warp(_position(_ALICE).maturity);
+        _price.setTimestamp(uint48(block.timestamp));
         task.execute();
         assertEq(
             task.assetCursor(address(_asset)),

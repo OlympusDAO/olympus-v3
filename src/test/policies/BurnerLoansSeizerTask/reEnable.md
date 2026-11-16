@@ -26,7 +26,7 @@ Seize must be active/enabled. Seize must report this Kernel, and Lens must repor
 
 ## Dependency validation contract
 
-Constructor-bound Seize is the required operational Policy. Derive Core from Seize and require Lens.core() to match. Core readiness is enforced by Seize during settlement, without a separate Task activation gate. Lens is a plain constructor-bound helper: verify its interface/Core identity without inventing Kernel membership or enablement. Required settlement/task roles remain separate authorization prerequisites.
+Constructor-bound Seize is the required operational Policy. Derive Core from Seize and require Lens.core() to match. Core readiness is enforced by Seize during settlement, without a separate Task activation gate. Lens is a plain constructor-bound helper: verify its code and shared Core identity (no Lens ERC165 probe) without inventing Kernel membership or enablement. Required settlement/task roles remain separate authorization prerequisites.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Readable Kernel mismatches use PolicyDependency_KernelMismatch(Seize,expectedKernel,reportedKernel); a zero or incompatible Seize target uses BurnerLoansSeizer_InvalidSeize(Seize); Lens mismatch uses BurnerLoansSeizer_InvalidLens; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -49,15 +49,15 @@ Initialized, locally disabled; otherwise compatible dependencies. Configure G wh
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BLSEIZ-REENABLE-N01 | Fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap holders; seed each | Fuzz MAX48-G+1..MAX48 | Configured G in 1..MAX32; seed1,MAX32 | L | `SafeCastOverflowedUintDowncast(48, uint256(L)+uint256(G))` | Unchanged; no committed transition logs | Unmapped |
 
-Implemented lifecycle payload rule: calculate D=uint256(L)+uint256(G), then use checked SafeCast narrowing to uint48. If D exceeds MAX48, revert with SafeCastOverflowedUintDowncast(48,D). The product-local _requireGrace override uses widened addition and checked uint48 narrowing; it leaves shared ReEnabler behavior unchanged. Preserve local enabled state, transition timestamp, configuration and balances; commit no lifecycle events. The duration setter cannot validate an unknown future disable timestamp.
+Implemented lifecycle payload rule: calculate D=uint256(L)+uint256(G), then use checked SafeCast narrowing to uint48. If D exceeds MAX48, revert with SafeCastOverflowedUintDowncast(48,D). The product-local \_requireGrace override uses widened addition and checked uint48 narrowing; it leaves shared ReEnabler behavior unchanged. Preserve local enabled state, transition timestamp, configuration and balances; commit no lifecycle events. The duration setter cannot validate an unknown future disable timestamp.
 
 ## Shared assertions
 
-Construct only reachable dependency drift: deactivation/local disable/migration after successful binding. Restoration then retry proves recovery, not only initial failure. Getter assertions include exact enabled/timestamp/grace values. Core callback guard enforcement is specific to Core; do not add cross-contract sessions.
+Construct only reachable dependency drift: deactivation/local disable/migration after successful binding. Restoration then retry proves recovery, not only initial failure. Getter assertions include exact enabled/timestamp/grace values. Task has no settlement-session guard in its lifecycle hooks. Core guards are enforced by the operations that consume Core.
 
 Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These must be asserted independently of the action return value.
 
-- [ ] Review these expectations.
+- [x] Review concrete branches and inherited guard order.
 - [ ] Implement named Foundry tests and boundary seed drivers.
 - [ ] Map each row to passing tests.
 
@@ -134,15 +134,36 @@ The same compatibility predicate runs at construction, enable and reEnable. The 
 | BLSEIZ-REENABLE-D14 | Core interface probe returns short data | BurnerLoansSeizerTask_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_reverts] |
 | BLSEIZ-REENABLE-P10 | Compatible Core; active/enabled flags independently false/true; all four seeded | Success | Consumer becomes enabled | Covered: [test][test_givenCoreLifecycle_whenActivated]; [seeds][test_whenCoreLifecycleStatesSeeded_thenActivated] |
 
+## Read failures and guard precedence
+
+Local active=true, initialized nonzero transition history and disabled state; valid inclusive grace; each ADMIN-only, BL-admin-only and overlap caller. Bindings are checked before Seize readiness. Seize.core()/Lens.core()/Seize.isEnabled() are direct ABI calls in the current implementation: custom reverts propagate, and malformed return data causes an ABI decode revert. Record this observed behavior separately from the shared policy-lifecycle guidance, which prefers consumer-owned errors for invalid metadata; this scenario review does not change the contract. Kernel migration and service pauses are reachable production drift. Faults in immutable core() bindings or fixed-code metadata require a mutable test double or defensive harness; do not describe them as ordinary production transitions.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-REENABLE-D15 | Authorized caller defined above | Seize kernel() reverts or returns malformed address data | PolicyDependency_InvalidDependency(Seize); no local transition | Unmapped |
+| BLSEIZ-REENABLE-T01 | Authorized caller defined above | Seize.core() getter reverts with a fixed custom error | Exact dependency error; disabled state/timestamp/accounting unchanged | Unmapped |
+| BLSEIZ-REENABLE-T02 | Authorized caller defined above | Lens.core() getter reverts with a fixed custom error | Exact dependency error; no transition | Unmapped |
+| BLSEIZ-REENABLE-T03 | Authorized caller defined above | Seize active in intended Kernel; isEnabled() getter reverts | Exact dependency error; no transition | Unmapped |
+| BLSEIZ-REENABLE-T04 | Authorized caller defined above | Seize inactive; isEnabled() configured to fail | PolicyDependency_NotActive(Seize); short-circuit avoids enabled getter | Unmapped |
+| BLSEIZ-REENABLE-T05 | Authorized caller defined above | Direct core()/isEnabled() read returns short or noncanonical ABI data; vary one reached getter | ABI decode revert with empty data; no transition | Unmapped |
+| BLSEIZ-REENABLE-D16 | Authorized caller defined above | Readable foreign Seize Kernel plus Seize inactive/disabled | KernelMismatch before readiness, with exact expected/reported addresses | Unmapped |
+
+## Grace precedence and ADMIN recovery
+
+The grace check precedes own activity and dependency readiness. enable remains ADMIN-only and may be used after grace expiry; reEnable does not bypass its grace window.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-REENABLE-L05 | Fuzz permitted role family | Task inactive; initialized disabled history; now>D; Seize also unavailable | GracePeriod_Expired(D) before own-activity/readiness | Unmapped |
+| BLSEIZ-REENABLE-N02 | Fuzz permitted role family | Deadline addition exceedsMAX48; task inactive and dependency unavailable | SafeCastOverflowedUintDowncast(48,L+G) before own-activity/readiness | Unmapped |
+| BLSEIZ-REENABLE-P11 | ADMIN | Grace expired after disable; restore dependencies and call enable(0x) | Enable succeeds with exact local transition; delegated BL-admin-only still cannot enable | Unmapped |
+| BLSEIZ-REENABLE-P12 | Fuzz permitted role family | Representable grace, Seize ready; Core lifecycle getters fail | reEnable succeeds without Core lifecycle reads; Core interface compatibility still required | Unmapped |
+
 [test_givenKernelDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L112
 [test_givenLensCoreDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L136
 [test_givenSeizeInactiveOrDisabled_whenReEnabled_reverts]: ./reEnable.t.sol#L158
-
 [test_givenMissingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L201
-
 [test_givenRevertingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L224
-
 [test_givenMalformedCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L247
-
 [test_givenCoreLifecycle_whenActivated]: ./reEnable.t.sol#L270
 [test_whenCoreLifecycleStatesSeeded_thenActivated]: ./reEnable.t.sol#L281

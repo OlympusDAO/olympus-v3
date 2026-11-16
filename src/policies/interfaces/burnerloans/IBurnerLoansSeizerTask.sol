@@ -32,7 +32,7 @@ interface IBurnerLoansSeizerTask {
 
     /// @notice Emitted when governance selects an asset's next borrower offset.
     /// @param asset Managed collateral asset.
-    /// @param cursor New offset in the canonical active-borrower list.
+    /// @param cursor New offset in the active borrower list.
     event AssetCursorSet(address indexed asset, uint256 cursor);
 
     /// @notice Emitted when the gas-bounded task body fails.
@@ -130,7 +130,8 @@ interface IBurnerLoansSeizerTask {
     /// @notice Sets the maximum borrowers scanned and seized in one execution.
     /// @dev ADMIN or burner_loans_admin may configure either limit. Both must be nonzero,
     ///      and the seizure limit must not exceed the scan limit. The input types define their maxima.
-    /// @param maxBorrowersToCheck Maximum active borrowers inspected per execution.
+    /// @param maxBorrowersToCheck Maximum distinct borrowers inspected per execution.
+    ///      An expiry-empty page may be read again by priced discovery.
     /// @param maxBorrowersToSeize Maximum seizable borrowers settled per execution.
     function setScanLimits(uint16 maxBorrowersToCheck, uint8 maxBorrowersToSeize) external;
 
@@ -149,10 +150,11 @@ interface IBurnerLoansSeizerTask {
     /// @dev ADMIN and burner_loans_admin can recover borrower traversal while locally paused.
     ///      Zero resets without downstream reads; nonzero offsets are validated through Lens.
     /// @param asset Managed collateral asset.
-    /// @param index Offset in the canonical active-borrower list.
+    /// @param index Offset in the active borrower list.
     function setNextAssetBorrowerIndex(address asset, uint256 index) external;
 
-    /// @notice Returns the maximum active borrowers inspected per execution.
+    /// @notice Returns the maximum distinct borrowers inspected per execution.
+    /// @dev An expiry-empty page may be read again by priced discovery.
     /// @return maxBorrowersToCheck_ Borrower scan limit.
     function maxBorrowersToCheck() external view returns (uint16 maxBorrowersToCheck_);
 
@@ -170,7 +172,7 @@ interface IBurnerLoansSeizerTask {
 
     /// @notice Returns the next active-borrower index scanned for an asset.
     /// @param asset Collateral asset whose cursor is queried.
-    /// @return cursor_ Next borrower index.
+    /// @return cursor_ Next offset in the active borrower list, independent of filtered results.
     function assetCursor(address asset) external view returns (uint256 cursor_);
 
     /// @notice Returns whether an asset is included in round-robin scanning.

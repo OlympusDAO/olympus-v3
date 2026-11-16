@@ -22,7 +22,7 @@ ROLES initialized; every dependency not varied by the selected table satisfies i
 
 ## Dependency validation contract
 
-Constructor-bound Seize is the required operational Policy. Derive Core from Seize and require Lens.core() to match. Core readiness is enforced by Seize during settlement, without a separate Task activation gate. Lens is a plain constructor-bound helper: verify its interface/Core identity without inventing Kernel membership or enablement. Required settlement/task roles remain separate authorization prerequisites.
+Constructor-bound Seize is the required operational Policy. Derive Core from Seize and require Lens.core() to match. Core readiness is enforced by Seize during settlement, without a separate Task activation gate. Lens is a plain constructor-bound helper: verify its code and shared Core identity (no Lens ERC165 probe) without inventing Kernel membership or enablement. Required settlement/task roles remain separate authorization prerequisites.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Readable Kernel mismatches use PolicyDependency_KernelMismatch(Seize,expectedKernel,reportedKernel); a zero or incompatible Seize target uses BurnerLoansSeizer_InvalidSeize(Seize); Lens mismatch uses BurnerLoansSeizer_InvalidLens; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -56,11 +56,11 @@ Local enabled=false; initialized ROLES; dependencies compatible; outside settlem
 
 ## Shared assertions
 
-Construct only reachable dependency drift: deactivation/local disable/migration after successful binding. Restoration then retry proves recovery, not only initial failure. Getter assertions include exact enabled/timestamp/grace values. Core callback guard enforcement is specific to Core; do not add cross-contract sessions.
+Construct only reachable dependency drift: deactivation/local disable/migration after successful binding. Restoration then retry proves recovery, not only initial failure. Getter assertions include exact enabled/timestamp/grace values. Task has no settlement-session guard in its lifecycle hooks. Core guards are enforced by the operations that consume Core.
 
 Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These must be asserted independently of the action return value.
 
-- [ ] Review these expectations.
+- [x] Review concrete branches and inherited guard order.
 - [ ] Implement named Foundry tests and boundary seed drivers.
 - [ ] Map each row to passing tests.
 
@@ -126,15 +126,34 @@ The same compatibility predicate runs at construction, enable and reEnable. The 
 | BLSEIZ-ENABLE-D14 | Core interface probe returns short data | BurnerLoansSeizerTask_InvalidCore(Core) | Remain paused; timestamp unchanged; restoring the interface permits retry | Covered: [test][test_givenMalformedCoreInterface_whenActivated_reverts] |
 | BLSEIZ-ENABLE-P10 | Compatible Core; active/enabled flags independently false/true; all four seeded | Success | Consumer becomes enabled | Covered: [test][test_givenCoreLifecycle_whenActivated]; [seeds][test_whenCoreLifecycleStatesSeeded_thenActivated] |
 
+## Read failures and guard precedence
+
+Local active=true, initialized ROLES and disabled state; authorized ADMIN, empty enable payload. Bindings are checked before Seize readiness. Seize.core()/Lens.core()/Seize.isEnabled() are direct ABI calls in the current implementation: custom reverts propagate, and malformed return data causes an ABI decode revert. Record this observed behavior separately from the shared policy-lifecycle guidance, which prefers consumer-owned errors for invalid metadata; this scenario review does not change the contract. Kernel migration and service pauses are reachable production drift. Faults in immutable core() bindings or fixed-code metadata require a mutable test double or defensive harness; do not describe them as ordinary production transitions.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-ENABLE-D15 | Authorized caller defined above | Seize kernel() reverts or returns malformed address data | PolicyDependency_InvalidDependency(Seize); no local transition | Unmapped |
+| BLSEIZ-ENABLE-T01 | Authorized caller defined above | Seize.core() getter reverts with a fixed custom error | Exact dependency error; disabled state/timestamp/accounting unchanged | Unmapped |
+| BLSEIZ-ENABLE-T02 | Authorized caller defined above | Lens.core() getter reverts with a fixed custom error | Exact dependency error; no transition | Unmapped |
+| BLSEIZ-ENABLE-T03 | Authorized caller defined above | Seize active in intended Kernel; isEnabled() getter reverts | Exact dependency error; no transition | Unmapped |
+| BLSEIZ-ENABLE-T04 | Authorized caller defined above | Seize inactive; isEnabled() configured to fail | PolicyDependency_NotActive(Seize); short-circuit avoids enabled getter | Unmapped |
+| BLSEIZ-ENABLE-T05 | Authorized caller defined above | Direct core()/isEnabled() read returns short or noncanonical ABI data; vary one reached getter | ABI decode revert with empty data; no transition | Unmapped |
+| BLSEIZ-ENABLE-D16 | Authorized caller defined above | Readable foreign Seize Kernel plus Seize inactive/disabled | KernelMismatch before readiness, with exact expected/reported addresses | Unmapped |
+
+## Payload precedence and unneeded Core reads
+
+Own inactivity is checked inside the enable hook after payload validation. Earlier inherited local-state and ADMIN checks remain first.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-ENABLE-I04 | ADMIN | Task inactive and disabled; nonempty payload; initialized ROLES | InvalidEnablerData before own-activity/readiness checks | Unmapped |
+| BLSEIZ-ENABLE-P11 | ADMIN | Task active and disabled; Seize ready; Core kernel()/isEnabled() getters fail | Enable succeeds without Core lifecycle reads; Core ERC165 still required | Unmapped |
+
 [test_givenKernelDrift_whenEnabled_reverts]: ./enable.t.sol#L22
 [test_givenLensCoreDrift_whenEnabled_reverts]: ./enable.t.sol#L46
 [test_givenSeizeInactiveOrDisabled_whenEnabled_reverts]: ./enable.t.sol#L68
-
 [test_givenMissingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L117
-
 [test_givenRevertingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L140
-
 [test_givenMalformedCoreInterface_whenActivated_reverts]: ./enable.t.sol#L163
-
 [test_givenCoreLifecycle_whenActivated]: ./enable.t.sol#L186
 [test_whenCoreLifecycleStatesSeeded_thenActivated]: ./enable.t.sol#L197

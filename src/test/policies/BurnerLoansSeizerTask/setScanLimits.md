@@ -12,7 +12,9 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 
 Own-policy admission: require Kernel-active BurnerLoansSeizerTask; own inactivity uses `BurnerLoans_PolicyNotActive(BurnerLoansSeizerTask)` before body/input/idempotent work. Preserve earlier local-state and authorization guards. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-ADMIN or BL admin, local enablement is independent; own policy activity is enforced before role/input validation; check:uint16, seize:uint8. Accepted 1<=check<=MAX16;1<=seize<=MAX8;seize<=check. Input types define maxima; there are no additional 500/50 ceilings. Practical settings follow the gas budget and measured workload.
+ADMIN or BL admin, local enablement is independent; own policy activity is enforced before role/input validation; check:uint16, seize:uint8. Accepted 1<=check<=MAX16;1<=seize<=MAX8;seize<=check. Input types define maxima; there are no additional 500/50 ceilings. The check limit bounds distinct entries in the active borrower list per visit; an expiry-empty page may be read
+again by priced discovery. Only one seizure batch is attempted per visit. Practical settings follow
+the gas budget and measured workload.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
@@ -37,7 +39,7 @@ Fixed for this table: Accounting / events: ScanLimitsSet; seed1/1,501/51,MAX16/M
 
 Co-located API assertions: `maxBorrowersToCheck`, `maxBorrowersToSeize`. These must be asserted independently of the action return value.
 
-- [ ] Review these expectations.
+- [x] Review concrete branches and inherited guard order.
 - [ ] Implement named Foundry tests and boundary seed drivers.
 - [ ] Map each row to passing tests.
 
@@ -56,14 +58,14 @@ Previously activated then Kernel-deactivated, retaining ROLES and valid caller a
 ## Same configuration value
 
 | ID | Caller | Proposed value | Execution | Effects | Test |
-| --- | --- | --- | --- | --- |--- |
+| --- | --- | --- | --- | --- | --- |
 | BLSEIZ-SCAN-LIMITS-P03 | Fuzz ADMIN_ROLE or BURNER_LOANS_ADMIN_ROLE holder; guarantee exclusive and overlap seeds | Exactly current complete value; fuzz the valid domain defined above, including its explicit boundary seeds | No-op after required validation | No setter writes/events; positions, obligations, authority and balances unchanged | Partial: [test][test_whenLimitsUnchanged_thenNoEvent]; other permitted caller partitions remain planned |
 
 ## Invalid scan bounds
 
 Local active=true; local enablement independent. Isolate each field failure; MAX16/MAX8 are type maxima. N03/N05 now demonstrate successful values beyond the former ceilings.
 
-| ID | Caller | maxBorrowersToCheck_ | maxBorrowersToSeize_ | Execution | Effects | Test |
+| ID | Caller | maxBorrowersToCheck | maxBorrowersToSeize | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
 | BLSEIZ-SCAN-LIMITS-N02 | Fuzz ADMIN-only, BL-admin-only and overlap; seed each | check=0 | Fuzz seize1..MAX8 | BurnerLoansSeizer_InvalidScanLimits(0,seize) | Unchanged; no logs | Partial: [test][test_whenCheckLimitZero_reverts], [test][test_whenInvalidBoundariesSeeded_reverts]; other permitted caller partitions remain planned |
 | BLSEIZ-SCAN-LIMITS-N03 | Fuzz ADMIN-only, BL-admin-only and overlap; seed each | Fuzz check501..MAX16; seed501,MAX16 | Valid seize1..MAX8 | Success | Store exact limits; emit once | Covered: [test][test_givenPermittedCaller_whenLimitsSet], [test][test_whenRolesAndFullWidthBoundariesSeeded] |
@@ -83,18 +85,22 @@ FOUNDRY_TEST=src/test/policies/BurnerLoansSeizerTask/integration \
 forge test --match-contract BurnerLoansSeizerTaskScanGasTest -vv
 ```
 
-The fixture uses real Core/FLOAN/Risk/Inventory/DepositManager/Payout/Seize contracts, a six-decimal collateral token and constant mock prices. Each borrower deposits 10e6 collateral units and borrows 1e9 OHM units. Healthy scans use unexpired positions; eligible batches use expired positions. The Task holds the protocol seizer role and earns no keeper reward. Measurements use solc 0.8.36, optimizer 400, Prague and transaction isolation. `snapshotGasLastFrame` measures the `execute` call, excluding deployment and loan setup. Gas snapshots are stored in [BurnerLoansSeizerTaskGas.json](../../../../snapshots/BurnerLoansSeizerTaskGas.json).
+The fixture uses real Core/FLOAN/Risk/Inventory/DepositManager/Payout/Seize contracts, a six-decimal collateral token and constant mock prices. Each borrower deposits 10e6 collateral units and borrows 1e9 OHM units. Healthy scans use unexpired positions; eligible batches use expired positions. The Task holds the protocol seizer role and earns no keeper reward. Measurements use solc 0.8.36, optimizer 400, Prague and transaction isolation. `snapshotGasLastFrame` measures the `execute` call, excluding deployment and loan setup. These expiry-first measurements are stored in [BurnerLoansSeizerTaskGas.json](../../../../snapshots/BurnerLoansSeizerTaskGas.json).
 
 | Borrowers checked or seized | Healthy scan, gas | All expired and seized, gas |
 | --- | --- | --- |
-| 1 | 200,480 | 564,283 |
-| 25 | 1,213,329 | 2,167,380 |
-| 50 | 2,271,480 | 4,097,897 |
-| 51 | Not measured | 4,180,275 |
-| 100 | 4,397,276 | 8,754,906 |
-| 255 | Not measured | 29,941,834 |
-| 500 | 21,859,263 | Not representable by the uint8 seizure limit |
-| 1000 | 44,825,810 | Not representable by the uint8 seizure limit |
+| 1 | 231,620 | 550,788 |
+| 25 | 1,571,162 | 2,245,876 |
+| 50 | 2,972,549 | 4,280,950 |
+| 51 | Not measured | 4,367,694 |
+| 100 | 5,793,790 | 9,173,790 |
+| 255 | Not measured | 31,630,736 |
+| 500 | 29,249,999 | Not representable by the uint8 seizure limit |
+| 1000 | 60,785,983 | Not representable by the uint8 seizure limit |
+
+Expiry-first avoids the priced scan for a nonempty expired batch. A healthy page requires both
+bounded discovery stages. Compared with the tracked pre-fix snapshot, healthy-25 increases by
+210,819 gas and eligible-25 decreases by 39,842 gas.
 
 These are workload examples, not universal safe limits. Duplicate detection in Seize is quadratic, so larger eligible batches do not scale linearly. Vault-backed collateral, price routes, payout behavior and borrower state can change costs. The body budget must also cover stale-cursor recovery; Heart needs gas for the outer reserve and subsequent tasks. Under this fixture, check=500 cannot finish a healthy page within a 10-million body budget; reducing check to 100 restores progress. Tune the scan and batch limits independently, leaving margin below the heartbeat's available gas, then rerun against the intended markets.
 
@@ -103,6 +109,18 @@ These are workload examples, not universal safe limits. Duplicate detection in S
 | BLSEIZ-SCAN-LIMITS-G01 | HEART_ROLE holder | Healthy scans of 1,25,50,100,500,1000 positions | Exact successful scan event and cursor; principal unchanged; gas measured separately from setup | Covered: [test][test_whenHealthyScanIsOne_thenMeasureGas], [test][test_whenHealthyScanIsTwentyFive_thenMeasureGas], [test][test_whenHealthyScanIsFifty_thenMeasureGas], [test][test_whenHealthyScanIsOneHundred_thenMeasureGas], [test][test_whenHealthyScanIsFiveHundred_thenMeasureGas], [test][test_whenHealthyScanIsOneThousand_thenMeasureGas] |
 | BLSEIZ-SCAN-LIMITS-G02 | HEART_ROLE holder | Expired batches of 1,25,50,51,100,255 | All selected principal and collateral settled; no Task custody; gas measured separately from setup | Covered: [test][test_whenEligibleBatchIsOne_thenMeasureGas], [test][test_whenEligibleBatchIsTwentyFive_thenMeasureGas], [test][test_whenEligibleBatchIsFifty_thenMeasureGas], [test][test_whenEligibleBatchIsFiftyOne_thenMeasureGas], [test][test_whenEligibleBatchIsOneHundred_thenMeasureGas], [test][test_whenEligibleBatchIsMaxUint8_thenMeasureGas] |
 | BLSEIZ-SCAN-LIMITS-G03 | HEART_ROLE holder | 500 healthy borrowers, 10-million body gas; change check500 to check100 | Oversized scan fails without progress; reduced page succeeds and saves cursor100 | Covered: [test][test_givenTenMillionGas_whenScanReduced_thenProgressResumes] |
+
+## Independent changes and recovery states
+
+Own policy active; callers cover ADMIN-only, BL-admin-only and overlap with deterministic seeds. No operational dependency is read. Existing P03 retains the unchanged-complete-tuple rule.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-SCAN-LIMITS-P04 | Fuzz permitted role family | Change check only; preserve a valid current seizure limit; seed check=seize and MAX16 | Store new check and emit ScanLimitsSet once; no cursor/lifecycle/accounting changes | Unmapped |
+| BLSEIZ-SCAN-LIMITS-P05 | Fuzz permitted role family | Change seize only; preserve check; seed seize1,min(check,MAX8) | Store new seize and emit once; no immediate scan/settlement | Unmapped |
+| BLSEIZ-SCAN-LIMITS-I01 | Fuzz permitted role family | check0 and seize0 | InvalidScanLimits(0,0); no writes/events | Unmapped |
+| BLSEIZ-SCAN-LIMITS-P06 | Fuzz permitted role family | Task disabled then re-enabled; dependency services broken; valid changed tuple | Setter succeeds in each local state without service reads; exact getter/event | Unmapped |
+| BLSEIZ-SCAN-LIMITS-L01 | Fuzz unauthorized caller | Task Kernel-inactive with invalid/unchanged tuple and failed cached ROLES | PolicyNotActive(Task) before caller/input/no-op | Unmapped |
 
 [test_givenInactiveTask_whenLimitsSet_reverts]: ./setScanLimits.t.sol#L114
 [test_givenPermittedCaller_whenLimitsSet]: ./setScanLimits.t.sol#L19
