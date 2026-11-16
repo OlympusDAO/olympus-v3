@@ -92,6 +92,10 @@ import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActiv
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
 
+// Incentive distribution
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
+import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
+
 // solhint-disable gas-custom-errors
 
 /// @notice V3 of the deployment script
@@ -1406,6 +1410,60 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(migrator), "olympus.policies");
+    }
+
+    // ===== INCENTIVE DISTRIBUTION CONTRACTS ===== //
+
+    function deployConvertibleOHMTeller() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+
+        // Log parameters
+        console2.log("ConvertibleOHMTeller parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohm", ohm);
+
+        // Deploy
+        vm.broadcast();
+        ConvertibleOHMTeller teller = new ConvertibleOHMTeller(kernel, ohm);
+
+        return (address(teller), "olympus.policies");
+    }
+
+    function deployIncentiveDistributorConvertible() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address teller = _getAddressNotZero("olympus.policies.ConvertibleOHMTeller");
+
+        // Input parameters
+        uint40 lastEpochEndDate = SafeCast.encodeUInt40(
+            _readDeploymentArgUint256("IncentiveDistributorConvertible", "lastEpochEndDate")
+        );
+
+        // Validate lastEpochEndDate is not stale (more than 90 days in the past)
+        require(
+            lastEpochEndDate + 90 days >= block.timestamp,
+            "lastEpochEndDate is more than 90 days in the past -- update savedDeployments config"
+        );
+
+        // Log parameters
+        console2.log("IncentiveDistributorConvertible parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  lastEpochEndDate", lastEpochEndDate);
+        console2.log("  teller", teller);
+
+        // Deploy
+        vm.broadcast();
+        IncentiveDistributorConvertible distributor = new IncentiveDistributorConvertible(
+            kernel,
+            lastEpochEndDate,
+            teller
+        );
+
+        return (address(distributor), "olympus.policies");
     }
 
     // ===== LZ BRIDGE CONTRACTS ===== //
