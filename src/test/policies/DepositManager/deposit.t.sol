@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";

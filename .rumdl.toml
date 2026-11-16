@@ -1,0 +1,14 @@
+# Preserve the existing Markdownlint conventions and editor configuration.
+[global]
+disable = ["MD013", "MD057", "MD060", "MD076", "MD077"]
+respect-gitignore = false
+include = ["**/*.md"]
+cache-dir = "cache/rumdl"
+
+# Keep four spaces under bullets, while aligning children of ordered lists.
+[MD007]
+indent = 4
+
+[MD030]
+ul-multi = 1
+ul-single = 1

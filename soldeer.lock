@@ -1,4 +1,39 @@
 [[dependencies]]
+name = "@layerzerolabs-lz-evm-messagelib-v2"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-messagelib-v2/3_0_162_27-02-2026_07:58:25_lz-evm-messagelib-v2.zip"
+checksum = "d8e9ae05e8c2a4a724a2fe1f27ed3cfc61aaf53cf261e2773f1c00b941d272df"
+integrity = "99e3b03d29b10f03c0be71d845cdef46ff6cd6976f46b4e9928c38a0c5471913"
+
+[[dependencies]]
+name = "@layerzerolabs-lz-evm-protocol-v2"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-protocol-v2/3_0_162_27-02-2026_07:58:39_lz-evm-protocol-v2.zip"
+checksum = "f894ed1e56d1fd6b7544bcd9db6d5178229b4e9911a815a23657b9e4b9a0ca32"
+integrity = "0f98e284369a98c633555df720e90f5a2cf420419b93643da9f016722d12cf90"
+
+[[dependencies]]
+name = "@layerzerolabs-lz-evm-v1-0-7"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-v1-0-7/3_0_162_27-02-2026_07:58:49_lz-evm-v1-0.zip"
+checksum = "6d531ce4160937fd1aa65db9b15a903caed78ee8ac062554ad93871f63c2a3b8"
+integrity = "451ddd49deb58410cdb08c3412ca784628b4d1bb37e3f3ef2542681d87ccd3fd"
+
+[[dependencies]]
+name = "@layerzerolabs-oapp-evm"
+version = "0.4.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-oapp-evm/0_4_1_14-12-2025_22:00:19_oapp-evm.zip"
+checksum = "65bf469656c64d3f448d5c23798376d3b399e55b3cee0d1838fe42cfc70a361b"
+integrity = "9b5962846e82481219ab5592bcc38c3b9966d978a79615e3e8eb98d28373b266"
+
+[[dependencies]]
+name = "@layerzerolabs-test-devtools-evm-foundry"
+version = "8.0.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-test-devtools-evm-foundry/8_0_1_14-12-2025_21:59:24_test-devtools-evm-foundry.zip"
+checksum = "e44c198c917aff47f8ce4b7469d3fd0dc84dc05ffdee28f0136c64f400a2bc93"
+integrity = "cb2acf42ee18ae51488af7fb9779a73c9e3984be82e695afcae336a694183178"
+
+[[dependencies]]
 name = "base58-solidity"
 version = "1.0.3"
 git = "https://github.com/storyicon/base58-solidity.git"
@@ -17,10 +52,16 @@ git = "https://github.com/smartcontractkit/chainlink.git"
 rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69"
 
 [[dependencies]]
+name = "chainlink-contracts-ccip"
+version = "2.0.0"
+git = "https://github.com/smartcontractkit/chainlink-ccip.git"
+rev = "c2c125c27f056db2e98d21501922b6eff5750f36"
+
+[[dependencies]]
 name = "chainlink-local"
-version = "0.2.5"
+version = "0.3.1"
 git = "https://github.com/smartcontractkit/chainlink-local.git"
-rev = "b429481536095867f9cd2c6480066c472b9594de"
+rev = "af2b3da7e84e141695389739bb137680d0942d1c"
 
 [[dependencies]]
 name = "clones-with-immutable-args"
@@ -36,16 +77,16 @@ rev = "76374f3bf3b032dfb5c685c5a969ca20d0776384"
 
 [[dependencies]]
 name = "forge-std"
-version = "1.9.6"
-url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_9_6_01-02-2025_20:49:10_forge-std-1.9.zip"
-checksum = "55f341818321b3f925161a72fd0dcd62e4a0a4b66785a7a932bf2bfaf96fb9d1"
-integrity = "e9ecdc364d152157431e5df5aa041ffddbe9bb1c1ad81634b1e72df9e23814e8"
+version = "1.16.2"
+url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_16_2_03-07-2026_07:37:45_forge-std-1.16.zip"
+checksum = "405dccc9d60d753f6abc412b4adf0359f4390f65dbadbbb277a12b4946ed8969"
+integrity = "5fb4325b60d7d4194bd0481e2f94398cf1d9c6561dd12a66fb2748ef4a68205f"
 
 [[dependencies]]
-name = "layer-zero-endpoint-v1"
-version = "0.0.6"
+name = "layer-zero-endpoint-v1-110"
+version = "1.1.0"
 git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
-rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f"
+rev = "cdc93994911829b1348f6ac18000000a43432ef1"
 
 [[dependencies]]
 name = "openzeppelin"
@@ -67,9 +108,9 @@ rev = "bf943f80fec5ac647159d26161446ac5d716a294"
 
 [[dependencies]]
 name = "safe-utils"
-version = "0.0.17"
+version = "0.0.23"
 git = "https://github.com/Recon-Fuzz/safe-utils.git"
-rev = "c057d167139dc4878f10ab7133a8c069fa6b1601"
+rev = "8884959c4416d5f22c9057c51875e20d81555081"
 
 [[dependencies]]
 name = "solidity-http"
@@ -88,3 +129,15 @@ name = "surl"
 version = "1.0.0"
 git = "https://github.com/memester-xyz/surl.git"
 rev = "034c912ae9b5e707a5afd21f145b452ad8e800df"
+
+[[dependencies]]
+name = "uniswap-v3-core"
+version = "1.0.1"
+git = "https://github.com/Uniswap/v3-core.git"
+rev = "6562c52e8f75f0c10f9deaf44861847585fc8129"
+
+[[dependencies]]
+name = "uniswap-v3-periphery"
+version = "1.4.2"
+git = "https://github.com/Uniswap/v3-periphery.git"
+rev = "b325bb0905d922ae61fcc7df85ee802e8df5e96c"

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";

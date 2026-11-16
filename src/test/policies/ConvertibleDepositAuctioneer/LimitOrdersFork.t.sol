@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 // Test
 import {Test, console2} from "forge-std/Test.sol";

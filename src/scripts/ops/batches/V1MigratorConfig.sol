@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 
@@ -19,11 +19,9 @@ contract V1MigratorConfig is BatchScriptV2 {
     ///         balance minus any already migrated amounts).
     function setMerkleRoot(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // Get addresses from environment
         address v1Migrator = _envAddressNotZero("olympus.policies.V1Migrator");
 

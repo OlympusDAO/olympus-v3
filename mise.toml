@@ -1,0 +1,8 @@
+[tools]
+node = "24.22.1"
+pnpm = "11.28.10"
+foundry = "1.8.1"
+jq = "1.8.2"
+python = "3.13.18"
+shfmt = "3.14.1"
+"aqua:boyter/scc" = "4.1.0"

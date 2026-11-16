@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {DEPOSTest} from "./DEPOSTest.sol";
 import {Base64} from "@base64-1.1.0/base64.sol";
 import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
 import {String} from "src/libraries/String.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 // solhint-disable quotes

@@ -1,22 +1,31 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 // solhint-disable custom-errors
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
-import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
-import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
+// Interfaces
+import {console2} from "@forge-std-1.16.2/console2.sol";
+import {VmSafe} from "@forge-std-1.16.2/Vm.sol";
+import {stdJson} from "@forge-std-1.16.2/StdJson.sol";
 
+// Libraries
 import {Surl} from "@surl-1.0.0/Surl.sol";
 
+// Scripts
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
-import {Safe} from "@safe-utils-0.0.17/Safe.sol";
+// External
+import {Safe} from "@safe-utils-0.0.23/Safe.sol";
 import {Enum} from "safe-smart-account/common/Enum.sol";
-import {OlympusHeart} from "src/policies/Heart.sol";
-import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+
+// Bophades
 import {Kernel, toKeycode} from "src/Kernel.sol";
+import {SubKeycode, toSubKeycode} from "src/Submodules.sol";
+import {OlympusHeart} from "src/policies/Heart.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 
 /// @title BatchScriptV2
 /// @notice A script that can be used to propose/execute a batch of transactions to a Safe Multisig or an EOA
@@ -31,10 +40,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
     /// @notice Whether the owner is a Safe Multisig
     bool internal _isMultiSig;
-
-    /// @notice Whether to only sign the batch without proposing/executing it
-    /// @dev    Provided to setUp modifiers
-    bool internal _signOnly;
 
     /// @notice safe-utils client
     Safe.Client internal _multiSig;
@@ -55,21 +60,20 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    Loaded by {_setUpBatchScript}
     string internal _ledgerDerivationPath;
 
-    /// @notice Optional signature for the batch
-    /// @dev    Loaded by {_setUpBatchScript}
-    ///         If this is provided, the batch will be proposed using the signature instead of asking the sender to sign
-    bytes internal _signature;
-
     /// @notice Optional post-batch validation function selector
     /// @dev    If set, this function will be called after batch simulation to validate state
     bytes4 internal _postBatchValidateSelector;
+
+    /// @notice Whether to skip heartbeat validation during batch simulation
+    /// @dev    Defaults to false (heartbeat validation enabled). Set to true in derived scripts to skip.
+    bool internal _skipHeartbeatValidation;
 
     // TODOs
     // [X] Add Ledger signer support
     // [X] Check for --broadcast flag before proposing batch
     // [X] Simulate batch before proposing
 
-    function _setUp(string memory chain_, bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
+    function _setUp(string memory chain_, bool useDaoMS_, string memory argsFilePath_, string memory ledgerDerivationPath_) internal {
         console2.log("Setting up batch script");
 
         _loadEnv(chain_);
@@ -79,33 +83,57 @@ abstract contract BatchScriptV2 is WithEnvironment {
         if (useDaoMS_) {
             owner = _envAddressNotZero("olympus.multisig.dao");
         }
-        _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
+        _setUpBatchScript(owner, ledgerDerivationPath_);
     }
 
-    modifier setUp(bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) {
+    modifier setUp(bool useDaoMS_, string memory argsFilePath_, string memory ledgerDerivationPath_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
+        _setUp(chainName, useDaoMS_, argsFilePath_, ledgerDerivationPath_);
         _;
     }
 
     /// @dev    Deprecated.
     modifier setUpWithChainId(bool useDaoMS_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, false, "", "", "");
+        _setUp(chainName, useDaoMS_, "", "");
         _;
     }
 
-    function _hasSignature() internal view returns (bool) {
-        return bytes(_signature).length > 0;
+    /// @notice Set up with the Treasury Working Group multisig as owner
+    /// @dev    Reads from olympus.multisig.treasuryWorkingGroup in env.json
+    ///         Parameter useDaoMS_ is ignored but present for signature compatibility with safeBatchV2.sh
+    modifier setUpWithTreasuryWorkingGroupMS(
+        bool useDaoMS_,
+        string memory argsFilePath_,
+        string memory ledgerDerivationPath_
+    ) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chainName);
+        _loadArgs(argsFilePath_);
+
+        address owner = _envAddressNotZero("olympus.multisig.treasuryWorkingGroup");
+        _setUpBatchScript(owner, ledgerDerivationPath_);
+        _;
     }
 
-    /// @notice Set the post-batch validation function selector
-    /// @param selector_ The function selector to call after batch simulation
-    function _setPostBatchValidateSelector(bytes4 selector_) internal {
-        _postBatchValidateSelector = selector_;
+    /// @notice Set up with the Emergency multisig as owner
+    /// @dev    Reads from olympus.multisig.emergency in env.json
+    ///         Parameter useDaoMS_ is ignored but present for signature compatibility with safeBatchV2.sh
+    modifier setUpWithEmergencyMS(
+        bool useDaoMS_,
+        string memory argsFilePath_,
+        string memory ledgerDerivationPath_
+    ) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chainName);
+        _loadArgs(argsFilePath_);
+
+        address owner = _envAddressNotZero("olympus.multisig.emergency");
+        _setUpBatchScript(owner, ledgerDerivationPath_);
+        _;
     }
 
-    function _setUpBatchScript(bool signOnly_, address owner_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
+    function _setUpBatchScript(address owner_, string memory ledgerDerivationPath_) internal {
         // Validate that the owner is not the forge default deployer
         if (owner_ == 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38) {
             // solhint-disable-next-line gas-custom-errors
@@ -129,27 +157,18 @@ abstract contract BatchScriptV2 is WithEnvironment {
             _isMultiSig = false;
         }
 
-        _signOnly = signOnly_;
-        console2.log("  Sign only", _signOnly);
-
-        _signature = signature_;
-        if (_hasSignature()) {
-            console2.log("  Signature provided");
-        } else {
-            console2.log("  No signature provided");
-        }
-
-        // If signOnly is true, no signature should be provided
-        if (signOnly_ && _hasSignature()) {
-            revert("BatchScriptV2: Cannot provide signature when signOnly is true");
-        }
-
         _ledgerDerivationPath = ledgerDerivationPath_;
         if (bytes(_ledgerDerivationPath).length > 0) {
             console2.log("  Ledger derivation path provided:", _ledgerDerivationPath);
         } else {
             console2.log("  No Ledger derivation path provided");
         }
+    }
+
+    /// @notice Set the post-batch validation function selector
+    /// @param selector_ The function selector to call after batch simulation
+    function _setPostBatchValidateSelector(bytes4 selector_) internal {
+        _postBatchValidateSelector = selector_;
     }
 
     function addToBatch(address target_, bytes memory data_) public {
@@ -196,15 +215,22 @@ abstract contract BatchScriptV2 is WithEnvironment {
         return nonce;
     }
 
-    function _proposeMultisigBatchTransactions() internal returns (bytes32 txHash) {
-        if (_signOnly) {
-            revert("BatchScriptV2: Cannot propose batch when signOnly is true");
-        }
+    function _logSafeTxDetails(address to, bytes memory data, uint256 nonce) internal view {
+        bytes32 safeTxHash = _multiSig.getSafeTxHash(to, 0, data, Enum.Operation.DelegateCall, nonce);
+        console2.log("  Safe tx hash (idempotency key):");
+        console2.logBytes32(safeTxHash);
+        console2.log("  Multisend target:", to);
+        console2.log("  Multisend calldata hash:");
+        console2.logBytes32(keccak256(data));
+    }
 
+    function _proposeMultisigBatchTransactions() internal returns (bytes32 txHash) {
         uint256 nonce = _getNonce();
 
         // Get tx data
         (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
+
+        _logSafeTxDetails(to, data, nonce);
 
         // Prepare the tx params
         Safe.ExecTransactionParams memory params = Safe.ExecTransactionParams({
@@ -213,26 +239,9 @@ abstract contract BatchScriptV2 is WithEnvironment {
             data: data,
             operation: Enum.Operation.DelegateCall,
             sender: msg.sender,
-            signature: _signature, // Empty signature, will be signed later
+            signature: _multiSig.sign(to, data, Enum.Operation.DelegateCall, msg.sender, nonce, _ledgerDerivationPath),
             nonce: nonce
         });
-
-        // If there is no signature, get the signature
-        if (!_hasSignature()) {
-            console2.log("  No signature provided, getting signature");
-            bytes memory signature = _multiSig.sign(
-                to,
-                data,
-                Enum.Operation.DelegateCall,
-                msg.sender,
-                nonce,
-                "" // No derivation path
-            );
-            params.signature = signature;
-        }
-        else {
-            console2.log("  Using provided signature");
-        }
 
         console2.log("  Submitting transaction");
         txHash = _multiSig.proposeTransaction(params);
@@ -254,26 +263,13 @@ abstract contract BatchScriptV2 is WithEnvironment {
         // Simulate and validate with snapshot/revert
         _validateWithSnapshot();
 
-        // If signOnly, get the signature and return
-        if (_signOnly) {
-            console2.log("signOnly is true, approve the request to sign the batch");
-
+        {
             uint256 nonce = _getNonce();
-
-            (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
-
-            // This will revert if the user is using a Ledger and the derivation path is not provided
-            bytes memory signature = _multiSig.sign(
-                to,
-                data,
-                Enum.Operation.DelegateCall,
-                msg.sender,
-                nonce,
-                _ledgerDerivationPath
+            (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(
+                _batchTargets,
+                _batchData
             );
-            console2.log("Batch signed. Signature:");
-            console2.logBytes(signature);
-            return;
+            _logSafeTxDetails(to, data, nonce);
         }
 
         // Check if we're in broadcast mode before proposing
@@ -319,6 +315,34 @@ abstract contract BatchScriptV2 is WithEnvironment {
         vm.stopBroadcast();
 
         console2.log("Batch executed successfully");
+    }
+
+    function proposeBatch() public {
+        bool useAnvilFork = vm.envOr("USE_ANVIL_FORK", false);
+        bool useTenderlyFork = vm.envOr("USE_TENDERLY_FORK", false);
+
+        // Reject mutually exclusive fork flags
+        if (useAnvilFork && useTenderlyFork) {
+            revert("BatchScriptV2: USE_ANVIL_FORK and USE_TENDERLY_FORK are mutually exclusive");
+        }
+
+        // Handle fork modes first
+        if (useAnvilFork) {
+            _sendAnvilBatch();
+            return;
+        }
+
+        if (useTenderlyFork) {
+            _sendTenderlyBatch();
+            return;
+        }
+
+        // Normal execution path
+        if (_isMultiSig) {
+            _sendMultisigBatch();
+        } else {
+            _sendEOABatch();
+        }
     }
 
     /// @notice Execute batch via Anvil fork with auto-impersonation
@@ -415,15 +439,15 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 headers,
                 string.concat(
                     "{",
-                    '"callArgs": {',
-                    '"from": "',
+                    "\"callArgs\": {",
+                    "\"from\": \"",
                     vm.toString(_owner),
-                    '", "to": "',
+                    "\", \"to\": \"",
                     vm.toString(_batchTargets[i]),
-                    '", "gas": "0x7a1200", "gasPrice": "0x10", "value": "0x0", ',
-                    '"data": "',
+                    "\", \"gas\": \"0x7a1200\", \"gasPrice\": \"0x10\", \"value\": \"0x0\", ",
+                    "\"data\": \"",
                     vm.toString(_batchData[i]),
-                    '"',
+                    "\"",
                     "}}"
                 )
             );
@@ -438,29 +462,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
 
         console2.log("Batch executed successfully on Tenderly VNet");
-    }
-
-    function proposeBatch() public {
-        bool useAnvilFork = vm.envOr("USE_ANVIL_FORK", false);
-        bool useTenderlyFork = vm.envOr("USE_TENDERLY_FORK", false);
-
-        // Handle fork modes first
-        if (useAnvilFork) {
-            _sendAnvilBatch();
-            return;
-        }
-
-        if (useTenderlyFork) {
-            _sendTenderlyBatch();
-            return;
-        }
-
-        // Normal execution path
-        if (_isMultiSig) {
-            _sendMultisigBatch();
-        } else {
-            _sendEOABatch();
-        }
     }
 
     /// @notice Load arguments from a file (optional)
@@ -490,6 +491,22 @@ abstract contract BatchScriptV2 is WithEnvironment {
         require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
         return
             _argsFile.readString(
+                string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
+            );
+    }
+
+    /// @notice Get a bool argument for a given function and key
+    /// @param functionName_ Name of the function
+    /// @param key_ Key to look for
+    /// @return bool Returns the bool value
+    function _readBatchArgBool(
+        string memory functionName_,
+        string memory key_
+    ) internal view returns (bool) {
+        // solhint-disable-next-line gas-custom-errors
+        require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
+        return
+            _argsFile.readBool(
                 string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
             );
     }
@@ -555,37 +572,28 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @notice Validate that heart beat will work after batch execution
     /// @dev    Warps through a full 24-hour cycle (3 beats) and calls beat() to validate
     ///         Temporarily increases price feed update thresholds to prevent stale feed errors
-    ///         Restores original timestamp and thresholds after validation to avoid signature issues
+    ///         State is restored by _validateWithSnapshot() which calls vm.revertToStateAndDelete
     function _validateHeartBeat() internal {
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
         console2.log("\n=== Validating heart beat (full 24-hour cycle - 3 beats) ===");
         console2.log("Heart address:", heart);
 
         OlympusHeart heartContract = OlympusHeart(heart);
-        PRICEv1 priceModule = _getPriceModule(heartContract);
-        address priceConfig = _envAddressNotZero("olympus.policies.OlympusPriceConfig");
+        IPRICEv2 priceModule = _getPriceModule(heartContract);
+        address priceConfig = _envAddressNotZero("olympus.policies.OlympusPriceConfigV2");
 
         uint256 originalTimestamp = block.timestamp;
-        uint48 originalOhmEthThreshold = priceModule.ohmEthUpdateThreshold();
-        uint48 originalReserveEthThreshold = priceModule.reserveEthUpdateThreshold();
         uint48 lastBeat = uint48(heartContract.lastBeat());
         uint48 frequency = heartContract.frequency();
 
         console2.log("Last beat:", lastBeat, "Frequency:", frequency);
-        console2.log("Original thresholds - OHM/ETH:", originalOhmEthThreshold, "Reserve/ETH:", originalReserveEthThreshold);
 
-        // Temporarily increase thresholds to 2 days to cover time warp
-        uint48 tempThreshold = uint48(2 days);
-        console2.log("Temporarily increasing update thresholds to:", tempThreshold);
-        vm.prank(priceConfig);
-        priceModule.changeUpdateThresholds(tempThreshold, tempThreshold);
+        // Update all price feed thresholds to at least 2 days to cover time warp
+        _updatePriceFeedThresholds(priceModule, priceConfig);
 
         bool timeWarped = _executeHeartBeats(heartContract, lastBeat, frequency);
 
         console2.log("\nAll heart beats validated successfully");
-        console2.log("Restoring original update thresholds");
-        vm.prank(priceConfig);
-        priceModule.changeUpdateThresholds(originalOhmEthThreshold, originalReserveEthThreshold);
 
         if (timeWarped) {
             console2.log("Restoring original timestamp:", originalTimestamp);
@@ -593,16 +601,184 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
     }
 
-    /// @notice Get PRICE module from Heart and verify version is 1.0 or 1.1
+    /// @notice Get PRICE module from Heart and verify version is 1.2+
     /// @param heartContract_ Heart contract to get kernel from
     /// @return priceModule PRICE module instance
-    function _getPriceModule(OlympusHeart heartContract_) internal view returns (PRICEv1) {
+    function _getPriceModule(OlympusHeart heartContract_) internal view returns (IPRICEv2) {
         Kernel kernel = heartContract_.kernel();
-        PRICEv1 priceModule = PRICEv1(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
-        (uint8 major, uint8 minor) = priceModule.VERSION();
-        if (major != 1 || (minor != 0 && minor != 1)) revert("PRICE must be v1.0 or v1.1");
-        console2.log("PRICE module version verified: v1.", uint256(minor));
+        IPRICEv2 priceModule = IPRICEv2(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
+        // Version check is handled by trying to call IPRICEv2 functions
+        // If the module doesn't support IPRICEv2, calls will revert
         return priceModule;
+    }
+
+    /// @notice Update price feed thresholds for all assets to at least 2 days
+    /// @dev    Iterates over all assets and their feeds, updating thresholds as needed
+    /// @param priceModule_ PRICE module to get assets from
+    /// @param priceConfig_ PriceConfig policy with permission to call PRICE.updateAsset
+    function _updatePriceFeedThresholds(IPRICEv2 priceModule_, address priceConfig_) internal {
+        uint48 twoDays = uint48(2 days);
+
+        address[] memory assets = priceModule_.getAssets();
+        console2.log("Updating price feed thresholds for", assets.length, "assets");
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            address asset = assets[i];
+            IPRICEv2.Asset memory assetData = priceModule_.getAssetData(asset);
+
+            if (!assetData.approved) continue;
+
+            IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
+            bool needsUpdate = false;
+
+            // Check each feed and update thresholds if needed
+            for (uint256 j = 0; j < feeds.length; j++) {
+                bytes memory newParams = _updateFeedThreshold(feeds[j], twoDays);
+                if (newParams.length > 0) {
+                    feeds[j].params = newParams;
+                    needsUpdate = true;
+                }
+            }
+
+            // Update the asset if any feeds were modified
+            if (needsUpdate) {
+                console2.log("  Updating thresholds for asset:", asset);
+                IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+                    updateFeeds: true,
+                    updateStrategy: false,
+                    updateMovingAverage: false,
+                    feeds: feeds,
+                    strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), ""),
+                    useMovingAverage: false,
+                    storeMovingAverage: false,
+                    movingAverageDuration: 0,
+                    lastObservationTime: 0,
+                    observations: new uint256[](0)
+                });
+
+                // This helper runs inside a validation snapshot only. Queueing through PriceConfig
+                // would not apply the threshold rewrite before the heartbeat time warp.
+                vm.prank(priceConfig_);
+                priceModule_.updateAsset(asset, params);
+            }
+        }
+    }
+
+    /// @notice Update a single feed's threshold if needed
+    /// @dev    Determines feed type based on SubKeycode and updates threshold if below minimum
+    /// @param feed_ Feed component to check/update
+    /// @param minThreshold_ Minimum threshold to enforce (2 days)
+    /// @return New encoded params if updated, empty bytes if no update needed
+    function _updateFeedThreshold(
+        IPRICEv2.Component memory feed_,
+        uint48 minThreshold_
+    ) internal pure returns (bytes memory) {
+        // Get the underlying bytes20 for comparison
+        bytes20 targetBytes = SubKeycode.unwrap(feed_.target);
+
+        // Skip UniswapV3 - uses observationWindowSeconds, not updateThreshold
+        if (targetBytes == bytes20("PRICE.UNIV3")) {
+            return new bytes(0);
+        }
+
+        // Handle Chainlink feeds
+        if (targetBytes == bytes20("PRICE.CHAINLINK")) {
+            return _updateChainlinkThreshold(feed_.params, feed_.selector, minThreshold_);
+        }
+
+        // Handle Pyth feeds
+        if (targetBytes == bytes20("PRICE.PYTH")) {
+            return _updatePythThreshold(feed_.params, feed_.selector, minThreshold_);
+        }
+
+        // Unknown feed type - skip
+        return new bytes(0);
+    }
+
+    /// @notice Update Chainlink feed thresholds if below minimum
+    /// @param params_ Encoded feed parameters
+    /// @param selector_ Function selector to determine feed type
+    /// @param minThreshold_ Minimum threshold to enforce
+    /// @return New encoded params if updated, empty bytes if no update needed
+    function _updateChainlinkThreshold(
+        bytes memory params_,
+        bytes4 selector_,
+        uint48 minThreshold_
+    ) internal pure returns (bytes memory) {
+        // OneFeedParams: getOneFeedPrice
+        if (selector_ == ChainlinkPriceFeeds.getOneFeedPrice.selector) {
+            ChainlinkPriceFeeds.OneFeedParams memory p =
+                abi.decode(params_, (ChainlinkPriceFeeds.OneFeedParams));
+            if (p.updateThreshold < minThreshold_) {
+                p.updateThreshold = minThreshold_;
+                return abi.encode(p);
+            }
+            return new bytes(0);
+        }
+
+        // TwoFeedParams: getTwoFeedPriceDiv or getTwoFeedPriceMul
+        if (selector_ == ChainlinkPriceFeeds.getTwoFeedPriceDiv.selector ||
+            selector_ == ChainlinkPriceFeeds.getTwoFeedPriceMul.selector) {
+            ChainlinkPriceFeeds.TwoFeedParams memory p =
+                abi.decode(params_, (ChainlinkPriceFeeds.TwoFeedParams));
+            bool updated = false;
+
+            if (p.firstUpdateThreshold < minThreshold_) {
+                p.firstUpdateThreshold = minThreshold_;
+                updated = true;
+            }
+            if (p.secondUpdateThreshold < minThreshold_) {
+                p.secondUpdateThreshold = minThreshold_;
+                updated = true;
+            }
+
+            return updated ? abi.encode(p) : new bytes(0);
+        }
+
+        return new bytes(0);
+    }
+
+    /// @notice Update Pyth feed thresholds if below minimum
+    /// @param params_ Encoded feed parameters
+    /// @param selector_ Function selector to determine feed type
+    /// @param minThreshold_ Minimum threshold to enforce
+    /// @return New encoded params if updated, empty bytes if no update needed
+    function _updatePythThreshold(
+        bytes memory params_,
+        bytes4 selector_,
+        uint48 minThreshold_
+    ) internal pure returns (bytes memory) {
+        // OneFeedParams: getOneFeedPrice
+        if (selector_ == PythPriceFeeds.getOneFeedPrice.selector) {
+            PythPriceFeeds.OneFeedParams memory p =
+                abi.decode(params_, (PythPriceFeeds.OneFeedParams));
+            if (p.updateThreshold < minThreshold_) {
+                p.updateThreshold = minThreshold_;
+                return abi.encode(p);
+            }
+            return new bytes(0);
+        }
+
+        // TwoFeedParams: getTwoFeedPriceDiv or getTwoFeedPriceMul
+        if (selector_ == PythPriceFeeds.getTwoFeedPriceDiv.selector ||
+            selector_ == PythPriceFeeds.getTwoFeedPriceMul.selector) {
+            PythPriceFeeds.TwoFeedParams memory p =
+                abi.decode(params_, (PythPriceFeeds.TwoFeedParams));
+            bool updated = false;
+
+            if (p.firstUpdateThreshold < minThreshold_) {
+                p.firstUpdateThreshold = minThreshold_;
+                updated = true;
+            }
+            if (p.secondUpdateThreshold < minThreshold_) {
+                p.secondUpdateThreshold = minThreshold_;
+                updated = true;
+            }
+
+            return updated ? abi.encode(p) : new bytes(0);
+        }
+
+        return new bytes(0);
     }
 
     /// @notice Execute 3 heart beats for full 24-hour cycle validation
@@ -676,9 +852,22 @@ abstract contract BatchScriptV2 is WithEnvironment {
         _runPostBatchValidation();
 
         // Validate heart beat
-        _validateHeartBeat();
+        if (_skipHeartbeatValidation) {
+            if (ChainUtils._isCanonicalChain(chain)) {
+                console2.log(
+                    "\n!!! HEARTBEAT VALIDATION DISABLED - PROCEED AT YOUR OWN RISK !!!"
+                );
+                console2.log(
+                    "!!! Skipping heartbeat check means the batch may break protocol operations !!!"
+                );
+            } else {
+                console2.log("\n=== Skipping heart beat validation (non-canonical chain:", chain, ") ===");
+            }
+        } else {
+            _validateHeartBeat();
+        }
 
-        // Revert to snapshot - removes BOTH simulation and validation artifacts
+        // Revert to snapshot - removes simulation and validation artifacts
         vm.revertToStateAndDelete(snapshotId);
         console2.log("Restored state from snapshot (simulation + validation artifacts removed)");
     }

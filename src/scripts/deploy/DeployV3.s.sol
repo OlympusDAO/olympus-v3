@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.24;
 
 // Scripting
-import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
-import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
-import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
+import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
+import {stdJson} from "@forge-std-1.16.2/StdJson.sol";
+import {VmSafe} from "@forge-std-1.16.2/Vm.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
@@ -15,29 +15,69 @@ import {SafeCast} from "src/libraries/SafeCast.sol";
 // Interfaces
 import {IERC20 as ChainlinkIERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
-import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
-import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
+import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 // Contracts
-import {Kernel} from "src/Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
+
+// Bridge
+import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
+import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
-import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
+import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
+import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {LZBridgeAndDelegateConfig} from "src/policies/bridge/LZBridgeAndDelegateConfig.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
+import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
+
+// Deposits
 import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
-import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
-import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
+import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
+
+// Other
+import {EmissionManager} from "src/policies/EmissionManager.sol";
+import {OlympusHeart} from "src/policies/Heart.sol";
 import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
 import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
-import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
-import {OlympusPriceConfig} from "src/policies/PriceConfig.sol";
+
+// Modules
+import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
+import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
+
+// PRICE submodules
+import {BalancerPoolTokenPrice} from "src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {ERC4626Price} from "src/modules/PRICE/submodules/feeds/ERC4626Price.sol";
+import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
+import {UniswapV2PoolTokenPrice} from "src/modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
+import {UniswapV3Price} from "src/modules/PRICE/submodules/feeds/UniswapV3Price.sol";
+import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+
+// Oracle factories
+import {ChainlinkOracleFactory} from "src/policies/price/ChainlinkOracleFactory.sol";
+import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
+import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
+
+// PRICE
+import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
+import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
+import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
+
+// Test mocks
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
 // Migration contracts
@@ -49,6 +89,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // OCG Activator contracts
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
+import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
 
 // Incentive distribution
 import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
@@ -62,6 +104,16 @@ import {IncentiveDistributorConvertible} from "src/policies/incentives/Incentive
 ///         - helper functions for reading deployment arguments from the sequence file
 ///         - remove the use of state variables for all of the contracts, since they can be loaded easily with `_envAddressNotZero()`
 ///         - deployment functions can reference deployments from the same sequence file (using `_getAddressNotZero()`)
+///
+///         Run this script under the `deploy` profile, which `shell/deployV3.sh` sets. That profile
+///         is the source of deployment bytecode: it compiles the whole graph with the optimizer at
+///         400 runs and clears the per-path `compilation_restrictions` that the everyday profile
+///         applies. Under the everyday profile the settings follow the import graph, since a
+///         restriction covers the whole connected graph: this script lands in the same 400-runs
+///         job through its `src/proposals` imports, and its bytecode carries the 400-runs
+///         creation code of every contract it deploys. That is incidental rather than guaranteed,
+///         and the runtime code of a large contract compiled without the optimizer exceeds the
+///         24,576 B limit and cannot be deployed.
 contract DeployV3 is WithEnvironment {
     using stdJson for string;
 
@@ -87,6 +139,7 @@ contract DeployV3 is WithEnvironment {
         // It would be nice to print the RPC URL being used here, but unfortunately vm.rpcUrl() prints the URL configured in foundry.toml
 
         // Load deployment data
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         sequenceFile = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
@@ -178,6 +231,7 @@ contract DeployV3 is WithEnvironment {
             inputs[0] = "mkdir";
             inputs[1] = "deployments";
 
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             vm.ffi(inputs);
         }
 
@@ -194,6 +248,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("Writing deployments to", file);
 
         // Write deployment info to file in JSON format
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeLine(file, "{");
 
         // solhint-disable quotes
@@ -201,6 +256,7 @@ contract DeployV3 is WithEnvironment {
         // Iterate through the contracts that were deployed and write their addresses to the file
         uint256 len = deployedToKeys.length;
         for (uint256 i; i < len - 1; ++i) {
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             vm.writeLine(
                 file,
                 string.concat(
@@ -213,6 +269,7 @@ contract DeployV3 is WithEnvironment {
             );
         }
         // Write last deployment without a comma
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeLine(
             file,
             string.concat(
@@ -223,6 +280,7 @@ contract DeployV3 is WithEnvironment {
                 '"'
             )
         );
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeLine(file, "}");
 
         // solhint-enable quotes
@@ -239,6 +297,7 @@ contract DeployV3 is WithEnvironment {
             inputs[1] = string.concat("current", ".", chain_, ".", key);
             inputs[2] = vm.toString(value);
 
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             vm.ffi(inputs);
         }
     }
@@ -320,6 +379,43 @@ contract DeployV3 is WithEnvironment {
             uint8Array[i] = SafeCast.encodeUInt8(uint256Array[i]);
         }
         return uint8Array;
+    }
+
+    /// @notice Reads a uint256 deployment argument, falling back to an `env.json` value of the
+    ///         current chain when the sequence file does not declare the argument.
+    /// @dev    Used for parameters whose source of truth is `env.json` (the desired-state
+    ///         configuration that the batches and proposals validate against), so that a
+    ///         sequence file only needs to name them to override them.
+    function _readDeploymentArgUint256OrEnv(
+        string memory deploymentName_,
+        string memory key_,
+        string memory envKey_
+    ) internal view returns (uint256) {
+        string memory path = string.concat(
+            ".sequence[?(@.name == '",
+            deploymentName_,
+            "')].args.",
+            key_
+        );
+        if (vm.keyExistsJson(sequenceFile, path)) {
+            uint256 value = sequenceFile.readUint(path);
+            console2.log("  %s: %s (from sequence args)", key_, value);
+            return value;
+        }
+
+        uint256 envValue = _envUintNotZero(envKey_);
+        console2.log("  %s: %s (from env.json %s)", key_, envValue, envKey_);
+        return envValue;
+    }
+
+    function _readDeploymentArgBool(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (bool) {
+        return
+            sequenceFile.readBool(
+                string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
+            );
     }
 
     function _readDeploymentArgAddressArray(
@@ -430,6 +526,137 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(ccipCrossChainBridge), "olympus.periphery");
+    }
+
+    /// @notice Deploys the CCIPTokenPoolConfig policy for the local token pool.
+    /// @dev    The pool is the lock/release pool on a canonical chain and the burn/mint pool
+    ///         otherwise, resolved from the same sequence first so that the pool and the config
+    ///         policy can be deployed together. `gracePeriod` defaults to
+    ///         `olympus.config.CCIPTokenPoolConfig.gracePeriod` and can be overridden by the
+    ///         sequence argument of the same name.
+    function deployCCIPTokenPoolConfig() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address pool = ChainUtils._isCanonicalChain(chain)
+            ? _getAddressNotZero("olympus.periphery.CCIPLockReleaseTokenPool")
+            : _getAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPTokenPoolConfig",
+                "gracePeriod",
+                "olympus.config.CCIPTokenPoolConfig.gracePeriod"
+            )
+        );
+
+        // Log parameters
+        console2.log("CCIPTokenPoolConfig parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  pool", pool);
+        console2.log("  gracePeriod", gracePeriod);
+
+        // Deploy
+        vm.broadcast();
+        CCIPTokenPoolConfig config = new CCIPTokenPoolConfig(Kernel(kernel), pool, gracePeriod);
+
+        return (address(config), "olympus.policies");
+    }
+
+    /// @notice Deploys the CCIPTokenPoolConfigTimelock policy for the CCIPTokenPoolConfig policy.
+    /// @dev    The config policy must already be deployed (in this sequence or in `env.json`); the
+    ///         timelock constructor requires it to advertise `ICCIPTokenPoolConfig`,
+    ///         `IConfigOperator` and `IEnabler` and to report the same Kernel.
+    ///         `initialTimelockDelay` defaults to
+    ///         `olympus.config.CCIPTokenPoolConfig.timelockDelay` and `gracePeriod` to
+    ///         `olympus.config.CCIPTokenPoolConfig.gracePeriod`; both can be overridden by the
+    ///         sequence arguments of the same name.
+    function deployCCIPTokenPoolConfigTimelock() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address config = _getAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
+        uint48 initialTimelockDelay = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPTokenPoolConfigTimelock",
+                "initialTimelockDelay",
+                "olympus.config.CCIPTokenPoolConfig.timelockDelay"
+            )
+        );
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPTokenPoolConfigTimelock",
+                "gracePeriod",
+                "olympus.config.CCIPTokenPoolConfig.gracePeriod"
+            )
+        );
+
+        // Log parameters
+        console2.log("CCIPTokenPoolConfigTimelock parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  config", config);
+        console2.log("  initialTimelockDelay", initialTimelockDelay);
+        console2.log("  gracePeriod", gracePeriod);
+
+        // Deploy
+        vm.broadcast();
+        CCIPTokenPoolConfigTimelock timelock = new CCIPTokenPoolConfigTimelock(
+            Kernel(kernel),
+            config,
+            initialTimelockDelay,
+            gracePeriod
+        );
+
+        return (address(timelock), "olympus.policies");
+    }
+
+    /// @notice Deploys the read-only checker that `CCIPTokenPoolConfigProposal` calls as its
+    ///         first action, bound to the mainnet lock/release pool, the config policy and the
+    ///         config timelock (both resolved from the same sequence first), OHM, the
+    ///         TokenAdminRegistry, the ROLES module, the OCG timelock and the DAO MS.
+    /// @dev    The checker constructor requires the config policy to report the pool, the
+    ///         timelock to report the config policy, both policies to report the Kernel, the
+    ///         Kernel to report the ROLES module and the pool to serve OHM, so a wrong binding
+    ///         fails at deployment.
+    function deployCCIPTokenPoolConfigProposalChecker() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address config = _getAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
+        address configTimelock = _getAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock");
+        address pool = _getAddressNotZero("olympus.periphery.CCIPLockReleaseTokenPool");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+        address registry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
+        address roles = _getAddressNotZero("olympus.modules.OlympusRoles");
+        address ocgTimelock = _getAddressNotZero("olympus.governance.Timelock");
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+
+        // Log parameters
+        console2.log("CCIPTokenPoolConfigProposalChecker parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  config", config);
+        console2.log("  configTimelock", configTimelock);
+        console2.log("  pool", pool);
+        console2.log("  ohm", ohm);
+        console2.log("  registry", registry);
+        console2.log("  roles", roles);
+        console2.log("  ocgTimelock", ocgTimelock);
+        console2.log("  daoMS", daoMS);
+
+        // Deploy
+        vm.broadcast();
+        CCIPTokenPoolConfigProposalChecker checker = new CCIPTokenPoolConfigProposalChecker(
+            kernel,
+            config,
+            configTimelock,
+            pool,
+            ohm,
+            registry,
+            roles,
+            ocgTimelock,
+            daoMS
+        );
+
+        return (address(checker), "olympus.periphery");
     }
 
     function deployOlympusHeart() public returns (address, string memory) {
@@ -664,50 +891,34 @@ contract DeployV3 is WithEnvironment {
         return (address(zeroDistributor), "olympus.policies");
     }
 
-    function deployOlympusPrice() public returns (address, string memory) {
-        // Dependencies
-        address kernel = _getAddressNotZero("olympus.Kernel");
-        address ohmEthPriceFeed = _envAddressNotZero("external.chainlink.ohmEthPriceFeed");
-        address reserveEthPriceFeed = _envAddressNotZero("external.chainlink.daiEthPriceFeed");
-
+    function deployOlympusPriceV1() public returns (address, string memory) {
         // Input parameters
-        uint48 ohmEthUpdateThreshold = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("OlympusPrice", "ohmEthUpdateThreshold")
-        );
-        uint48 reserveEthUpdateThreshold = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("OlympusPrice", "reserveEthUpdateThreshold")
-        );
-        uint48 observationFrequency = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("OlympusPrice", "observationFrequency")
-        );
-        uint48 movingAverageDuration = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("OlympusPrice", "movingAverageDuration")
+        uint32 observationFrequency = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("OlympusPriceV1", "observationFrequency")
         );
         uint256 minimumTargetPrice = _readDeploymentArgUint256(
-            "OlympusPrice",
+            "OlympusPriceV1",
             "minimumTargetPrice"
         );
 
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+
         // Log parameters
-        console2.log("PRICE parameters:");
+        console2.log("PRICEv1.2 parameters:");
         console2.log("  kernel", kernel);
-        console2.log("  ohmEthPriceFeed", ohmEthPriceFeed);
-        console2.log("  reserveEthPriceFeed", reserveEthPriceFeed);
-        console2.log("  reserveEthUpdateThreshold", reserveEthUpdateThreshold);
+        console2.log("  ohm", ohm);
         console2.log("  observationFrequency", observationFrequency);
-        console2.log("  movingAverageDuration", movingAverageDuration);
         console2.log("  minimumTargetPrice", minimumTargetPrice);
 
-        // Deploy Price module
+        // Deploy PRICEv1_2 (replaces existing PRICE module)
         vm.broadcast();
-        OlympusPrice price = new OlympusPrice(
+        OlympusPricev1_2 price = new OlympusPricev1_2(
             Kernel(kernel),
-            AggregatorV2V3Interface(ohmEthPriceFeed),
-            ohmEthUpdateThreshold,
-            AggregatorV2V3Interface(reserveEthPriceFeed),
-            reserveEthUpdateThreshold,
+            ohm,
             observationFrequency,
-            movingAverageDuration,
             minimumTargetPrice
         );
 
@@ -722,12 +933,245 @@ contract DeployV3 is WithEnvironment {
         console2.log("PriceConfig parameters:");
         console2.log("  kernel", kernel);
 
-        // Deploy PriceConfig policy
+        // Deploy PriceConfig policy (v1)
         vm.broadcast();
         OlympusPriceConfig priceConfig = new OlympusPriceConfig(Kernel(kernel));
 
         return (address(priceConfig), "olympus.policies");
     }
+
+    function deployOlympusPriceConfigV2() public returns (address, string memory) {
+        // Dependencies
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("PriceConfigv2 parameters:");
+        console2.log("  kernel", kernel);
+
+        // Deploy PriceConfigV2 policy (auto-enables on deployment)
+        vm.broadcast();
+        PriceConfigv2 priceConfig = new PriceConfigv2(Kernel(kernel));
+
+        return (address(priceConfig), "olympus.policies");
+    }
+
+    // ========== PRICE SUBMODULE DEPLOYMENT FUNCTIONS ========== //
+
+    function deployChainlinkPriceFeeds() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("ChainlinkPriceFeeds parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        ChainlinkPriceFeeds feeds = new ChainlinkPriceFeeds(Module(priceModule));
+
+        return (address(feeds), "olympus.submodules.PRICE");
+    }
+
+    function deployPythPriceFeeds() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("PythPriceFeeds parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        PythPriceFeeds feeds = new PythPriceFeeds(Module(priceModule));
+
+        return (address(feeds), "olympus.submodules.PRICE");
+    }
+
+    function deployUniswapV3Price() public returns (address, string memory) {
+        uint32 averageBlockTimeSeconds = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("UniswapV3Price", "averageBlockTimeSeconds")
+        );
+        address uniswapV3Factory = _envAddressNotZero("external.uniswap.UniswapV3Factory");
+
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("UniswapV3Price parameters:");
+        console2.log("  priceModule", priceModule);
+        console2.log("  averageBlockTimeSeconds", averageBlockTimeSeconds);
+        console2.log("  uniswapV3Factory", uniswapV3Factory);
+
+        // Deploy
+        vm.broadcast();
+        UniswapV3Price price = new UniswapV3Price(
+            Module(priceModule),
+            averageBlockTimeSeconds,
+            uniswapV3Factory
+        );
+
+        return (address(price), "olympus.submodules.PRICE");
+    }
+
+    function deployERC4626Price() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("ERC4626Price parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        ERC4626Price price = new ERC4626Price(Module(priceModule));
+
+        return (address(price), "olympus.submodules.PRICE");
+    }
+
+    function deploySimplePriceFeedStrategy() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("SimplePriceFeedStrategy parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        SimplePriceFeedStrategy strategy = new SimplePriceFeedStrategy(Module(priceModule));
+
+        return (address(strategy), "olympus.submodules.PRICE");
+    }
+
+    function deployUniswapV2PoolTokenPrice() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("UniswapV2PoolTokenPrice parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        UniswapV2PoolTokenPrice price = new UniswapV2PoolTokenPrice(Module(priceModule));
+
+        return (address(price), "olympus.submodules.PRICE");
+    }
+
+    function deployBalancerPoolTokenPrice() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+        address balVault = _envAddressNotZero("external.balancer.BalancerVault");
+
+        // Log parameters
+        console2.log("BalancerPoolTokenPrice parameters:");
+        console2.log("  priceModule", priceModule);
+        console2.log("  balVault", balVault);
+
+        // Deploy
+        vm.broadcast();
+        BalancerPoolTokenPrice price = new BalancerPoolTokenPrice(
+            Module(priceModule),
+            IVault(balVault)
+        );
+
+        return (address(price), "olympus.submodules.PRICE");
+    }
+
+    // ========== ORACLE FACTORY DEPLOYMENT FUNCTIONS ========== //
+
+    function deployChainlinkOracleFactory() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address priceCache = _getAddressNotZero("olympus.policies.PriceCache");
+
+        // Log parameters
+        console2.log("ChainlinkOracleFactory parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  priceCache", priceCache);
+
+        // Deploy
+        vm.broadcast();
+        ChainlinkOracleFactory factory = new ChainlinkOracleFactory(Kernel(kernel), priceCache);
+
+        return (address(factory), "olympus.policies");
+    }
+
+    function deployMorphoOracleFactory() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address priceCache = _getAddressNotZero("olympus.policies.PriceCache");
+
+        // Log parameters
+        console2.log("MorphoOracleFactory parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  priceCache", priceCache);
+
+        // Deploy
+        vm.broadcast();
+        MorphoOracleFactory factory = new MorphoOracleFactory(Kernel(kernel), priceCache);
+
+        return (address(factory), "olympus.policies");
+    }
+
+    function deployERC7726OracleFactory() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address priceCache = _getAddressNotZero("olympus.policies.PriceCache");
+
+        // Log parameters
+        console2.log("ERC7726OracleFactory parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  priceCache", priceCache);
+
+        // Deploy
+        vm.broadcast();
+        ERC7726OracleFactory factory = new ERC7726OracleFactory(Kernel(kernel), priceCache);
+
+        return (address(factory), "olympus.policies");
+    }
+
+    function deployPriceCache() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        uint8 unitOfAccountDecimals = SafeCast.encodeUInt8(
+            _readDeploymentArgUint256("PriceCache", "unitOfAccountDecimals")
+        );
+        string memory unitOfAccountSymbol = _readDeploymentArgString(
+            "PriceCache",
+            "unitOfAccountSymbol"
+        );
+
+        // Log parameters
+        console2.log("PriceCache parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  unitOfAccountDecimals", unitOfAccountDecimals);
+        console2.log("  unitOfAccountSymbol", unitOfAccountSymbol);
+
+        // Deploy
+        vm.startBroadcast();
+        PriceCache cache = new PriceCache(
+            Kernel(kernel),
+            unitOfAccountDecimals,
+            unitOfAccountSymbol
+        );
+        vm.stopBroadcast();
+
+        return (address(cache), "olympus.policies");
+    }
+
+    // ========== MOCK PRICE FEED DEPLOYMENT FUNCTIONS ========== //
 
     function deploydaiEthPriceFeed() public returns (address, string memory) {
         // Log parameters
@@ -1020,6 +1464,160 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(distributor), "olympus.policies");
+    }
+
+    // ===== LZ BRIDGE CONTRACTS ===== //
+
+    function deployLZBridgeGateway() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
+        bool isCanonical = ChainUtils._isCanonicalChain(chain);
+        uint32 grace = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("LZBridgeGateway", "graceSeconds")
+        );
+
+        // Log parameters
+        console2.log("LZBridgeGateway parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  lzEndpoint", lzEndpoint);
+        console2.log("  isCanonical", isCanonical);
+        console2.log("  graceSeconds", grace);
+
+        // Deploy
+        vm.broadcast();
+        LZBridgeGateway lzBridgeGateway = new LZBridgeGateway(
+            Kernel(kernel),
+            lzEndpoint,
+            isCanonical,
+            grace
+        );
+
+        return (address(lzBridgeGateway), "olympus.policies");
+    }
+
+    function deployLZEndpointDelegate() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+
+        // Log parameters
+        console2.log("LZEndpointDelegate parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  gateway", gateway);
+
+        // Deploy
+        vm.broadcast();
+        LZEndpointDelegate lzEndpointDelegate = new LZEndpointDelegate(Kernel(kernel), gateway);
+
+        return (address(lzEndpointDelegate), "olympus.policies");
+    }
+
+    function deployLZBridgeActivator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address timelock = _getAddressNotZero("olympus.governance.Timelock");
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegate = _getAddressNotZero("olympus.policies.LZEndpointDelegate");
+        address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
+        address arbGateway = _envAddressNotZero("arbitrum", "olympus.policies.LZBridgeGateway");
+        address optGateway = _envAddressNotZero("optimism", "olympus.policies.LZBridgeGateway");
+        address baseGateway = _envAddressNotZero("base", "olympus.policies.LZBridgeGateway");
+        address beraGateway = _envAddressNotZero("berachain", "olympus.policies.LZBridgeGateway");
+
+        // Log parameters
+        console2.log("LZBridgeActivator parameters:");
+        console2.log("  timelock", timelock);
+        console2.log("  gateway", gateway);
+        console2.log("  delegate", delegate);
+        console2.log("  lzEndpoint", lzEndpoint);
+        console2.log("  arbGateway", arbGateway);
+        console2.log("  optGateway", optGateway);
+        console2.log("  baseGateway", baseGateway);
+        console2.log("  beraGateway", beraGateway);
+
+        // Deploy
+        vm.broadcast();
+        LZBridgeActivator activator = new LZBridgeActivator(
+            timelock,
+            gateway,
+            delegate,
+            lzEndpoint,
+            arbGateway,
+            optGateway,
+            baseGateway,
+            beraGateway
+        );
+
+        return (address(activator), "olympus.periphery");
+    }
+
+    function deployLZCrossChainBridge() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+        address owner = _getAddressNotZero("olympus.multisig.dao");
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        // The DAO MS is also used as the re-enabler so it can recover the bridge after
+        // a disable, mirroring its role on the gateway via the manager role.
+        address reEnabler = _getAddressNotZero("olympus.multisig.dao");
+        uint32 grace = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("LZCrossChainBridge", "graceSeconds")
+        );
+
+        // Log parameters
+        console2.log("LZCrossChainBridge parameters:");
+        console2.log("  ohm", ohm);
+        console2.log("  owner", owner);
+        console2.log("  gateway", gateway);
+        console2.log("  reEnabler", reEnabler);
+        console2.log("  graceSeconds", grace);
+
+        // Deploy
+        vm.broadcast();
+        LZCrossChainBridge lzCrossChainBridge = new LZCrossChainBridge(
+            ohm,
+            owner,
+            gateway,
+            reEnabler,
+            grace
+        );
+
+        return (address(lzCrossChainBridge), "olympus.periphery");
+    }
+
+    function deployLZBridgeAndDelegateConfig() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegate = _getAddressNotZero("olympus.policies.LZEndpointDelegate");
+        address facilitator = _getAddressNotZero("olympus.periphery.LZCrossChainBridge");
+        uint48 initialDelay = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("LZBridgeAndDelegateConfig", "initialTimelockDelay")
+        );
+
+        // Log parameters
+        console2.log("LZBridgeAndDelegateConfig parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  gateway", gateway);
+        console2.log("  delegate", delegate);
+        console2.log("  facilitator", facilitator);
+        console2.log("  initialTimelockDelay", initialDelay);
+
+        // Deploy
+        vm.broadcast();
+        LZBridgeAndDelegateConfig lzBridgeAndDelegateConfig = new LZBridgeAndDelegateConfig(
+            Kernel(kernel),
+            gateway,
+            delegate,
+            facilitator,
+            initialDelay
+        );
+
+        return (address(lzBridgeAndDelegateConfig), "olympus.policies");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

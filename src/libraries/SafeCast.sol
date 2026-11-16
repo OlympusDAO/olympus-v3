@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 library SafeCast {
     error Overflow(uint256 amount);
@@ -23,6 +23,13 @@ library SafeCast {
             revert Overflow(amount);
         }
         return uint96(amount);
+    }
+
+    function encodeUInt64(uint256 amount) internal pure returns (uint64) {
+        if (amount > type(uint64).max) {
+            revert Overflow(amount);
+        }
+        return uint64(amount);
     }
 
     function encodeUInt40(uint256 amount) internal pure returns (uint40) {

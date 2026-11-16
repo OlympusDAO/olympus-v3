@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-pragma solidity >=0.7.6;
+pragma solidity >=0.7.6 <0.9.0;
 
 import "./Buffer.sol";
 //import "../../../solady/DynamicBufferLib.sol";

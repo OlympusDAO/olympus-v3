@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {V1MigratorTest} from "./V1MigratorTest.sol";
 import {Permissions, Keycode, toKeycode, fromKeycode} from "src/Kernel.sol";

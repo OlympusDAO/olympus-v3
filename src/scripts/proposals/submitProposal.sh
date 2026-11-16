@@ -45,7 +45,7 @@ echo "  Sender: $ACCOUNT_ADDRESS"
 
 echo ""
 echo "Running forge script..."
-forge script $file:$contract \
+FOUNDRY_PROFILE=deploy forge script $file:$contract \
     --rpc-url $chain \
     $ACCOUNT_FLAG \
     $LEDGER_FLAGS \

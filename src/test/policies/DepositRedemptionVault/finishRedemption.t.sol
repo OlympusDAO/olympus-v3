@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicensed
 /// forge-lint: disable-start(unwrapped-modifier-logic)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
@@ -8,7 +8,7 @@ import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTest {
     event RedemptionFinished(

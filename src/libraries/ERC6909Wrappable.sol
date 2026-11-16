@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 // Interfaces
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";

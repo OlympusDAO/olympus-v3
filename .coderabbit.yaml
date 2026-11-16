@@ -2,3 +2,8 @@ reviews:
     auto_review:
         # Review all branches, not just PRs against the base branch
         base_branches: [".*"]
+    path_instructions:
+        - path: "src/scripts/**/*.sol"
+          instructions: |
+              Solidity files under src/scripts are operational scripts, not deployed contracts.
+              Do not flag require statements, string revert messages, or missing custom errors in this path.

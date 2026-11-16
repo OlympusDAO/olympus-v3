@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 /// @title TimestampLinkedList
 /// @notice A library for managing linked lists of uint48 timestamps in descending order

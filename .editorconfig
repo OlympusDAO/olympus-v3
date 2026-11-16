@@ -1,0 +1,18 @@
+root = true
+
+[*.sh]
+indent_style = space
+indent_size = 4
+shell_variant = bash
+switch_case_indent = true
+space_redirects = true
+
+# Preserve the shell exclusions from .prettierignore.
+[**/{node_modules,dependencies,cache,coverage,docs,lib,out,.gen-perms}/**]
+ignore = true
+
+[broadcast/**]
+ignore = true
+
+[shell/calc_bridged_supply.sh]
+ignore = true

@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {console2} from "forge-std/console2.sol";
 
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {Timelock} from "src/external/governance/Timelock.sol";
 
 contract OCGPermissions is OlyBatch {
     address ROLES;

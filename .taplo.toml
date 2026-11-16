@@ -1,0 +1,11 @@
+include = ["**/*.toml", ".*.toml", ".*/**/*.toml"]
+exclude = [
+    "**/{node_modules,dependencies,cache,coverage,docs,lib,out,.gen-perms}/**",
+    "broadcast/**",
+    "src/scripts/deploy/savedDeployments/**",
+]
+
+[formatting]
+indent_string = "    "
+column_width = 100
+align_comments = false

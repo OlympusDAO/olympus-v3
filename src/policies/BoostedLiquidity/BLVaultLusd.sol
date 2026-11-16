@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 // Import system dependencies
 import {IBLVault, RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVault.sol";
@@ -8,7 +8,9 @@ import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.s
 
 // Import external dependencies
 import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/BoostedLiquidity/interfaces/IBalancer.sol";
-import {IAuraBooster, IAuraRewardPool, IAuraMiningLib, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
+// Unused: nothing here references IAuraMiningLib; kept because this contract is deployed
+// import {IAuraBooster, IAuraRewardPool, IAuraMiningLib, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
+import {IAuraBooster, IAuraRewardPool, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 // Import types
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
@@ -17,11 +19,14 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import libraries
 import {Clone} from "clones/Clone.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
+
+// Unused: nothing here references it; kept because this contract is deployed
+// import {FullMath} from "libraries/FullMath.sol";
 
 contract BLVaultLusd is IBLVault, Clone {
     using TransferHelper for ERC20;
-    using FullMath for uint256;
+    // Unused: no call resolves to it; kept because this contract is deployed
+    // using FullMath for uint256;
 
     // ========= ERRORS ========= //
 

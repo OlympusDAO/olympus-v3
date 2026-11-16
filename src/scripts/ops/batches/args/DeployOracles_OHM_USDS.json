@@ -1,0 +1,24 @@
+{
+    "functions": [
+        {
+            "args": {
+                "baseToken": "0x64aa3364F17A4D01c6f1751fd97C2bd3D7E7f1D5",
+                "maxAge": 3600,
+                "maxPrice": "18000000000000000000",
+                "minPrice": "17000000000000000000",
+                "quoteToken": "0xdC035D45d973E3EC169d2276DDab16f1e407384F"
+            },
+            "name": "deployChainlinkOracle"
+        },
+        {
+            "args": {
+                "baseToken": "0x64aa3364F17A4D01c6f1751fd97C2bd3D7E7f1D5",
+                "maxAge": 3600,
+                "maxPrice": "18000000000000000000",
+                "minPrice": "17000000000000000000",
+                "quoteToken": "0xdC035D45d973E3EC169d2276DDab16f1e407384F"
+            },
+            "name": "deployMorphoOracle"
+        }
+    ]
+}

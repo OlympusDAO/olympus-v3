@@ -288,5 +288,95 @@
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
         "name": "olympus-policy-incentive-distributor-convertible"
+    },
+    {
+        "addr": "0x45e563c39cDdbA8699A90078F42353A57509543a",
+        "chainId": 1,
+        "name": "olympus-policy-cross-chain-bridge"
+    },
+    {
+        "addr": "0x23dDFccdd5C573B9Fd7fC0fcD70B687A0D0C5f23",
+        "chainId": 1,
+        "name": "olympus-policy-lz-bridge-gateway"
+    },
+    {
+        "addr": "0xb218Eb347218031B2B9d17a19B040bD3509EFAc0",
+        "chainId": 1,
+        "name": "olympus-policy-lz-endpoint-delegate"
+    },
+    {
+        "addr": "0x9AD85D2f5EfC076Bb321dca425e67cf2E6829330",
+        "chainId": 1,
+        "name": "olympus-periphery-lz-cross-chain-bridge"
+    },
+    {
+        "addr": "0x946B739a26A8e7f035B27B075eb0cE8a54bF2f12",
+        "chainId": 1,
+        "name": "olympus-policy-lz-bridge-and-delegate-config"
+    },
+    {
+        "addr": "0x0f8Cc53Ac14dda2f9aebfCcB6cc3A4426BfF4Af7",
+        "chainId": 1,
+        "name": "olympus-lz-bridge-activator"
+    },
+    {
+        "addr": "0x2CEA7B722dbd6b03f0E857d11e53ECB698cC2b4E",
+        "chainId": 1,
+        "name": "olympus-policy-ccip-token-pool-config"
+    },
+    {
+        "addr": "0xF489F38BF8d98A5C10a030f8C16624f6764CD27A",
+        "chainId": 1,
+        "name": "olympus-policy-ccip-token-pool-config-timelock"
+    },
+    {
+        "addr": "0x1b1FB8C6E0420C6595a016Dd8AD962176aa564c9",
+        "chainId": 1,
+        "name": "olympus-periphery-ccip-token-pool-config-proposal-checker"
+    },
+    {
+        "addr": "0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD",
+        "chainId": 1,
+        "name": "olympus-periphery-ccip-lock-release-token-pool"
+    },
+    {
+        "addr": "0xFbf6383dC3F6010d403Ecdf12DDC1311701D143D",
+        "chainId": 1,
+        "name": "olympus-periphery-ccip-cross-chain-bridge"
+    },
+    {
+        "addr": "0xb22764f98dD05c789929716D677382Df22C05Cb6",
+        "chainId": 1,
+        "name": "external-ccip-token-admin-registry"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-module-price-1_2"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-erc7726-oracle-factory-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-chainlink-oracle-factory-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-morpho-oracle-factory-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-price-config-2_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-price-cache-1_0"
     }
 ]

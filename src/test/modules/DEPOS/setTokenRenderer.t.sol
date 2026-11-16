@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicensed
 // solhint-disable one-contract-per-file
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {Module} from "src/Kernel.sol";
 import {DEPOSTest} from "./DEPOSTest.sol";

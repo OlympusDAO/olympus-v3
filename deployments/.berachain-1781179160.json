@@ -1,0 +1,6 @@
+{
+    "olympus.periphery.LZCrossChainBridge": "0x9c859Dc91DB65bD7375660341231227336dAa134",
+    "olympus.policies.LZBridgeAndDelegateConfig": "0x02331A4c97a4841084dF54d7c0eC04DD3f1A9F1c",
+    "olympus.policies.LZBridgeGateway": "0x0db48Fa20894273cF6bB559644d63713E98FE67b",
+    "olympus.policies.LZEndpointDelegate": "0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9"
+}

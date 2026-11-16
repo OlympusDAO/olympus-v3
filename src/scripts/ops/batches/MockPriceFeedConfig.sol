@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
@@ -9,7 +9,7 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
 import {Owned} from "solmate/auth/Owned.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice Configures MockPriceFeedOwned contracts with price data
 /// @dev    This script sets the latest answer, timestamp, and round ID for mock price feeds
@@ -17,11 +17,9 @@ contract MockPriceFeedConfig is BatchScriptV2 {
     /// @notice Configure a mock price feed with the specified values
     function configurePriceFeed(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         // Read arguments
         string memory priceFeedName = _readBatchArgString("configurePriceFeed", "priceFeedName");
         int256 latestAnswer = int256(_readBatchArgUint256("configurePriceFeed", "latestAnswer"));
@@ -69,11 +67,9 @@ contract MockPriceFeedConfig is BatchScriptV2 {
     /// @notice Transfer ownership of a mock price feed to a new owner
     function transferOwnership(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         // Read arguments
         address newOwner = _readBatchArgAddress("transferOwnership", "newOwner");
         string memory priceFeedName = _readBatchArgString("transferOwnership", "priceFeedName");

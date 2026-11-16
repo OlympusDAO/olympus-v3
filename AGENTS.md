@@ -18,19 +18,22 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 **Testing:**
 
 - `pnpm run test` - Run all tests (runs `./shell/test_all.sh`)
-- `pnpm run test:unit` - Run unit tests only (excludes fork tests and proposals)
+- `pnpm run test:unit` - Run unit tests only (excludes invariants, Script and fork contracts, proposals and deprecated tests)
+- `pnpm run test:invariant` - Run invariant tests only
 - `pnpm run test:fork` - Run fork tests (requires `ALCHEMY_API_KEY` env var)
 - `pnpm run test:proposal` - Run OCG proposal tests
-- `pnpm run test:coverage` - Generate test coverage report
 - `forge test -vvv --match-contract ContractTest` - Run a specific test contract
 
 **For detailed test debugging guidance (verbosity levels, setUp() issues, trace output), use the `/test-debug` skill.**
 
 **Linting:**
 
-- `pnpm run lint` - Format and lint code (prettier + solhint + markdownlint)
+- `pnpm run lint` - Format and lint code (prettier + forge lint + markdownlint)
 - `pnpm run lint:check` - Check formatting and linting without fixing
-- `pnpm run prettier` - Format code (runs quicker than linting)
+- `pnpm run prettier` - Format code using a content-based cache (runs quicker than linting)
+
+Prettier skips generated `audit/**/solidity-metrics.html` reports. Direct Prettier invocations must
+also use `--cache --cache-strategy content` so they preserve the shared cache.
 
 **For detailed linter note resolution guidance (deployed vs in-development contracts, suppression templates), use the `/lint-fix` skill.**
 
@@ -52,7 +55,59 @@ Ask first:
 - Git push
 - Deleting files
 - Changing file permissions
-- Full test suites (`test`, `test:unit`, `test:fork` or `test:proposal`)
+- Full test suites (`test`, `test:unit`, `test:invariant`, `test:fork` or `test:proposal`)
+
+## Repo Workflow
+
+Use the repo's existing commands and tooling for commit, push, and PR work. Do not add scripts for this workflow.
+
+### Validation Gates
+
+- Before every commit, run the repo's existing lint/format command: `pnpm run lint`.
+- Before pushing, run the repo's existing full validation commands:
+    - `pnpm build` or `forge build`
+    - `pnpm run lint:check`
+    - `pnpm run test` when the change is ready for full-suite validation or touches protocol behavior, tests, deployment, dependencies, or shared tooling
+    - Include other existing focused validation commands when they are directly relevant to the changed files
+- Keep focused tests and single-file builds available during implementation, but do not substitute them for the push gate when the change is ready to publish.
+- CodeRabbit is a sparse pre-push review tool. Run it before pushing or when explicitly requested, not before every commit.
+- When using CodeRabbit, run `coderabbit review --agent --base <PR base>`. Verify the PR base and diff scope before trusting the result. Treat an instant "0 issues" response as suspicious until the base and reviewed diff have been confirmed.
+
+### Approval Gates
+
+Batch approval into two explicit gates. If the user approves a gate, do not ask separately for lint, `git add`, `git commit`, `git push`, or PR creation steps covered by that gate.
+
+1. Commit approval:
+    - Show the current branch.
+    - Show the exact files that will be staged.
+    - Show the validation command that will run before commit.
+    - Show the exact commit message.
+    - After approval, run validation, stage only the listed files, and commit.
+
+2. Publish approval:
+    - Show the current branch.
+    - Show the remote and PR base.
+    - Show the push validation commands, including full tests when appropriate.
+    - Show the CodeRabbit command when it applies.
+    - Show the PR action: create or update.
+    - Show the PR title and a summary of the PR body.
+    - After approval, validate, push, and create or update the PR.
+
+Never stage unrelated files. If the worktree has unrelated modifications, leave them unstaged and call them out in the approval summary.
+
+### Worktree Environment
+
+- For worktrees, check whether `.env` exists before running fork tests or full validation that needs RPC credentials.
+- If `.env` is missing, bootstrap it from the documented shared/local env source. If the source is unknown, ask once for the source and reuse that answer for the current worktree.
+- Do not repeatedly rediscover or re-report the same missing env issue after the source has been identified.
+
+### Audit and Review Intake
+
+- For audit issues or manually pasted CodeRabbit comments, first verify applicability against the current code.
+- State whether each issue applies, does not apply, or partially applies.
+- Identify the red test or smallest validation that demonstrates the issue before implementing, when a test is practical.
+- Implement only applicable fixes, then run focused validation before the normal commit or publish gate.
+- Include audit issue IDs in PR bodies when relevant.
 
 ## Agent Behaviour
 
@@ -110,15 +165,34 @@ Ask first:
 
 ### Testing Discipline
 
+- Before writing or modifying Solidity tests, use the `/test-write` skill.
 - Write or update tests before implementation
 - If tests don't exist for a function you're modifying, create them first
+- Before implementation, derive the applicable coverage matrix for every external function being
+    changed and treat it as acceptance criteria:
+    - Caller authorization: cover every permitted caller class, fuzz unauthorized callers while
+        excluding all authorized identities, and fuzz the caller for permissionless functions.
+    - Contract state: cover enabled, disabled, and re-enabled behavior. Explicitly test functions
+        that are intentionally callable while disabled.
+    - Input boundaries: cover zero, one, minimum, maximum, values immediately below and above
+        semantic limits, exact caps, and rounding thresholds. For every numeric input, test the
+        numeric type's maximum representable value. Cover zero/non-zero addresses and empty,
+        single-item, and maximum-size collections when relevant. Fuzz across the valid numeric range;
+        one interior fuzz case does not prove boundary behavior.
+    - State transitions: cover absent/existing, uninitialized/initialized, current/stale, and exact
+        transition points where applicable.
+    - Accounting and external interactions: assert authoritative balance or custody deltas,
+        aggregate consistency, rounding direction, rollback on failure, and reentrancy behavior.
+    - Read/write consistency: verify that previews and getters agree with successful execution and
+        equivalent failure conditions.
+    - Invariants: add stateful invariant tests for accounting, custody, lifecycle, authorization, and
+        enabled-state properties that must hold across arbitrary call sequences.
 - Run the specific test file after changes, not the full suite
 - Only run full test suites when explicitly requested or at major milestones
 
 ### Commit and Git Hygiene
 
-- Never create commits unless explicitly asked
-- Never push unless explicitly asked
+- Use the Repo Workflow approval gates for commits, pushes, and PRs. Do not commit or push outside those gates unless the user explicitly requests a different flow.
 - The git commit message should follow the format of: `<type>(<scope>): <description>`
     - `type` may be one of:
         - feat: Introduces a new feature.
@@ -230,45 +304,55 @@ src/
 **Test Commands:**
 
 - `pnpm run test` - Run all tests (runs `./shell/test_all.sh`)
-- `pnpm run test:unit` - Run unit tests only (excludes fork tests and proposals)
+- `pnpm run test:unit` - Run unit tests only (excludes invariants, Script and fork contracts, proposals and deprecated tests)
+- `pnpm run test:invariant` - Run invariant tests only
 - `pnpm run test:fork` - Run fork tests (requires `ALCHEMY_API_KEY` env var)
 - `pnpm run test:proposal` - Run OCG proposal tests
 - `forge test -vvv --match-contract <Contract>` - Run a specific test contract
 
 **Test Organization:**
 
-- Unit tests exclude fork tests and proposals: `--no-match-contract '(Fork)' --no-match-path 'src/test/proposals/*.t.sol'`
+- Unit tests exclude invariant functions, fork tests and proposals: `--no-match-test '^invariant_' --no-match-contract '(Fork|Script)' --no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}'`
+- Invariant tests select invariant functions while applying the same contract and path exclusions: `--match-test '^invariant_'`
 - Proposal tests are in `src/test/proposals/` and require fork environment
-- Coverage reports generated in `coverage/` directory
 
-**For detailed test writing guidance (file structure, modifiers, naming, error handling), use the `/test-write` skill.**
+**For detailed test writing guidance (coverage matrices, file structure, modifiers, naming, fuzzing,
+and error handling), use the `/test-write` skill.**
 
 Key standards summary:
 
-- One test file per contract **external** function (internal functions are tested indirectly via their callers)
+- Organize tests around external state-changing actions (internal functions are tested indirectly
+    via their callers). Co-locate directly corresponding preview or getter assertions with the action
+    when doing so preserves coverage.
 - Use `given*` modifiers for state setup
-- Follow branching tree naming: `test_given<Condition>_<Action>_<ExpectedResult>()`
-- Always use error selectors, never string messages: `abi.encodeWithSelector(Error.selector)`
+- In test function names, use `given` for pre-existing state and `when` for function parameters or
+    operation inputs. Repeat the prefix for multiple conditions, such as
+    `test_givenState_whenCondition1_whenCondition2()`.
+- Follow branching tree naming: `test_given<State>_when<Parameter1>_when<Parameter2>()`; use a
+    `_reverts` suffix for revert cases
+- Match specific revert data with error selectors or encoded custom errors. Do not use empty
+    `vm.expectRevert()` unless an opaque dependency has no stable revert data and the test documents
+    why stronger matching is impossible. Never use string messages.
 - All assertions must have descriptive messages
 
 ### Deployment
 
-- Chain-specific env files: `.env.[chain]` (copy from `.env.deploy.example`)
+- Shared environment template: `.env.example`. Use `.env`, or optional chain-specific `.env.[chain]` files through `--env`.
 - Deployment scripts in `src/scripts/deploy/`
 - Saved deployments in `src/scripts/deploy/savedDeployments/`
 - See `src/scripts/DEPLOY.md` and `src/scripts/DEPLOY_L2.md` for detailed steps
 
 ### Code Standards
 
-- Solidity version: >= 0.8.24 (with some on 0.8.15 for historical reasons)
+- Solidity compiler: pinned to 0.8.36 through `solc_version` in `foundry.toml`, so every machine builds identically. Sources declare flexible pragmas (`>=0.8.x`) and none pins an exact version; `src/LEGACY.md` lists the files that did before the pin.
 - Optimizer runs: 10,000 (except for some contracts that require specific runs to meet bytecode limits, see foundry.toml)
 - Follow existing patterns for module/policy development
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
 - Follow best-case practices for writing Solidity code, e.g. <https://dev.to/truongpx396/solidity-limitations-solutions-best-practices-and-gas-optimization-27cb>
-- Running `forge build` will output the `forge` tool's linting output. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
+- Linter notes come from `forge lint`, not from `forge build`: builds have `lint_on_build = false` in `foundry.toml` so compiler output stays readable. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
 - Internal state variables MUST use underscore prefix: `uint256 internal _counter;`
-- When completing a minor or major milestone and before any git commits, run the formatter: `pnpm run prettier`
+- For commit and push validation, follow the Repo Workflow section.
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
 - Between milestones, run a build (`forge build`) and prettier (`pnpm run prettier`)
 - Do not use `require()` for assertions. Instead, preference custom errors. Custom errors should be defined in the contract's parent interface (where available), or else in the contract itself.
@@ -407,13 +491,7 @@ Always think through the decimal arithmetic step-by-step and make the reasoning 
 
 ### Code Reviews with CodeRabbit
 
-If CodeRabbit is installed, run it as a way to review your code. Run the command: `coderabbit -h` for details on commands available.
-
-In general, I want you to run coderabbit with the `--prompt-only` flag.
-
-To review uncommitted changes (this is what we'll use most of the time) run: `coderabbit --prompt-only -t uncommitted`.
-
-It is more useful if the review is performed against a base branch, using the `--base <branchName>` flag.
+Use CodeRabbit through the Repo Workflow section, which defines timing, base verification, and the standard review command. Run `coderabbit -h` for CLI details if the installed command syntax is unclear.
 
 IMPORTANT: When running CodeRabbit to review code changes, don't run it more than 3 times in a given set of changes.
 
@@ -425,7 +503,7 @@ IMPORTANT: When running CodeRabbit to review code changes, don't run it more tha
 
 ```bash
 pnpm run lint:check # Check all linting rules
-forge build         # Output forge-lint notes
+forge lint          # Output forge-lint notes
 ```
 
 **The following commands show detailed linting rule breakdown:**

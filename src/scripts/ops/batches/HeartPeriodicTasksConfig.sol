@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
@@ -11,7 +11,7 @@ import {IOperator} from "src/policies/interfaces/IOperator.sol";
 import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice Configures the Heart with periodic tasks for reserve operations
 /// @dev    This is designed for use with Heart v1.7, and is mainly intended for configuring the Heart on testnets. The production contract will be configured through an OCG proposal.
@@ -21,11 +21,9 @@ contract HeartPeriodicTasksConfig is BatchScriptV2 {
     ///         Run this after ConvertibleDepositInstall.install()
     function configurePeriodicTasks(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath) {
         _validateArgsFileEmpty(argsFile_);
 
         // Load contract addresses

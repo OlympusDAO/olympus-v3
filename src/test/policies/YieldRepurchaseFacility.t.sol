@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
@@ -15,6 +15,7 @@ import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -289,22 +290,17 @@ contract YieldRepurchaseFacilityTest is Test {
             uint256 marketPrice = auctioneer.marketPrice(nextBondMarketId);
             (
                 address owner,
-                ERC20 payoutToken,
-                ERC20 quoteToken,
+                address payoutToken,
+                address quoteToken,
                 address callbackAddr,
-                bool isCapacityInQuote,
-                uint256 capacity,
-                ,
-                uint256 minPrice,
-                uint256 maxPayout,
-                ,
-                ,
-                uint256 scale
-            ) = auctioneer.markets(nextBondMarketId);
+                bool isCapacityInQuote
+            ) = auctioneer.getMarketIdentity(nextBondMarketId);
+            (uint256 capacity, uint256 minPrice, uint256 maxPayout, , uint256 scale) = auctioneer
+                .getMarketValues(nextBondMarketId);
 
-            assertEq(owner, address(yieldRepo));
-            assertEq(address(payoutToken), address(reserve));
-            assertEq(address(quoteToken), address(ohm));
+            assertEq(owner, address(yieldRepo), "market owner should be the facility");
+            assertEq(payoutToken, address(reserve), "payout token should be the reserve");
+            assertEq(quoteToken, address(ohm), "quote token should be OHM");
             assertEq(callbackAddr, address(0));
             assertEq(isCapacityInQuote, false);
             assertEq(capacity, uint256(initialYield) / 7);
@@ -517,20 +513,8 @@ contract YieldRepurchaseFacilityTest is Test {
         // Confirm that the bond market has the correct configuration
         {
             uint256 marketPrice = auctioneer.marketPrice(nextBondMarketId);
-            (
-                ,
-                ,
-                ,
-                ,
-                ,
-                uint256 capacity,
-                ,
-                uint256 minPrice,
-                uint256 maxPayout,
-                ,
-                ,
-                uint256 scale
-            ) = auctioneer.markets(nextBondMarketId);
+            (uint256 capacity, uint256 minPrice, uint256 maxPayout, , uint256 scale) = auctioneer
+                .getMarketValues(nextBondMarketId);
 
             assertEq(capacity, expectedBidAmount, "capacity should be the bid amount");
             assertEq(maxPayout, capacity / 6, "max payout should be 1/6th of the capacity");
@@ -689,7 +673,9 @@ contract YieldRepurchaseFacilityTest is Test {
         vm.stopPrank();
 
         // Register the new clearinghouse
-        godmode = CHREG.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
+        godmode = CHREG.generateMultiFunctionFixture(
+            ModulePermissions.olympusClearinghouseRegistry()
+        );
         kernel.executeAction(Actions.ActivatePolicy, godmode);
         vm.prank(godmode);
         CHREG.activateClearinghouse(address(newClearinghouse));
@@ -741,7 +727,9 @@ contract YieldRepurchaseFacilityTest is Test {
         newClearinghouse.setPrincipalReceivables(1_000_000e18);
 
         // Register the new clearinghouse
-        godmode = CHREG.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
+        godmode = CHREG.generateMultiFunctionFixture(
+            ModulePermissions.olympusClearinghouseRegistry()
+        );
         kernel.executeAction(Actions.ActivatePolicy, godmode);
         vm.prank(godmode);
         CHREG.activateClearinghouse(address(newClearinghouse));

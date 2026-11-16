@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {console2} from "forge-std/console2.sol";
 import {stdJson} from "forge-std/StdJson.sol";
@@ -8,7 +8,6 @@ import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 import {WithLayerZeroConstants} from "src/scripts/WithLayerZeroConstants.sol";
 
 // Bophades
-import {Kernel, Actions} from "src/Kernel.sol";
 import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 
 /// @notice     Sets the Berachain Bridge as trusted

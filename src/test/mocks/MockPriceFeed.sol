@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-variable)
 pragma solidity ^0.8.0;
 
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
@@ -93,3 +94,4 @@ contract MockPriceFeed is AggregatorV2V3Interface {
         )
     {}
 }
+/// forge-lint: disable-end(mixed-case-variable)
