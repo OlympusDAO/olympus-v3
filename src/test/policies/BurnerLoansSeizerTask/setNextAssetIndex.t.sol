@@ -25,7 +25,7 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
 
     modifier givenBorrowerProgress() {
         _mockCount(2);
-        _task.setNextAssetBorrowerIndex(address(_asset), 1);
+        _setBothBorrowerCursors(address(_asset), 1);
         _;
     }
 
@@ -180,7 +180,7 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
         );
         vm.expectCall(
             address(_lens),
-            abi.encodeWithSelector(IBurnerLoansLens.getSeizableBorrowersBoundedFor.selector),
+            abi.encodeWithSelector(IBurnerLoansLens.getUnhealthyBorrowersBoundedFor.selector),
             uint64(0)
         );
         vm.expectEmit(false, false, false, true, address(_task));
@@ -242,8 +242,22 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
         _task.setNextAssetIndex(index_);
         assertEq(_task.nextAssetIndex(), index_, "Exact requested asset index stored");
         assertEq(_task.getAssets(), assets, "Recovery preserves asset membership/order");
-        assertEq(_task.assetCursor(address(_asset)), 1, "A nonzero borrower cursor unchanged");
-        assertEq(_task.assetCursor(address(_otherAsset)), 0, "B borrower cursor unchanged");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            1,
+            "A nonzero borrower cursor unchanged"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "A nonzero borrower cursor unchanged"
+        );
+        assertEq(_task.expiredAssetCursor(address(_otherAsset)), 0, "B borrower cursor unchanged");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_otherAsset)),
+            0,
+            "B borrower cursor unchanged"
+        );
         assertEq(_task.lastTransitionAt(), transition, "Recovery preserves transition timestamp");
         assertEq(_task.isEnabled(), enabled_, "Recovery preserves local lifecycle");
         assertEq(_task.maxBorrowersToCheck(), 500, "Recovery preserves scan limit");

@@ -113,7 +113,7 @@ Seize and Lens report the same Core; all other constructor inputs are valid. Cor
 
 ## Binding reads and validation precedence
 
-Order: Seize address/ERC165, Seize.core(), Seize Kernel metadata, Lens code/core(), Core ERC165, scan limits, gas limit. Lens ERC165 is not probed. Its expiry API is required at execution; construction alone does not prove selector availability. Kernel is a trusted constructor input, compared with Seize metadata rather than independently code-validated.
+Order: Seize address/ERC165, Seize.core(), Seize Kernel metadata, Lens ERC165/core(), Core ERC165, scan limits, gas limit. Lens must advertise the current IBurnerLoansLens ERC165 interface, including both expired and unhealthy discovery. This rejects older same-Core helpers before deployment or activation; interface claims do not replace execution-time failure isolation. Kernel is a trusted constructor input, compared with Seize metadata rather than independently code-validated.
 
 | ID | Caller | Condition / domain | Execution / effects | Test |
 | --- | --- | --- | --- | --- |
@@ -133,29 +133,45 @@ Kernel code is not independently validated by this constructor. A helper with ma
 | ID | Caller | Input boundary | Execution / effects | Test |
 | --- | --- | --- | --- | --- |
 | BLSZC-P08 | Fuzz deployers | Kernel zero or EOA/MAX160; Seize test double reports that exact Kernel; other bindings valid | Constructor stores matching Kernel without a code/membership read; no promise of operational usability | Unmapped |
-| BLSZC-P09 | Fuzz deployers | Lens has code and matching core(), but lacks getExpiredBorrowersBoundedFor | Constructor accepts binding; execution behavior is covered by execute D23; no Lens ERC165 check | Unmapped |
 
-[test_givenSeizeLifecycleState_whenDeployed_thenBindingStillSucceeds]: ./constructor.t.sol#L166
-[test_whenBindingsMatch_thenCoreIsDerived]: ./constructor.t.sol#L26
-[test_whenConstructorBoundariesSeeded_thenAccepted]: ./constructor.t.sol#L256
-[test_whenConstructorGasLimitZero_reverts]: ./constructor.t.sol#L250
-[test_whenSeizeInterfaceInvalid_reverts]: ./constructor.t.sol#L190
-[test_whenLensCoreGetterReverts_thenErrorPropagates]: ./constructor.t.sol#L284
-[test_whenLensHasNoCode_reverts]: ./constructor.t.sol#L92
-[test_whenLensReportsDifferentCore_reverts]: ./constructor.t.sol#L104
-[test_whenLensZero_reverts]: ./constructor.t.sol#L268
-[test_whenScanLimitZero_reverts]: ./constructor.t.sol#L210
-[test_whenSeizeCoreGetterReverts_thenErrorPropagates]: ./constructor.t.sol#L273
-[test_whenSeizeHasNoCode_reverts]: ./constructor.t.sol#L80
-[test_whenSeizeLimitExceedsScanLimit_reverts]: ./constructor.t.sol#L236
-[test_whenSeizeLimitZero_reverts]: ./constructor.t.sol#L223
-[test_whenSeizeReportsDifferentKernel_reverts]: ./constructor.t.sol#L121
-[test_whenSeizeZero_reverts]: ./constructor.t.sol#L68
-[test_whenCoreLifecycleUnreadable_thenDeploymentUsesSeizeBinding]: ./constructor.t.sol#L140
-[test_givenZeroCore_whenConstructed_reverts]: ./constructor.t.sol#L321
-[test_givenEoaCore_whenConstructed_reverts]: ./constructor.t.sol#L329
-[test_givenMissingCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L338
-[test_givenRevertingCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L350
-[test_givenMalformedCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L362
-[test_givenCoreLifecycle_whenConstructed]: ./constructor.t.sol#L374
-[test_whenCoreLifecycleStatesSeeded_thenAccepted]: ./constructor.t.sol#L384
+Retired BLSZC-P09: accepting a same-Core helper without the required discovery capability is
+replaced by D15-D18. Execution D23 retains isolation for a helper that falsely claims that capability.
+
+## Required discovery capability
+
+| ID | Caller | Lens capability | Expected result | Test |
+| --- | --- | --- | --- | --- |
+| BLSZC-D15 | Fuzz deployer | Same-Core legacy Lens with combined discovery only | InvalidLens before construction completes | Covered: [test][test_givenSameCoreLegacyLens_whenConstructed_reverts] |
+| BLSZC-D16 | Fuzz deployer | Lens rejects current IBurnerLoansLens interface | InvalidLens; no deployment or committed effects | Covered: [test][test_givenLensRejectsCurrentInterface_whenConstructed_reverts] |
+| BLSZC-D17 | Fuzz deployer | Lens interface probe reverts | InvalidLens; no deployment or committed effects | Covered: [test][test_givenLensInterfaceProbeReverts_whenConstructed_reverts] |
+| BLSZC-D18 | Fuzz deployer | Lens interface probe returns short malformed data | InvalidLens; no deployment or committed effects | Covered: [test][test_givenLensInterfaceProbeMalformed_whenConstructed_reverts] |
+
+[test_givenSeizeLifecycleState_whenDeployed_thenBindingStillSucceeds]: ./constructor.t.sol#L168
+[test_whenBindingsMatch_thenCoreIsDerived]: ./constructor.t.sol#L27
+[test_whenConstructorBoundariesSeeded_thenAccepted]: ./constructor.t.sol#L258
+[test_whenConstructorGasLimitZero_reverts]: ./constructor.t.sol#L252
+[test_whenSeizeInterfaceInvalid_reverts]: ./constructor.t.sol#L192
+[test_whenLensCoreGetterReverts_thenErrorPropagates]: ./constructor.t.sol#L286
+[test_whenLensHasNoCode_reverts]: ./constructor.t.sol#L94
+[test_whenLensReportsDifferentCore_reverts]: ./constructor.t.sol#L106
+[test_whenLensZero_reverts]: ./constructor.t.sol#L270
+[test_whenScanLimitZero_reverts]: ./constructor.t.sol#L212
+[test_whenSeizeCoreGetterReverts_thenErrorPropagates]: ./constructor.t.sol#L275
+[test_whenSeizeHasNoCode_reverts]: ./constructor.t.sol#L82
+[test_whenSeizeLimitExceedsScanLimit_reverts]: ./constructor.t.sol#L238
+[test_whenSeizeLimitZero_reverts]: ./constructor.t.sol#L225
+[test_whenSeizeReportsDifferentKernel_reverts]: ./constructor.t.sol#L123
+[test_whenSeizeZero_reverts]: ./constructor.t.sol#L70
+[test_whenCoreLifecycleUnreadable_thenDeploymentUsesSeizeBinding]: ./constructor.t.sol#L142
+[test_givenZeroCore_whenConstructed_reverts]: ./constructor.t.sol#L388
+[test_givenEoaCore_whenConstructed_reverts]: ./constructor.t.sol#L396
+[test_givenMissingCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L405
+[test_givenRevertingCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L417
+[test_givenMalformedCoreInterface_whenConstructed_reverts]: ./constructor.t.sol#L429
+[test_givenCoreLifecycle_whenConstructed]: ./constructor.t.sol#L441
+[test_whenCoreLifecycleStatesSeeded_thenAccepted]: ./constructor.t.sol#L451
+
+[test_givenSameCoreLegacyLens_whenConstructed_reverts]: constructor.t.sol#L297
+[test_givenLensRejectsCurrentInterface_whenConstructed_reverts]: constructor.t.sol#L317
+[test_givenLensInterfaceProbeReverts_whenConstructed_reverts]: constructor.t.sol#L329
+[test_givenLensInterfaceProbeMalformed_whenConstructed_reverts]: constructor.t.sol#L341

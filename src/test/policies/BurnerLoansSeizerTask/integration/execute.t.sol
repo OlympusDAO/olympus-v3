@@ -42,7 +42,16 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             25,
             "First A visit settles 25 borrowers"
         );
-        assertEq(_task.assetCursor(address(_asset)), 0, "Compacted borrower cursor remains valid");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Compacted borrower cursor remains valid"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Compacted borrower cursor remains valid"
+        );
         assertEq(_task.nextAssetIndex(), 1, "B gets the next turn");
         _task.execute();
         assertEq(_inventory.activePrincipalOhm(), 25e9, "B visit cannot process A again");
@@ -102,7 +111,12 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         );
         _task.execute();
         vm.clearMockedCalls();
-        assertEq(_task.assetCursor(address(_asset)), 3, "Recovery begins with a stale cursor");
+        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Expiry progress already wrapped");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            3,
+            "Recovery begins with a stale unhealthy cursor"
+        );
         assertEq(_inventory.activePrincipalOhm(), 1e9, "Debt remains before recovery");
         assertEq(
             _lens.getActiveBorrowerCount(address(_asset)),
@@ -135,7 +149,8 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             0,
             "A repairs its cursor and settles on the same visit"
         );
-        assertEq(_task.assetCursor(address(_asset)), 0, "Empty borrower cursor is zero");
+        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Empty borrower cursor is zero");
+        assertEq(_task.unhealthyAssetCursor(address(_asset)), 0, "Empty borrower cursor is zero");
         assertEq(_task.nextAssetIndex(), 1, "Recovery still rotates to B");
     }
 
@@ -149,7 +164,12 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _seedDebt(_DAVE, 10e6, 1e9);
         _task.setScanLimits(3, 1);
         _task.execute(); // All healthy: cursor 3 of 4.
-        assertEq(_task.assetCursor(address(_asset)), 3, "Healthy scan advances past prefix");
+        assertEq(_task.expiredAssetCursor(address(_asset)), 3, "Healthy scan advances past prefix");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            3,
+            "Healthy scan advances past prefix"
+        );
         _repay(_BOB, 1e9);
         _repay(_CAROL, 1e9); // List now contains only Alice and Dave.
         _mature();
@@ -162,7 +182,12 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         );
         assertEq(_inventory.activePrincipalOhm(), 1e9, "One remaining principal reconciled");
         assertEq(_task.nextAssetIndex(), 1, "B keeps its next turn");
-        assertEq(_task.assetCursor(address(_otherAsset)), 0, "Other asset cursor unchanged");
+        assertEq(_task.expiredAssetCursor(address(_otherAsset)), 0, "Other asset cursor unchanged");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_otherAsset)),
+            0,
+            "Other asset cursor unchanged"
+        );
     }
 
     // Scenarios: BLSEIZ-SELF-EXECUTE-P12.
@@ -179,7 +204,12 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         vm.prank(makeAddr("external keeper"));
         _liquidation.seize(address(_asset), _two(_BOB, _CAROL));
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
+            3,
+            "Foreign seizure does not edit Task cursor"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
             3,
             "Foreign seizure does not edit Task cursor"
         );
@@ -211,7 +241,16 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _repay(_ALICE, 1e9);
         _task.setScanLimits(1, 1);
         _task.execute();
-        assertEq(_task.assetCursor(address(_asset)), 1, "First scan stops after healthy prefix");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            1,
+            "First scan stops after healthy prefix"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "First scan stops after healthy prefix"
+        );
         _task.execute();
         _task.execute();
         assertEq(
@@ -237,7 +276,12 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _task.execute();
         assertEq(_task.nextAssetIndex(), 1, "Failed settlement does not block B");
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Failed settlement preserves borrower cursor"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
             0,
             "Failed settlement preserves borrower cursor"
         );
@@ -269,7 +313,16 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         );
         task.execute();
         assertEq(task.nextAssetIndex(), 1, "Unsupported entry does not block registered asset");
-        assertEq(task.assetCursor(unsupported), 0, "Unsupported entry has no borrower progress");
+        assertEq(
+            task.expiredAssetCursor(unsupported),
+            0,
+            "Unsupported entry has no borrower progress"
+        );
+        assertEq(
+            task.unhealthyAssetCursor(unsupported),
+            0,
+            "Unsupported entry has no borrower progress"
+        );
         task.execute();
         assertEq(task.nextAssetIndex(), 0, "Registered asset remains reachable");
     }
@@ -321,10 +374,21 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _task.execute(); // B receives its ordinary turn.
         _expectNoRiskReads();
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 0, 0, 0);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Unhealthy,
+            0,
+            0,
+            0
+        );
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Empty-market stale cursor repairs within this visit"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
             0,
             "Empty-market stale cursor repairs within this visit"
         );
@@ -341,7 +405,12 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _seedDebt(_DAVE, 10e6, 1e9);
         _task.setScanLimits(3, 1);
         _task.execute();
-        assertEq(_task.assetCursor(address(_asset)), 3, "A saved a nonzero borrower cursor");
+        assertEq(_task.expiredAssetCursor(address(_asset)), 3, "A saved a nonzero borrower cursor");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            3,
+            "A saved a nonzero borrower cursor"
+        );
         assertEq(_task.nextAssetIndex(), 1, "Last asset B is next");
         vm.mockCallRevert(
             address(_task),
@@ -353,12 +422,22 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _task.execute();
         assertEq(_task.nextAssetIndex(), 0, "Whole-body failure rotates last asset back to first");
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             3,
             "A borrower progress is independent of B failure"
         );
         assertEq(
-            _task.assetCursor(address(_otherAsset)),
+            _task.unhealthyAssetCursor(address(_asset)),
+            3,
+            "A borrower progress is independent of B failure"
+        );
+        assertEq(
+            _task.expiredAssetCursor(address(_otherAsset)),
+            0,
+            "Failed B body leaves its borrower cursor unchanged"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_otherAsset)),
             0,
             "Failed B body leaves its borrower cursor unchanged"
         );

@@ -38,7 +38,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         manager.executeAllTasks{gas: 1_000_000}();
         assertEq(later.count(), 1, "Dependency gas exhaustion leaves later Heart work runnable");
         assertEq(_task.nextAssetIndex(), 1, "Gas exhaustion cannot monopolize the asset iterator");
-        assertEq(_task.assetCursor(address(_asset)), 0, "Failed scan preserves borrower progress");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Failed scan preserves borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
+        );
     }
 
     function setUp() public override {
@@ -58,7 +67,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             1,
             "Outer scheduler preserves rotation after self-call exhaustion"
         );
-        assertEq(_task.assetCursor(address(_asset)), 0, "Failed body preserves borrower progress");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Failed body preserves borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
+        );
         _task.setExecutionGasLimit(10_000_000);
         _task.execute();
         assertEq(_task.nextAssetIndex(), 0, "Next heartbeat visits B before returning to A");
@@ -75,7 +93,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), ScanReadFailed.selector);
         _task.execute();
         assertEq(_task.nextAssetIndex(), 1, "Failing scan cannot monopolize visits");
-        assertEq(_task.assetCursor(address(_asset)), 0, "Scan failure preserves borrower progress");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Scan failure preserves borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
+        );
     }
 
     // Scenarios: BLSEIZ-EXECUTE-L01.
@@ -89,7 +116,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         _task.execute();
         assertEq(_task.nextAssetIndex(), 0, "Paused task preserves progress");
-        assertEq(_task.assetCursor(address(_asset)), 0, "Paused task preserves borrower progress");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Paused task preserves borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
+        );
     }
 
     // Scenarios: BLSEIZ-EXECUTE-A01.
@@ -112,7 +148,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.mockCallRevert(
             address(_lens),
-            abi.encodeWithSelector(_lens.getSeizableBorrowersBoundedFor.selector),
+            abi.encodeWithSelector(_lens.getUnhealthyBorrowersBoundedFor.selector),
             abi.encodeWithSelector(ScanReadFailed.selector)
         );
         vm.mockCallRevert(
@@ -137,9 +173,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _task.execute();
         assertEq(_task.nextAssetIndex(), 1, "Missing authority does not monopolize scheduling");
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "Missing authority retains borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
         vm.clearMockedCalls();
         _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
@@ -153,7 +194,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _task.removeAsset(address(_otherAsset));
         vm.expectCall(
             address(_lens),
-            abi.encodeWithSelector(_lens.getSeizableBorrowersBoundedFor.selector),
+            abi.encodeWithSelector(_lens.getUnhealthyBorrowersBoundedFor.selector),
             uint64(0)
         );
         vm.expectCall(
@@ -199,7 +240,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         manager.addPeriodicTask(address(_task));
         manager.addPeriodicTask(address(later));
         _mockCount(10);
-        _task.setNextAssetBorrowerIndex(address(_asset), 9);
+        _setBothBorrowerCursors(address(_asset), 9);
         _mockCount(1);
         _task.setExecutionGasLimit(200_000);
         address[] memory borrowers = _one(_ALICE);
@@ -223,9 +264,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
         manager.executeAllTasks{gas: 1_000_000}();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             9,
             "Unexpected helper failure rolls back the stale-cursor repair"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            9,
+            "Whole-body rollback restores the unhealthy repair too"
         );
         assertEq(_task.nextAssetIndex(), 1, "Outer failure boundary retains one asset rotation");
         assertEq(later.count(), 1, "Helper exhaustion cannot prevent later Heart tasks");
@@ -294,7 +340,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), ScanReadFailed.selector);
         _task.execute();
-        assertEq(_task.assetCursor(address(_asset)), 1, "Count failure preserves the saved cursor");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Count failure preserves the expiry cursor"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "Count failure preserves the unhealthy cursor"
+        );
         assertEq(_task.nextAssetIndex(), 1, "Count failure still gives the next asset its turn");
     }
 
@@ -309,10 +364,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             uint64(1)
         );
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 0, 4, 2);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Unhealthy,
+            0,
+            4,
+            2
+        );
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.unhealthyAssetCursor(address(_asset)),
             4,
             "Six scanned entries minus two removals rewinds to four"
         );
@@ -333,10 +394,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             uint64(0)
         );
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 0, 4, 0);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Unhealthy,
+            0,
+            4,
+            0
+        );
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.unhealthyAssetCursor(address(_asset)),
             4,
             "Healthy scan progress is committed without seizure"
         );
@@ -347,9 +414,19 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         _task.execute(); // Other asset receives its turn.
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 4, 0, 0);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Unhealthy,
+            4,
+            0,
+            0
+        );
         _task.execute();
-        assertEq(_task.assetCursor(address(_asset)), 0, "Population end wraps the borrower cursor");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Population end wraps the unhealthy cursor"
+        );
     }
 
     // Scenarios: BLSEIZ-EXECUTE-P04.
@@ -370,7 +447,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _task.execute();
         assertEq(_task.nextAssetIndex(), 0, "Single managed asset wraps to itself");
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.unhealthyAssetCursor(address(_asset)),
             4,
             "Borrower progress follows the scan result"
         );
@@ -406,9 +483,24 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             uint64(1)
         );
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 0, 4, 2);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Expired,
+            0,
+            4,
+            2
+        );
         _task.execute();
-        assertEq(_task.assetCursor(address(_asset)), 4, "Expiry batch rewinds for two removals");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            4,
+            "Expiry batch rewinds for two removals"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
+        );
         assertEq(_task.nextAssetIndex(), 1, "Expiry batch consumes one asset turn");
     }
 
@@ -421,9 +513,24 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         _expectNoPricedDiscovery();
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 0, 0, 2);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Expired,
+            0,
+            0,
+            2
+        );
         _task.execute();
-        assertEq(_task.assetCursor(address(_asset)), 0, "Exact rewind boundary remains zero");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Exact rewind boundary remains zero"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
+        );
     }
 
     // Scenarios: BLSEIZ-SELF-EXECUTE-D02, BLSEIZ-SELF-EXECUTE-D06.
@@ -431,7 +538,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         public
     {
         _mockCount(10);
-        _task.setNextAssetBorrowerIndex(address(_asset), 9);
+        _setBothBorrowerCursors(address(_asset), 9);
         _mockCount(1);
         vm.mockCall(
             address(_lens),
@@ -448,9 +555,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), SettlementFailed.selector);
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "Caught settlement failure retains repaired offset"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
         assertEq(_task.nextAssetIndex(), 1, "Failed expiry batch rotates exactly once");
     }
@@ -458,7 +570,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-SELF-EXECUTE-D03, BLSEIZ-SELF-EXECUTE-D05.
     function test_givenValidCursor_givenExpiryScanFails_whenExecuted_thenCursorIsRetained() public {
         _mockCount(10);
-        _task.setNextAssetBorrowerIndex(address(_asset), 7);
+        _setBothBorrowerCursors(address(_asset), 7);
         vm.mockCallRevert(
             address(_lens),
             _expiryScan(7),
@@ -475,9 +587,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), ScanReadFailed.selector);
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             7,
             "Failed expiry discovery retains valid retry start"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            7,
+            "Expected independent unhealthy retry offset"
         );
         assertEq(_task.nextAssetIndex(), 1, "Expiry failure leaves the next asset reachable");
     }
@@ -497,9 +614,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), ScanReadFailed.selector);
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             next,
             "Priced failure commits only proven expiry-empty progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
         assertEq(_task.nextAssetIndex(), 1, "Priced failure consumes one turn");
     }
@@ -532,9 +654,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "Small population wraps under full-width caps"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
     }
 
@@ -546,9 +673,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "Malformed return rolls back body progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
         assertEq(_task.nextAssetIndex(), 1, "Outer boundary rotates after ABI decode failure");
     }
@@ -565,9 +697,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "Decode failure does not commit expiry-empty cursor"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
         assertEq(_task.nextAssetIndex(), 1, "Outer recovery consumes only one asset turn");
     }
@@ -581,9 +718,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), bytes4(0));
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "Missing capability retains retry progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
         assertEq(_task.nextAssetIndex(), 1, "Missing capability does not monopolize scheduling");
     }
@@ -596,9 +738,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _task.execute{gas: 50_000}();
         assertEq(_task.nextAssetIndex(), 1, "Cleanup rotates without entering the task body");
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "No-body execution preserves borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
     }
 
@@ -656,9 +803,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _task.execute();
         assertEq(_task.nextAssetIndex(), 1, "HEART-only Task still rotates without discovery");
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "HEART-only Task retains borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
     }
 
@@ -689,9 +841,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _task.execute();
         assertEq(_task.nextAssetIndex(), 1, "Body role lookup failure consumes one asset turn");
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "Body role lookup failure preserves borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
     }
 
@@ -704,13 +861,442 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         _expectNoPricedDiscovery();
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 0, 0, 2);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Expired,
+            0,
+            0,
+            2
+        );
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "End sentinel is not subtracted below zero"
         );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D09.
+    function test_givenIndependentCursors_whenPagesEmpty_thenEachLaneAdvancesItsOwnPage() public {
+        _separateLaneCursors();
+        _mockExpiryPage(2, new address[](0), 4);
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 8),
+            abi.encode(new address[](0), uint256(0), uint256(0))
+        );
+        vm.expectCall(address(_lens), _expiryScan(2), uint64(1));
+        vm.expectCall(address(_lens), _boundedScan(address(_asset), 8), uint64(1));
+        _task.execute();
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            4,
+            "Expiry lane advances from its own offset2"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Unhealthy lane wraps from its own offset8"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D10.
+    function test_givenIndependentCursors_whenUnhealthyScanFails_thenItsRetryOffsetIsRetained()
+        public
+    {
+        _separateLaneCursors();
+        _mockExpiryPage(2, new address[](0), 4);
+        vm.mockCallRevert(
+            address(_lens),
+            _boundedScan(address(_asset), 8),
+            abi.encodeWithSelector(ScanReadFailed.selector)
+        );
+        _task.execute();
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            4,
+            "Successful expiry progress survives a priced failure"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            8,
+            "Failed priced discovery retains its pending page"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D11.
+    function test_givenExpiredBatch_whenUnhealthyCursorIsLater_thenCompactionRewindsIt() public {
+        _separateLaneCursors();
+        _mockExpiryPage(2, _one(_ALICE), 4);
+        _expectNoPricedDiscovery();
+        _task.execute();
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            3,
+            "Executing lane rewinds by the selected-count bound"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            2,
+            "Other lane revisits possible swap-in destinations at or after scan start"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D11.
+    function test_givenExpiredBatchAtEnd_whenUnhealthyCursorIsLater_thenBothCursorsWrap() public {
+        _separateLaneCursors();
+        _task.setScanLimits(20, 1);
+        _mockExpiryPage(2, _one(_ALICE), 0);
+        _task.execute();
+        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Executing end sentinel stays zero");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "An end scan can remove the whole suffix, so the other lane wraps safely"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D12.
+    function test_givenUnhealthyBatch_whenExpiryCursorIsEarlier_thenItIsPreserved() public {
+        _separateLaneCursors();
+        _mockExpiryPage(2, new address[](0), 4);
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 8),
+            abi.encode(_one(_ALICE), uint256(0), uint256(0))
+        );
+        _task.execute();
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Unhealthy end batch wraps its own progress"
+        );
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            4,
+            "Earlier expiry work cannot be affected by removals from the suffix8 onward"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D12.
+    function test_givenUnhealthyBatch_whenExpiryCursorIsLater_thenCompactionRewindsIt() public {
+        _mockCount(10);
+        _task.setScanLimits(2, 1);
+        _setBothBorrowerCursors(address(_asset), 2);
+        _mockExpiryPage(2, new address[](0), 4);
+        vm.mockCallRevert(
+            address(_lens),
+            _boundedScan(address(_asset), 2),
+            abi.encodeWithSelector(ScanReadFailed.selector)
+        );
+        _task.execute();
+        _task.execute();
+        vm.clearMockedCalls();
+        _mockExpiryPage(4, new address[](0), 6);
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 2),
+            abi.encode(_one(_ALICE), uint256(4), uint256(0))
+        );
+        _task.execute();
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            3,
+            "Unhealthy lane rewinds its selected entry"
+        );
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            2,
+            "Expiry lane revisits possible swap-in destinations behind its former offset6"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D13.
+    function test_givenOnlyUnhealthyCursorStale_whenExecuted_thenExpiryOffsetIsPreserved() public {
+        _separateLaneCursors();
+        _mockCount(8);
+        _mockExpiryPage(2, new address[](0), 4);
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 0),
+            abi.encode(new address[](0), uint256(2), uint256(0))
+        );
+        vm.expectCall(address(_lens), _expiryScan(2), uint64(1));
+        vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
+        _task.execute();
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            4,
+            "Valid expiry offset2 was used without reset"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            2,
+            "Only stale unhealthy offset8 was repaired before scanning"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P08, BLSEIZ-UNHEALTHY-CURSOR-P08.
+    function test_givenUnequalCursors_whenBothSettersRun_thenBothCursorsAreUpdated() public {
+        _separateLaneCursors();
+        vm.recordLogs();
+        _task.setExpiredAssetCursor(address(_asset), 2);
+        assertEq(vm.getRecordedLogs().length, 0, "Unchanged expiry setter emits no event");
+        vm.expectEmit(true, false, false, true, address(_task));
+        emit IBurnerLoansSeizerTask.AssetCursorSet(
+            address(_asset),
+            2,
+            IBurnerLoansLens.Selection.Unhealthy
+        );
+        _task.setUnhealthyAssetCursor(address(_asset), 2);
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            2,
+            "Expiry cursor keeps the selected value"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            2,
+            "Setter must not return early while the other lane differs"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P02, BLSEIZ-UNHEALTHY-CURSOR-P02.
+    function test_givenUnequalCursors_whenZeroSelected_thenBothResetWithoutLensReads() public {
+        _separateLaneCursors();
+        vm.expectCall(address(_lens), bytes(""), uint64(0));
+        _setBothBorrowerCursors(address(_asset), 0);
+        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Zero resets expiry traversal");
+        assertEq(_task.unhealthyAssetCursor(address(_asset)), 0, "Zero resets unhealthy traversal");
+    }
+
+    // Scenarios: BLSEIZ-REMOVE-ASSET-P07.
+    function test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared() public {
+        _separateLaneCursors();
+        _task.removeAsset(address(_asset));
+        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Removal clears expiry progress");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Removal clears unhealthy progress"
+        );
+        assertFalse(
+            _task.isAssetManaged(address(_asset)),
+            "Removed asset leaves both discovery lanes"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-L01.
+    function test_givenUnequalCursors_givenDisabled_whenExecuted_thenBothArePreserved() public {
+        _separateLaneCursors();
+        _task.disable("");
+        vm.expectCall(address(_lens), bytes(""), uint64(0));
+        _task.execute();
+        assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Pause retains expiry work");
+        assertEq(_task.unhealthyAssetCursor(address(_asset)), 8, "Pause retains unhealthy work");
+    }
+
+    function _separateLaneCursors() private {
+        _mockCount(10);
+        _task.setScanLimits(2, 1);
+        _setBothBorrowerCursors(address(_asset), 6);
+        _mockExpiryPage(6, new address[](0), 8);
+        vm.mockCallRevert(
+            address(_lens),
+            _boundedScan(address(_asset), 6),
+            abi.encodeWithSelector(ScanReadFailed.selector)
+        );
+        _task.execute();
+        _task.execute();
+        vm.clearMockedCalls();
+        _mockExpiryPage(8, new address[](0), 0);
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 6),
+            abi.encode(new address[](0), uint256(8), uint256(0))
+        );
+        _task.execute();
+        _task.execute();
+        vm.clearMockedCalls();
+        _mockExpiryPage(0, new address[](0), 2);
+        vm.mockCallRevert(
+            address(_lens),
+            _boundedScan(address(_asset), 8),
+            abi.encodeWithSelector(ScanReadFailed.selector)
+        );
+        _task.execute();
+        _task.execute();
+        vm.clearMockedCalls();
+        assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            8,
+            "Independent unhealthy setup offset"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D13.
+    function test_givenOnlyExpiryCursorStale_whenExecuted_thenUnhealthyOffsetIsPreserved() public {
+        _separateLaneCursors();
+        _mockExpiryPage(2, new address[](0), 4);
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 8),
+            abi.encode(new address[](0), uint256(0), uint256(0))
+        );
+        _task.execute();
+        _task.execute();
+        vm.clearMockedCalls();
+        _mockExpiryPage(4, new address[](0), 6);
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 0),
+            abi.encode(new address[](0), uint256(2), uint256(0))
+        );
+        _task.execute();
+        _task.execute();
+        vm.clearMockedCalls();
+        _mockCount(6);
+        _mockExpiryPage(0, new address[](0), 2);
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 2),
+            abi.encode(new address[](0), uint256(4), uint256(0))
+        );
+        _task.execute();
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            2,
+            "Only stale expiry offset6 was reset before scanning"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            4,
+            "Valid unhealthy offset2 was used without reset"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D11.
+    function test_givenEqualCursors_whenExpiryBatchCompacts_thenOtherLaneRevisitsStart() public {
+        _mockCount(10);
+        _task.setScanLimits(2, 1);
+        _setBothBorrowerCursors(address(_asset), 2);
+        _mockExpiryPage(2, _one(_ALICE), 4);
+        _task.execute();
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            3,
+            "Expiry cursor rewinds by the selected borrower"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            2,
+            "Equal pending cursor revisits the first possible swap destination"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D14.
+    function test_givenExpiredBatch_whenExecuted_thenEventIdentifiesItsLane() public {
+        _mockExpiryPage(0, _one(_ALICE), 2);
+        vm.recordLogs();
+        _task.execute();
+        _assertProgressEvent(IBurnerLoansLens.Selection.Expired, 0, 1, 1);
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expiry batch preserves earlier unhealthy work"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SELF-EXECUTE-D14.
+    function test_givenUnhealthyBatch_whenExecuted_thenEventIdentifiesItsLane() public {
+        vm.mockCall(
+            address(_lens),
+            _boundedScan(address(_asset), 0),
+            abi.encode(_one(_ALICE), uint256(2), uint256(0))
+        );
+        vm.recordLogs();
+        _task.execute();
+        _assertProgressEvent(IBurnerLoansLens.Selection.Unhealthy, 0, 1, 1);
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Unhealthy batch rewinds expiry work to its scan start"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "Successful unhealthy batch stores its rewound next offset"
+        );
+    }
+
+    function _assertProgressEvent(
+        IBurnerLoansLens.Selection expected_,
+        uint256 start_,
+        uint256 next_,
+        uint256 count_
+    ) private {
+        (IBurnerLoansLens.Selection discovery, uint256 start, uint256 next, uint256 count) = abi
+            .decode(
+                vm.getRecordedLogs()[0].data,
+                (IBurnerLoansLens.Selection, uint256, uint256, uint256)
+            );
+        assertEq(
+            uint8(discovery),
+            uint8(expected_),
+            "Event identifies the processed discovery lane"
+        );
+        assertEq(start, start_, "Event reports that lane's scan start");
+        assertEq(next, next_, "Event reports that lane's stored next offset");
+        assertEq(count, count_, "Event reports the actual selected batch length");
+    }
+
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P09.
+    function test_givenUnequalCursors_whenOnlyExpirySelected_thenUnhealthyIsPreserved() public {
+        _separateLaneCursors();
+        _task.setExpiredAssetCursor(address(_asset), 7);
+        assertEq(_task.expiredAssetCursor(address(_asset)), 7, "Selected expiry lane changes");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            8,
+            "Unselected unhealthy lane stays pending"
+        );
+    }
+
+    // Scenarios: BLSEIZ-UNHEALTHY-CURSOR-P09.
+    function test_givenUnequalCursors_whenOnlyUnhealthySelected_thenExpiryIsPreserved() public {
+        _separateLaneCursors();
+        _task.setUnhealthyAssetCursor(address(_asset), 3);
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            2,
+            "Unselected expiry lane keeps its offset"
+        );
+        assertEq(_task.unhealthyAssetCursor(address(_asset)), 3, "Selected unhealthy lane changes");
+    }
+
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P10, BLSEIZ-UNHEALTHY-CURSOR-P10.
+    function test_givenUnequalCursors_whenSelectedLaneUnchanged_thenEventFreeNoOp() public {
+        _separateLaneCursors();
+        vm.recordLogs();
+        _task.setExpiredAssetCursor(address(_asset), 2);
+        _task.setUnhealthyAssetCursor(address(_asset), 8);
+        assertEq(vm.getRecordedLogs().length, 0, "Equality checks only the selected lane");
+        assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Expiry offset remains exact");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            8,
+            "Unhealthy offset remains independently exact"
+        );
+    }
+
+    function _mockExpiryPage(uint256 start_, address[] memory borrowers_, uint256 next_) private {
+        vm.mockCall(address(_lens), _expiryScan(start_), abi.encode(borrowers_, next_, uint256(0)));
     }
 
     function _expiryScan(uint256 start_) private view returns (bytes memory) {
@@ -741,9 +1327,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), bytes4(0));
         manager.executeAllTasks{gas: 2_000_000}();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             0,
             "Caught dependency exhaustion retains borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Expected independent unhealthy retry offset"
         );
         assertEq(_task.nextAssetIndex(), 1, "Caught dependency exhaustion rotates assets");
         assertEq(later.count(), 1, "Sufficient catch gas preserves subsequent Heart work");
@@ -752,7 +1343,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     function _expectNoPricedDiscovery() private {
         vm.expectCall(
             address(_lens),
-            abi.encodeWithSelector(_lens.getSeizableBorrowersBoundedFor.selector),
+            abi.encodeWithSelector(_lens.getUnhealthyBorrowersBoundedFor.selector),
             uint64(0)
         );
     }

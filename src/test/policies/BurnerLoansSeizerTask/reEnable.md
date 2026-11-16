@@ -26,7 +26,7 @@ Seize must be active/enabled. Seize must report this Kernel, and Lens must repor
 
 ## Dependency validation contract
 
-Constructor-bound Seize is the required operational Policy. Derive Core from Seize and require Lens.core() to match. Core readiness is enforced by Seize during settlement, without a separate Task activation gate. Lens is a plain constructor-bound helper: verify its code and shared Core identity (no Lens ERC165 probe) without inventing Kernel membership or enablement. Required settlement/task roles remain separate authorization prerequisites.
+Constructor-bound Seize is the required operational Policy. Derive Core from Seize and require Lens.core() to match. Core readiness is enforced by Seize during settlement, without a separate Task activation gate. Lens is a plain constructor-bound helper: verify current Lens ERC165 support and shared Core identity without inventing Kernel membership or enablement. Required settlement/task roles remain separate authorization prerequisites.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Readable Kernel mismatches use PolicyDependency_KernelMismatch(Seize,expectedKernel,reportedKernel); a zero or incompatible Seize target uses BurnerLoansSeizer_InvalidSeize(Seize); Lens mismatch uses BurnerLoansSeizer_InvalidLens; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -159,11 +159,19 @@ The grace check precedes own activity and dependency readiness. enable remains A
 | BLSEIZ-REENABLE-P11 | ADMIN | Grace expired after disable; restore dependencies and call enable(0x) | Enable succeeds with exact local transition; delegated BL-admin-only still cannot enable | Unmapped |
 | BLSEIZ-REENABLE-P12 | Fuzz permitted role family | Representable grace, Seize ready; Core lifecycle getters fail | reEnable succeeds without Core lifecycle reads; Core interface compatibility still required | Unmapped |
 
-[test_givenKernelDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L112
-[test_givenLensCoreDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L136
-[test_givenSeizeInactiveOrDisabled_whenReEnabled_reverts]: ./reEnable.t.sol#L158
-[test_givenMissingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L201
-[test_givenRevertingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L224
-[test_givenMalformedCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L247
-[test_givenCoreLifecycle_whenActivated]: ./reEnable.t.sol#L270
-[test_whenCoreLifecycleStatesSeeded_thenActivated]: ./reEnable.t.sol#L281
+## Required discovery capability
+
+| ID | Lens admission | Expected failure and recovery | Test |
+| --- | --- | --- | --- |
+| BLSEIZ-REENABLE-D17 | Current IBurnerLoansLens support becomes unavailable after construction | InvalidLens; remain paused with transition time and both cursors unchanged; restored support permits retry | Covered: [test][test_givenLensInterfaceUnavailable_whenActivated_reverts] |
+
+[test_givenKernelDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L113
+[test_givenLensCoreDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L137
+[test_givenSeizeInactiveOrDisabled_whenReEnabled_reverts]: ./reEnable.t.sol#L159
+[test_givenMissingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L202
+[test_givenRevertingCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L225
+[test_givenMalformedCoreInterface_whenActivated_reverts]: ./reEnable.t.sol#L248
+[test_givenCoreLifecycle_whenActivated]: ./reEnable.t.sol#L271
+[test_whenCoreLifecycleStatesSeeded_thenActivated]: ./reEnable.t.sol#L282
+
+[test_givenLensInterfaceUnavailable_whenActivated_reverts]: reEnable.t.sol#L295

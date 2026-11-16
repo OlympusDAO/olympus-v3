@@ -70,7 +70,10 @@ contract BurnerLoansSeizerTask is
     uint256 public override nextAssetIndex;
 
     /// @inheritdoc IBurnerLoansSeizerTask
-    mapping(address => uint256) public override assetCursor;
+    mapping(address => uint256) public override expiredAssetCursor;
+
+    /// @inheritdoc IBurnerLoansSeizerTask
+    mapping(address => uint256) public override unhealthyAssetCursor;
 
     /// @dev Collateral assets included in round-robin scanning.
     EnumerableSet.AddressSet private _assets;
@@ -82,7 +85,7 @@ contract BurnerLoansSeizerTask is
     /// @param kernel_ Kernel shared with the Burner Loans target.
     /// @param seize_ Public Core-bound Seize entry point.
     /// @param lens_ Read-only scan helper bound to that same Core.
-    /// @param maxBorrowersToCheck_ Maximum distinct borrowers checked per asset visit.
+    /// @param maxBorrowersToCheck_ Maximum borrowers checked by each discovery lane per asset visit.
     /// @param maxBorrowersToSeize_ Maximum eligible borrowers returned per batch.
     /// @param executionGasLimit_ Complete task self-call gas budget.
     constructor(
@@ -162,7 +165,8 @@ contract BurnerLoansSeizerTask is
     ///      - The asset is not managed.
     function removeAsset(address asset_) external override onlyActive onlyAdminRole {
         if (!_assets.remove(asset_)) revert BurnerLoansSeizer_AssetNotManaged(asset_);
-        delete assetCursor[asset_];
+        delete expiredAssetCursor[asset_];
+        delete unhealthyAssetCursor[asset_];
 
         uint256 remaining = _assets.length();
         if (remaining == 0) nextAssetIndex = 0;
@@ -213,25 +217,41 @@ contract BurnerLoansSeizerTask is
     }
 
     /// @inheritdoc IBurnerLoansSeizerTask
-    /// @dev Reverts if:
-    ///      - This policy is Kernel-inactive, the caller holds neither ADMIN nor
-    ///      burner_loans_admin, or the asset is unmanaged. A nonzero cursor uses a zero-sized
-    ///      Lens scan for borrower bounds validation; its errors propagate without writes.
-    ///      Zero resets need no downstream reads. Callable while disabled; unchanged valid
-    ///      cursors emit no event.
-    function setNextAssetBorrowerIndex(address asset_, uint256 index_) external override {
+    /// @dev Requires own Kernel activity, ADMIN or burner_loans_admin and a managed asset.
+    ///      Nonzero offsets require valid Lens borrower bounds. Callable while disabled.
+    function setExpiredAssetCursor(address asset_, uint256 index_) external override {
+        _setAssetBorrowerCursor(asset_, index_, IBurnerLoansLens.Selection.Expired);
+    }
+
+    /// @inheritdoc IBurnerLoansSeizerTask
+    /// @dev Requires own Kernel activity, ADMIN or burner_loans_admin and a managed asset.
+    ///      Nonzero offsets require valid Lens borrower bounds. Callable while disabled.
+    function setUnhealthyAssetCursor(address asset_, uint256 index_) external override {
+        _setAssetBorrowerCursor(asset_, index_, IBurnerLoansLens.Selection.Unhealthy);
+    }
+
+    /// @dev Validates the selected lane before equality; zero needs no downstream reads.
+    function _setAssetBorrowerCursor(
+        address asset_,
+        uint256 index_,
+        IBurnerLoansLens.Selection selection_
+    ) private {
         _requireOwnPolicyActive();
         _requireAdminOrBurnerLoansAdmin();
         if (!_assets.contains(asset_)) revert BurnerLoansSeizer_AssetNotManaged(asset_);
         if (index_ != 0) {
-            // Only bounds validation is needed; no positions, Risk or prices are inspected.
-            // The zero-sized page's return values are intentionally unused.
+            // Bounds only: no positions, Risk or prices are inspected.
             // forge-lint: disable-next-line(unused-return)
             _LENS.getSeizableBorrowersBoundedFor(address(this), asset_, index_, 0, 0);
         }
-        if (assetCursor[asset_] == index_) return;
-        assetCursor[asset_] = index_;
-        emit AssetCursorSet(asset_, index_);
+        if (selection_ == IBurnerLoansLens.Selection.Expired) {
+            if (expiredAssetCursor[asset_] == index_) return;
+            expiredAssetCursor[asset_] = index_;
+        } else {
+            if (unhealthyAssetCursor[asset_] == index_) return;
+            unhealthyAssetCursor[asset_] = index_;
+        }
+        emit AssetCursorSet(asset_, index_, selection_);
     }
 
     /// @inheritdoc IPeriodicTask
@@ -295,17 +315,23 @@ contract BurnerLoansSeizerTask is
             return;
         }
 
-        _scanAsset(asset, assetCursor[asset]);
+        _scanAsset(asset);
     }
 
     /// @dev Prioritizes one expired batch; an expiry-empty page may then use priced discovery.
     ///      Count, scan and seizure failures remain isolated to this asset visit.
-    function _scanAsset(address asset, uint256 startIndex) private {
-        if (startIndex != 0) {
+    function _scanAsset(address asset) private {
+        uint256 expiredStartIndex = expiredAssetCursor[asset];
+        uint256 unhealthyStartIndex = unhealthyAssetCursor[asset];
+        if (expiredStartIndex != 0 || unhealthyStartIndex != 0) {
             try _LENS.getActiveBorrowerCount(asset) returns (uint256 population) {
-                if (startIndex >= population) {
-                    startIndex = 0;
-                    assetCursor[asset] = 0;
+                if (expiredStartIndex >= population) {
+                    expiredStartIndex = 0;
+                    expiredAssetCursor[asset] = 0;
+                }
+                if (unhealthyStartIndex >= population) {
+                    unhealthyStartIndex = 0;
+                    unhealthyAssetCursor[asset] = 0;
                 }
             } catch (bytes memory reason) {
                 // The count must be authoritative before repairing a stale cursor.
@@ -315,21 +341,26 @@ contract BurnerLoansSeizerTask is
             }
         }
 
-        uint256 expiredNextIndex;
         try
             _LENS.getExpiredBorrowersBoundedFor(
                 address(this),
                 asset,
-                startIndex,
+                expiredStartIndex,
                 maxBorrowersToCheck,
                 maxBorrowersToSeize
             )
         returns (address[] memory borrowers, uint256 scannedNextIndex, uint256) {
             if (borrowers.length != 0) {
-                _seizeScannedBorrowers(asset, startIndex, borrowers, scannedNextIndex);
+                _seizeScannedBorrowers(
+                    asset,
+                    expiredStartIndex,
+                    borrowers,
+                    scannedNextIndex,
+                    IBurnerLoansLens.Selection.Expired
+                );
                 return;
             }
-            expiredNextIndex = scannedNextIndex;
+            expiredAssetCursor[asset] = scannedNextIndex;
         } catch (bytes memory reason) {
             // FLOAN reads and custody/Risk quote failures retain the retry cursor.
             // forge-lint: disable-next-line(unsafe-typecast)
@@ -337,21 +368,26 @@ contract BurnerLoansSeizerTask is
             return;
         }
 
-        // No settlement occurred, so the same borrower page can now be checked for unhealthy debt.
+        // Expiry progress is independent of priced discovery. A failed quote must not pass over
+        // the unhealthy lane's pending borrowers while price services are unavailable.
         try
-            _LENS.getSeizableBorrowersBoundedFor(
+            _LENS.getUnhealthyBorrowersBoundedFor(
                 address(this),
                 asset,
-                startIndex,
+                unhealthyStartIndex,
                 maxBorrowersToCheck,
                 maxBorrowersToSeize
             )
         returns (address[] memory borrowers, uint256 scannedNextIndex, uint256) {
-            _seizeScannedBorrowers(asset, startIndex, borrowers, scannedNextIndex);
+            _seizeScannedBorrowers(
+                asset,
+                unhealthyStartIndex,
+                borrowers,
+                scannedNextIndex,
+                IBurnerLoansLens.Selection.Unhealthy
+            );
         } catch (bytes memory reason) {
-            // Both cursors index the same unchanged active borrower list, never the filtered result arrays.
-            // Expiry discovery proved this page had no expired debt. Advance without inferring health.
-            assetCursor[asset] = expiredNextIndex;
+            // Preserve the unhealthy retry cursor and the successful expiry scan's progress.
             // forge-lint: disable-next-line(unsafe-typecast)
             emit ScanFailed(asset, bytes4(reason));
         }
@@ -363,11 +399,14 @@ contract BurnerLoansSeizerTask is
         address asset_,
         uint256 startIndex_,
         address[] memory borrowers_,
-        uint256 scannedNextIndex_
+        uint256 scannedNextIndex_,
+        IBurnerLoansLens.Selection selection_
     ) private {
         if (borrowers_.length == 0) {
-            assetCursor[asset_] = scannedNextIndex_;
-            emit SeizureExecuted(asset_, startIndex_, scannedNextIndex_, 0);
+            if (selection_ == IBurnerLoansLens.Selection.Expired)
+                expiredAssetCursor[asset_] = scannedNextIndex_;
+            else unhealthyAssetCursor[asset_] = scannedNextIndex_;
+            emit SeizureExecuted(asset_, selection_, startIndex_, scannedNextIndex_, 0);
             return;
         }
 
@@ -380,12 +419,38 @@ contract BurnerLoansSeizerTask is
             uint256 nextIndex = scannedNextIndex_ > borrowers_.length
                 ? scannedNextIndex_ - borrowers_.length
                 : 0;
-            assetCursor[asset_] = nextIndex;
-            emit SeizureExecuted(asset_, startIndex_, nextIndex, borrowers_.length);
+            if (selection_ == IBurnerLoansLens.Selection.Expired) {
+                expiredAssetCursor[asset_] = nextIndex;
+                unhealthyAssetCursor[asset_] = _compactionCursor(
+                    unhealthyAssetCursor[asset_],
+                    startIndex_,
+                    scannedNextIndex_
+                );
+            } else {
+                unhealthyAssetCursor[asset_] = nextIndex;
+                expiredAssetCursor[asset_] = _compactionCursor(
+                    expiredAssetCursor[asset_],
+                    startIndex_,
+                    scannedNextIndex_
+                );
+            }
+            emit SeizureExecuted(asset_, selection_, startIndex_, nextIndex, borrowers_.length);
         } catch (bytes memory reason) {
             // forge-lint: disable-next-line(unsafe-typecast)
             emit SeizureFailed(asset_, bytes4(reason));
         }
+    }
+
+    /// @dev Every selected entry is at/after startIndex_. Keep earlier pending offsets; rewind
+    ///      later offsets to include possible swap-and-pop destinations. An end scan may remove
+    ///      the whole suffix, so an offset at/after its start must wrap to zero in that case.
+    function _compactionCursor(
+        uint256 cursor_,
+        uint256 startIndex_,
+        uint256 scannedNextIndex_
+    ) private pure returns (uint256) {
+        if (cursor_ < startIndex_) return cursor_;
+        return scannedNextIndex_ == 0 ? 0 : startIndex_;
     }
 
     /// @inheritdoc IBurnerLoansSeizerTask
@@ -459,8 +524,10 @@ contract BurnerLoansSeizerTask is
         address core = IBurnerLoansCoreBound(address(seize)).core();
         // Kernel migration leaves old membership entries intact; activity cannot prove this binding.
         PolicyDependency.requireSameKernel(action, address(kernel));
-        if (address(_LENS).code.length == 0 || IBurnerLoansCoreBound(address(_LENS)).core() != core)
-            revert BurnerLoansSeizer_InvalidLens(address(_LENS));
+        if (
+            !ERC165Checker.supportsInterface(address(_LENS), type(IBurnerLoansLens).interfaceId) ||
+            IBurnerLoansCoreBound(address(_LENS)).core() != core
+        ) revert BurnerLoansSeizer_InvalidLens(address(_LENS));
         // addAsset calls Core.isAssetRegistered() directly. Check that callable boundary here.
         if (!ERC165Checker.supportsInterface(core, type(IBurnerLoansCore).interfaceId))
             revert BurnerLoansSeizerTask_InvalidCore(core);
@@ -482,7 +549,7 @@ contract BurnerLoansSeizerTask is
     /// @dev Reverts if:
     ///      - Either limit is zero.
     ///      - The seizure limit exceeds the scan limit.
-    /// @param maxBorrowersToCheck_ Maximum distinct borrowers checked per asset visit.
+    /// @param maxBorrowersToCheck_ Maximum borrowers checked by each discovery lane per asset visit.
     /// @param maxBorrowersToSeize_ Maximum eligible borrowers returned per batch.
     function _setScanLimits(uint16 maxBorrowersToCheck_, uint8 maxBorrowersToSeize_) private {
         if (

@@ -124,7 +124,16 @@ contract BurnerLoansSeizerTaskSelfExecuteTaskTest is BurnerLoansSeizerTaskTest {
         vm.prank(address(_task));
         _task.selfExecuteTask();
         assertEq(_task.nextAssetIndex(), 0, "Registry shrink leaves a valid pending asset");
-        assertEq(_task.assetCursor(removed), 0, "Removed asset borrower cursor remains clear");
+        assertEq(
+            _task.expiredAssetCursor(removed),
+            0,
+            "Removed asset borrower cursor remains clear"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(removed),
+            0,
+            "Removed asset borrower cursor remains clear"
+        );
     }
 
     // Scenarios: BLSEIZ-SELF-EXECUTE-N02.

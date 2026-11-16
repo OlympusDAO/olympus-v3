@@ -9,7 +9,7 @@ import {BurnerLoansSeizerTaskProgressTest} from "../fixtures/BurnerLoansSeizerTa
 
 // Fixed role/state partitions and loan quantities seed the recovery boundaries.
 // forge-lint: disable-start(literal-instead-of-constant,unsafe-typecast,calls-loop)
-contract BurnerLoansSeizerTaskSetNextAssetBorrowerIndexIntegrationTest is
+contract BurnerLoansSeizerTaskSetExpiredAssetCursorIntegrationTest is
     BurnerLoansSeizerTaskProgressTest
 {
     error CursorReadFailed();
@@ -23,12 +23,29 @@ contract BurnerLoansSeizerTaskSetNextAssetBorrowerIndexIntegrationTest is
         _seedDebt(_CAROL, 10e6, 1e9);
     }
 
-    // Scenarios: BLSEIZ-BORROWER-CURSOR-P04.
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P04.
     function test_whenBorrowerCursorSelected_thenExecutionResumesThere() public {
-        _task.setNextAssetBorrowerIndex(address(_asset), 2);
-        vm.expectCall(address(_lens), _boundedScan(address(_asset), 2), uint64(1));
+        _task.setExpiredAssetCursor(address(_asset), 2);
+        vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
+        vm.expectCall(
+            address(_lens),
+            abi.encodeCall(
+                IBurnerLoansLens.getExpiredBorrowersBoundedFor,
+                (address(_task), address(_asset), uint256(2), uint256(500), uint256(25))
+            ),
+            uint64(1)
+        );
         _task.execute();
-        assertEq(_task.assetCursor(address(_asset)), 0, "Healthy suffix reaches population end");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Healthy suffix reaches population end"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Healthy suffix reaches population end"
+        );
         assertEq(
             _task.nextAssetIndex(),
             1,
@@ -37,7 +54,7 @@ contract BurnerLoansSeizerTaskSetNextAssetBorrowerIndexIntegrationTest is
         assertEq(_inventory.activePrincipalOhm(), 3e9, "Resumed healthy scan preserves principal");
     }
 
-    // Scenarios: BLSEIZ-BORROWER-CURSOR-P06.
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P06.
     function test_givenOtherAssetHasProgress_whenBorrowerCursorSet_thenOtherProgressIsPreserved()
         public
     {
@@ -48,20 +65,34 @@ contract BurnerLoansSeizerTaskSetNextAssetBorrowerIndexIntegrationTest is
             abi.encodeCall(_floan.getActiveBorrowerCount, (_core.marketId(address(_otherAsset)))),
             abi.encode(uint256(2))
         );
-        _task.setNextAssetBorrowerIndex(address(_otherAsset), 1);
+        _task.setExpiredAssetCursor(address(_otherAsset), 1);
         _task.setNextAssetIndex(1);
-        _task.setNextAssetBorrowerIndex(address(_asset), 2);
-        assertEq(_task.assetCursor(address(_asset)), 2, "Only A receives the new borrower offset");
+        _task.setExpiredAssetCursor(address(_asset), 2);
         assertEq(
-            _task.assetCursor(address(_otherAsset)),
+            _task.expiredAssetCursor(address(_asset)),
+            2,
+            "Only A receives the new borrower offset"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Only A receives the new borrower offset"
+        );
+        assertEq(
+            _task.expiredAssetCursor(address(_otherAsset)),
             1,
+            "B keeps its nonzero borrower progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_otherAsset)),
+            0,
             "B keeps its nonzero borrower progress"
         );
         assertEq(_task.nextAssetIndex(), 1, "Borrower recovery preserves pending B visit");
         assertEq(_inventory.activePrincipalOhm(), 3e9, "Recovery preserves real A principal");
     }
 
-    // Scenarios: BLSEIZ-BORROWER-CURSOR-I04.
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-I04.
     function test_givenLoans_whenCursorValidationFails_thenAccountingIsPreserved() public {
         _expectNoRiskReads();
         vm.mockCallRevert(
@@ -70,8 +101,17 @@ contract BurnerLoansSeizerTaskSetNextAssetBorrowerIndexIntegrationTest is
             abi.encodeWithSelector(CursorReadFailed.selector)
         );
         vm.expectRevert(CursorReadFailed.selector);
-        _task.setNextAssetBorrowerIndex(address(_asset), 1);
-        assertEq(_task.assetCursor(address(_asset)), 0, "Failed validation preserves cursor");
+        _task.setExpiredAssetCursor(address(_asset), 1);
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Failed validation preserves cursor"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Failed validation preserves cursor"
+        );
         _assertOtherStateUnchanged();
     }
 
@@ -84,7 +124,16 @@ contract BurnerLoansSeizerTaskSetNextAssetBorrowerIndexIntegrationTest is
     }
 
     function _assertOtherStateUnchanged() private view {
-        assertEq(_task.assetCursor(address(_otherAsset)), 0, "Other borrower cursor unchanged");
+        assertEq(
+            _task.expiredAssetCursor(address(_otherAsset)),
+            0,
+            "Other borrower cursor unchanged"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_otherAsset)),
+            0,
+            "Other borrower cursor unchanged"
+        );
         assertEq(_task.nextAssetIndex(), 0, "Borrower recovery preserves asset traversal");
         assertEq(
             _task.getAssets(),

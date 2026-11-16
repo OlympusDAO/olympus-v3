@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
@@ -204,5 +205,45 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
         assertTrue(vm.revertToState(snapshot), "Restore disabled active Core");
         test_givenCoreLifecycle_whenActivated(true, true);
         assertTrue(vm.revertToStateAndDelete(snapshot), "Restore enabled active Core");
+    }
+
+    // Scenarios: BLSEIZ-ENABLE-D17.
+    function test_givenLensInterfaceUnavailable_whenActivated_reverts() public {
+        _task.addAsset(address(_asset));
+        _mockCount(3);
+        _setBothBorrowerCursors(address(_asset), 1);
+        _task.disable("");
+        uint48 transition = _task.lastTransitionAt();
+        vm.mockCall(
+            address(_lens),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBurnerLoansLens).interfaceId)),
+            abi.encode(false)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeizerTask.BurnerLoansSeizer_InvalidLens.selector,
+                address(_lens)
+            )
+        );
+        _task.enable("");
+        assertFalse(_task.isEnabled(), "Unsupported Lens preserves disabled state");
+        assertEq(
+            _task.lastTransitionAt(),
+            transition,
+            "Failed activation preserves transition time"
+        );
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            1,
+            "Failed activation preserves expiry progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "Failed activation preserves unhealthy progress"
+        );
+        vm.clearMockedCalls();
+        _task.enable("");
+        assertTrue(_task.isEnabled(), "Restoring Lens capability permits activation retry");
     }
 }

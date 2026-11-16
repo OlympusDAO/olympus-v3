@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
 import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurnerLoansSeizerTask.sol";
 
 // Contracts
@@ -78,16 +79,68 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), bytes4(0));
         _task.execute();
-        assertEq(_task.assetCursor(address(_asset)), 0, "Oversized scan cannot commit progress");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Oversized scan cannot commit progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Oversized scan cannot commit progress"
+        );
         _task.setScanLimits(100, 1);
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 0, 100, 0);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Unhealthy,
+            0,
+            100,
+            0
+        );
         _task.execute();
         assertEq(
-            _task.assetCursor(address(_asset)),
+            _task.expiredAssetCursor(address(_asset)),
             100,
             "Smaller page progresses within the same gas budget"
         );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            100,
+            "Smaller page progresses within the same gas budget"
+        );
+    }
+
+    // Scenarios: BLSEIZ-SCAN-LIMITS-G04.
+    function test_givenSeparateCursors_whenHealthyPagesDiffer_thenMeasureGas() public {
+        _seedBorrowers(200);
+        _task.setScanLimits(100, 1);
+        _task.setUnhealthyAssetCursor(address(_asset), 100);
+        vm.expectEmit(true, false, false, true, address(_task));
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Unhealthy,
+            100,
+            0,
+            0
+        );
+        _task.execute();
+        uint256 gasUsed = vm.snapshotGasLastFrame(
+            "BurnerLoansSeizerTaskGas",
+            "healthy-100-disjoint"
+        );
+        emit log_named_uint("healthy-100-disjoint", gasUsed);
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            100,
+            "Expiry advances through the first page"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Unhealthy advances through a different page and wraps"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 200e9, "Both healthy pages preserve principal");
     }
 
     function _seedBorrowers(uint16 count_) private {
@@ -100,7 +153,13 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
         _seedBorrowers(count_);
         _task.setScanLimits(count_, 1);
         vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.SeizureExecuted(address(_asset), 0, 0, 0);
+        emit IBurnerLoansSeizerTask.SeizureExecuted(
+            address(_asset),
+            IBurnerLoansLens.Selection.Unhealthy,
+            0,
+            0,
+            0
+        );
         _task.execute();
         uint256 gasUsed = vm.snapshotGasLastFrame("BurnerLoansSeizerTaskGas", name_);
         emit log_named_uint(name_, gasUsed);
@@ -109,7 +168,16 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
             uint256(count_) * 1e9,
             "Healthy scan preserves all principal"
         );
-        assertEq(_task.assetCursor(address(_asset)), 0, "Healthy scan reaches end and wraps");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            0,
+            "Healthy scan reaches end and wraps"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Healthy scan reaches end and wraps"
+        );
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
         _task.execute();
     }

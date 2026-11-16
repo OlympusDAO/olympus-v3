@@ -7,6 +7,13 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 /// @notice Read-only positions, custody status, health and seizure scanning for one Core.
 /// @dev Lens has no policy lifecycle. Economic queries use Core's currently selected Risk.
 interface IBurnerLoansLens {
+    /// @notice Seizure selection or the corresponding discovery cursor scope.
+    enum Selection {
+        All,
+        Expired,
+        Unhealthy
+    }
+
     /// @notice The starting offset is outside the current active borrower list.
     /// @param start Requested zero-based offset.
     /// @param borrowerCount Current total active borrower count.
@@ -118,6 +125,23 @@ interface IBurnerLoansLens {
     /// @return nextCursor First unexamined borrower index in the active borrower list, or zero at the end; no wrap within the call.
     /// @return keeperReward Estimated aggregate reward for actor_, in withdrawal-output token units.
     function getExpiredBorrowersBoundedFor(
+        address actor_,
+        address asset_,
+        uint256 start_,
+        uint256 count_,
+        uint256 maxResults_
+    ) external view returns (address[] memory borrowers, uint256 nextCursor, uint256 keeperReward);
+
+    /// @notice Scans only unexpired borrowers with positive debt and health below 1e18.
+    /// @param actor_ Reward identity, independent of the caller.
+    /// @param asset_ Registered underlying collateral token.
+    /// @param start_ Zero-based offset in the active borrower list.
+    /// @param count_ Maximum list entries examined, clipped to the remaining suffix.
+    /// @param maxResults_ Maximum unhealthy borrowers selected before stopping.
+    /// @return borrowers Unexpired unhealthy borrowers in active-list order; maturity equality is excluded.
+    /// @return nextCursor First unexamined index, or zero at the end; the scan does not wrap.
+    /// @return keeperReward Aggregate custody/reward quote for the actor and selected borrowers.
+    function getUnhealthyBorrowersBoundedFor(
         address actor_,
         address asset_,
         uint256 start_,

@@ -159,7 +159,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 start_,
         uint256 count_
     ) public view override returns (address[] memory, uint256, uint256) {
-        Scan memory scan = _scan(asset_, start_, count_, type(uint256).max, false);
+        Scan memory scan = _scan(asset_, start_, count_, type(uint256).max, Selection.All);
         return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
     }
 
@@ -177,7 +177,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 count_,
         uint256 maxResults_
     ) external view override returns (address[] memory, uint256, uint256) {
-        Scan memory scan = _scan(asset_, start_, count_, maxResults_, false);
+        Scan memory scan = _scan(asset_, start_, count_, maxResults_, Selection.All);
         return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
     }
 
@@ -192,7 +192,23 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 count_,
         uint256 maxResults_
     ) external view override returns (address[] memory, uint256, uint256) {
-        Scan memory scan = _scan(asset_, start_, count_, maxResults_, true);
+        Scan memory scan = _scan(asset_, start_, count_, maxResults_, Selection.Expired);
+        return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
+    }
+
+    /// @inheritdoc IBurnerLoansLens
+    /// @dev Reverts for invalid asset/start, failed FLOAN reads, unavailable Risk snapshot/health,
+    ///      or failed custody/reward quotes. Asset/start validation precedes zero-limit shortcuts.
+    ///      Nonempty scan work acquires a priced snapshot even for an all-expired page.
+    ///      Core lifecycle does not gate this view; expired debt is never selected or health-evaluated.
+    function getUnhealthyBorrowersBoundedFor(
+        address actor_,
+        address asset_,
+        uint256 start_,
+        uint256 count_,
+        uint256 maxResults_
+    ) external view override returns (address[] memory, uint256, uint256) {
+        Scan memory scan = _scan(asset_, start_, count_, maxResults_, Selection.Unhealthy);
         return (scan.borrowers, scan.cursor, _scanReward(asset_, actor_, scan));
     }
 
@@ -234,7 +250,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
     /// @param start_ Initial borrower index in the active borrower list.
     /// @param count_ Maximum active borrowers examined in the remaining suffix.
     /// @param maxResults_ Maximum eligible borrowers selected before stopping the scan.
-    /// @param expiredOnly_ Select only positive expired debt without Risk or custody reads.
+    /// @param selection_ Select combined seizable, expiry-only or unexpired unhealthy debt.
     /// @return scan Bounded selected borrowers, active borrower list cursor and aggregate position amounts.
     // Borrower dependency reads are bounded by the clipped borrower suffix.
     // forge-lint: disable-start(calls-loop)
@@ -243,7 +259,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         uint256 start_,
         uint256 count_,
         uint256 maxResults_,
-        bool expiredOnly_
+        Selection selection_
     ) private view returns (Scan memory scan) {
         IFLOANv1 floan = IFLOANv1(_CORE.floan());
         uint32 market = _CORE.marketId(asset_);
@@ -258,7 +274,7 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         if (count_ > remaining) count_ = remaining;
         IBurnerLoansRisk evaluator;
         IBurnerLoansRisk.PriceSnapshot memory snapshot;
-        if (!expiredOnly_) {
+        if (selection_ != Selection.Expired) {
             evaluator = _risk();
             snapshot = evaluator.snapshot(asset_);
         }
@@ -269,11 +285,16 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         for (uint256 checked; checked < count_ && returned < maxResults_; ++checked) {
             address borrower = floan.getActiveBorrowerAt(market, scan.cursor++);
             IFLOANv1.Position memory p = LoanPositions.getOrEmpty(floan, market, borrower);
-            if (expiredOnly_) {
+            if (selection_ == Selection.Expired) {
                 // Maturity equality qualifies independently of health. Unexpired debt is unclassified.
                 // forge-lint: disable-next-line(block-timestamp)
                 if (p.principalDue == 0 || block.timestamp < p.maturity) continue;
-            } else if (!LoanPositions.isSeizable(evaluator, snapshot, market, p)) continue;
+            } else {
+                // Maturity equality belongs exclusively to expiry discovery in the disjoint lanes.
+                // forge-lint: disable-next-line(block-timestamp)
+                if (selection_ == Selection.Unhealthy && block.timestamp >= p.maturity) continue;
+                if (!LoanPositions.isSeizable(evaluator, snapshot, market, p)) continue;
+            }
             candidates[returned++] = borrower;
             scan.debt += p.principalDue;
             scan.collateral += p.collateral;

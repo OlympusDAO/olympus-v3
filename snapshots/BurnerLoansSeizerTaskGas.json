@@ -1,14 +1,15 @@
 {
-    "eligible-1": "550788",
-    "eligible-100": "9173790",
-    "eligible-25": "2245876",
-    "eligible-255": "31630736",
-    "eligible-50": "4280950",
-    "eligible-51": "4367694",
-    "healthy-1": "231620",
-    "healthy-100": "5793790",
-    "healthy-1000": "60785983",
-    "healthy-25": "1571162",
-    "healthy-50": "2972549",
-    "healthy-500": "29249999"
+    "eligible-1": "553321",
+    "eligible-100": "9178617",
+    "eligible-25": "2248963",
+    "eligible-255": "31641265",
+    "eligible-50": "4284617",
+    "eligible-51": "4371384",
+    "healthy-1": "234654",
+    "healthy-100": "5812466",
+    "healthy-100-disjoint": "7234428",
+    "healthy-1000": "60946859",
+    "healthy-25": "1577988",
+    "healthy-50": "2983325",
+    "healthy-500": "29331875"
 }

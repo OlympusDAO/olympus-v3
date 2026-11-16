@@ -100,6 +100,6 @@ this method makes only static reads.
 
 [test_givenRewardQuoteFailure_whenQueried_reverts]: ./getExpiredBorrowersBoundedFor.t.sol#L334
 
-[test_givenPricesAvailable_whenOrdinaryExpiredQuoteSettled]: ../BurnerLoansSeizerTask/integration/executeOracleOutage.t.sol#L592
+[test_givenPricesAvailable_whenOrdinaryExpiredQuoteSettled]: ../BurnerLoansSeizerTask/integration/executeOracleOutage.t.sol#L717
 
-[test_givenZeroRewardConfig_givenOutage_whenOrdinaryExpiredQuoteRequested]: ../BurnerLoansSeizerTask/integration/executeOracleOutage.t.sol#L550
+[test_givenZeroRewardConfig_givenOutage_whenOrdinaryExpiredQuoteRequested]: ../BurnerLoansSeizerTask/integration/executeOracleOutage.t.sol#L675

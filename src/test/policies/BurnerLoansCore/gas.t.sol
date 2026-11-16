@@ -18,6 +18,7 @@ import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
 import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
+import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurnerLoansSeizerTask.sol";
 import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -1037,7 +1038,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         _assertEventEmitted(
             logs_,
             address(_seizer),
-            keccak256("SeizureExecuted(address,uint256,uint256,uint256)")
+            IBurnerLoansSeizerTask.SeizureExecuted.selector
         );
     }
 

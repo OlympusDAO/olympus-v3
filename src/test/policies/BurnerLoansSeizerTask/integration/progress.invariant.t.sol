@@ -42,25 +42,41 @@ contract BurnerLoansSeizerTaskProgressInvariantTest is BurnerLoansSeizerTaskProg
         targetContract(address(_handler));
     }
 
-    // Scenarios: BLSEIZ-SELF-EXECUTE-P02, BLSEIZ-EXECUTE-P03, BLSEIZ-EXECUTE-L01, BLSEIZ-ASSET-INDEX-P06, BLSEIZ-BORROWER-CURSOR-P05.
+    // Scenarios: BLSEIZ-SELF-EXECUTE-P02, BLSEIZ-EXECUTE-P03, BLSEIZ-EXECUTE-L01, BLSEIZ-ASSET-INDEX-P06, BLSEIZ-EXPIRED-CURSOR-P05, BLSEIZ-UNHEALTHY-CURSOR-P05.
     function invariant_schedulerAndAccountingRemainConsistent() public view {
         assertTrue(_handler.progressValid(), "Every enabled beat fairly rotates assets");
         assertLt(_task.nextAssetIndex(), 2, "Asset iterator remains within the fixed registry");
         assertEq(
-            _task.assetCursor(address(_otherAsset)),
+            _task.expiredAssetCursor(address(_otherAsset)),
             0,
             "Empty B market keeps a zero borrower cursor after recovery"
         );
         uint32 market = _core.marketId(address(_asset));
         uint256 population = _floan.getActiveBorrowerCount(market);
-        if (population == 0)
-            assertEq(_task.assetCursor(address(_asset)), 0, "Empty market cursor is zero");
-        else
+        if (population == 0) {
+            assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Empty market cursor is zero");
+            assertEq(
+                _task.unhealthyAssetCursor(address(_asset)),
+                0,
+                "Empty market unhealthy cursor is zero"
+            );
+        } else {
             assertLt(
-                _task.assetCursor(address(_asset)),
+                _task.expiredAssetCursor(address(_asset)),
                 population,
                 "Committed cursor remains usable after defaults"
             );
+            assertLt(
+                _task.unhealthyAssetCursor(address(_asset)),
+                population,
+                "Unhealthy cursor remains usable after either lane defaults debt"
+            );
+        }
+        assertEq(
+            _task.unhealthyAssetCursor(address(_otherAsset)),
+            0,
+            "Empty B market has no pending unhealthy offset"
+        );
         assertEq(
             _inventory.activePrincipalOhm(),
             _floan.getMarketPrincipalDue(market),

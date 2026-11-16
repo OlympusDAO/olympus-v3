@@ -70,20 +70,40 @@ contract BurnerLoansSeizerTaskBatch is BatchScriptV2 {
         proposeBatch();
     }
 
-    /// @notice setNextAssetBorrowerIndex; downstream validation and pause semantics remain authoritative.
-    function setNextAssetBorrowerIndex(
+    /// @notice setExpiredAssetCursor; downstream validation and pause semantics remain authoritative.
+    function setExpiredAssetCursor(
         bool useDaoMS_,
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
     ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
-        console2.log("BurnerLoansSeizerTaskBatch: setNextAssetBorrowerIndex");
+        console2.log("BurnerLoansSeizerTaskBatch: setExpiredAssetCursor");
         addToBatch(
             _envAddressNotZero("olympus.policies.BurnerLoansSeizerTask"),
             abi.encodeCall(
-                IBurnerLoansSeizerTask.setNextAssetBorrowerIndex,
+                IBurnerLoansSeizerTask.setExpiredAssetCursor,
                 (
-                    _readBatchArgAddress("setNextAssetBorrowerIndex", "asset"),
-                    _readBatchArgUint256("setNextAssetBorrowerIndex", "index")
+                    _readBatchArgAddress("setExpiredAssetCursor", "asset"),
+                    _readBatchArgUint256("setExpiredAssetCursor", "index")
+                )
+            )
+        );
+        proposeBatch();
+    }
+
+    /// @notice setUnhealthyAssetCursor; downstream validation and pause semantics remain authoritative.
+    function setUnhealthyAssetCursor(
+        bool useDaoMS_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        console2.log("BurnerLoansSeizerTaskBatch: setUnhealthyAssetCursor");
+        addToBatch(
+            _envAddressNotZero("olympus.policies.BurnerLoansSeizerTask"),
+            abi.encodeCall(
+                IBurnerLoansSeizerTask.setUnhealthyAssetCursor,
+                (
+                    _readBatchArgAddress("setUnhealthyAssetCursor", "asset"),
+                    _readBatchArgUint256("setUnhealthyAssetCursor", "index")
                 )
             )
         );

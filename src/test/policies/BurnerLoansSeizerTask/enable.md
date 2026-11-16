@@ -22,7 +22,7 @@ ROLES initialized; every dependency not varied by the selected table satisfies i
 
 ## Dependency validation contract
 
-Constructor-bound Seize is the required operational Policy. Derive Core from Seize and require Lens.core() to match. Core readiness is enforced by Seize during settlement, without a separate Task activation gate. Lens is a plain constructor-bound helper: verify its code and shared Core identity (no Lens ERC165 probe) without inventing Kernel membership or enablement. Required settlement/task roles remain separate authorization prerequisites.
+Constructor-bound Seize is the required operational Policy. Derive Core from Seize and require Lens.core() to match. Core readiness is enforced by Seize during settlement, without a separate Task activation gate. Lens is a plain constructor-bound helper: verify current Lens ERC165 support and shared Core identity without inventing Kernel membership or enablement. Required settlement/task roles remain separate authorization prerequisites.
 
 Use the same compatibility/readiness predicates in enable and reEnable, following the [shared lifecycle guidance](../../../../.agents/skills/policy-lifecycle/SKILL.md). Readable Kernel mismatches use PolicyDependency_KernelMismatch(Seize,expectedKernel,reportedKernel); a zero or incompatible Seize target uses BurnerLoansSeizer_InvalidSeize(Seize); Lens mismatch uses BurnerLoansSeizer_InvalidLens; a compatible unavailable required service uses PolicyDependency_NotActive(dependency). Preserve own-policy, authorization, controller, payload, grace and guard errors. Revalidate reachable drift without corrupting immutable storage or probing ignored recovery-state getters.
 
@@ -149,11 +149,19 @@ Own inactivity is checked inside the enable hook after payload validation. Earli
 | BLSEIZ-ENABLE-I04 | ADMIN | Task inactive and disabled; nonempty payload; initialized ROLES | InvalidEnablerData before own-activity/readiness checks | Unmapped |
 | BLSEIZ-ENABLE-P11 | ADMIN | Task active and disabled; Seize ready; Core kernel()/isEnabled() getters fail | Enable succeeds without Core lifecycle reads; Core ERC165 still required | Unmapped |
 
-[test_givenKernelDrift_whenEnabled_reverts]: ./enable.t.sol#L22
-[test_givenLensCoreDrift_whenEnabled_reverts]: ./enable.t.sol#L46
-[test_givenSeizeInactiveOrDisabled_whenEnabled_reverts]: ./enable.t.sol#L68
-[test_givenMissingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L117
-[test_givenRevertingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L140
-[test_givenMalformedCoreInterface_whenActivated_reverts]: ./enable.t.sol#L163
-[test_givenCoreLifecycle_whenActivated]: ./enable.t.sol#L186
-[test_whenCoreLifecycleStatesSeeded_thenActivated]: ./enable.t.sol#L197
+## Required discovery capability
+
+| ID | Lens admission | Expected failure and recovery | Test |
+| --- | --- | --- | --- |
+| BLSEIZ-ENABLE-D17 | Current IBurnerLoansLens support becomes unavailable after construction | InvalidLens; remain paused with transition time and both cursors unchanged; restored support permits retry | Covered: [test][test_givenLensInterfaceUnavailable_whenActivated_reverts] |
+
+[test_givenKernelDrift_whenEnabled_reverts]: ./enable.t.sol#L23
+[test_givenLensCoreDrift_whenEnabled_reverts]: ./enable.t.sol#L47
+[test_givenSeizeInactiveOrDisabled_whenEnabled_reverts]: ./enable.t.sol#L69
+[test_givenMissingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L118
+[test_givenRevertingCoreInterface_whenActivated_reverts]: ./enable.t.sol#L141
+[test_givenMalformedCoreInterface_whenActivated_reverts]: ./enable.t.sol#L164
+[test_givenCoreLifecycle_whenActivated]: ./enable.t.sol#L187
+[test_whenCoreLifecycleStatesSeeded_thenActivated]: ./enable.t.sol#L198
+
+[test_givenLensInterfaceUnavailable_whenActivated_reverts]: enable.t.sol#L211

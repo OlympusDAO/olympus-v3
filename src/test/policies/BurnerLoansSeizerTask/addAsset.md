@@ -69,15 +69,15 @@ Local active=true; caller holds ADMIN; asset is not already managed unless state
 | BLSEIZ-ADD-ASSET-P05 | ADMIN | Remove an asset with saved borrower progress, then register it again | Append once to current set order; its cursor starts0; other cursors/next asset unchanged | Unmapped |
 | BLSEIZ-ADD-ASSET-D01 | ADMIN | Asset duplicate; Seize.core()/registration reads configured to fail | AssetAlreadyManaged(asset) before those reads; no effects | Unmapped |
 
-[test_givenCoreUnavailable_whenRegisteredAssetAdded]: ./addAsset.t.sol#L113
+[test_givenCoreUnavailable_whenRegisteredAssetAdded]: ./addAsset.t.sol#L122
 [test_givenDuplicateAsset_whenAdded_reverts]: ./addAsset.t.sol#L38
-[test_givenInactiveTask_whenAssetAdded_reverts]: ./addAsset.t.sol#L126
+[test_givenInactiveTask_whenAssetAdded_reverts]: ./addAsset.t.sol#L135
 [test_givenOriginationsDisabled_whenRegisteredAssetAdded]: ./integration/addAsset.t.sol#L9
 [test_whenAssetIsUnregistered_reverts]: ./addAsset.t.sol#L81
 [test_whenAssetIsZero_reverts]: ./addAsset.t.sol#L69
 [test_whenCallerIsUnauthorized_reverts]: ./addAsset.t.sol#L60
-[test_whenLifecycleStatesSeeded_thenRegisteredAssetAdded]: ./addAsset.t.sol#L103
-[test_whenUnregisteredAddressBoundaries_reverts]: ./addAsset.t.sol#L96
+[test_whenLifecycleStatesSeeded_thenRegisteredAssetAdded]: ./addAsset.t.sol#L112
+[test_whenUnregisteredAddressBoundaries_reverts]: ./addAsset.t.sol#L105
 [test_givenEnabled_whenAdminAddsRegisteredAsset]: ./addAsset.t.sol#L19
 [test_givenDisabled_whenAdminAddsRegisteredAsset]: ./addAsset.t.sol#L24
 [test_givenReEnabled_whenAdminAddsRegisteredAsset]: ./addAsset.t.sol#L31

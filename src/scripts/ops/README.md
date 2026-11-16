@@ -61,12 +61,15 @@ Authorization, lifecycle, queue admission and execution checks are enforced by t
 | `EnablerBatch` | `enable`, `disable`, `reEnable` for supplied targets | Target-specific authority; Emergency for disable |
 | `BurnerLoansInventoryBatch` | `supply`, `withdraw`; `syncMintApproval` | `burner_loans_inventory_provider`; `burner_loans_admin` |
 | Four `BurnerLoans*TimelockBatch` scripts | Typed `queue*`, admitted `queueBatch` where supported; `executeQueuedAction`, `cancelQueuedAction` | ADMIN/`burner_loans_admin`; anyone, Emergency |
-| `BurnerLoansSeizerTaskBatch` | `setScanLimits`, `setExecutionGasLimit`, `setNextAssetIndex`, `setNextAssetBorrowerIndex` | ADMIN/`burner_loans_admin` |
+| `BurnerLoansSeizerTaskBatch` | `setScanLimits`, `setExecutionGasLimit`, `setNextAssetIndex`, `setExpiredAssetCursor`, `setUnhealthyAssetCursor` | ADMIN/`burner_loans_admin` |
 | `BurnerLoansYieldClaimerTaskBatch` | `setExecutionGasLimit`, `setMinimumGasToAttempt`, `setGasReserve`, `setNextAssetIndex` | ADMIN/`burner_loans_admin` |
 | `RevenueDistributorBatch` | `distribute`, `transferPendingPayout` | Anyone |
 | `RevenueDistributorConfigTimelockBatch` | Asset routes, rescue, pending rescue, admitted `queueBatch`; execute/cancel | ADMIN/`revenue_distributor_admin`; anyone/Emergency |
 | `DepositManagerConfigTimelockBatch` | `queueSetAssetDepositCap`, admitted `queueBatch`; execute/cancel | ADMIN/`deposit_manager_admin`; anyone/Emergency |
 | `BackingOracleConfigTimelockBatch` | `queueSetBacking`; execute/cancel | ADMIN/`backing_admin`; anyone/Emergency |
+
+Use `setExpiredAssetCursor` or `setUnhealthyAssetCursor` with `asset` and `index` to recover one
+discovery lane. The other lane is unchanged; nonzero bounds validation does not read prices.
 
 `KernelBatch` takes `targets` as an ordered array of keys from the selected chain in `env.json`,
 such as `olympus.modules.OlympusFixedTermLoan` or `olympus.policies.DepositManager`.

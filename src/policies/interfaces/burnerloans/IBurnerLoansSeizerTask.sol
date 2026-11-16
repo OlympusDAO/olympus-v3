@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
 import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
 
 /// @title Burner Loans Seizer Task Interface
@@ -30,10 +31,15 @@ interface IBurnerLoansSeizerTask {
     /// @param index New index in the managed asset set.
     event NextAssetIndexSet(uint256 index);
 
-    /// @notice Emitted when governance selects an asset's next borrower offset.
+    /// @notice Emitted when governance changes the selected discovery cursor or cursors.
     /// @param asset Managed collateral asset.
     /// @param cursor New offset in the active borrower list.
-    event AssetCursorSet(address indexed asset, uint256 cursor);
+    /// @param selection Expired or Unhealthy cursor whose offset changed.
+    event AssetCursorSet(
+        address indexed asset,
+        uint256 cursor,
+        IBurnerLoansLens.Selection selection
+    );
 
     /// @notice Emitted when the gas-bounded task body fails.
     /// @param reason First four bytes of the task's bounded revert data.
@@ -41,11 +47,13 @@ interface IBurnerLoansSeizerTask {
 
     /// @notice Emitted after an asset scan completes and any returned borrowers are seized.
     /// @param asset Scanned collateral asset.
-    /// @param startIndex Borrower cursor used at the start of the scan.
-    /// @param nextIndex Borrower cursor stored after successful processing.
+    /// @param selection Expired or Unhealthy lane whose start and next indexes are reported.
+    /// @param startIndex Expiry or unhealthy lane's cursor used at the start of its scan.
+    /// @param nextIndex That lane's cursor stored after successful processing.
     /// @param seizedBorrowers Number of borrowers submitted for seizure.
     event SeizureExecuted(
         address indexed asset,
+        IBurnerLoansLens.Selection selection,
         uint256 startIndex,
         uint256 nextIndex,
         uint256 seizedBorrowers
@@ -102,7 +110,7 @@ interface IBurnerLoansSeizerTask {
     /// @param count Current number of managed assets.
     error BurnerLoansSeizer_InvalidAssetIndex(uint256 index, uint256 count);
 
-    /// @notice The supplied scan helper is not deployed or reports another Core.
+    /// @notice The scan helper lacks the required Lens interface or reports another Core.
     /// @param lens Invalid scan helper.
     error BurnerLoansSeizer_InvalidLens(address lens);
 
@@ -130,8 +138,8 @@ interface IBurnerLoansSeizerTask {
     /// @notice Sets the maximum borrowers scanned and seized in one execution.
     /// @dev ADMIN or burner_loans_admin may configure either limit. Both must be nonzero,
     ///      and the seizure limit must not exceed the scan limit. The input types define their maxima.
-    /// @param maxBorrowersToCheck Maximum distinct borrowers inspected per execution.
-    ///      An expiry-empty page may be read again by priced discovery.
+    /// @param maxBorrowersToCheck Maximum borrowers inspected by each discovery lane per execution.
+    ///      An expiry-empty page permits a separate bounded unhealthy scan, possibly at another offset.
     /// @param maxBorrowersToSeize Maximum seizable borrowers settled per execution.
     function setScanLimits(uint16 maxBorrowersToCheck, uint8 maxBorrowersToSeize) external;
 
@@ -146,15 +154,24 @@ interface IBurnerLoansSeizerTask {
     /// @param index Index in getAssets() order.
     function setNextAssetIndex(uint256 index) external;
 
-    /// @notice Selects a managed asset's next active-borrower offset.
-    /// @dev ADMIN and burner_loans_admin can recover borrower traversal while locally paused.
+    /// @notice Selects the next active-borrower offset for expired discovery on one asset.
+    /// @dev ADMIN and burner_loans_admin can recover traversal while locally paused.
     ///      Zero resets without downstream reads; nonzero offsets are validated through Lens.
+    ///      Unhealthy discovery progress is unchanged.
     /// @param asset Managed collateral asset.
     /// @param index Offset in the active borrower list.
-    function setNextAssetBorrowerIndex(address asset, uint256 index) external;
+    function setExpiredAssetCursor(address asset, uint256 index) external;
 
-    /// @notice Returns the maximum distinct borrowers inspected per execution.
-    /// @dev An expiry-empty page may be read again by priced discovery.
+    /// @notice Selects the next active-borrower offset for unhealthy discovery on one asset.
+    /// @dev ADMIN and burner_loans_admin can recover traversal while locally paused.
+    ///      Zero resets without downstream reads; nonzero offsets are validated through Lens.
+    ///      Expired discovery progress is unchanged.
+    /// @param asset Managed collateral asset.
+    /// @param index Offset in the active borrower list.
+    function setUnhealthyAssetCursor(address asset, uint256 index) external;
+
+    /// @notice Returns the maximum borrowers inspected by each discovery lane per execution.
+    /// @dev Expiry and unhealthy discovery can examine different bounded pages in one visit.
     /// @return maxBorrowersToCheck_ Borrower scan limit.
     function maxBorrowersToCheck() external view returns (uint16 maxBorrowersToCheck_);
 
@@ -170,10 +187,15 @@ interface IBurnerLoansSeizerTask {
     /// @return nextAssetIndex_ Next managed-asset index.
     function nextAssetIndex() external view returns (uint256 nextAssetIndex_);
 
-    /// @notice Returns the next active-borrower index scanned for an asset.
+    /// @notice Returns the next active-borrower index used for expiry discovery.
     /// @param asset Collateral asset whose cursor is queried.
     /// @return cursor_ Next offset in the active borrower list, independent of filtered results.
-    function assetCursor(address asset) external view returns (uint256 cursor_);
+    function expiredAssetCursor(address asset) external view returns (uint256 cursor_);
+
+    /// @notice Returns the next active-borrower index used for unexpired unhealthy discovery.
+    /// @param asset Collateral asset whose cursor is queried.
+    /// @return cursor_ Next priced-scan offset; retained when prices or its quote are unavailable.
+    function unhealthyAssetCursor(address asset) external view returns (uint256 cursor_);
 
     /// @notice Returns whether an asset is included in round-robin scanning.
     /// @param asset Collateral asset to query.
