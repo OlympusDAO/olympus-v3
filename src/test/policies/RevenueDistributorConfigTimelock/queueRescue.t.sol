@@ -515,65 +515,6 @@ contract RevenueDistributorConfigTimelockQueueRescueTest is
         }
     }
 
-    // Scenarios: RDCT-QUEUE-RESCUE-P04.
-    function test_givenYieldConfigurationAction_whenSurplusRescueQueuedAndExecutedInEitherOrder()
-        public
-    {
-        address[2] memory callers = [admin, alice];
-        for (uint256 c; c < callers.length; ++c) {
-            for (uint256 reverseQueue; reverseQueue < 2; ++reverseQueue) {
-                for (uint256 reverseExecution; reverseExecution < 2; ++reverseExecution) {
-                    uint256 snapshot = vm.snapshotState();
-
-                    uint64 surplus;
-                    if (reverseQueue == 0) surplus = _assertSurplusQueued(token, bob, callers[c]);
-                    MockYieldRepurchaseRecipient candidate = new MockYieldRepurchaseRecipient(
-                        kernel
-                    );
-                    _setPolicyActive(address(candidate), true);
-                    candidate.setVaultConfig(address(token), address(token), true);
-                    // The managed debt fixture also has a retired yield-bearing token.
-                    address[] memory pendingAssets = distributor.getPendingPayoutAssets();
-                    for (uint256 i; i < pendingAssets.length; ++i)
-                        candidate.setVaultConfig(pendingAssets[i], pendingAssets[i], true);
-                    address currentYieldRecipient = address(candidate);
-                    vm.prank(callers[c]);
-                    uint64 independent = configTimelock.queueSetYieldRecipient(
-                        currentYieldRecipient
-                    );
-                    if (reverseQueue != 0) surplus = _assertSurplusQueued(token, bob, callers[c]);
-                    (bytes32 independentKey, ) = configTimelock.getQueuedConfigState(
-                        independent,
-                        0,
-                        0
-                    );
-                    assertTrue(
-                        independentKey != _surplusKey(address(token)),
-                        "independent action owns a different key"
-                    );
-                    assertEq(
-                        configTimelock.pendingActionId(independentKey),
-                        independent,
-                        "independent key owner retained"
-                    );
-                    if (reverseExecution == 0) {
-                        _executeVerifiedSurplus(surplus, token, bob, _QUEUED_PAYOUT, address(this));
-                    }
-                    vm.warp(configTimelock.getQueuedAction(independent).executableAt);
-                    configTimelock.executeQueuedAction(independent);
-                    _assertSurplusCompleted(independent, independentKey);
-                    if (reverseExecution != 0) {
-                        _executeVerifiedSurplus(surplus, token, bob, _QUEUED_PAYOUT, address(this));
-                    }
-                    assertTrue(
-                        vm.revertToState(snapshot),
-                        "restore independent queue/execution order"
-                    );
-                }
-            }
-        }
-    }
-
     // Scenarios: RDCT-QUEUE-RESCUE-T01.
     function test_givenQueuedRescue_whenCustodyIncreases() public {
         uint64 id = _assertSurplusQueued(token, bob, admin);

@@ -17,7 +17,8 @@ Ordinary mutations apply existing reentrancy guards, own Kernel activity, requir
 | Function | Caller | Requirements and effect |
 | --- | --- | --- |
 | `setConfigOperator` | Admin | Kernel-active; enabled or disabled. Selects an operator immediately; zero revokes delegation. |
-| `setAssetRoutes`, `disableAssetRoutes`, `setYieldRecipient` | Admin or selected operator | Enabled and Kernel-active; validates the requested route or recipient. |
+| `setAssetRoutes`, `disableAssetRoutes` | Admin or selected operator | Enabled and Kernel-active; validates the requested route. |
+| `setYieldRecipient` | ADMIN only | Enabled and Kernel-active; validates the global recipient. |
 | `distribute` | Anyone | Enabled, Kernel-active, active asset route; allocates new receipts and retries current destinations. |
 | `transferPendingPayout` | Anyone | Enabled and Kernel-active; retries the recipient's combined debt, including for retired assets. |
 | `rescue`, `rescuePendingPayout` | Admin or selected operator | Kernel-active; local disablement allowed. Sweeps never-listed tokens or redirects existing debt. |
@@ -28,12 +29,12 @@ deactivation of the distributor blocks rescue and its previews until reactivatio
 ## RevenueDistributorConfigTimelock
 
 Queueing and execution require this timelock to be enabled, Kernel-active, and the selected operator.
-Route and recipient configuration also require the distributor enabled and Kernel-active. Rescue
+Route configuration also requires the distributor enabled and Kernel-active. Rescue
 requires the distributor Kernel-active but permits its local disablement.
 
 | Function | Caller | Requirements and effect |
 | --- | --- | --- |
-| `queueSetAssetRoutes`, `queueDisableAssetRoutes`, `queueSetYieldRecipient` | Admin or revenue distributor admin | Validates configuration and starts the delay. |
+| `queueSetAssetRoutes`, `queueDisableAssetRoutes` | Admin or revenue distributor admin | Validates configuration and starts the delay. |
 | `queueRescue`, `queueRescuePendingPayout` | Admin or revenue distributor admin | Validates the rescue preview and starts the delay. |
 | `queueBatch` | Admin or revenue distributor admin | Applies the same gates and each action's checks; acquires nonconflicting keys. |
 | `executeQueuedAction` | Anyone | Ready, unexpired action; rechecks current state and executes atomically. |
@@ -45,8 +46,8 @@ a future implementation may expose the inherited internal setter within the same
 is followed by a three-day execution window. Local disablement blocks queueing and execution but permits emergency cancellation. Kernel deactivation blocks all three. Existing actions remain queued and time continues to pass;
 restoration allows retry only within the original execution window.
 
-Route changes, retirement, and rescues conflict on the same asset key. Yield-recipient changes use
-a separate global key. Every state hash includes the current config operator alongside its relevant configuration; rescue rechecks live availability
+Route changes, retirement, and rescues conflict on the same asset key. Global yield-recipient
+replacement is ADMIN-only and has no typed or generic queue path. Every state hash includes the current config operator alongside its relevant configuration; rescue rechecks live availability
 without binding balances at queue time. A failed execution retains its action and keys. See
 [configuration and timelock](revenue_distributor.md#configuration-and-timelock).
 

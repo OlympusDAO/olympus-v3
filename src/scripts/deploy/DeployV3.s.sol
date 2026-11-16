@@ -64,15 +64,10 @@ import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeAndDelegateConfig} from "src/policies/bridge/LZBridgeAndDelegateConfig.sol";
-import {OlympusHeart} from "src/policies/Heart.sol";
-import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
-import {DepositManager} from "src/policies/deposits/DepositManager.sol";
-import {EmissionManager} from "src/policies/EmissionManager.sol";
-import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
-import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 
 // Deposits
+import {DepositManagerConfigTimelock} from "src/policies/deposits/DepositManagerConfigTimelock.sol";
 import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
 import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
@@ -464,7 +459,7 @@ contract DeployV3 is WithEnvironment {
             );
     }
 
-    function _getDeployer() internal returns (address) {
+    function _getDeployer() internal view returns (address) {
         // Only the effective broadcaster is needed, not caller mode or transaction origin.
         // forge-lint: disable-next-line(unused-return)
         (, address msgSender, ) = vm.readCallers();
@@ -752,6 +747,21 @@ contract DeployV3 is WithEnvironment {
         DepositManager depositManager = new DepositManager(kernel, receiptTokenManager);
 
         return (address(depositManager), "olympus.policies");
+    }
+
+    /// @notice Deploys the configuration queue against the exact newly deployed manager.
+    function deployDepositManagerConfigTimelock() public returns (address, string memory) {
+        Kernel kernel = _getKernel();
+        IDepositManager manager = IDepositManager(
+            _getAddressNotZero("olympus.policies.DepositManager")
+        );
+        console2.log("DepositManagerConfigTimelock parameters:");
+        console2.log("  kernel", address(kernel));
+        console2.log("  depositManager", address(manager));
+        vm.broadcast();
+        DepositManagerConfigTimelock queue = new DepositManagerConfigTimelock(kernel, manager);
+        console2.log("DepositManagerConfigTimelock deployed at", address(queue));
+        return (address(queue), "olympus.policies");
     }
 
     function deployEmissionManager() public returns (address, string memory) {
@@ -2040,6 +2050,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("  ohm", d.ohm);
         console2.log("  floan", d.floan);
         console2.log("  depositManager", d.depositManager);
+        console2.log("  depositManagerTimelock", d.depositManagerTimelock);
         console2.log("  core", d.core);
         console2.log("  auth", d.auth);
         console2.log("  config", d.config);
@@ -2085,6 +2096,9 @@ contract DeployV3 is WithEnvironment {
         d.ohm = _getAddressNotZero("olympus.legacy.OHM");
         d.floan = _getAddressNotZero("olympus.modules.OlympusFixedTermLoan");
         d.depositManager = _getAddressNotZero("olympus.policies.DepositManager");
+        d.depositManagerTimelock = _getAddressNotZero(
+            "olympus.policies.DepositManagerConfigTimelock"
+        );
         d.core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
         d.auth = _getAddressNotZero("olympus.periphery.BurnerLoansAuth");
         d.config = _getAddressNotZero("olympus.policies.BurnerLoansConfig");

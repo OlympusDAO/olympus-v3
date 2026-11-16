@@ -250,7 +250,7 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
     ) public {
         // bound() guarantees that the result fits uint8.
         // forge-lint: disable-next-line(unsafe-typecast)
-        actionKind_ = uint8(bound(actionKind_, 0, 2));
+        actionKind_ = uint8(bound(actionKind_, 0, 1));
         uint64 actionId = _queueConfiguration(actionKind_);
         bytes32 key = _queuedKey(actionId, 0);
         bytes32 actionBefore = keccak256(abi.encode(configTimelock.getQueuedAction(actionId)));
@@ -377,7 +377,7 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
     ) public {
         // bound() guarantees that the result fits uint8.
         // forge-lint: disable-next-line(unsafe-typecast)
-        actionKind_ = uint8(bound(actionKind_, 0, 2));
+        actionKind_ = uint8(bound(actionKind_, 0, 1));
         uint64 actionId = _queueConfiguration(actionKind_);
         bytes32 key = _queuedKey(actionId, 0);
         bytes32 beforeAction = keccak256(abi.encode(configTimelock.getQueuedAction(actionId)));
@@ -403,15 +403,12 @@ contract RevenueDistributorConfigTimelockExecuteQueuedActionTest is
     }
 
     function _queueConfiguration(uint8 actionKind_) internal returns (uint64 actionId) {
-        address yieldRecipient = actionKind_ == 2 ? address(_activeYieldRecipient()) : address(0);
         vm.startPrank(admin);
         if (actionKind_ == 0) {
             actionId = configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes());
-        } else if (actionKind_ == 1) {
+        } else {
             distributor.setAssetRoutes(address(token), 0, _emptyRoutes());
             actionId = configTimelock.queueDisableAssetRoutes(address(token));
-        } else {
-            actionId = configTimelock.queueSetYieldRecipient(yieldRecipient);
         }
         vm.stopPrank();
     }

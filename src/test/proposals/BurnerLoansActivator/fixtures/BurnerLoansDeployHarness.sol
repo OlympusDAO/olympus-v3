@@ -41,8 +41,9 @@ contract BurnerLoansDeployHarness is DeployV3 {
     // Test fixture registry supplies policy membership independently of the production activator API.
     // forge-lint: disable-next-item(calls-loop)
     function policies() external view returns (address[] memory targets) {
-        string[19] memory names = [
+        string[20] memory names = [
             "DepositManager",
+            "DepositManagerConfigTimelock",
             "BurnerLoansCore",
             "BurnerLoansConfig",
             "BurnerLoansInventory",

@@ -8,7 +8,7 @@ import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActiva
 
 // Libraries
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
-import {ADMIN_ROLE, BACKING_ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE, HEART_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BACKING_ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, EMERGENCY_ROLE, HEART_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -43,19 +43,19 @@ contract BurnerLoansProposal is GovernorBravoProposal {
                 "\n",
                 "## Assumptions\n\n",
                 "- The reviewed contracts are deployed and recorded in the address registry.\n",
-                "- The DAO multisig, as Kernel executor, has installed the OlympusFixedTermLoan (FLOAN) module and activated the following policies without enabling them: DepositManager v1.1; PriceCache; BackingOracle and BackingOracleConfigTimelock; RevenueDistributor, RevenueDistributorConfigTimelock and RevenueDistributorTask; BurnerLoansCore, Config, Inventory, Payout, Risk, Collateral, Debt and Seize; BurnerLoansConfigTimelock, RiskConfigTimelock, PayoutConfigTimelock and InventoryConfigTimelock; BurnerLoansSeizerTask and BurnerLoansYieldClaimerTask.\n",
+                "- The DAO multisig, as Kernel executor, has installed the OlympusFixedTermLoan (FLOAN) module and activated the following policies without enabling them: DepositManager v1.1 and DepositManagerConfigTimelock; PriceCache; BackingOracle and BackingOracleConfigTimelock; RevenueDistributor, RevenueDistributorConfigTimelock and RevenueDistributorTask; BurnerLoansCore, Config, Inventory, Payout, Risk, Collateral, Debt and Seize; BurnerLoansConfigTimelock, RiskConfigTimelock, PayoutConfigTimelock and InventoryConfigTimelock; BurnerLoansSeizerTask and BurnerLoansYieldClaimerTask.\n",
                 "- BurnerLoansAuth, BurnerLoansLens and the one-use BurnerLoansActivator are deployed periphery/helpers, rather than Kernel policies.\n",
-                "- Heart and PriceConfigv2 are active and enabled. PRICE supports OHM and USDS. Heart retains the reviewed six-task order: ConvertibleDepositFacility, ReserveMigrator, ReserveWrapper, Operator, YieldRepurchaseFacility and EmissionManager.\n",
+                "- Heart and PriceConfigv2 are active and enabled, and Heart already holds HEART_ROLE. PRICE supports OHM and USDS. Heart retains the reviewed six-task order: ConvertibleDepositFacility, ReserveMigrator, ReserveWrapper, Operator, YieldRepurchaseFacility and EmissionManager.\n",
                 "- The governance timelock holds ADMIN and controls RolesAdmin. No DAO multisig initial enablement or configuration-operator selection is assumed.\n\n",
                 "## Proposal Steps\n\n",
-                "1. Grant the custody, settlement and automation roles required by Core, Collateral, Debt, Seize, SeizerTask and YieldClaimerTask. Grant the named lending, inventory, revenue and backing operational roles to the DAO multisig.\n",
+                "1. Grant the custody, settlement and automation roles required by Core, Collateral, Debt, Seize, SeizerTask and YieldClaimerTask. Grant the named lending, inventory, revenue, backing and custody operational roles to the DAO multisig.\n",
                 "2. Grant temporary ADMIN to the one-use activator.\n",
                 "3. Call the activator atomically. It verifies the prepared Kernel membership, immutable target bindings and fresh disabled state; adds USDe PRICE support if absent; initializes BackingOracle to $11.99 per OHM and selects and enables its configuration timelock.\n",
-                "4. Select Core-bound Auth, services and delayed configuration operators. Enable PriceCache, RevenueDistributor, DepositManager v1.1, Inventory, Payout, Risk, Core, Config, Collateral, Debt and Seize in dependency order. Configure Treasury-only routes for USDS, sUSDS, USDe and sUSDe revenue.\n",
-                "5. Register USDS/sUSDS and USDe/sUSDe custody routes and markets with the published launch parameters. Enable all five lending/revenue configuration timelocks and the SeizerTask, YieldClaimerTask and RevenueDistributorTask. Insert these tasks at Heart indexes 3, 4 and 5, respectively, after reserve preparation and immediately before Operator. Existing tasks and their selectors retain relative order.\n",
+                "4. Select Core-bound Auth, services and delayed configuration operators. Enable PriceCache, RevenueDistributor, DepositManager v1.1, Inventory, Payout, Risk, Core, Config, Collateral, Debt and Seize in dependency order. Configure Treasury-only routes for USDS, sUSDS, USDe and sUSDe revenue. Select DepositManager's configuration timelock after manager enablement.\n",
+                "5. Register USDS/sUSDS and USDe/sUSDe custody routes and markets with the published launch parameters. Enable all six lending/revenue/custody configuration timelocks and the SeizerTask, YieldClaimerTask and RevenueDistributorTask. Insert these tasks at Heart indexes 3, 4 and 5, respectively, after reserve preparation and immediately before Operator. Existing tasks and their selectors retain relative order.\n",
                 "6. Revoke the activator ADMIN role in the same governance execution. Any failed action rolls back the entire proposal.\n\n",
                 "## Next Steps\n\n",
-                "No further governance action is required to enable the configured markets. Before borrowers can draw debt, the DAO inventory provider must supply OHM or the delegated lending administrator must configure a Treasury-backed mint limit. Operators must confirm live prices and capacity, then monitor Heart task execution, outstanding debt and collateral custody using the launch runbook.\n"
+                "No further governance action is required to enable the configured markets. Yield recipient remains unset and all new revenue goes to Treasury. When YRF V2 is deployed and activated, its own OCG must select the compatible IYieldRepurchaseRecipient through ADMIN before enabling nonzero repurchase allocations. Before borrowers can draw debt, the DAO inventory provider must supply OHM or the delegated lending administrator must configure a Treasury-backed mint limit. Operators must confirm live prices and capacity, then monitor Heart task execution, outstanding debt and collateral custody using the launch runbook.\n"
             );
     }
 
@@ -126,7 +126,16 @@ contract BurnerLoansProposal is GovernorBravoProposal {
             addresses.getAddress("olympus-multisig-dao")
         );
         _grant(admin, roles, BACKING_ADMIN_ROLE, addresses.getAddress("olympus-multisig-dao"));
-        _grant(admin, roles, HEART_ROLE, addresses.getAddress("olympus-policy-heart-1_7"));
+        // Heart is already operational; requiring its existing role saves a Governor action.
+        address heart = addresses.getAddress("olympus-policy-heart-1_7");
+        if (!roles.hasRole(heart, HEART_ROLE))
+            revert IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite(heart);
+        _grant(
+            admin,
+            roles,
+            DEPOSIT_MANAGER_ADMIN_ROLE,
+            addresses.getAddress("olympus-multisig-dao")
+        );
         _grant(admin, roles, EMERGENCY_ROLE, addresses.getAddress("olympus-multisig-emergency"));
 
         // STEP 2: Grant the only temporary role immediately before using it. The activator
@@ -186,6 +195,9 @@ contract BurnerLoansProposal is GovernorBravoProposal {
         assert(!roles.hasRole(activator, ADMIN_ROLE));
         assert(!roles.hasRole(addresses.getAddress("olympus-multisig-dao"), ADMIN_ROLE));
         assert(roles.hasRole(addresses.getAddress("olympus-multisig-dao"), BACKING_ADMIN_ROLE));
+        assert(
+            roles.hasRole(addresses.getAddress("olympus-multisig-dao"), DEPOSIT_MANAGER_ADMIN_ROLE)
+        );
         assert(
             IPRICEv2(address(_kernel.getModuleForKeycode(toKeycode("PRICE")))).isAssetApproved(
                 addresses.getAddress("external-tokens-usde")

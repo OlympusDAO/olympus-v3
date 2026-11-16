@@ -6,11 +6,13 @@ import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.s
 
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
+import {ADMIN_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {RevenueDistributorTest} from "./RevenueDistributorTest.sol";
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {Actions, Kernel} from "src/Kernel.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
@@ -18,16 +20,18 @@ import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRe
 // forge-lint: disable-start(calls-loop,literal-instead-of-constant,unsafe-typecast)
 
 contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
+    function setUp() public override {
+        super.setUp();
+        // Pointer-validation fixtures default to ADMIN; explicit role tests select their own caller.
+        _configurationSeed = admin;
+    }
+
     // given admin
     //   when yield recipient set
     //     [X] admin selects yield recipient
     // Scenarios: SYR-A01, SYR-P09.
-    function test_givenAdmin_whenYieldRecipientSet(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
-    ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+    function test_givenAdmin_whenYieldRecipientSet(address authority_) public {
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
@@ -37,12 +41,8 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     }
 
     // Scenarios: SYR-P04.
-    function test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
-    ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+    function test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts(address authority_) public {
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         bytes32 beforeHash = distributor.assetDistributionHash(address(token));
 
@@ -66,12 +66,8 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     }
 
     // Scenarios: SYR-P03.
-    function test_givenSelectedCompatibleRecipient_whenSetAgain_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
-    ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+    function test_givenSelectedCompatibleRecipient_whenSetAgain_reverts(address authority_) public {
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
@@ -108,7 +104,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenSelectedRecipientBecomesDisabled_whenSetAgain_reverts() public {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         recipient.setEnabled(false);
 
@@ -118,18 +114,16 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
                 address(recipient)
             )
         );
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
     }
 
     // Scenarios: SYR-I05.
     function test_whenEOASelectedAsYieldRecipient_reverts(
         address recipient_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         vm.assume(recipient_.code.length == 0);
         vm.assume(recipient_ != address(0));
@@ -150,12 +144,8 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     //   when yield recipient set
     //     [X] it reverts with the expected error
     // Scenarios: SYR-I01.
-    function test_givenTreasuryAddress_whenYieldRecipientSet_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
-    ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+    function test_givenTreasuryAddress_whenYieldRecipientSet_reverts(address authority_) public {
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         vm.prank(authority_);
         vm.expectRevert(
@@ -171,14 +161,8 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     //   [X] it reverts with the expected error
     // Scenarios: SYR-A03.
     function test_whenUnauthorizedCallerSetsYieldRecipient_reverts(address caller_) public {
-        vm.assume(caller_ != address(configTimelock));
-        vm.assume(caller_ != admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_UnauthorizedConfigOperator.selector,
-                caller_
-            )
-        );
+        vm.assume(!roles.hasRole(caller_, ADMIN_ROLE));
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
         distributor.setYieldRecipient(address(0));
     }
@@ -187,17 +171,17 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     //   when operator sets yield recipient
     //     [X] it reverts with the expected error
     // Scenarios: SYR-L01.
-    function test_givenDisabled_whenOperatorSetsYieldRecipient_reverts() public {
+    function test_givenDisabled_whenAdminSetsYieldRecipient_reverts() public {
         _disableDistributor();
         _expectNotEnabled();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(0));
     }
 
     // given re enabled
     //   when operator sets yield recipient
     //     [X] re-enabled distributor selects yield recipient
-    function test_givenReEnabled_whenOperatorSetsYieldRecipient() public {
+    function test_givenReEnabled_whenAdminSetsYieldRecipient() public {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         vm.startPrank(admin);
         kernel.executeAction(Actions.ActivatePolicy, address(recipient));
@@ -205,7 +189,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         distributor.reEnable();
         vm.stopPrank();
 
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
 
         assertEq(
@@ -219,10 +203,10 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     //   when operator sets yield recipient
     //     [X] it reverts with the expected error
     // Scenarios: SYR-L02.
-    function test_givenPolicyInactive_whenOperatorSetsYieldRecipient_reverts() public {
+    function test_givenPolicyInactive_whenAdminSetsYieldRecipient_reverts() public {
         _setPolicyActive(address(distributor), false);
         _expectPolicyInactive();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(0));
     }
 
@@ -236,14 +220,14 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         vm.stopPrank();
 
         _expectPolicyInactive();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(0));
     }
 
     // given policy reactivated
     //   when operator sets yield recipient
     //     [X] reactivated policy selects yield recipient
-    function test_givenPolicyReactivated_whenOperatorSetsYieldRecipient() public {
+    function test_givenPolicyReactivated_whenAdminSetsYieldRecipient() public {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         vm.startPrank(admin);
         kernel.executeAction(Actions.ActivatePolicy, address(recipient));
@@ -251,7 +235,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
         vm.stopPrank();
 
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
 
         assertEq(
@@ -267,11 +251,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     //     [X] active repurchase route keeps valid recipient
     // Scenarios: SYR-I02.
     function test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
@@ -315,7 +297,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
         vm.expectEmit(true, false, false, false, address(distributor));
         emit IRevenueDistributor.YieldRecipientSet(address(current));
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(current));
 
         assertEq(distributor.yieldRecipient(), address(current), "compatible recipient changes");
@@ -323,11 +305,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I09.
     function test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient former = new MockYieldRepurchaseRecipient(kernel);
         MockYieldRepurchaseRecipient unsupported = new MockYieldRepurchaseRecipient(kernel);
@@ -361,11 +341,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     // Scenarios: SYR-I06.
     function test_whenCandidateLacksRequiredInterface_reverts(
         uint8 missingInterface_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         missingInterface_ = uint8(bound(missingInterface_, 0, 2));
         address candidate;
@@ -393,11 +371,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     // Scenarios: SYR-I07.
     function test_whenCandidatePolicyIsInactiveOrDisabled_reverts(
         bool inactive_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
         if (inactive_) {
@@ -418,11 +394,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I10.
     function test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         address vault = makeAddr("vault");
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -444,13 +418,11 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         distributor.setYieldRecipient(address(unsupported));
     }
 
-    // Scenarios: SYR-I12.
+    // Scenarios: SYR-P03.
     function test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient recipient = _newYieldRecipient();
         recipient.setVaultConfig(address(token), address(token), true);
@@ -474,12 +446,12 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenNoPositiveRoutes_whenNonzeroRecipientChanges_succeeds() public {
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
         MockYieldRepurchaseRecipient current = _newYieldRecipient();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(former));
 
         vm.expectEmit(true, false, false, false, address(distributor));
         emit IRevenueDistributor.YieldRecipientSet(address(current));
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(current));
 
         assertEq(distributor.yieldRecipient(), address(current), "nonzero recipient changes");
@@ -507,11 +479,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     //     [X] duplicate role destination is not selected
     // Scenarios: SYR-I04.
     function test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
@@ -547,11 +517,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     //     [X] Treasury received its residual
     // Scenarios: SYR-A01, SYR-P02.
     function test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient former = new MockYieldRepurchaseRecipient(kernel);
         MockYieldRepurchaseRecipient current = new MockYieldRepurchaseRecipient(kernel);
@@ -653,11 +621,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     //     [X] old recipient remains selected
     // Scenarios: SYR-I03.
     function test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient former = new MockYieldRepurchaseRecipient(kernel);
         MockYieldRepurchaseRecipient incompatible = new MockYieldRepurchaseRecipient(kernel);
@@ -696,11 +662,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I13.
     function test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         address vault = makeAddr("vault");
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -726,11 +690,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I14.
     function test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockERC20 otherToken = new MockERC20("Other Revenue", "OREV", 18);
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -767,11 +729,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I11.
     function test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockERC20 retiredToken = new MockERC20("Retired Revenue", "RREV", 18);
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -806,20 +766,15 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         address caller_,
         address candidate_
     ) public {
-        vm.assume(caller_ != admin && caller_ != address(configTimelock));
+        vm.assume(!roles.hasRole(caller_, ADMIN_ROLE));
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(former));
         distributor.seedPendingForTest(address(token), alice, 11, 22, 33);
         token.mint(address(distributor), 66);
 
         vm.recordLogs();
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_UnauthorizedConfigOperator.selector,
-                caller_
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
         distributor.setYieldRecipient(candidate_);
 
@@ -838,9 +793,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         address caller_,
         address candidate_
     ) public {
-        vm.assume(caller_ != admin && caller_ != address(configTimelock));
+        vm.assume(!roles.hasRole(caller_, ADMIN_ROLE));
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(former));
         distributor.seedPendingForTest(address(token), alice, 11, 22, 33);
         token.mint(address(distributor), 66);
@@ -868,9 +823,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         address candidate_,
         bool disable_
     ) public {
-        vm.assume(caller_ != admin && caller_ != address(configTimelock));
+        vm.assume(!roles.hasRole(caller_, ADMIN_ROLE));
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(former));
         distributor.seedPendingForTest(address(token), alice, 11, 22, 33);
         token.mint(address(distributor), 66);
@@ -899,12 +854,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenSeededUnauthorizedIdentities_whenYieldRecipientSet_reverts() public {
         address[3] memory callers = [emergency, alice, bob];
         for (uint256 i; i < callers.length; ++i) {
-            vm.expectRevert(
-                abi.encodeWithSelector(
-                    IRevenueDistributor.RevenueDistributor_UnauthorizedConfigOperator.selector,
-                    callers[i]
-                )
-            );
+            vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
             vm.prank(callers[i]);
             distributor.setYieldRecipient(address(0));
         }
@@ -953,11 +903,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         bool treasuryCandidate_,
         bool currentNonzero_,
         bool populated_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         vm.assume(eoa_.code.length == 0 && eoa_ != address(0) && eoa_ != address(treasury));
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -996,11 +944,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     // Scenarios: SYR-I07.
     function test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack(
         bool inactive_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
@@ -1034,11 +980,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I02.
     function test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockERC20 earlier = new MockERC20("Earlier Revenue", "EREV", 18);
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -1083,11 +1027,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack(
         bool directVault_,
         uint8 failureKind_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         failureKind_ = uint8(bound(failureKind_, 0, 3));
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -1131,11 +1073,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack(
         bool directVault_,
         uint8 failureKind_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         failureKind_ = uint8(bound(failureKind_, 0, 3));
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -1174,11 +1114,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I14.
     function test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockERC20 later = new MockERC20("Later Revenue", "LREV", 18);
         address firstVault = makeAddr("first vault");
@@ -1229,11 +1167,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I04.
     function test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockERC20 later = new MockERC20("Later Revenue", "LREV", 18);
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
@@ -1273,11 +1209,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-I04.
     function test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
         IRevenueDistributor.AssetRoute[] memory collision = new IRevenueDistributor.AssetRoute[](1);
@@ -1301,11 +1235,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-A01, SYR-P09.
     function test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
         vm.prank(authority_);
@@ -1345,11 +1277,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     // Scenarios: SYR-A01, SYR-P02.
     function test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt(
         bool directVault_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockERC20 retired = new MockERC20("Retired Revenue", "RREV", 18);
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
@@ -1414,15 +1344,14 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     // Scenarios: SYR-P01.
     function test_givenAnySupportedPendingYieldSet_whenRecipientCleared_redirectsToTreasury(
         uint8 assetCount_,
-        uint8 retiredMask_,
-        bool adminCalls_
+        uint8 retiredMask_
     ) public {
         assetCount_ = uint8(bound(assetCount_, 0, 3));
         MockERC20 second = new MockERC20("Second Revenue", "REV2", 18);
         MockERC20 third = new MockERC20("Third Revenue", "REV3", 18);
         address[3] memory assets = [address(token), address(second), address(third)];
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(former));
         for (uint256 i; i < assetCount_; ++i) {
             vm.prank(_configurationCaller());
@@ -1437,7 +1366,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         vm.expectEmit(true, false, false, false, address(distributor));
         emit IRevenueDistributor.YieldRecipientSet(address(0));
         vm.recordLogs();
-        vm.prank(adminCalls_ ? admin : address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(0));
 
         assertEq(distributor.yieldRecipient(), address(0), "recipient clears to Treasury fallback");
@@ -1465,11 +1394,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts(
         bool underlying_,
         bool retireSecond_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockERC20 second = new MockERC20("Second Revenue", "REV2", 18);
         MockYieldRepurchaseRecipient recipient = _newYieldRecipient();
@@ -1520,11 +1447,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts(
         uint8 assetCount_,
         uint8 retiredMask_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         assetCount_ = uint8(bound(assetCount_, 0, 3));
         MockERC20 second = new MockERC20("Second Revenue", "REV2", 18);
@@ -1617,7 +1542,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         returns (MockYieldRepurchaseRecipient former)
     {
         former = _newYieldRecipient();
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(former));
         distributor.seedPendingForTest(address(token), alice, 11, 22, 33);
         token.mint(address(distributor), 66);
@@ -1641,11 +1566,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     // Scenarios: SYR-D01.
     function test_whenCandidateKernelReadIsMalformed_reverts(
         bytes memory output_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         if (output_.length == 32) vm.assume(abi.decode(output_, (uint256)) > type(uint160).max);
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
@@ -1669,11 +1592,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     // Scenarios: SYR-D02.
     function test_whenCandidateEnabledReadIsMalformed_reverts(
         bytes memory output_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         if (output_.length == 32) vm.assume(abi.decode(output_, (uint256)) > 1);
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
@@ -1695,65 +1616,24 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     }
 
     // Scenarios: SYR-D01, SYR-D02.
-    function test_whenCandidateMetadataBoundaries_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
-    ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+    function test_whenCandidateMetadataBoundaries_reverts(address authority_) public {
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
-        test_whenCandidateKernelReadIsMalformed_reverts(hex"", authority_, operatorOnly_, overlap_);
-        test_whenCandidateKernelReadIsMalformed_reverts(
-            hex"00",
-            authority_,
-            operatorOnly_,
-            overlap_
-        );
-        test_whenCandidateKernelReadIsMalformed_reverts(
-            abi.encode(type(uint256).max),
-            authority_,
-            operatorOnly_,
-            overlap_
-        );
-        test_whenCandidateKernelReadIsMalformed_reverts(
-            new bytes(64),
-            authority_,
-            operatorOnly_,
-            overlap_
-        );
-        test_whenCandidateEnabledReadIsMalformed_reverts(
-            hex"",
-            authority_,
-            operatorOnly_,
-            overlap_
-        );
-        test_whenCandidateEnabledReadIsMalformed_reverts(
-            hex"00",
-            authority_,
-            operatorOnly_,
-            overlap_
-        );
-        test_whenCandidateEnabledReadIsMalformed_reverts(
-            abi.encode(uint256(2)),
-            authority_,
-            operatorOnly_,
-            overlap_
-        );
-        test_whenCandidateEnabledReadIsMalformed_reverts(
-            new bytes(64),
-            authority_,
-            operatorOnly_,
-            overlap_
-        );
+        test_whenCandidateKernelReadIsMalformed_reverts(hex"", authority_);
+        test_whenCandidateKernelReadIsMalformed_reverts(hex"00", authority_);
+        test_whenCandidateKernelReadIsMalformed_reverts(abi.encode(type(uint256).max), authority_);
+        test_whenCandidateKernelReadIsMalformed_reverts(new bytes(64), authority_);
+        test_whenCandidateEnabledReadIsMalformed_reverts(hex"", authority_);
+        test_whenCandidateEnabledReadIsMalformed_reverts(hex"00", authority_);
+        test_whenCandidateEnabledReadIsMalformed_reverts(abi.encode(uint256(2)), authority_);
+        test_whenCandidateEnabledReadIsMalformed_reverts(new bytes(64), authority_);
     }
 
     // Scenarios: SYR-D03.
     function test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
         Kernel otherKernel = new Kernel();
@@ -1777,14 +1657,12 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         );
     }
 
-    // Scenarios: SYR-I12, SYR-P03, SYR-P04.
+    // Scenarios: SYR-P03, SYR-P04.
     function test_givenSamePointer_whenDependencyProbesWouldFail_reverts(
         bool nonzero_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         address candidate;
         if (nonzero_) {
@@ -1823,11 +1701,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     // Scenarios: SYR-D04.
     function test_whenCandidateMetadataReverts_reverts(
         bool kernelRead_,
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
         vm.mockCallRevert(
@@ -1853,11 +1729,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-D05.
     function test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
         former.setVaultConfig(address(token), address(token), true);
@@ -1890,11 +1764,9 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
 
     // Scenarios: SYR-D06.
     function test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts(
-        address authority_,
-        bool operatorOnly_,
-        bool overlap_
+        address authority_
     ) public {
-        _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
+        _grantConfigurationAuthority(authority_, false, false);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient former = _newYieldRecipient();
         former.setVaultConfig(address(token), address(token), true);
@@ -1934,35 +1806,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack(
             false,
             1,
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I09, SYR-I10.
-    function test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack_OperatorOnlySeed()
-        public
-    {
-        test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack(
-            false,
-            1,
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I09, SYR-I10.
-    function test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack_RolesOverlapSeed()
-        public
-    {
-        test_givenActiveRepurchaseRoute_whenCandidateRegistrationInvalid_revertsAndRollsBack(
-            false,
-            1,
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -1970,132 +1814,28 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts_AdminOnlySeed()
         public
     {
-        test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I02.
-    function test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I02.
-    function test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts(
-            address(0x1234),
-            true,
-            true
-        );
+        test_givenActiveRepurchaseRoute_whenYieldRecipientCleared_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-D05.
     function test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_AdminOnlySeed()
         public
     {
-        test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-D05.
-    function test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-D05.
-    function test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts(
-            address(0x1234),
-            true,
-            true
-        );
+        test_givenActiveRepurchase_whenCandidateVaultBoolMalformed_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-D06.
     function test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_AdminOnlySeed()
         public
     {
-        test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-D06.
-    function test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-D06.
-    function test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts(
-            address(0x1234),
-            true,
-            true
-        );
+        test_givenActiveRepurchase_whenCandidateVaultListMalformed_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-I10.
     function test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts_AdminOnlySeed()
         public
     {
-        test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I10.
-    function test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I10.
-    function test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts(
-            address(0x1234),
-            true,
-            true
-        );
+        test_givenActiveUnderlyingRoute_whenUnsupportedRecipientSelected_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-I09.
@@ -2103,47 +1843,13 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I09.
-    function test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I09.
-    function test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenActiveVaultShareRoute_whenUnsupportedYieldRecipientSelected_reverts(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
     // Scenarios: SYR-A01.
     function test_givenAdmin_whenYieldRecipientSet_AdminOnlySeed() public {
-        test_givenAdmin_whenYieldRecipientSet(address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-A01.
-    function test_givenAdmin_whenYieldRecipientSet_OperatorOnlySeed() public {
-        test_givenAdmin_whenYieldRecipientSet(address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-A01.
-    function test_givenAdmin_whenYieldRecipientSet_RolesOverlapSeed() public {
-        test_givenAdmin_whenYieldRecipientSet(address(0x1234), true, true);
+        test_givenAdmin_whenYieldRecipientSet(address(0x1234));
     }
 
     // Scenarios: SYR-I01, SYR-I05.
@@ -2155,39 +1861,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
             false,
             false,
             false,
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I01, SYR-I05.
-    function test_givenAnyPointerAndAssetState_whenExcludedAddressSelected_revertsAndRollsBack_OperatorOnlySeed()
-        public
-    {
-        test_givenAnyPointerAndAssetState_whenExcludedAddressSelected_revertsAndRollsBack(
-            address(0x2345),
-            false,
-            false,
-            false,
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I01, SYR-I05.
-    function test_givenAnyPointerAndAssetState_whenExcludedAddressSelected_revertsAndRollsBack_RolesOverlapSeed()
-        public
-    {
-        test_givenAnyPointerAndAssetState_whenExcludedAddressSelected_revertsAndRollsBack(
-            address(0x2345),
-            false,
-            false,
-            false,
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2196,31 +1870,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-D03.
-    function test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-D03.
-    function test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenCandidateActiveInConsumerKernel_whenReportedKernelDiffers_reverts(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2228,33 +1878,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds_AdminOnlySeed()
         public
     {
-        test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I04.
-    function test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds_OperatorOnlySeed()
-        public
-    {
-        test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I04.
-    function test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds_RolesOverlapSeed()
-        public
-    {
-        test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds(
-            address(0x1234),
-            true,
-            true
-        );
+        test_givenCandidateConfiguredOnlyOnRetiredAsset_whenSelected_succeeds(address(0x1234));
     }
 
     // Scenarios: SYR-I04.
@@ -2262,31 +1886,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I04.
-    function test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack_OperatorOnlySeed()
-        public
-    {
-        test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I04.
-    function test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack_RolesOverlapSeed()
-        public
-    {
-        test_givenCandidateIsConfiguredOnLaterActiveAsset_whenSelected_revertsAndRollsBack(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2296,33 +1896,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     {
         test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack(
             false,
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I07.
-    function test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack_OperatorOnlySeed()
-        public
-    {
-        test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack(
-            false,
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I07.
-    function test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack_RolesOverlapSeed()
-        public
-    {
-        test_givenInactiveOrDisabledCandidate_whenSetAsDifferentPointer_revertsAndRollsBack(
-            false,
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2331,31 +1905,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I02.
-    function test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack_OperatorOnlySeed()
-        public
-    {
-        test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I02.
-    function test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack_RolesOverlapSeed()
-        public
-    {
-        test_givenLaterActiveRepurchaseRoute_whenYieldRecipientCleared_revertsAndRollsBack(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2365,33 +1915,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     {
         test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt(
             false,
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-A01.
-    function test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt_OperatorOnlySeed()
-        public
-    {
-        test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt(
-            false,
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-A01.
-    function test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt_RolesOverlapSeed()
-        public
-    {
-        test_givenMultipleActiveAndRetiredYieldDebts_whenRecipientChanges_redirectsOnlyRoleDebt(
-            false,
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2399,33 +1923,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts_AdminOnlySeed()
         public
     {
-        test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I14.
-    function test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I14.
-    function test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts(
-            address(0x1234),
-            true,
-            true
-        );
+        test_givenMultipleRetiredPendingAssets_whenLaterAssetUnsupported_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-I14.
@@ -2433,31 +1931,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I14.
-    function test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack_OperatorOnlySeed()
-        public
-    {
-        test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I14.
-    function test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack_RolesOverlapSeed()
-        public
-    {
-        test_givenMultipleRetiredUnderlyingAssets_whenLaterAssetUnsupported_revertsAndRollsBack(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2465,33 +1939,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
     function test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts_AdminOnlySeed()
         public
     {
-        test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I04.
-    function test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I04.
-    function test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts(
-            address(0x1234),
-            true,
-            true
-        );
+        test_givenOrdinaryRecipient_whenSelectedAsYieldRecipient_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-I03.
@@ -2499,31 +1947,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I03.
-    function test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I03.
-    function test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenRetiredAssetWithPendingYield_whenIncompatibleRecipientSelected_reverts(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2534,35 +1958,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack(
             false,
             1,
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I03, SYR-I13.
-    function test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack_OperatorOnlySeed()
-        public
-    {
-        test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack(
-            false,
-            1,
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I03, SYR-I13.
-    function test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack_RolesOverlapSeed()
-        public
-    {
-        test_givenRetiredPendingYield_whenCandidateRegistrationInvalid_revertsAndRollsBack(
-            false,
-            1,
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2571,31 +1967,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I13.
-    function test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I13.
-    function test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenRetiredUnderlyingWithPendingYield_whenUnsupportedRecipientSelected_reverts(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2606,129 +1978,30 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts(
             false,
             false,
-            address(0x1234),
-            false,
-            false
+            address(0x1234)
         );
     }
 
-    // Scenarios: SYR-P03.
-    function test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts(
-            false,
-            false,
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-P03.
-    function test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenSameCompatibleRecipientWithAnyAssetStates_whenSetAgain_reverts(
-            false,
-            false,
-            address(0x1234),
-            true,
-            true
-        );
-    }
-
-    // Scenarios: SYR-I12, SYR-P03, SYR-P04.
+    // Scenarios: SYR-P03, SYR-P04.
     function test_givenSamePointer_whenDependencyProbesWouldFail_reverts_AdminOnlySeed() public {
-        test_givenSamePointer_whenDependencyProbesWouldFail_reverts(
-            false,
-            address(0x1234),
-            false,
-            false
-        );
+        test_givenSamePointer_whenDependencyProbesWouldFail_reverts(false, address(0x1234));
     }
 
-    // Scenarios: SYR-I12, SYR-P03, SYR-P04.
-    function test_givenSamePointer_whenDependencyProbesWouldFail_reverts_OperatorOnlySeed() public {
-        test_givenSamePointer_whenDependencyProbesWouldFail_reverts(
-            false,
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I12, SYR-P03, SYR-P04.
-    function test_givenSamePointer_whenDependencyProbesWouldFail_reverts_RolesOverlapSeed() public {
-        test_givenSamePointer_whenDependencyProbesWouldFail_reverts(
-            false,
-            address(0x1234),
-            true,
-            true
-        );
-    }
-
-    // Scenarios: SYR-I12.
+    // Scenarios: SYR-P03.
     function test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts_AdminOnlySeed()
         public
     {
-        test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I12.
-    function test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I12.
-    function test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts(
-            address(0x1234),
-            true,
-            true
-        );
+        test_givenSameRecipientRegistrationDisabled_whenSetAgain_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-P03.
     function test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_AdminOnlySeed() public {
-        test_givenSelectedCompatibleRecipient_whenSetAgain_reverts(address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-P03.
-    function test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_OperatorOnlySeed() public {
-        test_givenSelectedCompatibleRecipient_whenSetAgain_reverts(address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-P03.
-    function test_givenSelectedCompatibleRecipient_whenSetAgain_reverts_RolesOverlapSeed() public {
-        test_givenSelectedCompatibleRecipient_whenSetAgain_reverts(address(0x1234), true, true);
+        test_givenSelectedCompatibleRecipient_whenSetAgain_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-I01.
     function test_givenTreasuryAddress_whenYieldRecipientSet_reverts_AdminOnlySeed() public {
-        test_givenTreasuryAddress_whenYieldRecipientSet_reverts(address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-I01.
-    function test_givenTreasuryAddress_whenYieldRecipientSet_reverts_OperatorOnlySeed() public {
-        test_givenTreasuryAddress_whenYieldRecipientSet_reverts(address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-I01.
-    function test_givenTreasuryAddress_whenYieldRecipientSet_reverts_RolesOverlapSeed() public {
-        test_givenTreasuryAddress_whenYieldRecipientSet_reverts(address(0x1234), true, true);
+        test_givenTreasuryAddress_whenYieldRecipientSet_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-I11.
@@ -2736,31 +2009,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I11.
-    function test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst_OperatorOnlySeed()
-        public
-    {
-        test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-I11.
-    function test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst_RolesOverlapSeed()
-        public
-    {
-        test_givenUnsupportedActiveAndPendingAssets_whenRecipientChanges_revertsForActiveFirst(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2769,31 +2018,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-A01.
-    function test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient_OperatorOnlySeed()
-        public
-    {
-        test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-A01.
-    function test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient_RolesOverlapSeed()
-        public
-    {
-        test_givenYieldPayoutPending_whenYieldRecipientChanges_thenRetryPaysCurrentRecipient(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2804,35 +2029,7 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts(
             1,
             1,
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-P04.
-    function test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts_OperatorOnlySeed()
-        public
-    {
-        test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts(
-            1,
-            1,
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-P04.
-    function test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts_RolesOverlapSeed()
-        public
-    {
-        test_givenZeroPointerAndAnyPendingYieldSet_whenSetToZeroAgain_reverts(
-            1,
-            1,
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
@@ -2841,157 +2038,176 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         public
     {
         test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState(
-            address(0x1234),
-            false,
-            false
-        );
-    }
-
-    // Scenarios: SYR-A01.
-    function test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState_OperatorOnlySeed()
-        public
-    {
-        test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState(
-            address(0x1234),
-            true,
-            false
-        );
-    }
-
-    // Scenarios: SYR-A01.
-    function test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState_RolesOverlapSeed()
-        public
-    {
-        test_givenZeroPointer_whenPermittedCallerSelectsRecipient_emitsAndPreservesState(
-            address(0x1234),
-            true,
-            true
+            address(0x1234)
         );
     }
 
     // Scenarios: SYR-P04.
     function test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_AdminOnlySeed() public {
-        test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts(address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-P04.
-    function test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_OperatorOnlySeed() public {
-        test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts(address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-P04.
-    function test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts_RolesOverlapSeed() public {
-        test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts(address(0x1234), true, true);
+        test_givenZeroYieldRecipient_whenSetToZeroAgain_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-D02.
     function test_whenCandidateEnabledReadIsMalformed_reverts_AdminOnlySeed() public {
-        test_whenCandidateEnabledReadIsMalformed_reverts(hex"00", address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-D02.
-    function test_whenCandidateEnabledReadIsMalformed_reverts_OperatorOnlySeed() public {
-        test_whenCandidateEnabledReadIsMalformed_reverts(hex"00", address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-D02.
-    function test_whenCandidateEnabledReadIsMalformed_reverts_RolesOverlapSeed() public {
-        test_whenCandidateEnabledReadIsMalformed_reverts(hex"00", address(0x1234), true, true);
+        test_whenCandidateEnabledReadIsMalformed_reverts(hex"00", address(0x1234));
     }
 
     // Scenarios: SYR-D01.
     function test_whenCandidateKernelReadIsMalformed_reverts_AdminOnlySeed() public {
-        test_whenCandidateKernelReadIsMalformed_reverts(hex"00", address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-D01.
-    function test_whenCandidateKernelReadIsMalformed_reverts_OperatorOnlySeed() public {
-        test_whenCandidateKernelReadIsMalformed_reverts(hex"00", address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-D01.
-    function test_whenCandidateKernelReadIsMalformed_reverts_RolesOverlapSeed() public {
-        test_whenCandidateKernelReadIsMalformed_reverts(hex"00", address(0x1234), true, true);
+        test_whenCandidateKernelReadIsMalformed_reverts(hex"00", address(0x1234));
     }
 
     // Scenarios: SYR-I06.
     function test_whenCandidateLacksRequiredInterface_reverts_AdminOnlySeed() public {
-        test_whenCandidateLacksRequiredInterface_reverts(1, address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-I06.
-    function test_whenCandidateLacksRequiredInterface_reverts_OperatorOnlySeed() public {
-        test_whenCandidateLacksRequiredInterface_reverts(1, address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-I06.
-    function test_whenCandidateLacksRequiredInterface_reverts_RolesOverlapSeed() public {
-        test_whenCandidateLacksRequiredInterface_reverts(1, address(0x1234), true, true);
+        test_whenCandidateLacksRequiredInterface_reverts(1, address(0x1234));
     }
 
     // Scenarios: SYR-D01, SYR-D02.
     function test_whenCandidateMetadataBoundaries_reverts_AdminOnlySeed() public {
-        test_whenCandidateMetadataBoundaries_reverts(address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-D01, SYR-D02.
-    function test_whenCandidateMetadataBoundaries_reverts_OperatorOnlySeed() public {
-        test_whenCandidateMetadataBoundaries_reverts(address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-D01, SYR-D02.
-    function test_whenCandidateMetadataBoundaries_reverts_RolesOverlapSeed() public {
-        test_whenCandidateMetadataBoundaries_reverts(address(0x1234), true, true);
+        test_whenCandidateMetadataBoundaries_reverts(address(0x1234));
     }
 
     // Scenarios: SYR-D04.
     function test_whenCandidateMetadataReverts_reverts_AdminOnlySeed() public {
-        test_whenCandidateMetadataReverts_reverts(false, address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-D04.
-    function test_whenCandidateMetadataReverts_reverts_OperatorOnlySeed() public {
-        test_whenCandidateMetadataReverts_reverts(false, address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-D04.
-    function test_whenCandidateMetadataReverts_reverts_RolesOverlapSeed() public {
-        test_whenCandidateMetadataReverts_reverts(false, address(0x1234), true, true);
+        test_whenCandidateMetadataReverts_reverts(false, address(0x1234));
     }
 
     // Scenarios: SYR-I07.
     function test_whenCandidatePolicyIsInactiveOrDisabled_reverts_AdminOnlySeed() public {
-        test_whenCandidatePolicyIsInactiveOrDisabled_reverts(false, address(0x1234), false, false);
-    }
-
-    // Scenarios: SYR-I07.
-    function test_whenCandidatePolicyIsInactiveOrDisabled_reverts_OperatorOnlySeed() public {
-        test_whenCandidatePolicyIsInactiveOrDisabled_reverts(false, address(0x1234), true, false);
-    }
-
-    // Scenarios: SYR-I07.
-    function test_whenCandidatePolicyIsInactiveOrDisabled_reverts_RolesOverlapSeed() public {
-        test_whenCandidatePolicyIsInactiveOrDisabled_reverts(false, address(0x1234), true, true);
+        test_whenCandidatePolicyIsInactiveOrDisabled_reverts(false, address(0x1234));
     }
 
     // Scenarios: SYR-I05.
     function test_whenEOASelectedAsYieldRecipient_reverts_AdminOnlySeed() public {
-        test_whenEOASelectedAsYieldRecipient_reverts(
-            address(0x2345),
-            address(0x1234),
-            false,
-            false
+        test_whenEOASelectedAsYieldRecipient_reverts(address(0x2345), address(0x1234));
+    }
+
+    // Scenarios: SYR-A03.
+    function test_givenSelectedOperatorWithoutAdmin_whenRecipientRotated_reverts() public {
+        MockYieldRepurchaseRecipient recipient = _compatibleRecipient();
+        assertFalse(roles.hasRole(address(configTimelock), ADMIN_ROLE), "Operator has no ADMIN");
+        _expectAdminRole();
+        vm.prank(address(configTimelock));
+        distributor.setYieldRecipient(address(recipient));
+        assertEq(distributor.yieldRecipient(), address(0), "Operator cannot select recipient");
+    }
+
+    // Scenarios: SYR-A03.
+    function test_givenRevenueProposerWithoutAdmin_whenRecipientRotated_reverts() public {
+        MockYieldRepurchaseRecipient recipient = _compatibleRecipient();
+        vm.prank(admin);
+        rolesAdmin.grantRole(REVENUE_DISTRIBUTOR_ADMIN_ROLE, alice);
+        assertFalse(roles.hasRole(alice, ADMIN_ROLE), "Proposer has no ADMIN");
+        _expectAdminRole();
+        vm.prank(alice);
+        distributor.setYieldRecipient(address(recipient));
+        assertEq(distributor.yieldRecipient(), address(0), "Proposer cannot select recipient");
+    }
+
+    // Scenarios: SYR-A03.
+    function test_whenCallerHasNoAdmin_whenRecipientUnchanged_reverts(address caller_) public {
+        vm.assume(!roles.hasRole(caller_, ADMIN_ROLE));
+        _expectAdminRole();
+        vm.prank(caller_);
+        distributor.setYieldRecipient(address(0));
+        assertEq(distributor.yieldRecipient(), address(0), "Unauthorized no-op keeps recipient");
+    }
+
+    // Scenarios: SYR-A01.
+    function test_givenAdmin_whenRecipientSelected_preservesDirectGovernance(
+        address selectedOperator_
+    ) public {
+        MockYieldRepurchaseRecipient recipient = _compatibleRecipient();
+        if (selectedOperator_ != distributor.configOperator()) {
+            vm.prank(admin);
+            distributor.setConfigOperator(selectedOperator_);
+        }
+        uint256 balanceBefore = token.balanceOf(address(distributor));
+        vm.expectEmit(address(distributor));
+        emit IRevenueDistributor.YieldRecipientSet(address(recipient));
+        vm.prank(admin);
+        distributor.setYieldRecipient(address(recipient));
+        assertEq(distributor.yieldRecipient(), address(recipient), "ADMIN selects recipient");
+        assertEq(
+            token.balanceOf(address(distributor)),
+            balanceBefore,
+            "Pointer change preserves custody"
         );
+        _assertPendingPayouts(address(token), alice, 0, 0, 0);
+        assertEq(distributor.getActiveAssetCount(), 0, "Pointer change creates no route");
     }
 
-    // Scenarios: SYR-I05.
-    function test_whenEOASelectedAsYieldRecipient_reverts_OperatorOnlySeed() public {
-        test_whenEOASelectedAsYieldRecipient_reverts(address(0x2345), address(0x1234), true, false);
+    // Scenarios: SYR-A01.
+    function test_givenAdminAlsoSelectedOperator_whenRecipientSelected() public {
+        vm.prank(admin);
+        distributor.setConfigOperator(admin);
+        MockYieldRepurchaseRecipient recipient = _compatibleRecipient();
+        vm.prank(admin);
+        distributor.setYieldRecipient(address(recipient));
+        assertEq(distributor.yieldRecipient(), address(recipient), "ADMIN/operator overlap works");
     }
 
-    // Scenarios: SYR-I05.
-    function test_whenEOASelectedAsYieldRecipient_reverts_RolesOverlapSeed() public {
-        test_whenEOASelectedAsYieldRecipient_reverts(address(0x2345), address(0x1234), true, true);
+    // Scenarios: SYR-A01.
+    function test_givenAdmin_whenOperatorSelectionSeeds_preservesDirectGovernance() public {
+        test_givenAdmin_whenRecipientSelected_preservesDirectGovernance(address(0));
+        test_givenAdmin_whenRecipientSelected_preservesDirectGovernance(address(configTimelock));
+        test_givenAdmin_whenRecipientSelected_preservesDirectGovernance(bob);
+    }
+
+    // Scenarios: SYR-A03.
+    function test_whenUnauthorizedCallerSeeds_whenRecipientUnchanged_reverts() public {
+        test_whenCallerHasNoAdmin_whenRecipientUnchanged_reverts(address(0));
+        test_whenCallerHasNoAdmin_whenRecipientUnchanged_reverts(address(configTimelock));
+        test_whenCallerHasNoAdmin_whenRecipientUnchanged_reverts(emergency);
+    }
+
+    // Scenarios: SYR-L02, SYR-L03.
+    function test_givenInactive_whenEnabledSeeds_revertsBeforeAuthority() public {
+        test_givenInactive_whenSelectedOperatorRotates_revertsBeforeAuthority(true);
+        _setPolicyActive(address(distributor), true);
+        test_givenInactive_whenSelectedOperatorRotates_revertsBeforeAuthority(false);
+    }
+
+    // Scenarios: SYR-L01.
+    function test_givenDisabled_whenSelectedOperatorRotates_revertsBeforeAuthority() public {
+        _disableDistributor();
+        _expectNotEnabled();
+        vm.prank(address(configTimelock));
+        distributor.setYieldRecipient(address(0));
+        assertEq(distributor.yieldRecipient(), address(0), "Paused failure preserves recipient");
+    }
+
+    // Scenarios: SYR-L02, SYR-L03.
+    function test_givenInactive_whenSelectedOperatorRotates_revertsBeforeAuthority(
+        bool enabled_
+    ) public {
+        if (!enabled_) _disableDistributor();
+        _setPolicyActive(address(distributor), false);
+        _expectPolicyInactive();
+        vm.prank(address(configTimelock));
+        distributor.setYieldRecipient(address(0));
+        assertEq(distributor.yieldRecipient(), address(0), "Inactive failure preserves recipient");
+    }
+
+    // Scenarios: SYR-V01.
+    function test_whenAnyCallerValidatesRecipient_preservesReadOnlySemantics(
+        address caller_
+    ) public {
+        MockYieldRepurchaseRecipient recipient = _compatibleRecipient();
+        bytes32 fundsBefore = _revenueFundsDigest();
+        vm.prank(caller_);
+        distributor.validateSetYieldRecipient(address(recipient));
+        assertEq(distributor.yieldRecipient(), address(0), "Validation does not select recipient");
+        assertEq(_revenueFundsDigest(), fundsBefore, "Validation preserves all funds and routes");
+    }
+
+    function _compatibleRecipient() private returns (MockYieldRepurchaseRecipient recipient) {
+        recipient = new MockYieldRepurchaseRecipient(kernel);
+        _setPolicyActive(address(recipient), true);
+    }
+
+    function _expectAdminRole() private {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
     }
 }
 // forge-lint: disable-end(calls-loop,literal-instead-of-constant,unsafe-typecast)

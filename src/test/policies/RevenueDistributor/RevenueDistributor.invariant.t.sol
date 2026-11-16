@@ -42,8 +42,9 @@ contract RevenueDistributorInvariantTest is StdInvariant, RevenueDistributorTest
             recipient: address(replacementTreasury),
             bps: 1_667
         });
-        vm.startPrank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(firstYieldRecipient));
+        vm.startPrank(address(configTimelock));
         distributor.setAssetRoutes(address(asset), 2_000, routes);
         vm.stopPrank();
 

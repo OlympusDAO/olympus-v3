@@ -10,6 +10,7 @@ interface IBurnerLoansActivator {
         address ohm;
         address floan;
         address depositManager;
+        address depositManagerTimelock;
         address core;
         address auth;
         address config;

@@ -49,9 +49,6 @@ contract RevenueDistributorConfigTimelock is
     uint256 internal constant _FOUR_ABI_WORD_BYTES = 128;
     /// @dev Conflict-key namespace for per-asset actions.
     bytes32 internal constant _ASSET_DOMAIN = keccak256("REVENUE_DISTRIBUTOR_ASSET");
-    /// @dev Conflict-key namespace for the global yield recipient.
-    bytes32 internal constant _YIELD_RECIPIENT_DOMAIN =
-        keccak256("REVENUE_DISTRIBUTOR_YIELD_RECIPIENT");
 
     /// @dev Distributor configured by this timelock.
     IRevenueDistributor internal immutable _DISTRIBUTOR;
@@ -170,23 +167,6 @@ contract RevenueDistributorConfigTimelock is
     /// @dev Reverts if:
     ///      - The caller lacks admin and revenue_distributor_admin roles.
     ///      - This timelock is disabled, inactive, or not the selected config operator.
-    ///      - The distributor is disabled or inactive.
-    ///      - The action conflicts with another queued action.
-    function queueSetYieldRecipient(
-        address recipient_
-    ) external override onlyActive givenEnabled onlyProposerRole returns (uint64) {
-        return
-            _queueAction(
-                address(_DISTRIBUTOR),
-                IRevenueDistributor.setYieldRecipient.selector,
-                abi.encode(recipient_)
-            );
-    }
-
-    /// @inheritdoc IRevenueDistributorConfigTimelock
-    /// @dev Reverts if:
-    ///      - The caller lacks admin and revenue_distributor_admin roles.
-    ///      - This timelock is disabled, inactive, or not the selected config operator.
     ///      - The action conflicts with another queued action.
     function queueRescue(
         address asset_,
@@ -287,18 +267,11 @@ contract RevenueDistributorConfigTimelock is
             _DISTRIBUTOR.validateSetAssetRoutes(asset, bps, routes);
             return;
         }
-        if (
-            selector == IRevenueDistributor.disableAssetRoutes.selector ||
-            selector == IRevenueDistributor.setYieldRecipient.selector
-        ) {
+        if (selector == IRevenueDistributor.disableAssetRoutes.selector) {
             if (action_.payload.length != _ABI_WORD_BYTES) _revertUnsupportedAction(action_);
             _requireTargetActiveAndEnabled();
             address requestedAddress = abi.decode(action_.payload, (address));
-            if (selector == IRevenueDistributor.disableAssetRoutes.selector) {
-                _DISTRIBUTOR.validateDisableAssetRoutes(requestedAddress);
-            } else {
-                _DISTRIBUTOR.validateSetYieldRecipient(requestedAddress);
-            }
+            _DISTRIBUTOR.validateDisableAssetRoutes(requestedAddress);
             return;
         }
         _revertUnsupportedAction(action_);
@@ -331,18 +304,13 @@ contract RevenueDistributorConfigTimelock is
         return address(_DISTRIBUTOR);
     }
 
-    /// @dev Shares an asset key among its route, retirement, and rescue actions; yield recipient
-    ///      changes use a separate global key.
+    /// @dev Shares an asset key among its route, retirement, and rescue actions.
     function _configKeys(
         ITimelockBatchQueue.BatchAction memory action_
     ) internal pure override returns (bytes32[] memory keys) {
         keys = new bytes32[](1);
-        if (action_.selector == IRevenueDistributor.setYieldRecipient.selector) {
-            keys[0] = _YIELD_RECIPIENT_DOMAIN;
-        } else {
-            address asset = abi.decode(action_.payload, (address));
-            keys[0] = keccak256(abi.encode(_ASSET_DOMAIN, asset));
-        }
+        address asset = abi.decode(action_.payload, (address));
+        keys[0] = keccak256(abi.encode(_ASSET_DOMAIN, asset));
     }
 
     /// @dev Stales route changes on distribution or selected-operator changes, and rescue on
@@ -353,9 +321,6 @@ contract RevenueDistributorConfigTimelock is
         bytes32,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32) {
-        if (action_.selector == IRevenueDistributor.setYieldRecipient.selector) {
-            return keccak256(abi.encode(_DISTRIBUTOR.yieldRecipient(), _readConfigOperator()));
-        }
         address asset = abi.decode(action_.payload, (address));
         if (
             action_.selector == IRevenueDistributorRescue.rescue.selector ||
@@ -384,8 +349,6 @@ contract RevenueDistributorConfigTimelock is
             _DISTRIBUTOR.setAssetRoutes(asset, bps, routes);
         } else if (selector == IRevenueDistributor.disableAssetRoutes.selector) {
             _DISTRIBUTOR.disableAssetRoutes(abi.decode(action_.payload, (address)));
-        } else if (selector == IRevenueDistributor.setYieldRecipient.selector) {
-            _DISTRIBUTOR.setYieldRecipient(abi.decode(action_.payload, (address)));
         } else if (selector == IRevenueDistributorRescue.rescue.selector) {
             (address asset, address destination) = abi.decode(action_.payload, (address, address));
             _DISTRIBUTOR_RESCUE.rescue(asset, destination);

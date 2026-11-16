@@ -14,7 +14,7 @@ Default: the acting policy is Kernel-active. Inactivity tests retain valid calle
 
 Own-policy admission: require Kernel-active RevenueDistributorConfigTimelock; own inactivity uses `RevenueDistributorConfigTimelock_PolicyNotActive(this policy)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-Permissionless executor: fuzz without exclusions; proposer authority after queue is irrelevant. Delay=1 day, execution window=3 days. Prefix `ITimelockBatchQueue_` applies to timing/flag errors; `IConfigTimelockBatchQueue_` applies to key/hash errors. Standard accessible/time checks occur before RDT enabled/activity/operator checks. Each sub-action checks its hash immediately before dispatch, in array order; earlier writes can stale later hashes. Config locks exclude another unresolved action on the same destination-scoped key. They do not prevent one batch from holding an asset-scoped route key and the separate global yield-recipient key.
+Permissionless executor: fuzz without exclusions; proposer authority after queue is irrelevant. Delay=1 day, execution window=3 days. Prefix `ITimelockBatchQueue_` applies to timing/flag errors; `IConfigTimelockBatchQueue_` applies to key/hash errors. Standard accessible/time checks occur before RDT enabled/activity/operator checks. Each sub-action checks its hash immediately before dispatch, in array order; earlier writes can stale later hashes. Config locks exclude another unresolved action on the same destination-scoped key. The queue admits only asset-scoped settings; ADMIN recipient rotation is a separate direct operation.
 
 Unchanged means balances, liabilities, route configuration, membership indexes and lifecycle state retain their pre-call values; a reverted transaction commits no events. Check exact error data. Views are permissionless, including while disabled or Kernel-inactive. Execution success marks executed, clears sub-actions, releases every key and emits ordered per-sub-action logs followed by TimelockActionExecuted. Any failed sub-action rolls back every earlier write/transfer/log, executed flag and key release; queued data remains available for retry or cancellation.
 
@@ -25,7 +25,7 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 | RDCT-EXECUTE-E11 | Any executor, fuzz | true | false | Ready | Yes | true | true | NotEnabled() | Unchanged | Covered: [configuration][test_givenTimelockDisabled_whenExecuted_reverts], [rescue][test_givenQueuedRequest_givenTimelockDisabled_whenExecuted_reverts] |
 | RDCT-EXECUTE-E12 | Any executor, fuzz | false | true | Ready | Yes | true | true | RevenueDistributorConfigTimelock_PolicyNotActive(RDT) | Unchanged | Covered: [configuration][test_givenTimelockInactive_whenExecuted_reverts], [rescue][test_givenQueuedRequest_givenTimelockInactive_whenExecuted_reverts] |
 | EXEC-L04 | Any executor, fuzz | true | true | Ready | No | true | true | ConfigOperator_Unauthorized(RDT) | Unchanged | Covered: [executor and configuration classes][test_givenOperatorRotatedAfterQueue_whenConfigurationExecuted_reverts] |
-| EXEC-L02 | Any executor, fuzz | true | true | Ready configuration | Yes | true | false | NotEnabled() | Unchanged; re-enable RD to retry | Covered: [route creation, route retirement and yield pointer with retry][test_givenTargetDisabledAfterQueue_whenConfigurationExecuted_revertsThenRetries] |
+| EXEC-L02 | Any executor, fuzz | true | true | Ready configuration | Yes | true | false | NotEnabled() | Unchanged; re-enable RD to retry | Covered: [route creation and route retirement with retry][test_givenTargetDisabledAfterQueue_whenConfigurationExecuted_revertsThenRetries] |
 | EXEC-L05 | Any executor, fuzz | true | true | Ready configuration | Yes | false | true | RevenueDistributor_PolicyNotActive(RD) | Unchanged; reactivate RD to retry | Covered: [evidence][test_givenTargetInactiveAfterQueue_whenExecuted_revertsThenRetries] |
 | EXEC-L06 | Any executor, fuzz | true | true | Ready configuration | Yes | false | false | RevenueDistributor_PolicyNotActive(RD) before target local enablement | Unchanged; reactivate and re-enable RD to retry | Covered: [evidence][test_givenTargetInactiveAfterQueue_whenExecuted_revertsThenRetries] |
 
@@ -59,7 +59,7 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 
 | ID | Caller | Guarded config after queue | Custody after queue | Pending debt after queue | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| RDCT-EXECUTE-E05 | Any executor, fuzz | Encoded state changed | Fuzz unchanged/changed | Fuzz unchanged/changed | ConfigStateChanged(actionId, index, key, expected, actual) | Rollback and retain queue | Covered: [rescue listing][test_givenQueuedActiveAsset_whenRetired_reverts], [route hash][test_whenRouteChanges_executionRevertsAndRetainsKey], [global hash][test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey] |
+| RDCT-EXECUTE-E05 | Any executor, fuzz | Encoded state changed | Fuzz unchanged/changed | Fuzz unchanged/changed | ConfigStateChanged(actionId, index, key, expected, actual) | Rollback and retain queue | Covered: [rescue listing][test_givenQueuedActiveAsset_whenRetired_reverts], [route hash][test_whenRouteChanges_executionRevertsAndRetainsKey], [recipient in route hash][test_givenAdminChangesYieldRecipient_whenQueuedRouteExecutes_revertsThenRetries] |
 | EXEC-S02 | Any executor, fuzz | Unchanged | Balance changed, or unchanged | Pending debt changed, or unchanged; at least one changes | Guard hash remains valid; execution proceeds to live input validation | Apply action or its live target error; queue semantics follow that result | Covered: [entitlement increases][test_givenQueuedRequest_whenEntitlementIncreases], [decreases but stays sufficient][test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient], [equals request][test_givenQueuedRequest_whenEntitlementEqualsAmount], [custody increases][test_givenQueuedRequest_whenCustodyIncreases] |
 
 ## Batch ordering
@@ -67,8 +67,7 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 | ID | Caller | Sub-actions | Asset/key relationship | Execution order | Live recipient/route relationship | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | EXEC-P02 | Any executor, fuzz | Two route updates | Independent assets/keys | Supplied order | Both compatible | Execute both in order | Both configurations installed atomically | Covered: [executor, ordered sub-action logs and key release][test_givenTwoDifferentAssetRoutes_whenBatchExecutes] |
-| EXEC-I03 | Any executor, fuzz | Route update plus yield-pointer update; batch valid against pre-batch state | Different locks: asset-scoped route key plus global yield key | Fuzz route-first/yield-first | The first sub-action makes the candidate collide with the second: route-first adds it as a route recipient; yield-first changes the value included in `assetDistributionHash` | Route-first: DuplicateRecipient(candidate); yield-first: ConfigStateChanged at later route | Rollback earlier sub-action and all logs; retain both locks and queued sub-actions | Covered: [route first][test_givenConflictingRouteAndYield_whenRouteFirstBatchExecutes_revertsAtomically], [yield first][test_givenConflictingRouteAndYield_whenYieldFirstBatchExecutes_revertsAtomically] |
-| EXEC-I05 | Any executor, fuzz | Yield-pointer update and route update | Independent asset key plus global key | Fuzz yield-first/route-first | Otherwise compatible | Yield-first: later route ConfigStateChanged because its hash includes global yieldRecipient; compatible route-first then yield succeeds | Yield-first failure rolls back both actions and retains all keys; route-first completes in order | Covered: [both supplied orders and arbitrary executor][test_givenCompatibleRouteAndYield_whenBatchExecutesInSuppliedOrder] |
+| EXEC-I05 | Any executor, fuzz | Route queued, then direct ADMIN recipient change | Asset key retained | Ready execution | Recipient changes the route commitment | ConfigStateChanged with exact old/new hashes; restored recipient permits retry | Route remains unapplied and key retained until retry | Covered: [ADMIN drift and retry][test_givenAdminChangesYieldRecipient_whenQueuedRouteExecutes_revertsThenRetries] |
 
 ## Batch rollback
 
@@ -100,12 +99,10 @@ Execute the stored amount=4 at a valid ready timestamp. Expect one unchanged RD 
 [test_givenOperatorRotatedAfterQueue_whenConfigurationExecuted_reverts]: ./executeQueuedAction.t.sol#L374
 [test_givenTargetDisabledAfterQueue_whenConfigurationExecuted_revertsThenRetries]: ./executeQueuedAction.t.sol#L247
 [test_givenTargetInactiveAfterQueue_whenExecuted_revertsThenRetries]: ./executeQueuedAction.t.sol#L279
-[test_givenQueuedRequest_givenTimelockDisabled_whenExecuted_reverts]: ./queueRescuePendingPayout.t.sol#L870
-[test_givenQueuedRequest_givenTimelockInactive_whenExecuted_reverts]: ./queueRescuePendingPayout.t.sol#L879
-[test_givenQueuedActiveAsset_whenRetired_reverts]: ./queueRescuePendingPayout.t.sol#L632
-[test_givenTwoDifferentAssetRoutes_whenBatchExecutes]: ./queueBatch.t.sol#L1343
-[test_givenConflictingRouteAndYield_whenRouteFirstBatchExecutes_revertsAtomically]: ./queueBatch.t.sol#L1092
-[test_givenConflictingRouteAndYield_whenYieldFirstBatchExecutes_revertsAtomically]: ./queueBatch.t.sol#L1128
+[test_givenQueuedRequest_givenTimelockDisabled_whenExecuted_reverts]: ./queueRescuePendingPayout.t.sol#L837
+[test_givenQueuedRequest_givenTimelockInactive_whenExecuted_reverts]: ./queueRescuePendingPayout.t.sol#L846
+[test_givenQueuedActiveAsset_whenRetired_reverts]: ./queueRescuePendingPayout.t.sol#L599
+[test_givenTwoDifferentAssetRoutes_whenBatchExecutes]: ./queueBatch.t.sol#L1093
 [test_givenQueuedRescueBatch_whenLaterBucketPaidBeforeExecution_reverts]: ./queueBatch.t.sol#L74
 [test_givenTimelockDisabled_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L314
 [test_givenTimelockInactive_whenExecuted_reverts]: ./executeQueuedAction.t.sol#L329
@@ -117,52 +114,52 @@ Execute the stored amount=4 at a valid ready timestamp. Expect one unchanged RD 
 [test_whenActionAlreadyExecuted_revertsBeforeLifecycleChecks]: ./executeQueuedAction.t.sol#L159
 [test_whenExecutedOrUnknownActionRead_returnsTerminalStateAndDefaults]: ./executeQueuedAction.t.sol#L176
 [test_whenRouteChanges_executionRevertsAndRetainsKey]: ./queueSetAssetRoutes.t.sol#L431
-[test_whenPointerChangesAfterQueue_executionRevertsAndRetainsKey]: ./queueSetYieldRecipient.t.sol#L419
-[test_givenCompatibleRouteAndYield_whenBatchExecutesInSuppliedOrder]: ./queueBatch.t.sol#L1173
-[test_givenQueuedRequest_whenEntitlementIncreases]: ./queueRescuePendingPayout.t.sol#L458
-[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient]: ./queueRescuePendingPayout.t.sol#L480
-[test_givenQueuedRequest_whenEntitlementEqualsAmount]: ./queueRescuePendingPayout.t.sol#L508
-[test_givenQueuedRequest_whenCustodyIncreases]: ./queueRescuePendingPayout.t.sol#L536
-[test_givenQueuedFixedRecipient_whenTreasuryUpgraded]: ./queueRescuePendingPayout.t.sol#L712
-[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts]: ./queueRescuePendingPayout.t.sol#L737
-[test_givenQueuedRequest_whenDistributorBecomesInactive_reverts]: ./queueRescuePendingPayout.t.sol#L852
-[test_givenQueuedFixedRecipient_whenRouteChanges]: ./queueRescuePendingPayout.t.sol#L670
-[test_givenQueuedRequest_whenEntitlementIsInsufficient_reverts]: ./queueRescuePendingPayout.t.sol#L561
-[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts]: ./queueRescuePendingPayout.t.sol#L775
-[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts]: ./queueRescuePendingPayout.t.sol#L827
-[test_givenQueuedRequest_whenTokenRejectsTransfer_reverts]: ./queueRescuePendingPayout.t.sol#L810
-[test_givenQueuedFixedRecipient_whenYieldRecipientChanges]: ./queueRescuePendingPayout.t.sol#L687
-[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts]: ./queueRescuePendingPayout.t.sol#L593
+[test_givenQueuedRequest_whenEntitlementIncreases]: ./queueRescuePendingPayout.t.sol#L425
+[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient]: ./queueRescuePendingPayout.t.sol#L447
+[test_givenQueuedRequest_whenEntitlementEqualsAmount]: ./queueRescuePendingPayout.t.sol#L475
+[test_givenQueuedRequest_whenCustodyIncreases]: ./queueRescuePendingPayout.t.sol#L503
+[test_givenQueuedFixedRecipient_whenTreasuryUpgraded]: ./queueRescuePendingPayout.t.sol#L679
+[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts]: ./queueRescuePendingPayout.t.sol#L704
+[test_givenQueuedRequest_whenDistributorBecomesInactive_reverts]: ./queueRescuePendingPayout.t.sol#L819
+[test_givenQueuedFixedRecipient_whenRouteChanges]: ./queueRescuePendingPayout.t.sol#L637
+[test_givenQueuedRequest_whenEntitlementIsInsufficient_reverts]: ./queueRescuePendingPayout.t.sol#L528
+[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts]: ./queueRescuePendingPayout.t.sol#L742
+[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts]: ./queueRescuePendingPayout.t.sol#L794
+[test_givenQueuedRequest_whenTokenRejectsTransfer_reverts]: ./queueRescuePendingPayout.t.sol#L777
+[test_givenQueuedFixedRecipient_whenYieldRecipientChanges]: ./queueRescuePendingPayout.t.sol#L654
+[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts]: ./queueRescuePendingPayout.t.sol#L560
 [test_givenSameActionCallback_whenNestedFailureCaught]: ./executeQueuedActionCallback.t.sol#L13
 [test_givenIndependentActionCallback_whenNestedFailureCaught]: ./executeQueuedActionCallback.t.sol#L26
 [test_givenSameActionCallback_whenNestedFailurePropagated_reverts]: ./executeQueuedActionCallback.t.sol#L40
 [test_givenIndependentActionCallback_whenNestedFailurePropagated_reverts]: ./executeQueuedActionCallback.t.sol#L51
-[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1418
-[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1430
-[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1442
-[test_givenQueuedRequest_whenEntitlementEqualsAmount_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1454
-[test_givenQueuedRequest_whenEntitlementEqualsAmount_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1464
-[test_givenQueuedRequest_whenEntitlementEqualsAmount_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1474
-[test_givenQueuedRequest_whenCustodyIncreases_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1339
-[test_givenQueuedRequest_whenCustodyIncreases_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1344
-[test_givenQueuedRequest_whenCustodyIncreases_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1349
-[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1386
-[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1396
-[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1408
-[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1303
-[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1315
-[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1327
-[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1484
-[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1494
-[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1506
-[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1354
-[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1364
-[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1376
-[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1273
-[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1283
-[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1293
-[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1243
-[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1253
-[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1263
+[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1385
+[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1397
+[test_givenQueuedRequest_whenEntitlementDecreasesButRemainsSufficient_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1409
+[test_givenQueuedRequest_whenEntitlementEqualsAmount_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1421
+[test_givenQueuedRequest_whenEntitlementEqualsAmount_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1431
+[test_givenQueuedRequest_whenEntitlementEqualsAmount_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1441
+[test_givenQueuedRequest_whenCustodyIncreases_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1306
+[test_givenQueuedRequest_whenCustodyIncreases_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1311
+[test_givenQueuedRequest_whenCustodyIncreases_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1316
+[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1353
+[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1363
+[test_givenQueuedRequest_whenEntitlementAlreadyPaid_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1375
+[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1270
+[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1282
+[test_givenQueuedRepurchaseRecipient_whenRepurchaseRecipientChanges_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1294
+[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1451
+[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1461
+[test_givenQueuedTreasuryRecipient_whenTreasuryUpgraded_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1473
+[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1321
+[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1331
+[test_givenQueuedRequest_whenCustodyIsInsufficient_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1343
+[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1240
+[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1250
+[test_givenQueuedFixedRecipient_whenYieldRecipientChanges_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1260
+[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1210
+[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1220
+[test_givenQueuedFixedRecipient_whenTreasuryUpgraded_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1230
 
-[test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes]: ./queueRescuePendingPayout.t.sol#L1541
+[test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes]: ./queueRescuePendingPayout.t.sol#L1508
+
+[test_givenAdminChangesYieldRecipient_whenQueuedRouteExecutes_revertsThenRetries]: ./queueBatch.t.sol#L1155

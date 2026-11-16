@@ -10,7 +10,7 @@ import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActiva
 
 // Libraries
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
-import {ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansDeployHarness} from "./BurnerLoansDeployHarness.sol";
@@ -108,6 +108,7 @@ abstract contract BurnerLoansActivatorTest is Test {
         _graph.ohm = address(_ohm);
         _graph.floan = _deployer.resolve("olympus.modules.OlympusFixedTermLoan");
         _graph.depositManager = _policy("DepositManager");
+        _graph.depositManagerTimelock = _policy("DepositManagerConfigTimelock");
         _graph.core = _policy("BurnerLoansCore");
         _graph.auth = _deployer.resolve("olympus.periphery.BurnerLoansAuth");
         _graph.config = _policy("BurnerLoansConfig");
@@ -163,6 +164,7 @@ abstract contract BurnerLoansActivatorTest is Test {
         _rolesAdmin.grantRole(BL_LIQUIDATION_POLICY_ROLE, _graph.seize);
         _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, _graph.yieldClaimerTask);
         _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, _graph.seizerTask);
+        _rolesAdmin.grantRole(HEART_ROLE, address(_heart));
         _heart.enable("");
         // Use the six reviewed mainnet identities and their exact stored selectors.
         for (uint256 i; i < 6; ++i)
@@ -185,7 +187,7 @@ abstract contract BurnerLoansActivatorTest is Test {
                 string.concat("src/scripts/deploy/savedDeployments/", files[i])
             );
             _deployer.loadSequence(sequence);
-            uint256 count = i < 2 ? 1 : 3;
+            uint256 count = i == 0 ? 2 : i == 1 ? 1 : 3;
             for (uint256 j; j < count; ++j) {
                 string memory name = vm.parseJsonString(
                     sequence,

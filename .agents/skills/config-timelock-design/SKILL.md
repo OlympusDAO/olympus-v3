@@ -45,6 +45,12 @@ Resolve only required modules and permissions. A queue that calls authorized tar
 
 ## Target authority
 
+Before admitting selectors, inventory all public/external contract-identity setters, including inherited setters and forwarding paths. Protocol dependencies, configuration controllers and global recipient identities default to ADMIN-only; delegate an exception only when the user expressly approves it, with a documented rationale and negative tests. Classify per-asset allocation recipients, map keys, referrer allowlists and rescue destinations separately. An address argument alone does not make a product setting a protocol binding, and selecting a config operator does not authorize every target setter.
+
+Require an authorization matrix with one row per selector: target guard; intended caller classes; typed queue API; generic batch allowlist/validation; dispatch; interface/operations documentation; positive and negative tests. Trace every indirect path, not just convenience wrappers. ADMIN-only selectors must be absent from both typed APIs and generic admission/dispatch; remove obsolete keys and hashes. Prove selected operators, proposer-only roles and generic batching cannot rotate these bindings while direct ADMIN remains usable. Read-only validators retain their validation semantics without acquiring write authority.
+
+Regression example: `RevenueDistributor.setYieldRecipient` replaces a global protocol recipient; removing only `queueSetYieldRecipient` leaves `queueBatch` as an alternate path. Preserve explicitly delegated per-asset routes and rescue while closing both paths to global replacement.
+
 Target setters within the operator's delegated scope should normally accept direct ADMIN **or** the current nonzero config operator. ADMIN is itself timelocked, so preserve its direct target path without imposing another configuration queue. This does not grant the operator every setter: explicitly inventory delegated selectors and retain ADMIN-only control for other setters, including operator rotation where specified. Any exception to ADMIN/operator access for a delegated setter needs explicit product justification and tests. A proposer role on the queue does not itself grant direct setter authority. At dispatch the queue is the caller; it does not inherit the proposing user's role.
 
 The operator starts unset. Rotation is immediate, zero revokes delegation, and an unchanged address reverts after authorization. Override `_authorizeSetConfigOperator`; its default denies everyone. Prefer ADMIN-only rotation on an active target, allowed while locally paused for repair, unless the product specifies otherwise. Identity selection must not query the upstream queue's lifecycle or reverse binding.
@@ -76,6 +82,8 @@ Validate canonical Kernel binding at construction with `PolicyDependency.require
 Construction must not read target activity, local enablement or current operator selection, including through `readEnabled`/`isEnabled` or membership probes. Both activation routes require current operator selection and the other target checks in the table, without reading target enablement. Revalidate these prerequisites on each activation; a paused target must not prevent queue repair.
 
 A valid startup order is: deploy compatible target and queue; activate/configure the target; enable it if its operator setter requires that; select its queue; activate/enable the queue. Adapt this order to real binding prerequisites and prove it has no activation cycle.
+
+For launch reviews, require the [binding-completeness matrix](../policy-lifecycle/SKILL.md#launch-binding-completeness), including every selected queue and its proposer/cancellation roles. A correct queue implementation is insufficient if deployment, registry, activation or controller selection omits it.
 
 ### Mutation and cancellation admission
 

@@ -34,23 +34,6 @@ contract RevenueDistributorConfigTimelockBatch is TimelockBatchScript {
         proposeBatch();
     }
 
-    /// @notice Submit the reviewed queueSetYieldRecipient inputs to the delayed queue.
-    function queueSetYieldRecipient(
-        bool useDaoMS_,
-        string calldata argsFile_,
-        string calldata ledgerDerivationPath_
-    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
-        console2.log("RevenueDistributorConfigTimelockBatch: queueSetYieldRecipient");
-        addToBatch(
-            _envAddressNotZero("olympus.policies.RevenueDistributorConfigTimelock"),
-            abi.encodeCall(
-                IRevenueDistributorConfigTimelock.queueSetYieldRecipient,
-                (_readBatchArgAddress("queueSetYieldRecipient", "recipient"))
-            )
-        );
-        proposeBatch();
-    }
-
     /// @notice Submit the reviewed queueRescue inputs to the delayed queue.
     function queueRescue(
         bool useDaoMS_,

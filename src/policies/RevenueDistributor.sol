@@ -17,6 +17,7 @@ import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol
 import {FullMath} from "src/libraries/FullMath.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
+import {ADMIN_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
@@ -29,7 +30,6 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleStep.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
-import {REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Revenue Distributor
 /// @notice Holds received ERC-20 assets and settles each managed asset under one distribution.
@@ -235,14 +235,14 @@ contract RevenueDistributor is
 
     /// @inheritdoc IRevenueDistributor
     /// @dev Reverts if:
-    ///      - The caller is neither admin nor the selected operator, or the policy is inactive or disabled.
+    ///      - The caller lacks ADMIN, or the policy is inactive or disabled.
     ///      - The pointer is unchanged, or the recipient is invalid, duplicates a configured recipient, or cannot accept an
     ///        asset with an active route or a pending repurchase share.
     // Zero deliberately clears the optional role destination; _validateYieldRecipient checks every active route.
     // forge-lint: disable-next-line(missing-zero-check)
     function setYieldRecipient(address recipient_) external override nonReentrant {
         _requireActiveAndEnabled();
-        _requireConfigOperatorOrAdmin();
+        if (!_isAdmin(msg.sender)) revert ROLESv1.ROLES_RequireRole(ADMIN_ROLE);
         _validateYieldRecipient(recipient_);
         _yieldRecipient = recipient_;
         emit YieldRecipientSet(recipient_);

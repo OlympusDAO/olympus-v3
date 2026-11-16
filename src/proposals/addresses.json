@@ -387,6 +387,11 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
+        "name": "olympus-policy-deposit-manager-config-timelock"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
         "name": "olympus-policy-backing-oracle"
     },
     {

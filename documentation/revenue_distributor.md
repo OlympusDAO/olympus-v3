@@ -129,8 +129,9 @@ Pause remains available without own activity or downstream readiness. Grace dead
 and use checked uint48 narrowing. Ordinary grace-period changes require own activity; repeating a
 valid grace value still emits GracePeriodSet.
 
-Admin or the selected operator can configure routes and the yield recipient while the distributor
-is enabled and Kernel-active. Admin can rotate or revoke the operator while locally disabled, but
+Admin or the selected operator can configure per-asset routes while the distributor is enabled
+and Kernel-active. Only ADMIN can select or clear the global yield recipient; neither a queue
+proposer role nor generic batching grants that authority. Admin can rotate or revoke the operator while locally disabled, but
 must keep the distributor Kernel-active. Selecting `RevenueDistributorConfigTimelock` adds a delay
 for delegated actions. Direct admin calls use the delay, if any, of the admin role holder.
 
@@ -143,9 +144,9 @@ one day and exposes no public delay setter; a future implementation may expose t
 internal setter within the same bounds. Emergency can cancel unfinished actions while the timelock
 is Kernel-active, including while locally disabled, without distributor or operator reads.
 
-Route changes, retirement, and both rescues share one key per asset; yield-recipient changes use a
-separate global key. Conflicting actions cannot be queued together. Route actions bind the current
-asset state, route, and yield recipient; recipient changes bind the current recipient. Every domain
+Route changes, retirement, and both rescues share one key per asset. The queue has no global
+recipient setter or key. Conflicting actions cannot be queued together. Route actions bind the current
+asset state, route, and yield recipient, so a direct ADMIN recipient change can stale them. Every domain
 also binds the current config operator. Rescue otherwise binds only asset state, so new receipts do
 not stale it. Surplus rescue sweeps the balance at execution;
 pending rescue rechecks the stored recipient and amount against live entitlement.
@@ -185,7 +186,9 @@ all delayed route and rescue work is complete. Before disabling or deactivating 
 ## Rollout
 
 Deploy and activate the distributor, its config timelock, and its task. Enable the distributor,
-then configure the yield recipient and exact fee and yield output tokens. Select and enable its
+then configure the exact fee and yield output tokens. ADMIN selects a compatible yield recipient
+when repurchases are required. Burner Loans leaves it unset until the future YRF V2 OCG; all four
+launch tokens use zero repurchase BPS and empty routes, sending new receipts entirely to Treasury. Select and enable its
 config timelock if delayed delegation is required, grant
 `revenue_distributor_admin` to queue proposers, and enable the periodic task. On the selected BurnerLoansPayout, ADMIN sets the distributor address. ADMIN or Payout's local config operator enables the desired flags, directly or through PayoutConfigTimelock. Run the yield claimer before the distributor task in Heart and size gas against the
 largest intended route. Verify the admin role holder: operator rotation is immediate at the target,

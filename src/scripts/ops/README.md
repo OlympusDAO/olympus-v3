@@ -64,7 +64,8 @@ Authorization, lifecycle, queue admission and execution checks are enforced by t
 | `BurnerLoansSeizerTaskBatch` | `setScanLimits`, `setExecutionGasLimit`, `setNextAssetIndex`, `setNextAssetBorrowerIndex` | ADMIN/`burner_loans_admin` |
 | `BurnerLoansYieldClaimerTaskBatch` | `setExecutionGasLimit`, `setMinimumGasToAttempt`, `setGasReserve`, `setNextAssetIndex` | ADMIN/`burner_loans_admin` |
 | `RevenueDistributorBatch` | `distribute`, `transferPendingPayout` | Anyone |
-| `RevenueDistributorConfigTimelockBatch` | Asset routes, yield recipient, rescue, pending rescue, admitted `queueBatch`; execute/cancel | ADMIN/`revenue_distributor_admin`; anyone/Emergency |
+| `RevenueDistributorConfigTimelockBatch` | Asset routes, rescue, pending rescue, admitted `queueBatch`; execute/cancel | ADMIN/`revenue_distributor_admin`; anyone/Emergency |
+| `DepositManagerConfigTimelockBatch` | `queueSetAssetDepositCap`, admitted `queueBatch`; execute/cancel | ADMIN/`deposit_manager_admin`; anyone/Emergency |
 | `BackingOracleConfigTimelockBatch` | `queueSetBacking`; execute/cancel | ADMIN/`backing_admin`; anyone/Emergency |
 
 `KernelBatch` takes `targets` as an ordered array of keys from the selected chain in `env.json`,
@@ -93,7 +94,7 @@ Shared services have separate lifecycles and can be included in a reviewed targe
 
 Create task/timelock args files when needed. Use a `functions` array with a matching entry-point
 `name` and an `args` object. Field names are read by each script's `_readBatchArg*` calls.
-The six batch configuration-timelock scripts and PriceConfigV2Batch inherit execution and emergency cancellation from
+The seven batch configuration-timelock scripts and PriceConfigV2Batch inherit execution and emergency cancellation from
 `TimelockBatchScript`; each binds its queue environment key. Terminal operations use `actionId` with the actual queue ID. `queueBatch` takes ABI-encoded `(address,bytes4,bytes)[]` in `encodedActions`. Distributor routes
 use ABI-encoded `(address,uint16)[]` in `encodedRoutes`. Supply reads `amount` in OHM base units; withdrawal also reads
 `recipient`. The provider Safe supplies and withdraws its own OHM claim.

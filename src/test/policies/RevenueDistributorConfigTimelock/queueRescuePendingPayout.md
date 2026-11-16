@@ -64,7 +64,7 @@ Current queue order: RDT active → RDT enabled → caller role → selected ope
 | --- | --- | --- | --- | --- |
 | RDT-Q01 | Fuzz permitted role caller | Valid request, amount=4; Active and Retired assets with pending entitlement tested separately | Store unchanged action and emit queue events; no payout | Covered: [test][test_givenValidRequest_whenEachRoleQueues], [test][test_givenValidRequest_whenEachRoleQueues_AdminOnlySeed], [test][test_givenValidRequest_whenEachRoleQueues_RevenueRoleOnlySeed], [test][test_givenValidRequest_whenEachRoleQueues_RolesOverlapSeed] |
 | RDCT-PENDING-RESCUE-Q02 | Authorized queue caller | Another action owns the same asset key; vary recipient/destination/valid amount or use an asset-scoped route action | `IConfigTimelockBatchQueue_ConfigKeyPending(key,owner)`; prior action unchanged | Covered: [another valid request queues][test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts] |
-| RDCT-PENDING-RESCUE-Q03 | Authorized queue caller | Different asset, or global yield-recipient action; both requests valid | Independent keys permit queueing | Covered: [queued][test_givenIndependentAssetAndGlobalAction_whenQueued] |
+| RDCT-PENDING-RESCUE-Q03 | Authorized queue caller | Different asset; both pending-rescue requests valid | Independent keys permit queueing | Covered: [queued][test_givenIndependentAssets_whenQueued] |
 
 ## Invalid inputs
 
@@ -95,11 +95,11 @@ Use a fixed role-recipient fixture with no other debt for routing-change rejecti
 [test_givenDistributorInactive_whenAdminQueuesPendingRescue_reverts]: ./queueRescuePendingPayout.t.sol#L164
 [test_givenDistributorInactive_whenRevenueAdminQueuesPendingRescue_reverts]: ./queueRescuePendingPayout.t.sol#L193
 [test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts]: ./queueRescuePendingPayout.t.sol#L351
-[test_givenIndependentAssetAndGlobalAction_whenQueued]: ./queueRescuePendingPayout.t.sol#L393
+[test_givenIndependentAssets_whenQueued]: ./queueRescuePendingPayout.t.sol#L393
 [test_whenPreviewRejectsBeforeConflict_reverts]: ./queueRescuePendingPayout.t.sol#L323
-[test_givenValidRequest_whenEachRoleQueues_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1518
-[test_givenValidRequest_whenEachRoleQueues_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1523
-[test_givenValidRequest_whenEachRoleQueues_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1528
+[test_givenValidRequest_whenEachRoleQueues_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1485
+[test_givenValidRequest_whenEachRoleQueues_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1490
+[test_givenValidRequest_whenEachRoleQueues_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1495
 [test_givenInactiveTimelock_givenOperatorChanged_whenUnauthorizedQueues_reverts]: ./queueRescuePendingPayout.t.sol#L290
 [test_givenInactiveDisabledTimelock_givenInactiveDistributor_whenUnauthorizedQueues_reverts]: ./queueRescuePendingPayout.t.sol#L280
 [test_givenOperatorChanged_whenUnauthorizedCallerQueues_reverts]: ./queueRescuePendingPayout.t.sol#L299

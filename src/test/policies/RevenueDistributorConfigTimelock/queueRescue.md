@@ -80,7 +80,7 @@ Competing queue faults follow RDT enablement → activity → operator selection
 | ID | Caller | Existing pending request / new request | Queue / effects | Test |
 | --- | --- | --- | --- | --- |
 | RDCT-QUEUE-RESCUE-P03 | Each queue role separately | Same-asset surplus rescue (same/different destination), or valid route action; guarantee rescue→route and route→rescue orders | ConfigKeyPending(Key, owningId); Unchanged; existing request remains usable | Covered: [rescue and route queues conflict][test_givenAssetKeyOwned_whenRescueAndRouteQueuesConflict] |
-| RDCT-QUEUE-RESCUE-P04 | Each queue role separately | Different-asset rescues, or rescue plus independent yield-recipient action | Both queued with independent keys; either execution order affects only the owning keys/state | Covered: [surplus rescue queued and executed in either order][test_givenIndependentAsset_whenSurplusRescueQueuedAndExecutedInEitherOrder], [surplus rescue queued and executed in either order][test_givenYieldConfigurationAction_whenSurplusRescueQueuedAndExecutedInEitherOrder] |
+| RDCT-QUEUE-RESCUE-P04 | Each queue role separately | Different-asset rescues | Both queued with independent keys; either execution order affects only the owning keys/state | Covered: [surplus rescue queued and executed in either order][test_givenIndependentAsset_whenSurplusRescueQueuedAndExecutedInEitherOrder] |
 
 The key is also shared with pending-payout rescue, but both surplus and pending requests cannot be valid simultaneously for the same asset through public flows: surplus requires NeverListed; pending debt requires a managed asset. The mixed-batch cases below prove that the invalid second request's preview runs before the shared-key conflict without fabricating a successful overlap.
 
@@ -125,12 +125,11 @@ RD's transfer/callback matrix owns false-return and guard behavior. Generic call
 [test_whenBalanceQueryReverts_reverts]: ./queueRescue.t.sol#L366
 [test_givenAssetKeyOwned_whenRescueAndRouteQueuesConflict]: ./queueRescue.t.sol#L422
 [test_givenIndependentAsset_whenSurplusRescueQueuedAndExecutedInEitherOrder]: ./queueRescue.t.sol#L470
-[test_givenYieldConfigurationAction_whenSurplusRescueQueuedAndExecutedInEitherOrder]: ./queueRescue.t.sol#L519
-[test_givenQueuedRescue_whenCustodyIncreases]: ./queueRescue.t.sol#L578
-[test_givenQueuedRescue_whenAdminAlreadyRescued]: ./queueRescue.t.sol#L585
-[test_givenQueuedNeverListedAsset_whenActivated_reverts]: ./queueRescue.t.sol#L595
-[test_givenQueuedNeverListedAsset_whenActivatedThenRetired_reverts]: ./queueRescue.t.sol#L621
+[test_givenQueuedRescue_whenCustodyIncreases]: ./queueRescue.t.sol#L519
+[test_givenQueuedRescue_whenAdminAlreadyRescued]: ./queueRescue.t.sol#L526
+[test_givenQueuedNeverListedAsset_whenActivated_reverts]: ./queueRescue.t.sol#L536
+[test_givenQueuedNeverListedAsset_whenActivatedThenRetired_reverts]: ./queueRescue.t.sol#L562
 [test_givenQueuedSurplusRescue_whenDistributorBecomesInactive_revertsThenRetries]: ./queueRescue.t.sol#L290
-[test_givenQueuedSurplus_whenTransferFailsThenRecovers]: ./queueRescue.t.sol#L650
+[test_givenQueuedSurplus_whenTransferFailsThenRecovers]: ./queueRescue.t.sol#L591
 
-[test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes]: ./queueRescue.t.sol#L925
+[test_whenQueuedRescue_commitsCurrentOperatorAndRestorationExecutes]: ./queueRescue.t.sol#L866

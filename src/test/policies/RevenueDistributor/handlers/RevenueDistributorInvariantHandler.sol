@@ -154,11 +154,11 @@ contract RevenueDistributorInvariantHandler is Test {
                     recipient
                 )
             );
-            vm.prank(address(_configTimelock));
+            vm.prank(_admin);
             _distributor.setYieldRecipient(recipient);
             return;
         }
-        vm.prank(address(_configTimelock));
+        vm.prank(_admin);
         _distributor.setYieldRecipient(recipient);
         _expectedYieldRecipient = recipient;
     }

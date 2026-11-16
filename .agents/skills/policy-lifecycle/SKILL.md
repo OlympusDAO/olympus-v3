@@ -55,6 +55,8 @@ Configuration timelocks have a specific activation boundary: enable and reEnable
 
 ## Validate dependency selection and activation
 
+Inventory concrete and inherited contract-identity mutation APIs before reviewing individual guards. Use the configuration timelock skill's [authorization matrix](../config-timelock-design/SKILL.md#target-authority) to compare target guards with every typed, generic and forwarding path. Default protocol dependency, controller and global recipient replacement to ADMIN-only unless the user expressly approves a documented, tested exception; do not expand an operator's authority merely because a setter exists.
+
 Define two predicates for each relationship: **compatibility** (the right kind of contract and binding) and **readiness** (usable now). Reuse those predicates in the setter and enable/reEnable when they enforce the same relationship. A setter may require a ready replacement, but construction or an identity-only binding must not inherit that requirement without an agreed deployment reason.
 
 Before accepting a candidate, check the applicable requirements:
@@ -83,6 +85,12 @@ Use the stateless `PolicyDependency` library for shared Policy Kernel/readiness 
 Prefer a small internal helper shared by setters and activation hooks, or reuse an existing base's hook. Keep component-specific token, accounting and migration checks in the caller. Avoid a new dependency registry, recursive graph validation, generic error forwarding or extra inheritance solely to centralize a few checks. Binding identity must not silently introduce upstream readiness checks.
 
 ## Dependency scenario proof
+
+### Launch binding completeness
+
+For each ADMIN-only binding, record the intended identity; constructor selection or initial setter call; deployment sequence/helper and registry key; selected config operator/queue; exact role and holder grants; Kernel preparation; enablement order; and post-launch assertion. Include inherited setters, immutable targets and intentionally unset pointers. Mark each row configured, intentionally deferred or missing. For future dependencies such as YRF V2, record why the pointer stays unset, the safe launch behavior and the future OCG step that selects the deployed compatible dependency. Never invent a placeholder dependency to complete a row.
+
+Prove startup in dependency order and a representative delayed operational change after governance removes temporary authority. Negative tests must reject proposer/operator attempts to replace ADMIN-only bindings and queue-batch bypasses; late failures must roll back selection, enablement and temporary grants. Check proposal action limits and combined deployment runtime/initcode with concurrent launch changes. Keep the matrix linked to function scenarios and actual execution evidence; do not count isolated target tests as proof of launch wiring.
 
 Keep enable and reEnable prerequisites identical. For each operational Policy dependency, cover active/enabled, inactive/enabled, active/disabled and inactive/disabled while other prerequisites pass. Use permitted callers here; unauthorized coverage belongs in its own table. Include reachable drift after successful activation, restoration/retry, and one valid startup sequence that demonstrates there is no activation cycle.
 

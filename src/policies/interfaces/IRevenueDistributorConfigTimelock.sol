@@ -46,11 +46,6 @@ interface IRevenueDistributorConfigTimelock is ITimelockBatchQueue {
     /// @return actionId Queued action identifier.
     function queueDisableAssetRoutes(address asset_) external returns (uint64 actionId);
 
-    /// @notice Queues a global yield-recipient change.
-    /// @param recipient_ Proposed yield-repurchase recipient.
-    /// @return actionId Queued action identifier.
-    function queueSetYieldRecipient(address recipient_) external returns (uint64 actionId);
-
     /// @notice Queues full execution-time balance rescue of a never-listed asset.
     /// @param asset_ Never-listed asset to recover.
     /// @param destination_ Recipient of the recovered tokens.

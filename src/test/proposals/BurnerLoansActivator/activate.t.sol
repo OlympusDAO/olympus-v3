@@ -2,28 +2,38 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
+import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
-import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/IDepositManagerConfigTimelock.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+
+import {IBurnerLoansAuthTarget} from "src/policies/interfaces/burnerloans/IBurnerLoansAuthTarget.sol";
 
 // Libraries
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
-import {ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansActivatorTest} from "./fixtures/BurnerLoansActivatorTest.sol";
-import {Actions} from "src/Kernel.sol";
+import {Actions, Policy} from "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
+import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerTask.sol";
 import {BurnerLoansActivator} from "src/proposals/BurnerLoansActivator.sol";
 import {MockPeriodicTask} from "src/test/bases/PeriodicTaskManager/MockPeriodicTask.sol";
 
 contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
+    error DepositManagerQueueNotSelected();
     error LateFailure();
 
     // Scenarios: BLAUNCH-A01.
@@ -124,6 +134,49 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             distributor,
             _graph.revenueDistributorTask,
             "Distribution immediately precedes Operator"
+        );
+
+        IRevenueDistributor revenueDistributor = IRevenueDistributor(_graph.revenueDistributor);
+        assertEq(revenueDistributor.yieldRecipient(), address(0), "YRF V2 awaits its own OCG");
+        address[4] memory assets = [_graph.usds, _graph.susds, _graph.usde, _graph.susde];
+        for (uint256 i; i < assets.length; ++i) {
+            (uint16 bps, IRevenueDistributor.AssetRoute[] memory assetRoutes) = revenueDistributor
+                .getAssetDistribution(assets[i]);
+            assertEq(bps, 0, "Launch allocates no repurchase share");
+            assertEq(assetRoutes.length, 0, "Launch allocates every receipt to Treasury");
+            assertEq(
+                uint256(revenueDistributor.assetState(assets[i])),
+                uint256(IRevenueDistributor.AssetState.Active),
+                "Launch asset route is active"
+            );
+        }
+
+        assertEq(
+            IBurnerLoansCoreBound(_graph.lens).core(),
+            _graph.core,
+            "Lens is constructor-bound to launch Core"
+        );
+        assertEq(
+            BurnerLoansSeizerTask(_graph.seizerTask).lens(),
+            _graph.lens,
+            "Seizer uses the deployed Lens"
+        );
+        IDepositManagerConfigTimelock queue = _selectedDepositQueue();
+        assertEq(
+            address(queue.depositManager()),
+            _graph.depositManager,
+            "Queue binds exact manager"
+        );
+        assertEq(
+            address(Policy(address(queue)).kernel()),
+            _graph.kernel,
+            "Queue uses launch Kernel"
+        );
+        assertTrue(_kernel.isPolicyActive(Policy(address(queue))), "Queue is Kernel-active");
+        assertTrue(IEnabler(address(queue)).isEnabled(), "Selected queue is enabled");
+        assertTrue(
+            IEnabler(_graph.depositManager).isEnabled(),
+            "Manager initialized before selection"
         );
     }
 
@@ -335,23 +388,25 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-A02.
     function test_givenMissingRole_whenTimelockActivates_reverts(uint8 index_) public {
-        address[7] memory holders = [
+        address[8] memory holders = [
             address(_activator),
             _graph.core,
             _graph.collateral,
             _graph.debt,
             _graph.seize,
             _graph.yieldClaimerTask,
-            _graph.seizerTask
+            _graph.seizerTask,
+            _graph.heart
         ];
-        bytes32[7] memory roles = [
+        bytes32[8] memory roles = [
             ADMIN_ROLE,
             DEPOSIT_OPERATOR_ROLE,
             BL_COLLATERAL_POLICY_ROLE,
             BL_DEBT_POLICY_ROLE,
             BL_LIQUIDATION_POLICY_ROLE,
             BL_YIELD_CLAIMER_ROLE,
-            BURNER_LOANS_SEIZER_ROLE
+            BURNER_LOANS_SEIZER_ROLE,
+            HEART_ROLE
         ];
         uint256 index = bound(index_, 0, holders.length - 1);
         _rolesAdmin.revokeRole(roles[index], holders[index]);
@@ -406,12 +461,29 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     }
 
     // Scenarios: BLAUNCH-C07.
-    function test_whenAuthBoundToDifferentCore_reverts() public {
-        vm.mockCall(_graph.auth, abi.encodeWithSignature("core()"), abi.encode(_graph.config));
+    function test_whenComponentBoundToDifferentCore_reverts(uint8 index_) public {
+        address[10] memory components = [
+            _graph.auth,
+            _graph.config,
+            _graph.inventory,
+            _graph.payout,
+            _graph.risk,
+            _graph.collateral,
+            _graph.debt,
+            _graph.seize,
+            _graph.lens,
+            _graph.yieldClaimerTask
+        ];
+        address target = components[bound(index_, 0, components.length - 1)];
+        vm.mockCall(
+            target,
+            abi.encodeCall(IBurnerLoansCoreBound.core, ()),
+            abi.encode(_graph.config)
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansActivator.BurnerLoansActivator_InvalidDeployment.selector,
-                _graph.auth
+                target
             )
         );
         new BurnerLoansActivator(_timelock, _graph);
@@ -501,7 +573,25 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
         assertFalse(_oracle.isEnabled(), "Oracle initialization rolls back");
         assertEq(_oracle.backing(), 0, "Initial backing rolls back");
         assertEq(_oracle.configOperator(), address(0), "Oracle controller selection rolls back");
+        assertFalse(
+            IEnabler(_graph.depositManagerTimelock).isEnabled(),
+            "Custody queue enablement rolls back"
+        );
         assertFalse(_oracleQueue.isEnabled(), "Backing queue enablement rolls back");
+
+        assertEq(
+            IConfigOperator(_graph.depositManager).configOperator(),
+            address(0),
+            "Manager controller selection rolls back"
+        );
+        assertEq(
+            IDepositManager(_graph.depositManager).getConfiguredAssets().length,
+            0,
+            "Custody registration rolls back"
+        );
+        vm.clearMockedCalls();
+        _activate();
+        assertTrue(_activator.isActivated(), "Restored prerequisites permit launch retry");
     }
 
     // Scenarios: BLAUNCH-S05.
@@ -628,5 +718,122 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             0,
             "Global cap rolls back"
         );
+    }
+
+    // Scenarios: BLAUNCH-C02, BLAUNCH-C05.
+    function test_givenInvalidManagerQueue_whenConstructed_reverts(uint8 fault_) public {
+        uint256 fault = bound(fault_, 0, 2);
+        address queue = _graph.depositManagerTimelock;
+        if (fault == 0) vm.etch(queue, "");
+        else if (fault == 1)
+            vm.mockCall(
+                queue,
+                abi.encodeCall(IDepositManagerConfigTimelock.depositManager, ()),
+                abi.encode(_graph.core)
+            );
+        else
+            vm.mockCall(
+                queue,
+                abi.encodeCall(IBurnerLoansAuthTarget.kernel, ()),
+                abi.encode(address(new Kernel()))
+            );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidDeployment.selector,
+                queue
+            )
+        );
+        new BurnerLoansActivator(_timelock, _graph);
+    }
+
+    // Scenarios: BLAUNCH-C05.
+    function test_givenManagerQueueBindingDrift_whenActivated_revertsAndRetries(
+        bool foreignKernel_
+    ) public {
+        address queue = _graph.depositManagerTimelock;
+        if (foreignKernel_)
+            vm.mockCall(
+                queue,
+                abi.encodeCall(IBurnerLoansAuthTarget.kernel, ()),
+                abi.encode(address(new Kernel()))
+            );
+        else
+            vm.mockCall(
+                queue,
+                abi.encodeCall(IDepositManagerConfigTimelock.depositManager, ()),
+                abi.encode(_graph.core)
+            );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidDeployment.selector,
+                queue
+            )
+        );
+        _activate();
+        _assertUnlaunched();
+        vm.clearMockedCalls();
+        _activate();
+        assertTrue(_activator.isActivated(), "Restored binding permits retry");
+    }
+
+    // Scenarios: BLAUNCH-S02.
+    function test_givenManagerQueueNotFresh_whenActivated_reverts(bool currentlyEnabled_) public {
+        address queue = _graph.depositManagerTimelock;
+        IEnabler(_graph.depositManager).enable("");
+        IConfigOperator(_graph.depositManager).setConfigOperator(queue);
+        IEnabler(queue).enable("");
+        if (!currentlyEnabled_) IEnabler(queue).disable("");
+        // Remove the earlier manager prerequisite fault without changing queue history.
+        vm.mockCall(
+            _graph.depositManager,
+            abi.encodeCall(IEnabler.isEnabled, ()),
+            abi.encode(false)
+        );
+        vm.mockCall(
+            _graph.depositManager,
+            abi.encodeCall(IEnablerV2.lastTransitionAt, ()),
+            abi.encode(uint48(0))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
+                queue
+            )
+        );
+        _activate();
+        assertFalse(_activator.isActivated(), "Non-fresh queue rejects without consuming launch");
+        assertEq(
+            IConfigOperator(_graph.depositManager).configOperator(),
+            queue,
+            "Prior selection retained"
+        );
+    }
+
+    // Scenarios: BLAUNCH-S02.
+    function test_givenManagerQueueInactive_whenActivated_reverts() public {
+        _kernel.executeAction(Actions.DeactivatePolicy, _graph.depositManagerTimelock);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
+                _graph.depositManagerTimelock
+            )
+        );
+        _activate();
+        _assertUnlaunched();
+    }
+
+    function _selectedDepositQueue() private view returns (IDepositManagerConfigTimelock queue) {
+        address selected = IConfigOperator(_graph.depositManager).configOperator();
+        assertTrue(selected != address(0), "Launch must select DepositManager configuration queue");
+        // Legacy assertions record failure without halting; stop here so a missing controller
+        // cannot be obscured by the dispatcher's fallback JSON lookup or a call to address zero.
+        if (selected == address(0)) revert DepositManagerQueueNotSelected();
+        assertGt(selected.code.length, 0, "Selected queue must have deployed code");
+        assertEq(
+            selected,
+            _policy("DepositManagerConfigTimelock"),
+            "Select the production sequence queue"
+        );
+        queue = IDepositManagerConfigTimelock(selected);
     }
 }

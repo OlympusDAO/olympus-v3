@@ -18,6 +18,9 @@ This reference describes the modular contracts and their current authority check
 | `burner_loans_admin` operational recovery | None beyond the function's state and grace checks |
 | `emergency` pause or cancellation | None beyond the function's state checks |
 
+Protocol dependency, controller and global recipient replacement remains ADMIN-only; queues
+admit only their documented product settings.
+
 A queue does not remove direct ADMIN authority. Revoking a queue as config operator blocks its target calls; it does not erase its queued actions or extend their execution windows.
 
 ## Authorities and expected assignments
@@ -26,6 +29,7 @@ A queue does not remove direct ADMIN authority. Revoking a queue as config opera
 | --- | --- |
 | `admin` | OCG governance; selects components and independent configuration operators |
 | `burner_loans_admin` | Operational administration, queue proposals, task tuning and bounded re-enablement |
+| `deposit_manager_admin` | DAO shared-custody queue proposals and bounded recovery; cannot replace the manager controller |
 | `backing_admin` | Separate backing-oracle proposals and bounded re-enablement of the oracle and its queue |
 | `emergency` | Pauses enabled policies and cancels queued actions |
 | `heart` | Calls periodic `execute()` entry points |

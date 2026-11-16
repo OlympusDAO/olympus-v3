@@ -59,7 +59,7 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 
 | ID | Caller | Callback destination | Nested guarded call | Callback handling | Other destinations | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DIST-C01 | Fuzz all callers | Fuzz configured/yield/Treasury | Distribute, retry, configuration or rescue | Caught | Succeed | Outer success; nested ReentrancyGuardReentrantCall() | Original allocation used; pay once | Covered: [distribution seed][test_givenCallbackToken_nestedDistributionFailsAndPaysOnce], [timelock roles][test_givenMaturedRouteChange_whenTokenCallsTimelockDuringDistribution_thenRouteStaysFixed], [guarded-write matrix][test_givenCallbackFromAnyPayoutClass_whenAnyGuardedWriteAttempted_outerDistributionPaysOnce], [getter observation][test_givenPayoutCallbackReadsPendingGetter_observesDebtBeforeDeliveryClearsIt] |
+| DIST-C01 | Fuzz all callers | Fuzz configured/yield/Treasury | Distribute, retry, configuration or rescue | Caught | Succeed | Outer success; nested ReentrancyGuardReentrantCall() | Original allocation used; pay once | Covered: [distribution seed][test_givenCallbackToken_nestedDistributionFailsAndPaysOnce], [timelock roles][test_givenMaturedRouteChange_whenTokenCallsTimelockDuringDistribution_thenRouteStaysFixed], [guarded-write matrix][test_givenCallbackFromAnyPayoutClass_whenAnyGuardedWriteAttempted_outerDistributionPaysOnce], [authorized recipient rotation seed][test_givenAuthorizedRecipientCallback_whenPointerRotationAttempted_outerDistributionPaysOnce], [getter observation][test_givenPayoutCallbackReadsPendingGetter_observesDebtBeforeDeliveryClearsIt] |
 | DIST-C02 | Fuzz all callers | Fuzz configured/yield/Treasury | Guarded write | Propagated | Succeed | Outer success; affected transfer deferred | Debt and custody retained; no partial failed-token movement | Covered: [seed][test_givenCallbackFailureBubbles_defersEachShare], [caller, logs and retry][test_givenPropagatedGuardFailure_whenAnyCallerDistributes_defersThenRetriesExactly] |
 
 ## Allocation
@@ -91,46 +91,48 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | DIST-L03 | Any address, fuzz, without exclusions | false | false | Distributor locally disabled, then Kernel-deactivated; Asset=`address(0)` | `RevenueDistributor_PolicyNotActive(RD)` before local enablement and asset validation | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenAnyCallerDistributes_revertsActivityFirst] |
 
-[test_givenDisabled_whenManagedBalanceArrives_reverts]: ./distribute.t.sol#L409
-[test_givenKernelInactive_whenManagedBalanceArrives_reverts]: ./distribute.t.sol#L427
-[test_givenZeroBalance_succeedsWithoutTransfer]: ./distribute.t.sol#L512
-[test_givenAliceConfiguredAsRecipient_whenBalanceIsFuzzed]: ./distribute.t.sol#L526
-[test_givenAliceConfiguredAsRecipient_whenBalanceIsMaximum_preservesExactTotal]: ./distribute.t.sol#L549
-[test_givenAliceConfiguredAsRecipient_whenBalanceHasRoundingDust]: ./distribute.t.sol#L362
-[test_givenYieldRecipientVaultEnabled_emitsRepurchaseAndTreasury]: ./distribute.t.sol#L336
+[test_givenDisabled_whenManagedBalanceArrives_reverts]: ./distribute.t.sol#L422
+[test_givenKernelInactive_whenManagedBalanceArrives_reverts]: ./distribute.t.sol#L440
+[test_givenZeroBalance_succeedsWithoutTransfer]: ./distribute.t.sol#L525
+[test_givenAliceConfiguredAsRecipient_whenBalanceIsFuzzed]: ./distribute.t.sol#L539
+[test_givenAliceConfiguredAsRecipient_whenBalanceIsMaximum_preservesExactTotal]: ./distribute.t.sol#L562
+[test_givenAliceConfiguredAsRecipient_whenBalanceHasRoundingDust]: ./distribute.t.sol#L375
+[test_givenYieldRecipientVaultEnabled_emitsRepurchaseAndTreasury]: ./distribute.t.sol#L348
 [test_givenConfiguredRecipientBecomesTreasury_givenNewReceipts_reverts]: ./distribute.t.sol#L29
 [test_givenSecondConfiguredRecipientBecomesTreasury_reverts]: ./distribute.t.sol#L71
 [test_givenConfiguredRecipientBecomesTreasury_givenNoNewReceipts_paysPendingOnce]: ./distribute.t.sol#L113
-[test_givenRecipientTransferFails_keepsOnlyRecipientPending]: ./distribute.t.sol#L445
-[test_givenTreasuryBlacklisted_retainsTreasuryShare]: ./distribute.t.sol#L480
-[test_givenCallbackToken_nestedDistributionFailsAndPaysOnce]: ./distribute.t.sol#L227
-[test_givenMaturedRouteChange_whenTokenCallsTimelockDuringDistribution_thenRouteStaysFixed]: ./distribute.t.sol#L175
-[test_givenCallbackFailureBubbles_defersEachShare]: ./distribute.t.sol#L258
-[test_givenAliceConfiguredAsRecipient_emitsEachRecipientPayout]: ./distribute.t.sol#L318
-[test_givenBalanceReceivedBeforeTreasuryUpgrade_paysNewTreasury]: ./distribute.t.sol#L294
-[test_givenAssetNotActive_whenDistributed_reverts]: ./distribute.t.sol#L570
-[test_givenReservedDebtExceedsCustody_whenDistributed_reverts]: ./distribute.t.sol#L601
-[test_givenTreasuryOnlyRoute_whenBalanceDistributed_paysExactAmount]: ./distribute.t.sol#L621
-[test_givenActiveAsset_whenBalanceQueryReverts_bubblesExactError]: ./distribute.t.sol#L642
-[test_givenTokenReportsTransferSuccessWithoutMovement_recordsApparentDelivery]: ./distribute.t.sol#L664
-[test_givenMultipleTransfersReturnFalse_defersEveryShare]: ./distribute.t.sol#L687
-[test_givenActiveAsset_whenBalanceQueryReturnsMalformedData_reverts]: ./distribute.t.sol#L715
-[test_givenAnyExistingDebtSubset_whenZeroOrOneNewReceiptDistributed_allocatesOnlySurplus]: ./distribute.t.sol#L951
-[test_givenAnyValidRouteTopology_whenReceiptsDistributed_conservesExactAmount]: ./distribute.t.sol#L800
-[test_givenCallbackFromAnyPayoutClass_whenAnyGuardedWriteAttempted_outerDistributionPaysOnce]: ./distribute.t.sol#L1106
-[test_givenConfiguredRecipientBecomesTreasury_whenAnyCallerDistributes_revertsAtomically]: ./distribute.t.sol#L1010
-[test_givenOneConfiguredRecipient_whenBoundaryBalancesDistributed_conservesExactAmount]: ./distribute.t.sol#L902
-[test_givenOneTransferReturnsFalse_whenAnyCallerDistributes_defersOnlySelectedClass]: ./distribute.t.sol#L894
-[test_givenOneTransferReverts_whenAnyCallerDistributes_defersOnlySelectedClass]: ./distribute.t.sol#L943
-[test_givenPayoutCallbackReadsPendingGetter_observesDebtBeforeDeliveryClearsIt]: ./distribute.t.sol#L1177
-[test_givenPropagatedGuardFailure_whenAnyCallerDistributes_defersThenRetriesExactly]: ./distribute.t.sol#L1220
-[test_givenReceiptsBeforeTreasuryUpgrade_whenAnyCallerDistributes_usesCurrentTreasury]: ./distribute.t.sol#L1061
-[test_givenDisabledDistributor_whenAnyCallerDistributes_revertsAndRollsBack]: ./distribute.t.sol#L737
-[test_givenInactiveDistributor_whenAnyCallerDistributes_revertsAndRollsBack]: ./distribute.t.sol#L753
-[test_givenZeroBalance_whenAnyCallerDistributes_makesNoTokenCallOrEvent]: ./distribute.t.sol#L769
-[test_givenTreasuryOnly_whenReceiptBoundariesDistributed]: ./distribute.t.sol#L1466
-[test_givenRepurchaseOnly_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1472
-[test_givenOneConfiguredRecipient_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1484
-[test_givenTwoConfiguredRecipients_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1496
-[test_givenMixedRecipients_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1508
-[test_givenInactiveAndDisabled_whenAnyCallerDistributes_revertsActivityFirst]: ./distribute.t.sol#L1541
+[test_givenRecipientTransferFails_keepsOnlyRecipientPending]: ./distribute.t.sol#L458
+[test_givenTreasuryBlacklisted_retainsTreasuryShare]: ./distribute.t.sol#L493
+[test_givenCallbackToken_nestedDistributionFailsAndPaysOnce]: ./distribute.t.sol#L239
+[test_givenMaturedRouteChange_whenTokenCallsTimelockDuringDistribution_thenRouteStaysFixed]: ./distribute.t.sol#L187
+[test_givenCallbackFailureBubbles_defersEachShare]: ./distribute.t.sol#L270
+[test_givenAliceConfiguredAsRecipient_emitsEachRecipientPayout]: ./distribute.t.sol#L330
+[test_givenBalanceReceivedBeforeTreasuryUpgrade_paysNewTreasury]: ./distribute.t.sol#L306
+[test_givenAssetNotActive_whenDistributed_reverts]: ./distribute.t.sol#L583
+[test_givenReservedDebtExceedsCustody_whenDistributed_reverts]: ./distribute.t.sol#L614
+[test_givenTreasuryOnlyRoute_whenBalanceDistributed_paysExactAmount]: ./distribute.t.sol#L634
+[test_givenActiveAsset_whenBalanceQueryReverts_bubblesExactError]: ./distribute.t.sol#L655
+[test_givenTokenReportsTransferSuccessWithoutMovement_recordsApparentDelivery]: ./distribute.t.sol#L677
+[test_givenMultipleTransfersReturnFalse_defersEveryShare]: ./distribute.t.sol#L700
+[test_givenActiveAsset_whenBalanceQueryReturnsMalformedData_reverts]: ./distribute.t.sol#L728
+[test_givenAnyExistingDebtSubset_whenZeroOrOneNewReceiptDistributed_allocatesOnlySurplus]: ./distribute.t.sol#L964
+[test_givenAnyValidRouteTopology_whenReceiptsDistributed_conservesExactAmount]: ./distribute.t.sol#L813
+[test_givenCallbackFromAnyPayoutClass_whenAnyGuardedWriteAttempted_outerDistributionPaysOnce]: ./distribute.t.sol#L1119
+[test_givenConfiguredRecipientBecomesTreasury_whenAnyCallerDistributes_revertsAtomically]: ./distribute.t.sol#L1023
+[test_givenOneConfiguredRecipient_whenBoundaryBalancesDistributed_conservesExactAmount]: ./distribute.t.sol#L915
+[test_givenOneTransferReturnsFalse_whenAnyCallerDistributes_defersOnlySelectedClass]: ./distribute.t.sol#L907
+[test_givenOneTransferReverts_whenAnyCallerDistributes_defersOnlySelectedClass]: ./distribute.t.sol#L956
+[test_givenPayoutCallbackReadsPendingGetter_observesDebtBeforeDeliveryClearsIt]: ./distribute.t.sol#L1195
+[test_givenPropagatedGuardFailure_whenAnyCallerDistributes_defersThenRetriesExactly]: ./distribute.t.sol#L1238
+[test_givenReceiptsBeforeTreasuryUpgrade_whenAnyCallerDistributes_usesCurrentTreasury]: ./distribute.t.sol#L1074
+[test_givenDisabledDistributor_whenAnyCallerDistributes_revertsAndRollsBack]: ./distribute.t.sol#L750
+[test_givenInactiveDistributor_whenAnyCallerDistributes_revertsAndRollsBack]: ./distribute.t.sol#L766
+[test_givenZeroBalance_whenAnyCallerDistributes_makesNoTokenCallOrEvent]: ./distribute.t.sol#L782
+[test_givenTreasuryOnly_whenReceiptBoundariesDistributed]: ./distribute.t.sol#L1484
+[test_givenRepurchaseOnly_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1490
+[test_givenOneConfiguredRecipient_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1502
+[test_givenTwoConfiguredRecipients_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1514
+[test_givenMixedRecipients_whenBpsAndReceiptBoundariesDistributed]: ./distribute.t.sol#L1526
+[test_givenInactiveAndDisabled_whenAnyCallerDistributes_revertsActivityFirst]: ./distribute.t.sol#L1559
+
+[test_givenAuthorizedRecipientCallback_whenPointerRotationAttempted_outerDistributionPaysOnce]: ./distribute.t.sol#L176

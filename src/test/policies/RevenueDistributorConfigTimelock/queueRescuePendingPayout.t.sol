@@ -388,9 +388,9 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
         }
     }
 
-    /// @notice Another asset and a global yield-recipient action are independent of the rescue key.
-    // Scenarios: RDCT-BATCH-Q03, RDCT-PENDING-RESCUE-Q03.
-    function test_givenIndependentAssetAndGlobalAction_whenQueued(
+    /// @notice Another asset has an independent pending-rescue key.
+    // Scenarios: RDCT-PENDING-RESCUE-Q03.
+    function test_givenIndependentAssets_whenQueued(
         address proposerSeed_,
         bool revenueOnly_,
         bool overlap_
@@ -405,19 +405,6 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
             uint256 snapshot = vm.snapshotState();
             uint64 first = _assertQueued(callers[c], address(_rescueAsset), alice, bob, _AMOUNT);
             uint64 second = _assertQueued(callers[c], address(other), alice, bob, _AMOUNT);
-            MockYieldRepurchaseRecipient candidate = new MockYieldRepurchaseRecipient(kernel);
-            _setPolicyActive(address(candidate), true);
-            vm.prank(callers[c]);
-            uint64 globalActionId = configTimelock.queueSetYieldRecipient(address(candidate));
-            (bytes32 globalKey, bytes32 globalHash) = configTimelock.getQueuedConfigState(
-                globalActionId,
-                0,
-                0
-            );
-            assertTrue(
-                globalActionId != first && globalActionId != second,
-                "global action has independent ID"
-            );
             assertEq(
                 configTimelock.pendingActionId(_key(address(_rescueAsset))),
                 first,
@@ -427,26 +414,6 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
                 configTimelock.pendingActionId(_key(address(other))),
                 second,
                 "second asset owns independent key"
-            );
-            assertEq(
-                configTimelock.pendingActionId(globalKey),
-                globalActionId,
-                "global key owns yield action"
-            );
-            assertEq(
-                globalHash,
-                keccak256(abi.encode(address(0), distributor.configOperator())),
-                "global guard captures zero pointer"
-            );
-            assertEq(
-                configTimelock.getQueuedConfigStateCount(globalActionId, 0),
-                1,
-                "global action has one guard"
-            );
-            assertEq(
-                configTimelock.getQueuedConfigDestination(globalActionId, 0),
-                address(distributor),
-                "global action targets distributor"
             );
             assertEq(other.balanceOf(address(distributor)), 10, "other asset unpaid at queue time");
             assertTrue(vm.revertToState(snapshot), "restore independent queues");
@@ -1224,19 +1191,19 @@ contract RevenueDistributorConfigTimelockQueueRescuePendingPayoutTest is
         test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts(address(0x1234), true, true);
     }
 
-    // Scenarios: RDCT-BATCH-Q03.
-    function test_givenIndependentAssetAndGlobalAction_whenQueued_AdminOnlySeed() public {
-        test_givenIndependentAssetAndGlobalAction_whenQueued(address(0x1234), false, false);
+    // Scenarios: RDCT-PENDING-RESCUE-Q03.
+    function test_givenIndependentAssets_whenQueued_AdminOnlySeed() public {
+        test_givenIndependentAssets_whenQueued(address(0x1234), false, false);
     }
 
-    // Scenarios: RDCT-BATCH-Q03.
-    function test_givenIndependentAssetAndGlobalAction_whenQueued_RevenueRoleOnlySeed() public {
-        test_givenIndependentAssetAndGlobalAction_whenQueued(address(0x1234), true, false);
+    // Scenarios: RDCT-PENDING-RESCUE-Q03.
+    function test_givenIndependentAssets_whenQueued_RevenueRoleOnlySeed() public {
+        test_givenIndependentAssets_whenQueued(address(0x1234), true, false);
     }
 
-    // Scenarios: RDCT-BATCH-Q03.
-    function test_givenIndependentAssetAndGlobalAction_whenQueued_RolesOverlapSeed() public {
-        test_givenIndependentAssetAndGlobalAction_whenQueued(address(0x1234), true, true);
+    // Scenarios: RDCT-PENDING-RESCUE-Q03.
+    function test_givenIndependentAssets_whenQueued_RolesOverlapSeed() public {
+        test_givenIndependentAssets_whenQueued(address(0x1234), true, true);
     }
 
     // Scenarios: RDT-E19.

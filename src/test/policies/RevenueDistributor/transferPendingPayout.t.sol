@@ -506,13 +506,13 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
     ) public {
         amount_ = bound(amount_, 1, type(uint256).max - 7);
         MockYieldRepurchaseRecipient oldRecipient = _newYieldRecipientForAsset(address(token));
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(oldRecipient));
         _setAssetState(retired_);
         distributor.seedPendingForTest(address(token), bob, 7, amount_, 0);
         token.mint(address(distributor), amount_ + 7);
         MockYieldRepurchaseRecipient newRecipient = _newYieldRecipientForAsset(address(token));
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(newRecipient));
 
         vm.recordLogs();
@@ -545,12 +545,12 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
     // Scenarios: RTRY-P03.
     function test_givenMaximumYieldPayout_whenRecipientRotates_retryPaysMaximum() public {
         MockYieldRepurchaseRecipient oldRecipient = _newYieldRecipientForAsset(address(token));
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(oldRecipient));
         distributor.seedPendingForTest(address(token), alice, 0, type(uint256).max, 0);
         token.mint(address(distributor), type(uint256).max);
         MockYieldRepurchaseRecipient newRecipient = _newYieldRecipientForAsset(address(token));
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(newRecipient));
 
         distributor.transferPendingPayout(address(token), address(newRecipient));
@@ -571,12 +571,12 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
     ) public {
         amount_ = bound(amount_, 1, type(uint256).max - 7);
         MockYieldRepurchaseRecipient oldRecipient = _newYieldRecipientForAsset(address(token));
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(oldRecipient));
         _setAssetState(retired_);
         distributor.seedPendingForTest(address(token), bob, 7, amount_, 0);
         token.mint(address(distributor), amount_ + 7);
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(0));
 
         vm.recordLogs();
@@ -605,11 +605,11 @@ contract RevenueDistributorTransferPendingPayoutTest is RevenueDistributorTest {
     // Scenarios: RTRY-P12.
     function test_givenMaximumYieldPayout_whenRecipientClears_retryPaysTreasuryMaximum() public {
         MockYieldRepurchaseRecipient oldRecipient = _newYieldRecipientForAsset(address(token));
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(oldRecipient));
         distributor.seedPendingForTest(address(token), alice, 0, type(uint256).max, 0);
         token.mint(address(distributor), type(uint256).max);
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(0));
 
         distributor.transferPendingPayout(address(token), address(treasury));

@@ -35,20 +35,21 @@ and its deposits remain in place.
 | Global active debt cap | 100,000 OHM (`100_000e9`) | Aggregate launch limit |
 | Referral fee share and whitelist | 0%; no initial referrers | Zero-fee launch |
 | DepositManager operator namespace and period | `brn`; period `1` for Core | Burner Loans receipt namespace |
-| DepositManager deployment | Shared v1.1 manager; reuse existing ReceiptTokenManager | Keep existing v1.0 deposits |
+| DepositManager deployment | Shared v1.1 manager and its exact-manager configuration timelock; reuse existing ReceiptTokenManager | Keep existing v1.0 deposits; OCG selects/enables queue after manager initialization |
 | Backing oracle | Deploy BackingOracle and its timelock separately; OCG initializes backing to $11.99 (`11_990_000_000_000_000_000`, 18 decimals) | Same Kernel; active and never enabled before OCG |
 | Backing oracle configuration | Select its timelock; one-day notice and seven-day execution window | Separate shared-service administration |
 | PRICE compatibility | OlympusPricev1_2 or PRICE major 2 | Preserve existing PRICE and Heart |
 | PRICE configuration policy | Existing active PriceConfigv2 (`0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd`) | OCG admits missing USDe before activation |
 | PriceCache | USD cache, 18 decimals; maximum age `300` seconds | Refresh pairs on demand |
 | Payout routing | Fresh RevenueDistributor; both distributor flags true | USDS, sUSDS, USDe and sUSDe route to Treasury |
+| Yield recipient | Unset; zero repurchase BPS and empty routes for all four assets | Future YRF V2 OCG selects the deployed compatible recipient through ADMIN |
 | RevenueDistributor configuration | Deploy its independent configuration timelock, activate and enable it; select it as distributor config operator | DAO proposes delayed changes |
 | RevenueDistributorTask | Deploy, activate and enable; 1,000,000 execution gas; 250,000 minimum attempt gas; 100,000 reserve gas | Run after yield collection |
 | Initial inventory supply | None required; DAO multisig receives the inventory provider role | Mint shortfall within global cap |
 | SeizerTask | Check at most 100 borrowers; seize at most 25; 10,000,000 execution gas | Bounded initial scan |
 | YieldClaimerTask | 1,000,000 execution gas; 250,000 minimum attempt gas; 100,000 reserve gas | Explicit execution budget |
 | Automation | Enable SeizerTask, YieldClaimerTask and RevenueDistributorTask in that order at Heart indexes 3, 4 and 5, immediately before Operator | Preserve existing task order |
-| Operational roles | DAO: `burner_loans_admin`, `burner_loans_inventory_provider` and `revenue_distributor_admin` and `backing_admin`; existing emergency multisig: `emergency` | No permanent ADMIN grant |
+| Operational roles | DAO: `burner_loans_admin`, `burner_loans_inventory_provider` and `revenue_distributor_admin`, `backing_admin` and `deposit_manager_admin`; existing emergency multisig: `emergency` | No permanent ADMIN grant |
 
 The four Burner Loans queues and RevenueDistributor queue use one-day notice and a three-day inclusive execution window.
 These are implementation constants, not new constructor arguments or mutable launch settings.

@@ -227,7 +227,7 @@ abstract contract BurnerLoansForkTest is ProposalTest {
                 string.concat("src/scripts/deploy/savedDeployments/", files[i])
             );
             _deployer.loadSequence(sequence);
-            uint256 count = i < 2 ? 1 : 3;
+            uint256 count = i == 0 ? 2 : i == 1 ? 1 : 3;
             for (uint256 j; j < count; ++j) {
                 string memory name = vm.parseJsonString(
                     sequence,
@@ -255,6 +255,10 @@ abstract contract BurnerLoansForkTest is ProposalTest {
         );
 
         addresses.addAddress("olympus-policy-deposit-manager", _graph.depositManager);
+        addresses.addAddress(
+            "olympus-policy-deposit-manager-config-timelock",
+            _graph.depositManagerTimelock
+        );
         addresses.addAddress("olympus-policy-burner-loans-core", _graph.core);
         addresses.addAddress("olympus-policy-burner-loans-config", _graph.config);
         addresses.addAddress("olympus-policy-burner-loans-inventory", _graph.inventory);

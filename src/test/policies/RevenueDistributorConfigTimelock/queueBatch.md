@@ -16,7 +16,7 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 
 Own-policy admission: require Kernel-active RevenueDistributorConfigTimelock; own inactivity uses `RevenueDistributorConfigTimelock_PolicyNotActive(this policy)` before body/input/idempotent work. Own activity precedes local enablement, caller roles, and input or target checks. Successful body scenarios assume Local active=true, except explicit admission failures.
 
-RDT = Revenue Distributor Config Timelock; RD = RevenueDistributor. Proposers are Admin or Revenue Distributor Admin, separately. Successful queue gates: RDT Kernel-active, RDT enabled, permitted proposer, selected as RD configOperator, RD Kernel-active and locally enabled. Error order follows that list: own RevenueDistributorConfigTimelock_PolicyNotActive(RDT), NotEnabled(), NotAuthorised(), then selected-operator and target checks. Generic timing/cancellation is owned by executeQueuedAction/cancelQueuedAction plans. Batch bounds 1..15 inclusive; each supported action has one key. Route/retirement/surplus-rescue/pending-rescue for the same asset share one key; yield selection uses a separate global key. Surplus requires NeverListed, while pending debt requires an asset that has been managed, so both rescue previews cannot simultaneously be valid for one asset. Across separate queued actions, an Admin can list/fund a formerly NeverListed asset while its old surplus action owns the key; a newly valid pending request then fails with ConfigKeyPending. Rescue selectors have their own preview/lifecycle rules documented in their plans.
+RDT = Revenue Distributor Config Timelock; RD = RevenueDistributor. Proposers are Admin or Revenue Distributor Admin, separately. Successful queue gates: RDT Kernel-active, RDT enabled, permitted proposer, selected as RD configOperator, RD Kernel-active and locally enabled. Error order follows that list: own RevenueDistributorConfigTimelock_PolicyNotActive(RDT), NotEnabled(), NotAuthorised(), then selected-operator and target checks. Generic timing/cancellation is owned by executeQueuedAction/cancelQueuedAction plans. Batch bounds 1..15 inclusive; each supported action has one key. Route/retirement/surplus-rescue/pending-rescue for the same asset share one key. Global yield-recipient replacement is outside this queue's delegated authority and must reject as an unsupported selector. Surplus requires NeverListed, while pending debt requires an asset that has been managed, so both rescue previews cannot simultaneously be valid for one asset. Across separate queued actions, an Admin can list/fund a formerly NeverListed asset while its old surplus action owns the key; a newly valid pending request then fails with ConfigKeyPending. Rescue selectors have their own preview/lifecycle rules documented in their plans.
 
 Queue success: exact target/selector/ABI payload, proposer, ID, queuedAt/ready/expiry, scoped conflict key and independently computed expected-state hash; one TimelockSubActionQueued then one TimelockActionQueued; no configuration or token movement. Failed queue: ID, keys, stored actions and RD state unchanged; no committed events. At a ready timestamp, verify exact forwarding and downstream configuration effect; failed execution retains action/key and rolls back target state.
 
@@ -41,7 +41,6 @@ Queue success: exact target/selector/ABI payload, proposer, ID, queuedAt/ready/e
 | BATCH-P02 | Fuzz permitted role caller | true | false | Valid rescue | Valid rescue | Independent assets | Rescue-only batch queues | No payment at queue | Covered: [test][test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch], [test][test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_AdminOnlySeed], [test][test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_RevenueRoleOnlySeed], [test][test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_RolesOverlapSeed] |
 | BATCH-I07 | Fuzz permitted role caller | true | false | Valid rescue | Route update | Independent valid keys | PolicyDependency_NotActive(RD) | Entire batch and prior key acquisition roll back | Covered: [test][test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically], [test][test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_AdminOnlySeed], [test][test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_RevenueRoleOnlySeed], [test][test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_RolesOverlapSeed] |
 | BATCH-I08 | Fuzz permitted role caller | true | false | Valid rescue | Route retirement | Independent valid keys | PolicyDependency_NotActive(RD) | Entire batch and prior key acquisition roll back | Covered: [test][test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically], [test][test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_AdminOnlySeed], [test][test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RevenueRoleOnlySeed], [test][test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RolesOverlapSeed] |
-| BATCH-I09 | Fuzz permitted role caller | true | false | Valid rescue | Yield-recipient update | Independent valid keys | PolicyDependency_NotActive(RD) | Entire batch and prior key acquisition roll back | Covered: [test][test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically], [test][test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_AdminOnlySeed], [test][test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RevenueRoleOnlySeed], [test][test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RolesOverlapSeed] |
 
 ## Batch size
 
@@ -61,27 +60,25 @@ Queue success: exact target/selector/ABI payload, proposer, ID, queuedAt/ready/e
 | ID | Caller | Queue conflict / action input | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- |
 | BATCH-I02 | Fuzz permitted role caller | Unsupported target at first position | RevenueDistributorConfigTimelock_InvalidAction(target, selector) | Queue and next ID unchanged | Covered: [test][test_whenFirstActionTargetOrSelectorUnsupported_reverts], [test][test_whenFirstActionTargetOrSelectorUnsupported_reverts_AdminOnlySeed], [test][test_whenFirstActionTargetOrSelectorUnsupported_reverts_RevenueRoleOnlySeed], [test][test_whenFirstActionTargetOrSelectorUnsupported_reverts_RolesOverlapSeed] |
-| BATCH-I11 | Fuzz permitted role caller | Unsupported selector for RD at first position | RevenueDistributorConfigTimelock_InvalidAction(target, selector) | Queue and next ID unchanged | Covered: [test][test_whenFirstActionTargetOrSelectorUnsupported_reverts], [test][test_whenFirstActionTargetOrSelectorUnsupported_reverts_AdminOnlySeed], [test][test_whenFirstActionTargetOrSelectorUnsupported_reverts_RevenueRoleOnlySeed], [test][test_whenFirstActionTargetOrSelectorUnsupported_reverts_RolesOverlapSeed] |
-| BATCH-I12 | Fuzz permitted role caller | Unsupported target or selector after a valid action | RevenueDistributorConfigTimelock_InvalidAction(target, selector) | Rollback all earlier key acquisitions and ID | Covered: [test][test_whenLaterActionUnsupported_rollsBackEarlierKey], [test][test_whenLaterActionUnsupported_rollsBackEarlierKey_AdminOnlySeed], [test][test_whenLaterActionUnsupported_rollsBackEarlierKey_RevenueRoleOnlySeed], [test][test_whenLaterActionUnsupported_rollsBackEarlierKey_RolesOverlapSeed] |
+| BATCH-I11 | Fuzz permitted role caller; seed exclusive roles and overlap | Unsupported selector at first position: arbitrary invalid selector or setYieldRecipient with a valid candidate payload | RevenueDistributorConfigTimelock_InvalidAction(target,selector) | No ID, keys or pointer changes | Covered: [first action][test_whenFirstActionTargetOrSelectorUnsupported_reverts], [ADMIN][test_whenFirstActionTargetOrSelectorUnsupported_reverts_AdminOnlySeed], [proposer][test_whenFirstActionTargetOrSelectorUnsupported_reverts_RevenueRoleOnlySeed], [overlap][test_whenFirstActionTargetOrSelectorUnsupported_reverts_RolesOverlapSeed] |
+| BATCH-I12 | Fuzz permitted role caller; seed exclusive roles and overlap | Unsupported arbitrary selector or setYieldRecipient after a valid asset route | RevenueDistributorConfigTimelock_InvalidAction(target,selector) | Rollback prior key acquisition and ID; route can queue again; pointer unchanged | Covered: [later action][test_whenLaterActionUnsupported_rollsBackEarlierKey], [ADMIN][test_whenLaterActionUnsupported_rollsBackEarlierKey_AdminOnlySeed], [proposer][test_whenLaterActionUnsupported_rollsBackEarlierKey_RevenueRoleOnlySeed], [overlap][test_whenLaterActionUnsupported_rollsBackEarlierKey_RolesOverlapSeed] |
 
 ## Payload inputs
 
 | ID | Caller | Queue conflict / action input | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- |
-| BATCH-I03 | Fuzz permitted role caller | Static disable/yield length not 32; surplus length not 64; pending-rescue length not 128; truncated/trailing word | RevenueDistributorConfigTimelock_InvalidAction(target,selector) | Queue unchanged | Covered: [test][test_whenStaticPayloadLengthIsInvalid_reverts], [test][test_whenStaticPayloadLengthIsInvalid_reverts_AdminOnlySeed], [test][test_whenStaticPayloadLengthIsInvalid_reverts_RevenueRoleOnlySeed], [test][test_whenStaticPayloadLengthIsInvalid_reverts_RolesOverlapSeed] |
+| BATCH-I03 | Fuzz permitted role caller | Static disable length not 32; surplus length not 64; pending-rescue length not 128; truncated/trailing word | RevenueDistributorConfigTimelock_InvalidAction(target,selector) | Queue unchanged | Covered: [test][test_whenStaticPayloadLengthIsInvalid_reverts], [test][test_whenStaticPayloadLengthIsInvalid_reverts_AdminOnlySeed], [test][test_whenStaticPayloadLengthIsInvalid_reverts_RevenueRoleOnlySeed], [test][test_whenStaticPayloadLengthIsInvalid_reverts_RolesOverlapSeed] |
 | QBATCH-V01 | Fuzz all getter callers; queue setup by ADMIN_ROLE holder | Successfully queued live batch; sub-action index=length or MAX | ITimelockBatchQueue_SubActionIndexOutOfBounds(id,index,length) | Read only; valid 0..length-1 indexes return exact supplied actions | Covered: [evidence][test_whenLiveBatchRead_returnsExactSubActionsAndRejectsInvalidIndex] |
 | QBATCH-V02 | Fuzz all getter callers; queue setup by ADMIN_ROLE holder | Live batch, unknown ID, or cleared configuration slot; key index=count or MAX | IConfigTimelockBatchQueue_ConfigStateIndexOutOfBounds(id,subIndex,keyIndex,count) | Read only; valid indexes expose independently expected keys/hashes | Covered: [evidence][test_whenQueuedConfigRead_returnsExactStateAndDefaults] |
 | BATCH-I04 | Fuzz permitted role caller | setAssetRoutes missing its dynamic offset, or decodable but noncanonical shifted offsets/trailing bytes | Raw ABI decode failure for the missing offset; decodable noncanonical gives InvalidAction(target,selector) | Queue unchanged | Covered: [test][test_whenRoutePayloadEncodingIsInvalid_reverts], [test][test_whenRoutePayloadEncodingIsInvalid_reverts_AdminOnlySeed], [test][test_whenRoutePayloadEncodingIsInvalid_reverts_RevenueRoleOnlySeed], [test][test_whenRoutePayloadEncodingIsInvalid_reverts_RolesOverlapSeed] |
-| BATCH-I05 | Fuzz permitted role caller | Dirty upper bits in the first address word of route, retirement, yield, surplus-rescue or pending-rescue payload | Solidity ABI decode failure at queue time | Queue unchanged; no target effect or queue ownership | Covered: [test][test_whenAddressWordHasDirtyUpperBits_revertsAtQueue], [test][test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_AdminOnlySeed], [test][test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RevenueRoleOnlySeed], [test][test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RolesOverlapSeed] |
+| BATCH-I05 | Fuzz permitted role caller | Dirty upper bits in the first address word of route, retirement, surplus-rescue or pending-rescue payload | Solidity ABI decode failure at queue time | Queue unchanged; no target effect or queue ownership | Covered: [test][test_whenAddressWordHasDirtyUpperBits_revertsAtQueue], [test][test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_AdminOnlySeed], [test][test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RevenueRoleOnlySeed], [test][test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RolesOverlapSeed] |
 
 ## Key conflicts
 
 | ID | Caller | Queue conflict / action input | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- |
 | RDCT-BATCH-Q02 | Fuzz permitted role caller | Same key already queued, or twice in batch; route/retire/pending-rescue pairs on a managed asset with valid previews; surplus/surplus on a NeverListed asset. Exclude same-batch surplus/pending pair | IConfigTimelockBatchQueue_ConfigKeyPending(key,ownerId) | Atomic queue rollback | Covered: [test][test_whenReachableAssetActionsShareKey_batchReverts], [test][test_whenReachableAssetActionsShareKey_batchReverts_AdminOnlySeed], [test][test_whenReachableAssetActionsShareKey_batchReverts_RevenueRoleOnlySeed], [test][test_whenReachableAssetActionsShareKey_batchReverts_RolesOverlapSeed], [test][test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts], [test][test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_AdminOnlySeed], [test][test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_RevenueRoleOnlySeed], [test][test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_RolesOverlapSeed] |
-| BATCH-Q02 | Fuzz permitted role caller | Actions use distinct asset keys | Success | Independent keys queue; no RD changes at queue | Covered: [test][test_givenQueuedRoute_whenOtherAssetRouteQueued], [test][test_givenQueuedRoute_whenOtherAssetRouteQueued_AdminOnlySeed], [test][test_givenQueuedRoute_whenOtherAssetRouteQueued_RevenueRoleOnlySeed], [test][test_givenQueuedRoute_whenOtherAssetRouteQueued_RolesOverlapSeed] |
-| RDCT-BATCH-Q03 | Fuzz permitted role caller | One asset action and one global yield action | Success | Independent keys queue; no RD changes at queue | Covered: [test][test_givenIndependentAssetAndGlobalAction_whenQueued], [test][test_givenIndependentAssetAndGlobalAction_whenQueued_AdminOnlySeed], [test][test_givenIndependentAssetAndGlobalAction_whenQueued_RevenueRoleOnlySeed], [test][test_givenIndependentAssetAndGlobalAction_whenQueued_RolesOverlapSeed] |
-| BATCH-Q04 | Fuzz permitted role caller | Two global yield actions | IConfigTimelockBatchQueue_ConfigKeyPending(globalKey, ownerId) | Atomic queue rollback | Covered: [test][test_whenTwoYieldActionsShareGlobalKey_batchReverts], [test][test_whenTwoYieldActionsShareGlobalKey_batchReverts_AdminOnlySeed], [test][test_whenTwoYieldActionsShareGlobalKey_batchReverts_RevenueRoleOnlySeed], [test][test_whenTwoYieldActionsShareGlobalKey_batchReverts_RolesOverlapSeed] |
+| BATCH-Q02 | Fuzz permitted role caller | Actions use distinct asset keys | Success | Independent keys queue with no RD changes; proposer-only route batch executes after delay without recipient/custody changes | Covered: [test][test_givenQueuedRoute_whenOtherAssetRouteQueued], [test][test_givenQueuedRoute_whenOtherAssetRouteQueued_AdminOnlySeed], [test][test_givenQueuedRoute_whenOtherAssetRouteQueued_RevenueRoleOnlySeed], [test][test_givenQueuedRoute_whenOtherAssetRouteQueued_RolesOverlapSeed], [execution][test_givenTwoDifferentAssetRoutes_whenBatchExecutes] |
 
 ## Admission precedence regressions
 
@@ -97,94 +94,88 @@ TL denotes this timelock. Unchanged includes the queue, lifecycle and custody fi
 | BATCH-L08 | Fuzz permitted proposer roles; seed exclusive roles and overlap | true | false | 16-action batch | NotEnabled() | No ID, payload, guard or log | Covered: [fuzz][test_givenDisabled_whenBatchExceedsMaximum_reverts], [seed][test_whenBatchExceedsMaximum_reverts_AdminOnlySeed], [seed][test_whenBatchExceedsMaximum_reverts_RevenueRoleOnlySeed], [seed][test_whenBatchExceedsMaximum_reverts_RolesOverlapSeed] |
 | BATCH-L09 | Fuzz permitted proposer roles; seed exclusive roles and overlap | false | true | 16-action batch | RevenueDistributorConfigTimelock_PolicyNotActive(TL) | No ID, payload, guard or log | Covered: [fuzz][test_givenInactive_whenBatchExceedsMaximum_reverts] |
 
-[test_givenOperatorRotated_whenBatchQueued_reverts]: ./queueBatch.t.sol#L201
-[test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically]: ./queueBatch.t.sol#L226
-[test_whenFirstActionTargetOrSelectorUnsupported_reverts]: ./queueBatch.t.sol#L380
-[test_whenLaterActionUnsupported_rollsBackEarlierKey]: ./queueBatch.t.sol#L411
-[test_whenStaticPayloadLengthIsInvalid_reverts]: ./queueBatch.t.sol#L444
-[test_whenRoutePayloadEncodingIsInvalid_reverts]: ./queueBatch.t.sol#L501
-[test_whenAddressWordHasDirtyUpperBits_revertsAtQueue]: ./queueBatch.t.sol#L555
-[test_whenTwoYieldActionsShareGlobalKey_batchReverts]: ./queueBatch.t.sol#L594
-[test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically]: ./queueBatch.t.sol#L254
-[test_whenLiveBatchRead_returnsExactSubActionsAndRejectsInvalidIndex]: ./queueBatch.t.sol#L292
-[test_whenQueuedConfigRead_returnsExactStateAndDefaults]: ./queueBatch.t.sol#L332
-[test_givenDisabled_whenBatchQueued_reverts]: ./queueBatch.t.sol#L746
-[test_givenPolicyInactive_whenBatchQueued_reverts]: ./queueBatch.t.sol#L789
-[test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch]: ./queueBatch.t.sol#L1412
-[test_whenValidSizedBatchQueued_storesEveryActionAndGuard]: ./queueBatch.t.sol#L916
-[test_whenEmptyBatchQueued_reverts]: ./queueBatch.t.sol#L836
-[test_whenBatchExceedsMaximum_reverts]: ./queueBatch.t.sol#L984
-[test_whenReachableAssetActionsShareKey_batchReverts]: ./queueBatch.t.sol#L624
-[test_whenKnownUnauthorizedIdentitiesQueueBatch_reverts]: ./queueBatch.t.sol#L723
-[test_givenUnauthorizedCaller_whenBatchQueued_reverts]: ./queueBatch.t.sol#L708
-[test_whenMaximumBatchQueued]: ./queueBatch.t.sol#L895
+[test_givenOperatorRotated_whenBatchQueued_reverts]: ./queueBatch.t.sol#L190
+[test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically]: ./queueBatch.t.sol#L215
+[test_whenFirstActionTargetOrSelectorUnsupported_reverts]: ./queueBatch.t.sol#L364
+[test_whenLaterActionUnsupported_rollsBackEarlierKey]: ./queueBatch.t.sol#L397
+[test_whenStaticPayloadLengthIsInvalid_reverts]: ./queueBatch.t.sol#L437
+[test_whenRoutePayloadEncodingIsInvalid_reverts]: ./queueBatch.t.sol#L493
+[test_whenAddressWordHasDirtyUpperBits_revertsAtQueue]: ./queueBatch.t.sol#L547
+[test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically]: ./queueBatch.t.sol#L243
+[test_whenLiveBatchRead_returnsExactSubActionsAndRejectsInvalidIndex]: ./queueBatch.t.sol#L276
+[test_whenQueuedConfigRead_returnsExactStateAndDefaults]: ./queueBatch.t.sol#L316
+[test_givenDisabled_whenBatchQueued_reverts]: ./queueBatch.t.sol#L692
+[test_givenPolicyInactive_whenBatchQueued_reverts]: ./queueBatch.t.sol#L735
+[test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch]: ./queueBatch.t.sol#L1227
+[test_whenValidSizedBatchQueued_storesEveryActionAndGuard]: ./queueBatch.t.sol#L862
+[test_whenEmptyBatchQueued_reverts]: ./queueBatch.t.sol#L782
+[test_whenBatchExceedsMaximum_reverts]: ./queueBatch.t.sol#L930
+[test_whenReachableAssetActionsShareKey_batchReverts]: ./queueBatch.t.sol#L585
+[test_whenKnownUnauthorizedIdentitiesQueueBatch_reverts]: ./queueBatch.t.sol#L669
+[test_givenUnauthorizedCaller_whenBatchQueued_reverts]: ./queueBatch.t.sol#L654
+[test_whenMaximumBatchQueued]: ./queueBatch.t.sol#L841
 [test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts]: ./queueRescuePendingPayout.t.sol#L351
-[test_givenQueuedRoute_whenOtherAssetRouteQueued]: ./queueBatch.t.sol#L1278
-[test_givenIndependentAssetAndGlobalAction_whenQueued]: ./queueRescuePendingPayout.t.sol#L393
-[test_givenDisabled_whenBatchQueued_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1468
-[test_givenDisabled_whenBatchQueued_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1473
-[test_givenDisabled_whenBatchQueued_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1478
-[test_givenPolicyInactive_whenBatchQueued_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1612
-[test_givenPolicyInactive_whenBatchQueued_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1617
-[test_givenPolicyInactive_whenBatchQueued_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1622
-[test_givenOperatorRotated_whenBatchQueued_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1597
-[test_givenOperatorRotated_whenBatchQueued_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1602
-[test_givenOperatorRotated_whenBatchQueued_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1607
-[test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_AdminOnlySeed]: ./queueBatch.t.sol#L1483
-[test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1496
-[test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_RolesOverlapSeed]: ./queueBatch.t.sol#L1509
-[test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_AdminOnlySeed]: ./queueBatch.t.sol#L1561
-[test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1573
-[test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_RolesOverlapSeed]: ./queueBatch.t.sol#L1585
-[test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_AdminOnlySeed]: ./queueBatch.t.sol#L1522
-[test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1535
-[test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RolesOverlapSeed]: ./queueBatch.t.sol#L1548
-[test_whenValidSizedBatchQueued_storesEveryActionAndGuard_AdminOnlySeed]: ./queueBatch.t.sol#L1873
-[test_whenValidSizedBatchQueued_storesEveryActionAndGuard_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1884
-[test_whenValidSizedBatchQueued_storesEveryActionAndGuard_RolesOverlapSeed]: ./queueBatch.t.sol#L1895
-[test_whenMaximumBatchQueued_AdminOnlySeed]: ./queueBatch.t.sol#L1747
-[test_whenMaximumBatchQueued_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1752
-[test_whenMaximumBatchQueued_RolesOverlapSeed]: ./queueBatch.t.sol#L1757
-[test_whenEmptyBatchQueued_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1684
-[test_whenEmptyBatchQueued_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1689
-[test_whenEmptyBatchQueued_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1694
-[test_whenBatchExceedsMaximum_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1669
-[test_whenBatchExceedsMaximum_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1674
-[test_whenBatchExceedsMaximum_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1679
-[test_whenFirstActionTargetOrSelectorUnsupported_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1699
-[test_whenFirstActionTargetOrSelectorUnsupported_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1710
-[test_whenFirstActionTargetOrSelectorUnsupported_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1721
-[test_whenLaterActionUnsupported_rollsBackEarlierKey_AdminOnlySeed]: ./queueBatch.t.sol#L1732
-[test_whenLaterActionUnsupported_rollsBackEarlierKey_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1737
-[test_whenLaterActionUnsupported_rollsBackEarlierKey_RolesOverlapSeed]: ./queueBatch.t.sol#L1742
-[test_whenStaticPayloadLengthIsInvalid_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1819
-[test_whenStaticPayloadLengthIsInvalid_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1832
-[test_whenStaticPayloadLengthIsInvalid_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1845
-[test_whenRoutePayloadEncodingIsInvalid_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1783
-[test_whenRoutePayloadEncodingIsInvalid_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1795
-[test_whenRoutePayloadEncodingIsInvalid_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1807
-[test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_AdminOnlySeed]: ./queueBatch.t.sol#L1642
-[test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1653
-[test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RolesOverlapSeed]: ./queueBatch.t.sol#L1664
-[test_whenReachableAssetActionsShareKey_batchReverts_AdminOnlySeed]: ./queueBatch.t.sol#L1762
-[test_whenReachableAssetActionsShareKey_batchReverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1773
-[test_whenReachableAssetActionsShareKey_batchReverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1778
-[test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1205
-[test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1214
-[test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1221
-[test_givenQueuedRoute_whenOtherAssetRouteQueued_AdminOnlySeed]: ./queueBatch.t.sol#L1627
-[test_givenQueuedRoute_whenOtherAssetRouteQueued_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1632
-[test_givenQueuedRoute_whenOtherAssetRouteQueued_RolesOverlapSeed]: ./queueBatch.t.sol#L1637
-[test_givenIndependentAssetAndGlobalAction_whenQueued_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1228
-[test_givenIndependentAssetAndGlobalAction_whenQueued_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1233
-[test_givenIndependentAssetAndGlobalAction_whenQueued_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1238
-[test_whenTwoYieldActionsShareGlobalKey_batchReverts_AdminOnlySeed]: ./queueBatch.t.sol#L1858
-[test_whenTwoYieldActionsShareGlobalKey_batchReverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1863
-[test_whenTwoYieldActionsShareGlobalKey_batchReverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1868
-[test_givenPolicyInactive_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1906
-[test_givenActiveDisabled_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1935
-[test_givenUnauthorizedCaller_givenBrokenTarget_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1955
-[test_givenDisabled_whenEmptyBatchQueued_reverts]: ./queueBatch.t.sol#L852
-[test_givenInactive_whenEmptyBatchQueued_reverts]: ./queueBatch.t.sol#L869
-[test_givenDisabled_whenBatchExceedsMaximum_reverts]: ./queueBatch.t.sol#L1009
-[test_givenInactive_whenBatchExceedsMaximum_reverts]: ./queueBatch.t.sol#L1029
+[test_givenQueuedRoute_whenOtherAssetRouteQueued]: ./queueBatch.t.sol#L1028
+[test_givenDisabled_whenBatchQueued_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1283
+[test_givenDisabled_whenBatchQueued_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1288
+[test_givenDisabled_whenBatchQueued_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1293
+[test_givenPolicyInactive_whenBatchQueued_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1424
+[test_givenPolicyInactive_whenBatchQueued_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1429
+[test_givenPolicyInactive_whenBatchQueued_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1434
+[test_givenOperatorRotated_whenBatchQueued_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1409
+[test_givenOperatorRotated_whenBatchQueued_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1414
+[test_givenOperatorRotated_whenBatchQueued_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1419
+[test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_AdminOnlySeed]: ./queueBatch.t.sol#L1298
+[test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1311
+[test_givenDistributorDisabled_whenPermittedCallerQueuesRescueBatch_RolesOverlapSeed]: ./queueBatch.t.sol#L1324
+[test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_AdminOnlySeed]: ./queueBatch.t.sol#L1373
+[test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1385
+[test_givenDistributorDisabled_whenRescuePrecedesRoute_batchRevertsAtomically_RolesOverlapSeed]: ./queueBatch.t.sol#L1397
+[test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_AdminOnlySeed]: ./queueBatch.t.sol#L1337
+[test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1349
+[test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RolesOverlapSeed]: ./queueBatch.t.sol#L1361
+[test_whenValidSizedBatchQueued_storesEveryActionAndGuard_AdminOnlySeed]: ./queueBatch.t.sol#L1712
+[test_whenValidSizedBatchQueued_storesEveryActionAndGuard_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1723
+[test_whenValidSizedBatchQueued_storesEveryActionAndGuard_RolesOverlapSeed]: ./queueBatch.t.sol#L1734
+[test_whenMaximumBatchQueued_AdminOnlySeed]: ./queueBatch.t.sol#L1601
+[test_whenMaximumBatchQueued_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1606
+[test_whenMaximumBatchQueued_RolesOverlapSeed]: ./queueBatch.t.sol#L1611
+[test_whenEmptyBatchQueued_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1496
+[test_whenEmptyBatchQueued_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1501
+[test_whenEmptyBatchQueued_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1506
+[test_whenBatchExceedsMaximum_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1481
+[test_whenBatchExceedsMaximum_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1486
+[test_whenBatchExceedsMaximum_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1491
+[test_whenFirstActionTargetOrSelectorUnsupported_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1511
+[test_whenFirstActionTargetOrSelectorUnsupported_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1526
+[test_whenFirstActionTargetOrSelectorUnsupported_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1541
+[test_whenLaterActionUnsupported_rollsBackEarlierKey_AdminOnlySeed]: ./queueBatch.t.sol#L1556
+[test_whenLaterActionUnsupported_rollsBackEarlierKey_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1571
+[test_whenLaterActionUnsupported_rollsBackEarlierKey_RolesOverlapSeed]: ./queueBatch.t.sol#L1586
+[test_whenStaticPayloadLengthIsInvalid_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1673
+[test_whenStaticPayloadLengthIsInvalid_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1686
+[test_whenStaticPayloadLengthIsInvalid_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1699
+[test_whenRoutePayloadEncodingIsInvalid_reverts_AdminOnlySeed]: ./queueBatch.t.sol#L1637
+[test_whenRoutePayloadEncodingIsInvalid_reverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1649
+[test_whenRoutePayloadEncodingIsInvalid_reverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1661
+[test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_AdminOnlySeed]: ./queueBatch.t.sol#L1454
+[test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1465
+[test_whenAddressWordHasDirtyUpperBits_revertsAtQueue_RolesOverlapSeed]: ./queueBatch.t.sol#L1476
+[test_whenReachableAssetActionsShareKey_batchReverts_AdminOnlySeed]: ./queueBatch.t.sol#L1616
+[test_whenReachableAssetActionsShareKey_batchReverts_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1627
+[test_whenReachableAssetActionsShareKey_batchReverts_RolesOverlapSeed]: ./queueBatch.t.sol#L1632
+[test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_AdminOnlySeed]: ./queueRescuePendingPayout.t.sol#L1172
+[test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_RevenueRoleOnlySeed]: ./queueRescuePendingPayout.t.sol#L1181
+[test_givenAssetKeyOwned_whenAnotherValidRequestQueues_reverts_RolesOverlapSeed]: ./queueRescuePendingPayout.t.sol#L1188
+[test_givenQueuedRoute_whenOtherAssetRouteQueued_AdminOnlySeed]: ./queueBatch.t.sol#L1439
+[test_givenQueuedRoute_whenOtherAssetRouteQueued_RevenueRoleOnlySeed]: ./queueBatch.t.sol#L1444
+[test_givenQueuedRoute_whenOtherAssetRouteQueued_RolesOverlapSeed]: ./queueBatch.t.sol#L1449
+[test_givenPolicyInactive_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1745
+[test_givenActiveDisabled_givenBrokenRoles_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1774
+[test_givenUnauthorizedCaller_givenBrokenTarget_whenQueueRequested_reverts]: ./queueBatch.t.sol#L1794
+[test_givenDisabled_whenEmptyBatchQueued_reverts]: ./queueBatch.t.sol#L798
+[test_givenInactive_whenEmptyBatchQueued_reverts]: ./queueBatch.t.sol#L815
+[test_givenDisabled_whenBatchExceedsMaximum_reverts]: ./queueBatch.t.sol#L955
+[test_givenInactive_whenBatchExceedsMaximum_reverts]: ./queueBatch.t.sol#L975
+
+[test_givenTwoDifferentAssetRoutes_whenBatchExecutes]: ./queueBatch.t.sol#L1093

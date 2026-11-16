@@ -181,17 +181,6 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
             });
     }
 
-    function _yieldAction(
-        address recipient_
-    ) internal view returns (ITimelockBatchQueue.BatchAction memory) {
-        return
-            ITimelockBatchQueue.BatchAction({
-                target: address(distributor),
-                selector: IRevenueDistributor.setYieldRecipient.selector,
-                payload: abi.encode(recipient_)
-            });
-    }
-
     function _assetKey(address asset_) internal view returns (bytes32) {
         bytes32 localKey = keccak256(abi.encode(keccak256("REVENUE_DISTRIBUTOR_ASSET"), asset_));
         return keccak256(abi.encode(address(distributor), localKey));
@@ -250,10 +239,9 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(token.balanceOf(address(distributor)), 1, "queue failure moves no funds");
     }
 
-    // Scenarios: BATCH-I08, BATCH-I09.
+    // Scenarios: BATCH-I08.
     function test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
         bool useRevenueAdmin_,
-        bool retireRoute_,
         address proposerSeed_,
         bool revenueOnly_,
         bool overlap_
@@ -262,17 +250,13 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         token.mint(address(distributor), 1);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _rescueAction(address(token));
-        if (retireRoute_) {
-            MockERC20 routeToken = new MockERC20("Route", "ROUTE", 18);
-            _activateAsset(address(routeToken));
-            actions[1] = ITimelockBatchQueue.BatchAction({
-                target: address(distributor),
-                selector: IRevenueDistributor.disableAssetRoutes.selector,
-                payload: abi.encode(address(routeToken))
-            });
-        } else {
-            actions[1] = _yieldAction(address(_activeYieldRecipient()));
-        }
+        MockERC20 routeToken = new MockERC20("Route", "ROUTE", 18);
+        _activateAsset(address(routeToken));
+        actions[1] = ITimelockBatchQueue.BatchAction({
+            target: address(distributor),
+            selector: IRevenueDistributor.disableAssetRoutes.selector,
+            payload: abi.encode(address(routeToken))
+        });
         _disablePolicy(address(distributor), emergency);
 
         vm.expectRevert(
@@ -378,20 +362,22 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
 
     // Scenarios: BATCH-I02, BATCH-I11.
     function test_whenFirstActionTargetOrSelectorUnsupported_reverts(
-        bool invalidTarget_,
+        uint8 invalidAction_,
         bool useRevenueAdmin_,
         address proposerSeed_,
         bool revenueOnly_,
         bool overlap_
     ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
-        address target = invalidTarget_ ? address(token) : address(distributor);
-        bytes4 selector = invalidTarget_
-            ? IRevenueDistributor.setAssetRoutes.selector
-            : INVALID_SELECTOR;
+        uint256 kind = bound(invalidAction_, 0, 2);
+        address target = kind == 0 ? address(token) : address(distributor);
+        bytes4 selector = kind == 0 ? IRevenueDistributor.setAssetRoutes.selector : kind == 1
+            ? INVALID_SELECTOR
+            : IRevenueDistributor.setYieldRecipient.selector;
+        bytes memory payload = kind == 2 ? abi.encode(address(_activeYieldRecipient())) : bytes("");
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
-        actions[0] = ITimelockBatchQueue.BatchAction(target, selector, "");
-
+        actions[0] = ITimelockBatchQueue.BatchAction(target, selector, payload);
+        uint64 nextId = configTimelock.nextActionId();
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
@@ -403,40 +389,47 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         );
         vm.prank(proposer);
         configTimelock.queueBatch(actions);
-
-        assertEq(configTimelock.nextActionId(), 1, "invalid action consumes no ID");
+        assertEq(configTimelock.nextActionId(), nextId, "Invalid action consumes no ID");
+        assertEq(distributor.yieldRecipient(), address(0), "Rejected selector changes no pointer");
     }
 
     // Scenarios: BATCH-I12.
     function test_whenLaterActionUnsupported_rollsBackEarlierKey(
+        bool recipientSelector_,
         bool useRevenueAdmin_,
         address proposerSeed_,
         bool revenueOnly_,
         bool overlap_
     ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
+        bytes4 selector = recipientSelector_
+            ? IRevenueDistributor.setYieldRecipient.selector
+            : INVALID_SELECTOR;
+        bytes memory payload = recipientSelector_
+            ? abi.encode(address(_activeYieldRecipient()))
+            : bytes("");
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _routeAction(address(token), address(0));
-        actions[1] = ITimelockBatchQueue.BatchAction(address(distributor), INVALID_SELECTOR, "");
-
+        actions[1] = ITimelockBatchQueue.BatchAction(address(distributor), selector, payload);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRevenueDistributorConfigTimelock
                     .RevenueDistributorConfigTimelock_InvalidAction
                     .selector,
                 address(distributor),
-                INVALID_SELECTOR
+                selector
             )
         );
         vm.prank(proposer);
         configTimelock.queueBatch(actions);
-
-        assertEq(configTimelock.nextActionId(), 1, "invalid later action consumes no ID");
+        assertEq(configTimelock.nextActionId(), 1, "Invalid later action consumes no ID");
+        assertEq(distributor.getActiveAssetCount(), 0, "Rejected batch changes no route");
+        assertEq(distributor.yieldRecipient(), address(0), "Rejected batch changes no recipient");
         vm.prank(admin);
         assertEq(
             configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes()),
             1,
-            "rolled-back key can be acquired"
+            "Rolled-back key can be acquired"
         );
     }
 
@@ -451,9 +444,8 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         bool overlap_
     ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
-        bytes4[4] memory selectors = [
+        bytes4[3] memory selectors = [
             IRevenueDistributor.disableAssetRoutes.selector,
-            IRevenueDistributor.setYieldRecipient.selector,
             IRevenueDistributorRescue.rescue.selector,
             IRevenueDistributorRescue.rescuePendingPayout.selector
         ];
@@ -560,10 +552,9 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         bool overlap_
     ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
         address proposer = _permittedProposer(useRevenueAdmin_);
-        bytes4[5] memory selectors = [
+        bytes4[4] memory selectors = [
             IRevenueDistributor.setAssetRoutes.selector,
             IRevenueDistributor.disableAssetRoutes.selector,
-            IRevenueDistributor.setYieldRecipient.selector,
             IRevenueDistributorRescue.rescue.selector,
             IRevenueDistributorRescue.rescuePendingPayout.selector
         ];
@@ -588,36 +579,6 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         configTimelock.queueBatch(actions);
 
         assertEq(configTimelock.nextActionId(), 1, "dirty address consumes no ID");
-    }
-
-    // Scenarios: BATCH-Q04.
-    function test_whenTwoYieldActionsShareGlobalKey_batchReverts(
-        bool useRevenueAdmin_,
-        address proposerSeed_,
-        bool revenueOnly_,
-        bool overlap_
-    ) public givenProposer(proposerSeed_, revenueOnly_, overlap_) {
-        address proposer = _permittedProposer(useRevenueAdmin_);
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        MockYieldRepurchaseRecipient candidate = _activeYieldRecipient();
-        actions[0] = _yieldAction(address(candidate));
-        actions[1] = _yieldAction(address(candidate));
-        uint64 actionId = configTimelock.nextActionId();
-        bytes32 localKey = keccak256("REVENUE_DISTRIBUTOR_YIELD_RECIPIENT");
-        bytes32 key = keccak256(abi.encode(address(distributor), localKey));
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector,
-                key,
-                actionId
-            )
-        );
-        vm.prank(proposer);
-        configTimelock.queueBatch(actions);
-
-        assertEq(configTimelock.nextActionId(), actionId, "conflicting batch consumes no ID");
-        assertEq(configTimelock.pendingActionId(key), 0, "rolled-back global key is free");
     }
 
     // Scenarios: RDCT-BATCH-Q02.
@@ -683,21 +644,6 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
 
         assertEq(configTimelock.nextActionId(), expectedOwner, "conflicting batch consumes no ID");
         assertEq(configTimelock.pendingActionId(key), 0, "conflicting batch leaves key free");
-    }
-
-    function _conflictingBatch(
-        address recipient_,
-        bool routeFirst_
-    ) internal view returns (ITimelockBatchQueue.BatchAction[] memory actions) {
-        actions = new ITimelockBatchQueue.BatchAction[](2);
-        ITimelockBatchQueue.BatchAction memory route = _routeAction(address(token), recipient_);
-        ITimelockBatchQueue.BatchAction memory yieldChange = ITimelockBatchQueue.BatchAction({
-            target: address(distributor),
-            selector: IRevenueDistributor.setYieldRecipient.selector,
-            payload: abi.encode(recipient_)
-        });
-        actions[0] = routeFirst_ ? route : yieldChange;
-        actions[1] = routeFirst_ ? yieldChange : route;
     }
 
     // given unauthorized caller
@@ -1052,202 +998,6 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         assertEq(configTimelock.nextActionId(), 1, "oversized batch consumes no ID");
     }
 
-    // given a queued route names the proposed yield recipient
-    //   when the recipient change is queued separately and the route executes first
-    //     [X] the recipient change can queue but reverts when executed
-    function test_givenQueuedRoute_whenConflictingYieldQueued_whenRouteExecutesFirst_yieldReverts()
-        public
-    {
-        MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
-        IRevenueDistributor.AssetRoute[] memory shares = new IRevenueDistributor.AssetRoute[](1);
-        shares[0] = IRevenueDistributor.AssetRoute({recipient: address(recipient), bps: 2_000});
-
-        vm.prank(admin);
-        uint64 routeId = configTimelock.queueSetAssetRoutes(address(token), 0, shares);
-        vm.prank(admin);
-        uint64 yieldId = configTimelock.queueSetYieldRecipient(address(recipient));
-        assertEq(yieldId, routeId + 1, "conflicting yield change can queue");
-
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-        configTimelock.executeQueuedAction(routeId);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_DuplicateRecipient.selector,
-                address(recipient)
-            )
-        );
-        configTimelock.executeQueuedAction(yieldId);
-
-        assertEq(distributor.yieldRecipient(), address(0), "failed yield change is not applied");
-        (uint16 repurchaseBps, IRevenueDistributor.AssetRoute[] memory configured) = distributor
-            .getAssetDistribution(address(token));
-        assertEq(repurchaseBps, 0, "earlier route has no repurchase share");
-        assertEq(configured[0].recipient, address(recipient), "earlier route remains active");
-    }
-
-    // given a batch names the same address in its route and yield recipient
-    //   when the route executes before the yield change
-    //     [X] the later action reverts and the whole batch rolls back
-    // Scenarios: EXEC-I03.
-    function test_givenConflictingRouteAndYield_whenRouteFirstBatchExecutes_revertsAtomically(
-        address executor_
-    ) public {
-        MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
-        vm.prank(admin);
-        uint64 actionId = configTimelock.queueBatch(_conflictingBatch(address(recipient), true));
-        bytes32 actionBefore = keccak256(abi.encode(configTimelock.getQueuedAction(actionId)));
-        (bytes32 firstKey, bytes32 firstHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
-        (bytes32 secondKey, bytes32 secondHash) = configTimelock.getQueuedConfigState(
-            actionId,
-            1,
-            0
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IRevenueDistributor.RevenueDistributor_DuplicateRecipient.selector,
-                address(recipient)
-            )
-        );
-        vm.prank(executor_);
-        configTimelock.executeQueuedAction(actionId);
-        assertEq(
-            uint8(distributor.assetState(address(token))),
-            uint8(IRevenueDistributor.AssetState.NeverListed),
-            "route update rolled back"
-        );
-        assertEq(distributor.yieldRecipient(), address(0), "yield change rolled back");
-        _assertBatchRetained(actionId, actionBefore, firstKey, firstHash, secondKey, secondHash);
-    }
-
-    // given a batch names the same address in its route and yield recipient
-    //   when the yield change executes before the route
-    //     [X] the route state hash changes and the whole batch rolls back
-    // Scenarios: EXEC-I03.
-    function test_givenConflictingRouteAndYield_whenYieldFirstBatchExecutes_revertsAtomically(
-        address executor_
-    ) public {
-        MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
-        vm.prank(admin);
-        uint64 actionId = configTimelock.queueBatch(_conflictingBatch(address(recipient), false));
-        bytes32 actionBefore = keccak256(abi.encode(configTimelock.getQueuedAction(actionId)));
-        (bytes32 firstKey, bytes32 firstHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
-        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 1, 0);
-        IRevenueDistributor.AssetRoute[] memory emptyShares = new IRevenueDistributor.AssetRoute[](
-            0
-        );
-        bytes32 changedHash = keccak256(
-            abi.encode(
-                IRevenueDistributor.AssetState.NeverListed,
-                uint16(0),
-                emptyShares,
-                address(recipient)
-            )
-        );
-        changedHash = keccak256(abi.encode(changedHash, distributor.configOperator()));
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
-                actionId,
-                uint256(1),
-                key,
-                expectedHash,
-                changedHash
-            )
-        );
-        vm.prank(executor_);
-        configTimelock.executeQueuedAction(actionId);
-        assertEq(
-            uint8(distributor.assetState(address(token))),
-            uint8(IRevenueDistributor.AssetState.NeverListed),
-            "route update rolled back"
-        );
-        assertEq(distributor.yieldRecipient(), address(0), "yield change rolled back");
-        _assertBatchRetained(actionId, actionBefore, firstKey, firstHash, key, expectedHash);
-    }
-
-    // Scenarios: EXEC-I05.
-    function test_givenCompatibleRouteAndYield_whenBatchExecutesInSuppliedOrder(
-        bool routeFirst_,
-        address executor_
-    ) public {
-        MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        ITimelockBatchQueue.BatchAction memory route = _routeAction(address(token), bob);
-        ITimelockBatchQueue.BatchAction memory yieldChange = _yieldAction(address(recipient));
-        actions[0] = routeFirst_ ? route : yieldChange;
-        actions[1] = routeFirst_ ? yieldChange : route;
-        vm.prank(admin);
-        uint64 actionId = configTimelock.queueBatch(actions);
-        bytes32 actionBefore = keccak256(abi.encode(configTimelock.getQueuedAction(actionId)));
-        (bytes32 firstKey, bytes32 firstHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
-        (bytes32 secondKey, bytes32 secondHash) = configTimelock.getQueuedConfigState(
-            actionId,
-            1,
-            0
-        );
-        vm.warp(configTimelock.getQueuedAction(actionId).executableAt);
-
-        if (routeFirst_) {
-            vm.prank(executor_);
-            configTimelock.executeQueuedAction(actionId);
-
-            (, IRevenueDistributor.AssetRoute[] memory configured) = distributor
-                .getAssetDistribution(address(token));
-            assertEq(configured.length, 1, "route installed before yield change");
-            assertEq(configured[0].recipient, bob, "compatible route recipient retained");
-            assertEq(
-                distributor.yieldRecipient(),
-                address(recipient),
-                "yield recipient installed second"
-            );
-            assertEq(configTimelock.pendingActionId(firstKey), 0, "first key released");
-            assertEq(configTimelock.pendingActionId(secondKey), 0, "second key released");
-        } else {
-            IRevenueDistributor.AssetRoute[]
-                memory emptyRoutes = new IRevenueDistributor.AssetRoute[](0);
-            bytes32 changedHash = keccak256(
-                abi.encode(
-                    IRevenueDistributor.AssetState.NeverListed,
-                    uint16(0),
-                    emptyRoutes,
-                    address(recipient)
-                )
-            );
-            changedHash = keccak256(abi.encode(changedHash, distributor.configOperator()));
-            vm.expectRevert(
-                abi.encodeWithSelector(
-                    IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
-                    actionId,
-                    uint256(1),
-                    secondKey,
-                    secondHash,
-                    changedHash
-                )
-            );
-            vm.prank(executor_);
-            configTimelock.executeQueuedAction(actionId);
-
-            assertEq(distributor.yieldRecipient(), address(0), "yield-first change rolled back");
-            assertEq(
-                uint8(distributor.assetState(address(token))),
-                0,
-                "later route remains unapplied"
-            );
-            _assertBatchRetained(
-                actionId,
-                actionBefore,
-                firstKey,
-                firstHash,
-                secondKey,
-                secondHash
-            );
-        }
-    }
-
     // given an asset route is already queued
     //   when a second route for the same asset is queued
     //     [X] its per-asset key rejects the second action
@@ -1339,7 +1089,7 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
     // given two different asset routes in one batch
     //   when the batch executes after the delay
     //     [X] both assets receive their routes
-    // Scenarios: EXEC-P02.
+    // Scenarios: EXEC-P02, BATCH-Q02.
     function test_givenTwoDifferentAssetRoutes_whenBatchExecutes(address executor_) public {
         MockERC20 otherToken = new MockERC20("Other Revenue", "OREV", 18);
         vm.label(address(otherToken), "Other revenue token");
@@ -1347,7 +1097,9 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         actions[0] = _routeAction(address(token), address(0));
         actions[1] = _routeAction(address(otherToken), address(0));
 
-        vm.prank(admin);
+        address proposer = _permittedProposer(true);
+        assertFalse(roles.hasRole(proposer, ADMIN_ROLE), "Route proposer has no ADMIN");
+        vm.prank(proposer);
         uint64 actionId = configTimelock.queueBatch(actions);
         bytes32 firstKey = _queuedKey(actionId, 0);
         bytes32 secondKey = _queuedKey(actionId, 1);
@@ -1382,6 +1134,69 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         );
         assertEq(configTimelock.pendingActionId(firstKey), 0, "first key released");
         assertEq(configTimelock.pendingActionId(secondKey), 0, "second key released");
+
+        assertEq(
+            distributor.yieldRecipient(),
+            address(0),
+            "Asset routes do not select the global recipient"
+        );
+        address[2] memory assets = [address(token), address(otherToken)];
+        for (uint256 i; i < assets.length; ++i) {
+            (uint16 bps, IRevenueDistributor.AssetRoute[] memory routes) = distributor
+                .getAssetDistribution(assets[i]);
+            assertEq(bps, 0, "Treasury-only repurchase share retained");
+            assertEq(routes.length, 0, "Treasury-only routes retained");
+        }
+        assertEq(token.balanceOf(address(distributor)), 0, "First route preserves custody");
+        assertEq(otherToken.balanceOf(address(distributor)), 0, "Second route preserves custody");
+    }
+
+    // Scenarios: EXEC-I05, RDCT-EXECUTE-E05.
+    function test_givenAdminChangesYieldRecipient_whenQueuedRouteExecutes_revertsThenRetries(
+        address executor_
+    ) public {
+        MockYieldRepurchaseRecipient recipient = _activeYieldRecipient();
+        vm.prank(admin);
+        uint64 id = configTimelock.queueSetAssetRoutes(address(token), 0, _emptyRoutes());
+        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+        vm.prank(admin);
+        distributor.setYieldRecipient(address(recipient));
+        bytes32 currentHash = keccak256(
+            abi.encode(
+                keccak256(
+                    abi.encode(
+                        IRevenueDistributor.AssetState.NeverListed,
+                        uint16(0),
+                        _emptyRoutes(),
+                        address(recipient)
+                    )
+                ),
+                address(configTimelock)
+            )
+        );
+        vm.warp(configTimelock.getQueuedAction(id).executableAt);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
+                id,
+                uint256(0),
+                key,
+                expectedHash,
+                currentHash
+            )
+        );
+        vm.prank(executor_);
+        configTimelock.executeQueuedAction(id);
+        assertEq(
+            configTimelock.pendingActionId(key),
+            id,
+            "ADMIN rotation stales the queued route and retains its key"
+        );
+        vm.prank(admin);
+        distributor.setYieldRecipient(address(0));
+        vm.prank(executor_);
+        configTimelock.executeQueuedAction(id);
+        assertEq(configTimelock.pendingActionId(key), 0, "Restored state allows retry");
     }
 
     function _assertBatchRetained(
@@ -1518,12 +1333,11 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         );
     }
 
-    // Scenarios: BATCH-I08, BATCH-I09.
+    // Scenarios: BATCH-I08.
     function test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_AdminOnlySeed()
         public
     {
         test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
-            false,
             false,
             address(0x1234),
             false,
@@ -1531,12 +1345,11 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         );
     }
 
-    // Scenarios: BATCH-I08, BATCH-I09.
+    // Scenarios: BATCH-I08.
     function test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RevenueRoleOnlySeed()
         public
     {
         test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
-            false,
             false,
             address(0x1234),
             true,
@@ -1544,12 +1357,11 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
         );
     }
 
-    // Scenarios: BATCH-I08, BATCH-I09.
+    // Scenarios: BATCH-I08.
     function test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically_RolesOverlapSeed()
         public
     {
         test_givenDistributorDisabled_whenRescuePrecedesExistingConfig_batchRevertsAtomically(
-            false,
             false,
             address(0x1234),
             true,
@@ -1697,50 +1509,92 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
 
     // Scenarios: BATCH-I02, BATCH-I11.
     function test_whenFirstActionTargetOrSelectorUnsupported_reverts_AdminOnlySeed() public {
-        test_whenFirstActionTargetOrSelectorUnsupported_reverts(
-            false,
-            false,
-            address(0x1234),
-            false,
-            false
-        );
+        for (uint8 kind; kind < 3; ++kind) {
+            uint256 snapshot = vm.snapshotState();
+            test_whenFirstActionTargetOrSelectorUnsupported_reverts(
+                kind,
+                false,
+                address(0x1234),
+                false,
+                false
+            );
+            assertTrue(vm.revertToState(snapshot), "Restore selector seed fixture");
+        }
     }
 
     // Scenarios: BATCH-I02, BATCH-I11.
     function test_whenFirstActionTargetOrSelectorUnsupported_reverts_RevenueRoleOnlySeed() public {
-        test_whenFirstActionTargetOrSelectorUnsupported_reverts(
-            false,
-            false,
-            address(0x1234),
-            true,
-            false
-        );
+        for (uint8 kind; kind < 3; ++kind) {
+            uint256 snapshot = vm.snapshotState();
+            test_whenFirstActionTargetOrSelectorUnsupported_reverts(
+                kind,
+                false,
+                address(0x1234),
+                true,
+                false
+            );
+            assertTrue(vm.revertToState(snapshot), "Restore selector seed fixture");
+        }
     }
 
     // Scenarios: BATCH-I02, BATCH-I11.
     function test_whenFirstActionTargetOrSelectorUnsupported_reverts_RolesOverlapSeed() public {
-        test_whenFirstActionTargetOrSelectorUnsupported_reverts(
-            false,
-            false,
-            address(0x1234),
-            true,
-            true
-        );
+        for (uint8 kind; kind < 3; ++kind) {
+            uint256 snapshot = vm.snapshotState();
+            test_whenFirstActionTargetOrSelectorUnsupported_reverts(
+                kind,
+                false,
+                address(0x1234),
+                true,
+                true
+            );
+            assertTrue(vm.revertToState(snapshot), "Restore selector seed fixture");
+        }
     }
 
     // Scenarios: BATCH-I12.
     function test_whenLaterActionUnsupported_rollsBackEarlierKey_AdminOnlySeed() public {
-        test_whenLaterActionUnsupported_rollsBackEarlierKey(false, address(0x1234), false, false);
+        for (uint256 kind; kind < 2; ++kind) {
+            uint256 snapshot = vm.snapshotState();
+            test_whenLaterActionUnsupported_rollsBackEarlierKey(
+                kind == 1,
+                false,
+                address(0x1234),
+                false,
+                false
+            );
+            assertTrue(vm.revertToState(snapshot), "Restore later-action seed fixture");
+        }
     }
 
     // Scenarios: BATCH-I12.
     function test_whenLaterActionUnsupported_rollsBackEarlierKey_RevenueRoleOnlySeed() public {
-        test_whenLaterActionUnsupported_rollsBackEarlierKey(false, address(0x1234), true, false);
+        for (uint256 kind; kind < 2; ++kind) {
+            uint256 snapshot = vm.snapshotState();
+            test_whenLaterActionUnsupported_rollsBackEarlierKey(
+                kind == 1,
+                false,
+                address(0x1234),
+                true,
+                false
+            );
+            assertTrue(vm.revertToState(snapshot), "Restore later-action seed fixture");
+        }
     }
 
     // Scenarios: BATCH-I12.
     function test_whenLaterActionUnsupported_rollsBackEarlierKey_RolesOverlapSeed() public {
-        test_whenLaterActionUnsupported_rollsBackEarlierKey(false, address(0x1234), true, true);
+        for (uint256 kind; kind < 2; ++kind) {
+            uint256 snapshot = vm.snapshotState();
+            test_whenLaterActionUnsupported_rollsBackEarlierKey(
+                kind == 1,
+                false,
+                address(0x1234),
+                true,
+                true
+            );
+            assertTrue(vm.revertToState(snapshot), "Restore later-action seed fixture");
+        }
     }
 
     // Scenarios: BATCH-P01.
@@ -1852,21 +1706,6 @@ contract RevenueDistributorConfigTimelockQueueBatchTest is RevenueDistributorCon
             true,
             true
         );
-    }
-
-    // Scenarios: BATCH-Q04.
-    function test_whenTwoYieldActionsShareGlobalKey_batchReverts_AdminOnlySeed() public {
-        test_whenTwoYieldActionsShareGlobalKey_batchReverts(false, address(0x1234), false, false);
-    }
-
-    // Scenarios: BATCH-Q04.
-    function test_whenTwoYieldActionsShareGlobalKey_batchReverts_RevenueRoleOnlySeed() public {
-        test_whenTwoYieldActionsShareGlobalKey_batchReverts(false, address(0x1234), true, false);
-    }
-
-    // Scenarios: BATCH-Q04.
-    function test_whenTwoYieldActionsShareGlobalKey_batchReverts_RolesOverlapSeed() public {
-        test_whenTwoYieldActionsShareGlobalKey_batchReverts(false, address(0x1234), true, true);
     }
 
     // Scenarios: BATCH-P01.

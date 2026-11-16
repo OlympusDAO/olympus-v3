@@ -13,7 +13,7 @@ and their positions remain bound to the old manager. Record each confirmed deplo
 | Order | Sequence in `src/scripts/deploy/savedDeployments/` | Deploys |
 | --- | --- | --- |
 | 1 | `backing_oracle.json` | BackingOracle and its configuration timelock |
-| 2 | `deposit_manager_v1_1.json` | Shared DepositManager v1.1, using `deployDepositManager` |
+| 2 | `deposit_manager_v1_1.json` | Shared DepositManager v1.1, then its exact-manager configuration queue |
 | 3 | `price_cache.json` | USD PriceCache, 18 decimals |
 | 4 | `revenue_distributor.json` | Distributor, configuration timelock and Heart task |
 | 5 | `burner_loans.json` | FLOAN, lending contracts, timelocks, tasks, Auth, Lens and Activator |
@@ -26,6 +26,8 @@ Repeat for each sequence. Add `--broadcast true --verify true` only for the revi
 The wrapper selects the `deploy` Foundry profile. Deployment does not activate or enable policies.
 Auth deploys immediately after Core and is permanently bound to it and the trusted Kernel.
 It is periphery, so it needs no Kernel policy activation, role or independent enable call.
+Lens also has no Kernel lifecycle: `deployBurnerLoansLens` binds it to Core, and SeizerTask
+receives that Lens in its constructor. Activator verifies both links at deployment and launch.
 OCG selects Auth on Core before enabling Core. Bundler deployment remains a TODO.
 Oracle factories are not required: PriceCache reads PRICE directly.
 
@@ -51,6 +53,7 @@ these Kernel actions through governance. Create a reviewed args file, for exampl
           "olympus.policies.BackingOracle",
           "olympus.policies.BackingOracleConfigTimelock",
           "olympus.policies.DepositManager",
+          "olympus.policies.DepositManagerConfigTimelock",
           "olympus.policies.RevenueDistributor",
           "olympus.policies.RevenueDistributorConfigTimelock",
           "olympus.policies.RevenueDistributorTask",
@@ -97,11 +100,14 @@ The OCG activator selects the backing queue, initializes the oracle to **$11.99 
 The DAO multisig has no ADMIN authority to call `enable` or `setConfigOperator`.
 The proposal grants DAO `backing_admin` for delayed updates and grace-period recovery.
 Heart and PriceConfigv2 must be active and enabled; PRICE must already support OHM and USDS.
+Heart must already hold `heart`; proposal construction rejects a missing role rather than adding
+a redundant grant. With every other permanent launch role absent, the action list has exactly 15
+actions, including the new DAO `deposit_manager_admin` grant and final helper ADMIN revocation.
 
 ### Timelock wiring checklist
 
-All six queues are policies activated in the Kernel. Their immutable target and the target's
-`configOperator` must agree. The activator selects and enables all six queues during OCG.
+All seven queues are policies activated in the Kernel. Their immutable target and the target's
+`configOperator` must agree. The activator selects and enables all seven queues during OCG.
 
 | Queue | Target | Deployment sequence | Kernel setup batch | Binding and enablement |
 | --- | --- | --- | --- | --- |
@@ -110,10 +116,11 @@ All six queues are policies activated in the Kernel. Their immutable target and 
 | BurnerLoansPayoutConfigTimelock | BurnerLoansPayout | `burner_loans.json` | KernelBatch.activatePolicies | Activator |
 | BurnerLoansInventoryConfigTimelock | BurnerLoansInventory | `burner_loans.json` | KernelBatch.activatePolicies | Activator |
 | RevenueDistributorConfigTimelock | RevenueDistributor | `revenue_distributor.json` | KernelBatch.activatePolicies | Activator |
+| DepositManagerConfigTimelock | DepositManager v1.1 | `deposit_manager_v1_1.json` | KernelBatch.activatePolicies | Enable manager, select queue as ADMIN, then enable queue |
 | BackingOracleConfigTimelock | BackingOracle | `backing_oracle.json` | KernelBatch.activatePolicies | Activator |
 
 OCG grants the DAO multisig `burner_loans_admin`, `backing_admin`,
-`revenue_distributor_admin` and `burner_loans_inventory_provider`. The first three authorize
+`revenue_distributor_admin`, `deposit_manager_admin` and `burner_loans_inventory_provider`. The first four authorize
 configuration queues and recovery; the provider role authorizes supplying/withdrawing OHM.
 The DAO does not receive general `admin`; the activator's temporary `admin` is revoked before
 proposal execution completes.
@@ -155,6 +162,16 @@ resulting action list fits the Governor's 15-action limit and confirm the propos
 ```
 
 Add `--broadcast true` after approval. Complete voting, queueing and execution through OCG.
+
+The recipient is intentionally unset: USDS, sUSDS, USDe and sUSDe each launch with zero
+repurchase BPS and empty routes, so every new receipt goes to Treasury. YRF V2 is not deployed.
+Its future OCG must select the deployed, active, enabled `IYieldRepurchaseRecipient` implementation
+through ADMIN before any nonzero repurchase allocation. The legacy Heart YRF does not implement
+this interface. No launch adapter or substitute recipient is deployed.
+
+The Activator validates the fixed deployment bindings at construction and again at launch.
+Check its runtime and complete constructor initcode against EIP-170/EIP-3860 with the unchanged
+deploy profile.
 
 ## 4. Heart ordering
 
@@ -198,7 +215,7 @@ repay, withdraw, seize, provider funding and automation under the unmodified lau
 Use the [operations index](../src/scripts/ops/README.md#burner-loans-and-shared-services) for the
 standalone batches. Create args files when needed. Queuing and execution are separate runs;
 `executeQueuedAction` and `cancelQueuedAction` take the actual `actionId`. Backing updates have
-one-day notice and a seven-day execution window; lending/distributor queues use one and three days.
+one-day notice and a seven-day execution window; lending/distributor/custody queues use one and three days.
 Use `EnablerBatch.disable` and `EnablerBatch.reEnable` for reviewed target lists. For all fourteen
 Burner Loans contracts, use these orders (names below omit the `BurnerLoans` prefix):
 
@@ -211,3 +228,9 @@ Supply the resolved deployment addresses in `targets`. Disable also takes matchi
 payloads in `data`; initial enable takes each target's required payload. Restore any unavailable
 shared dependencies first. Shared custody, oracle, distributor, cache and Heart have separate roles
 and can use the same generic batch with their respective authorized caller.
+
+For a delayed custody-cap change, use `DepositManagerConfigTimelockBatch.queueSetAssetDepositCap`
+with `asset` and `cap` in its matching args entry. The DAO proposes using `deposit_manager_admin`;
+any caller executes the actual queued ID after the one-day delay. Generic `queueBatch` supports
+the existing admitted cap/minimum/share/period/rescue settings; it cannot replace the controller.
+Emergency can cancel while the queue and manager are paused or the controller has been replaced.

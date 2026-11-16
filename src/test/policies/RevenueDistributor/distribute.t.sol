@@ -10,7 +10,7 @@ import {Actions} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
-import {REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
@@ -171,6 +171,18 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
     // given a route change queued by admin or revenue distributor admin and a token with a callback
     //   when the callback executes the queued change during distribution
     //     [X] the in-flight distribution keeps its original recipient allocation
+
+    // Scenarios: SYR-C01, DIST-C01.
+    function test_givenAuthorizedRecipientCallback_whenPointerRotationAttempted_outerDistributionPaysOnce()
+        public
+    {
+        test_givenCallbackFromAnyPayoutClass_whenAnyGuardedWriteAttempted_outerDistributionPaysOnce(
+            0,
+            3,
+            alice
+        );
+    }
+
     // Scenarios: DIST-C01.
     function test_givenMaturedRouteChange_whenTokenCallsTimelockDuringDistribution_thenRouteStaysFixed(
         bool useRevenueDistributorAdmin_
@@ -337,8 +349,9 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(address(token), address(token), true);
-        vm.startPrank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
+        vm.startPrank(address(configTimelock));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
         distributor.setAssetRoutes(address(token), 2_000, routes);
         vm.stopPrank();
@@ -836,7 +849,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
             yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
             yieldRecipient.setVaultConfig(address(token), address(token), true);
             _setPolicyActive(address(yieldRecipient), true);
-            vm.prank(address(configTimelock));
+            vm.prank(admin);
             distributor.setYieldRecipient(address(yieldRecipient));
         }
         vm.prank(address(configTimelock));
@@ -958,7 +971,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
         yieldRecipient.setVaultConfig(address(token), address(token), true);
         _setPolicyActive(address(yieldRecipient), true);
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(yieldRecipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: bob, bps: 3_333});
@@ -1114,7 +1127,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
         yieldRecipient.setVaultConfig(address(callbackToken), address(callbackToken), true);
         _setPolicyActive(address(yieldRecipient), true);
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(yieldRecipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: alice, bps: 3_000});
@@ -1134,7 +1147,12 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
                 (address(callbackToken), uint16(0), new IRevenueDistributor.AssetRoute[](0))
             );
         } else if (operation_ == 3) {
-            callback = abi.encodeCall(distributor.setYieldRecipient, (address(0)));
+            MockYieldRepurchaseRecipient replacement = new MockYieldRepurchaseRecipient(kernel);
+            replacement.setVaultConfig(address(callbackToken), address(callbackToken), true);
+            _setPolicyActive(address(replacement), true);
+            vm.prank(admin);
+            rolesAdmin.grantRole(ADMIN_ROLE, address(callbackToken));
+            callback = abi.encodeCall(distributor.setYieldRecipient, (address(replacement)));
         } else {
             callback = abi.encodeCall(distributor.rescue, (address(callbackToken), bob));
         }
@@ -1281,7 +1299,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
         yieldRecipient.setVaultConfig(address(token), address(token), true);
         _setPolicyActive(address(yieldRecipient), true);
-        vm.prank(address(configTimelock));
+        vm.prank(admin);
         distributor.setYieldRecipient(address(yieldRecipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: alice, bps: 3_000});
@@ -1404,7 +1422,7 @@ contract RevenueDistributorDistributeTest is RevenueDistributorTest {
         if (address(recipient) == address(0)) {
             recipient = new MockYieldRepurchaseRecipient(kernel);
             _setPolicyActive(address(recipient), true);
-            vm.prank(address(configTimelock));
+            vm.prank(admin);
             distributor.setYieldRecipient(address(recipient));
         }
         recipient.setVaultConfig(address(boundaryToken), address(boundaryToken), true);

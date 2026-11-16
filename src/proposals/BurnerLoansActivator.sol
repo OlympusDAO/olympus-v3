@@ -29,6 +29,7 @@ import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansRiskConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansRiskConfigTimelock.sol";
 import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurnerLoansSeizerTask.sol";
 import {IBurnerLoansYieldClaimerTask} from "src/policies/interfaces/burnerloans/IBurnerLoansYieldClaimerTask.sol";
+import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/IDepositManagerConfigTimelock.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
@@ -37,7 +38,7 @@ import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActiva
 // Libraries
 import {toSubKeycode} from "src/Submodules.sol";
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
-import {ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
@@ -95,6 +96,7 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
     address internal immutable _ohm;
     address internal immutable _floan;
     address internal immutable _depositManager;
+    address internal immutable _depositManagerTimelock;
     address internal immutable _core;
     address internal immutable _auth;
     address internal immutable _config;
@@ -136,6 +138,7 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
         _ohm = deployment_.ohm;
         _floan = deployment_.floan;
         _depositManager = deployment_.depositManager;
+        _depositManagerTimelock = deployment_.depositManagerTimelock;
         _core = deployment_.core;
         _auth = deployment_.auth;
         _config = deployment_.config;
@@ -182,7 +185,7 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
 
     /// @dev Enumerates policies used by on-chain launch checks.
     function _policies() internal view returns (address[] memory targets) {
-        targets = new address[](21);
+        targets = new address[](22);
         targets[0] = _depositManager;
         targets[1] = _core;
         targets[2] = _config;
@@ -204,6 +207,7 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
         targets[18] = _revenueDistributorTimelock;
         targets[19] = _backingOracle;
         targets[20] = _backingOracleTimelock;
+        targets[21] = _depositManagerTimelock;
     }
 
     // Kernel activation alone does not initialize a policy. Require a fresh, disabled graph
@@ -285,23 +289,25 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
     // forge-lint: disable-next-item(calls-loop,require-revert-in-loop)
     function _validateRoles() private view {
         ROLESv1 roles = ROLESv1(address(Kernel(_kernel).getModuleForKeycode(toKeycode("ROLES"))));
-        address[7] memory holders = [
+        address[8] memory holders = [
             address(this),
             _core,
             _collateral,
             _debt,
             _seize,
             _yieldClaimerTask,
-            _seizerTask
+            _seizerTask,
+            _heart
         ];
-        bytes32[7] memory required = [
+        bytes32[8] memory required = [
             ADMIN_ROLE,
             DEPOSIT_OPERATOR_ROLE,
             BL_COLLATERAL_POLICY_ROLE,
             BL_DEBT_POLICY_ROLE,
             BL_LIQUIDATION_POLICY_ROLE,
             BL_YIELD_CLAIMER_ROLE,
-            BURNER_LOANS_SEIZER_ROLE
+            BURNER_LOANS_SEIZER_ROLE,
+            HEART_ROLE
         ];
         for (uint256 i; i < holders.length; ++i) {
             if (!roles.hasRole(holders[i], required[i]))
@@ -379,6 +385,7 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
         IRevenueDistributor(_revenueDistributor).setAssetRoutes(_susde, 0, routes);
         // Enable custody and services before Core, then its action policies.
         IEnabler(_depositManager).enable("");
+        IConfigOperator(_depositManager).setConfigOperator(_depositManagerTimelock);
         IEnabler(_inventory).enable("");
         IEnabler(_payout).enable("");
         IEnabler(_risk).enable("");
@@ -430,6 +437,7 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
 
     function _configureTasks() private {
         // Arm each selected configuration timelock after its target has been enabled.
+        IEnabler(_depositManagerTimelock).enable("");
         IEnabler(_configTimelock).enable("");
         IEnabler(_riskTimelock).enable("");
         IEnabler(_payoutTimelock).enable("");
@@ -504,6 +512,11 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
                 _backingOracle,
             _backingOracleTimelock
         );
+        _bound(
+            address(IDepositManagerConfigTimelock(_depositManagerTimelock).depositManager()) ==
+                _depositManager,
+            _depositManagerTimelock
+        );
         _bound(address(Policy(_heart).kernel()) == _kernel, _heart);
         _bound(
             RevenueDistributorTask(_revenueDistributorTask).distributor() == _revenueDistributor,
@@ -526,16 +539,21 @@ contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
                 IBurnerLoansRisk(_risk).backingOracle() == _backingOracle,
             _risk
         );
-        _bound(IBurnerLoansCoreBound(_auth).core() == _core, _auth);
-        _bound(IBurnerLoansCoreBound(_config).core() == _core, _config);
-        _bound(IBurnerLoansCoreBound(_inventory).core() == _core, _inventory);
-        _bound(IBurnerLoansCoreBound(_payout).core() == _core, _payout);
-        _bound(IBurnerLoansCoreBound(_risk).core() == _core, _risk);
-        _bound(IBurnerLoansCoreBound(_collateral).core() == _core, _collateral);
-        _bound(IBurnerLoansCoreBound(_debt).core() == _core, _debt);
-        _bound(IBurnerLoansCoreBound(_seize).core() == _core, _seize);
-        _bound(IBurnerLoansCoreBound(_lens).core() == _core, _lens);
-        _bound(IBurnerLoansCoreBound(_yieldClaimerTask).core() == _core, _yieldClaimerTask);
+        address[10] memory coreBound = [
+            _auth,
+            _config,
+            _inventory,
+            _payout,
+            _risk,
+            _collateral,
+            _debt,
+            _seize,
+            _lens,
+            _yieldClaimerTask
+        ];
+        for (uint256 i; i < coreBound.length; ++i) {
+            _bound(IBurnerLoansCoreBound(coreBound[i]).core() == _core, coreBound[i]);
+        }
         _bound(
             address(IBurnerLoansConfigTimelock(_configTimelock).burnerLoans()) == _config,
             _configTimelock

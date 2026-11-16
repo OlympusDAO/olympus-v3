@@ -8,7 +8,7 @@ import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
-import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansForkTest} from "./fixtures/BurnerLoansForkTest.sol";
@@ -26,6 +26,56 @@ contract BurnerLoansHeartOrderForkTest is BurnerLoansForkTest {
         assertTrue(_activator.isActivated(), "Reviewed baseline launches through real governance");
         _assertHeartOrder();
         assertFalse(_roles.hasRole(address(_activator), ADMIN_ROLE), "Temporary ADMIN revoked");
+    }
+
+    // Scenarios: BLAUNCH-S04, BLPF-T01.
+    function test_givenLateLaunchFailure_whenGovernanceExecutes_rollsBackBindingsAndRoles() public {
+        vm.mockCallRevert(
+            _graph.heart,
+            abi.encodeCall(
+                IPeriodicTaskManager.addPeriodicTaskAtIndex,
+                (_graph.yieldClaimerTask, bytes4(0), uint256(4))
+            ),
+            abi.encodeWithSelector(Timelock.Timelock_InvalidTx_ExecReverted.selector)
+        );
+        vm.expectRevert(Timelock.Timelock_InvalidTx_ExecReverted.selector);
+        // Failed simulation has no successful snapshot result.
+        // forge-lint: disable-next-line(unused-return)
+        suite.testProposals();
+        assertFalse(_activator.isActivated(), "Late failure rolls back one-use flag");
+        assertFalse(
+            _roles.hasRole(address(_activator), ADMIN_ROLE),
+            "Temporary ADMIN grant rolls back"
+        );
+        assertFalse(
+            _roles.hasRole(_dao, DEPOSIT_MANAGER_ADMIN_ROLE),
+            "Custody proposer grant rolls back"
+        );
+        assertFalse(
+            _roles.hasRole(_graph.core, DEPOSIT_OPERATOR_ROLE),
+            "Core custody grant rolls back"
+        );
+        assertEq(
+            IConfigOperator(_graph.depositManager).configOperator(),
+            address(0),
+            "Custody controller selection rolls back"
+        );
+        assertFalse(
+            IEnabler(_graph.depositManagerTimelock).isEnabled(),
+            "Custody queue enablement rolls back"
+        );
+        assertFalse(IEnabler(_graph.depositManager).isEnabled(), "Manager enablement rolls back");
+        assertEq(_core.getAssetCount(), 0, "Markets roll back");
+        assertEq(
+            IPeriodicTaskManager(_graph.heart).getPeriodicTaskCount(),
+            6,
+            "Earlier task insertion rolls back"
+        );
+        vm.clearMockedCalls();
+        // Simulator returns snapshots unused by these postconditions.
+        // forge-lint: disable-next-line(unused-return)
+        suite.testProposals();
+        assertTrue(_activator.isActivated(), "Restored prerequisite permits real governance retry");
     }
 
     // Scenarios: BLAUNCH-H05, BLAUNCH-H09.

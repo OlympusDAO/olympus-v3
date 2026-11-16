@@ -2,36 +2,45 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBackingOracleConfigTimelock} from "src/policies/interfaces/IBackingOracleConfigTimelock.sol";
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
-import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
-import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
 import {IBurnerLoansInventoryConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansInventoryConfigTimelock.sol";
 import {IBurnerLoansPayoutConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansPayoutConfigTimelock.sol";
 import {IBurnerLoansRiskConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansRiskConfigTimelock.sol";
-import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
-import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
-import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/IDepositManagerConfigTimelock.sol";
+import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
+import {IBackingOracleConfigTimelock} from "src/policies/interfaces/IBackingOracleConfigTimelock.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
+import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, BACKING_ADMIN_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {fromSubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, BACKING_ADMIN_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Policy} from "src/Kernel.sol";
 import {BurnerLoansForkTest} from "./BurnerLoansProposal/fixtures/BurnerLoansForkTest.sol";
 import {ContinuouslyUpdatedFeed} from "./BurnerLoansProposal/fixtures/ContinuouslyUpdatedFeed.sol";
 import {UnavailableFeed} from "./BurnerLoansProposal/fixtures/UnavailableFeed.sol";
+import {Policy} from "src/Kernel.sol";
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {BurnerLoansProposal} from "src/proposals/BurnerLoansProposal.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
 contract BurnerLoansProposalForkTest is BurnerLoansForkTest {
+    error DepositManagerQueueNotSelected();
+
     // Scenarios: BLPF-P09.
     function test_givenOneUsdeFeedUnavailable_whenPriceRead(uint8 index_) public {
         address[3] memory feeds = [_USDE_FEED, _USDE_REDSTONE_FEED, _USDE_API3_FEED];
@@ -177,37 +186,45 @@ contract BurnerLoansProposalForkTest is BurnerLoansForkTest {
         _assertPriceAdmission();
         _assertExistingHeartSnapshot();
         _assertHeartOrder();
+
+        assertTrue(
+            _roles.hasRole(_dao, DEPOSIT_MANAGER_ADMIN_ROLE),
+            "OCG grants custody proposer role"
+        );
     }
 
-    // Read-only postconditions for the fixed six-queue deployment graph.
+    // Read-only postconditions for the fixed seven-queue deployment graph.
     // forge-lint: disable-next-item(calls-loop)
     function _assertTimelocks() private view {
         address backingQueue = addresses.getAddress(
             "olympus-policy-backing-oracle-config-timelock"
         );
-        address[6] memory queues = [
+        address[7] memory queues = [
             _graph.configTimelock,
             _graph.riskTimelock,
             _graph.payoutTimelock,
             _graph.inventoryTimelock,
             _graph.revenueDistributorTimelock,
-            backingQueue
+            backingQueue,
+            _graph.depositManagerTimelock
         ];
-        address[6] memory targets = [
+        address[7] memory targets = [
             _graph.config,
             _graph.risk,
             _graph.payout,
             _graph.inventory,
             _graph.revenueDistributor,
-            _graph.backingOracle
+            _graph.backingOracle,
+            _graph.depositManager
         ];
-        address[6] memory boundTargets = [
+        address[7] memory boundTargets = [
             address(IBurnerLoansConfigTimelock(queues[0]).burnerLoans()),
             address(IBurnerLoansRiskConfigTimelock(queues[1]).risk()),
             address(IBurnerLoansPayoutConfigTimelock(queues[2]).payout()),
             address(IBurnerLoansInventoryConfigTimelock(queues[3]).inventory()),
             IRevenueDistributorConfigTimelock(queues[4]).distributor(),
-            address(IBackingOracleConfigTimelock(queues[5]).backingOracle())
+            address(IBackingOracleConfigTimelock(queues[5]).backingOracle()),
+            address(IDepositManagerConfigTimelock(queues[6]).depositManager())
         ];
         for (uint256 i; i < queues.length; ++i) {
             assertGt(queues[i].code.length, 0, "Timelock is deployed");
@@ -341,6 +358,202 @@ contract BurnerLoansProposalForkTest is BurnerLoansForkTest {
                 targets[i] != 0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd,
                 "PRICE admission is inside the atomic activator call"
             );
+        }
+    }
+
+    // Scenarios: BLPF-N01.
+    // Inspect each actual Governor action for the exact role, holder and final cleanup call.
+    // forge-lint: disable-next-item(calls-loop)
+    function test_givenGovernanceLaunch_whenActionsRead_includesCustodyGrantWithinLimit()
+        public
+        view
+    {
+        // No ETH values are relevant to the role-grant and action-count assertions.
+        // forge-lint: disable-next-item(unused-return)
+        (address[] memory targets, , bytes[] memory calls) = _proposal.getProposalActions();
+        assertLe(targets.length, 15, "Launch fits Governor action limit");
+        address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
+        bytes32 expectedGrant = keccak256(
+            abi.encodeCall(RolesAdmin.grantRole, (DEPOSIT_MANAGER_ADMIN_ROLE, _dao))
+        );
+        uint256 custodyGrants;
+        for (uint256 i; i < targets.length; ++i) {
+            if (targets[i] == rolesAdmin && keccak256(calls[i]) == expectedGrant) ++custodyGrants;
+        }
+        assertEq(custodyGrants, 1, "OCG explicitly grants the exact custody role to DAO once");
+        assertEq(targets[targets.length - 1], rolesAdmin, "Final action uses RolesAdmin");
+        assertEq(
+            calls[calls.length - 1],
+            abi.encodeCall(RolesAdmin.revokeRole, (ADMIN_ROLE, address(_activator))),
+            "Final action revokes the temporary helper ADMIN"
+        );
+    }
+
+    // Scenarios: BLPF-N01.
+    function test_givenOnlyHeartRolePresent_whenActionsBuilt_fitsWorstCaseBudget() public {
+        vm.mockCall(
+            address(_roles),
+            abi.encodeWithSelector(_roles.hasRole.selector),
+            abi.encode(false)
+        );
+        vm.mockCall(
+            address(_roles),
+            abi.encodeCall(_roles.hasRole, (_graph.heart, HEART_ROLE)),
+            abi.encode(true)
+        );
+        BurnerLoansProposal proposal = new BurnerLoansProposal();
+        proposal.run(addresses, address(this), false, true, false, false, false, false);
+        (address[] memory targets, , bytes[] memory calls) = proposal.getProposalActions();
+        assertEq(targets.length, 15, "Worst case fills but never exceeds Governor limit");
+        uint256 custodyGrants;
+        for (uint256 i; i < calls.length; ++i) {
+            if (
+                keccak256(calls[i]) ==
+                keccak256(abi.encodeCall(RolesAdmin.grantRole, (DEPOSIT_MANAGER_ADMIN_ROLE, _dao)))
+            ) ++custodyGrants;
+        }
+        assertEq(custodyGrants, 1, "Worst case retains the exact custody proposer grant");
+    }
+
+    // Scenarios: BLPF-N01.
+    function test_givenHeartRoleMissing_whenActionsBuilt_reverts() public {
+        vm.mockCall(
+            address(_roles),
+            abi.encodeCall(_roles.hasRole, (_graph.heart, HEART_ROLE)),
+            abi.encode(false)
+        );
+        BurnerLoansProposal proposal = new BurnerLoansProposal();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
+                _graph.heart
+            )
+        );
+        proposal.run(addresses, address(this), false, true, false, false, false, false);
+    }
+
+    // Scenarios: BLPF-A02.
+    function test_givenGovernanceLaunch_whenNonAdminReplacesController_reverts(
+        address caller_
+    ) public {
+        vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        address beforeOperator = IConfigOperator(_graph.depositManager).configOperator();
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.prank(caller_);
+        IConfigOperator(_graph.depositManager).setConfigOperator(_dao);
+        assertEq(
+            IConfigOperator(_graph.depositManager).configOperator(),
+            beforeOperator,
+            "Unauthorized caller cannot replace controller"
+        );
+    }
+
+    // Scenarios: BLPF-A02.
+    function test_givenGovernanceLaunch_whenDaoReplacesController_reverts() public {
+        test_givenGovernanceLaunch_whenNonAdminReplacesController_reverts(_dao);
+    }
+
+    // Scenarios: BLPF-D01.
+    function test_givenGovernanceLaunch_whenDaoQueuesDepositCap_executes(address executor_) public {
+        address selected = IConfigOperator(_graph.depositManager).configOperator();
+        assertTrue(selected != address(0), "OCG must select the custody queue");
+        // Preserve the missing-binding diagnostic under legacy non-halting assertions.
+        if (selected == address(0)) revert DepositManagerQueueNotSelected();
+        IDepositManagerConfigTimelock queue = IDepositManagerConfigTimelock(selected);
+        assertEq(address(queue.depositManager()), _graph.depositManager, "Exact custody target");
+        assertEq(address(Policy(selected).kernel()), address(_kernel), "Same Kernel queue");
+        assertTrue(_kernel.isPolicyActive(Policy(selected)), "OCG-prepared queue is active");
+        assertTrue(IEnabler(selected).isEnabled(), "OCG enables selected queue");
+        IERC20 asset = IERC20(_graph.usds);
+        uint256 balanceBefore = asset.balanceOf(_graph.depositManager);
+        vm.prank(_dao);
+        uint64 id = queue.queueSetAssetDepositCap(asset, 9_000_000e18);
+        assertEq(
+            IDepositManager(_graph.depositManager).getAssetConfiguration(asset).depositCap,
+            10_000_000e18,
+            "No cap change before delay"
+        );
+        ITimelockBatchQueue.QueuedAction memory queued = queue.getQueuedAction(id);
+        vm.warp(queued.executableAt);
+        vm.prank(executor_);
+        queue.executeQueuedAction(id);
+        assertEq(
+            IDepositManager(_graph.depositManager).getAssetConfiguration(asset).depositCap,
+            9_000_000e18,
+            "DAO config executes after real launch"
+        );
+        assertEq(asset.balanceOf(_graph.depositManager), balanceBefore, "No custody delta");
+    }
+
+    // Scenarios: BLPF-D02.
+    function test_givenGovernanceLaunch_whenControllerReplacedAndPaused_adminRepairAndEmergencyCancellationRemain()
+        public
+    {
+        IDepositManagerConfigTimelock queue = IDepositManagerConfigTimelock(
+            _graph.depositManagerTimelock
+        );
+        IERC20 asset = IERC20(_graph.usds);
+        vm.prank(_dao);
+        uint64 id = queue.queueSetAssetDepositCap(asset, 8_000_000e18);
+        (bytes32 key, ) = IConfigTimelockBatchQueue(address(queue)).getQueuedConfigState(id, 0, 0);
+        vm.startPrank(_timelock);
+        IConfigOperator(_graph.depositManager).setConfigOperator(_dao);
+        IDepositManager(_graph.depositManager).setAssetDepositCap(asset, 9_000_000e18);
+        vm.stopPrank();
+        assertEq(
+            IDepositManager(_graph.depositManager).getAssetConfiguration(asset).depositCap,
+            9_000_000e18,
+            "ADMIN retains direct repair authority after queue replacement"
+        );
+        vm.startPrank(_emergency);
+        IEnabler(_graph.depositManager).disable("");
+        IEnabler(address(queue)).disable("");
+        queue.cancelQueuedAction(id);
+        vm.stopPrank();
+        assertTrue(
+            queue.getQueuedAction(id).cancelled,
+            "Emergency cancels despite target pause and replacement"
+        );
+        assertEq(
+            IConfigTimelockBatchQueue(address(queue)).pendingActionId(key),
+            0,
+            "Cancellation releases the old custody key"
+        );
+        assertFalse(_roles.hasRole(_dao, ADMIN_ROLE), "DAO retains no broad ADMIN");
+    }
+
+    // Scenarios: BLPF-P12.
+    // Fixed four-token distribution checks exercise actual underlying and share-token balances.
+    // forge-lint: disable-next-item(calls-loop)
+    function test_givenGovernanceLaunch_whenRevenueDistributed_allReceiptsReachTreasury(
+        address caller_
+    ) public {
+        IRevenueDistributor distributor = IRevenueDistributor(_graph.revenueDistributor);
+        assertEq(
+            distributor.yieldRecipient(),
+            address(0),
+            "Future V2 OCG owns recipient selection"
+        );
+        address[4] memory assets = [_graph.usds, _graph.susds, _graph.usde, _graph.susde];
+        address treasury = distributor.treasury();
+        for (uint256 i; i < assets.length; ++i) {
+            IERC20 asset = IERC20(assets[i]);
+            (uint16 bps, IRevenueDistributor.AssetRoute[] memory routes) = distributor
+                .getAssetDistribution(assets[i]);
+            assertEq(bps, 0, "No repurchases before V2");
+            assertEq(routes.length, 0, "No configured revenue recipients at launch");
+            uint256 treasuryBefore = asset.balanceOf(treasury);
+            // All four assets have 18 decimals: 100e18 received, zero explicit allocations,
+            // residual = 100e18 - 0 - 0 = 100e18, entirely to Treasury.
+            deal(assets[i], address(distributor), 100e18);
+            vm.prank(caller_);
+            distributor.distribute(assets[i]);
+            assertEq(
+                asset.balanceOf(treasury) - treasuryBefore,
+                100e18,
+                "Treasury receives full receipt"
+            );
+            assertEq(asset.balanceOf(address(distributor)), 0, "No unallocated receipt remains");
         }
     }
 }

@@ -603,7 +603,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(address(token), address(token), false);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
 
@@ -631,7 +631,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(makeAddr("yield vault"), address(token), true);
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
         vm.prank(_configurationCaller());
@@ -658,7 +658,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(makeAddr("yield vault"), address(token), false);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
 
@@ -774,7 +774,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(address(token), address(token), true);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
         vm.prank(authority_);
@@ -802,7 +802,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(address(token), address(token), true);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](1);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: alice, bps: 5_001});
@@ -853,7 +853,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(address(token), address(token), true);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](2);
         routes[0] = IRevenueDistributor.AssetRoute({recipient: alice, bps: 1_000});
@@ -961,7 +961,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         _setPolicyActive(address(recipient), true);
         recipient.setVaultConfig(address(token), address(token), true);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         recipient.setEnabled(false);
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
@@ -1050,7 +1050,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         pendingMask_ = uint8(bound(pendingMask_, 0, 7));
         repurchaseBps_ = uint16(bound(repurchaseBps_, 0, 10_000));
         MockYieldRepurchaseRecipient recipient = _newYieldRecipient(address(token), true);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory initial = new IRevenueDistributor.AssetRoute[](1);
         initial[0] = IRevenueDistributor.AssetRoute({recipient: alice, bps: 2_500});
@@ -1119,7 +1119,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         pendingMask_ = uint8(bound(pendingMask_, 0, 7));
         repurchaseBps_ = uint16(bound(repurchaseBps_, 0, 9_999));
         MockYieldRepurchaseRecipient recipient = _newYieldRecipient(address(token), true);
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory empty = new IRevenueDistributor.AssetRoute[](0);
         vm.startPrank(_configurationCaller());
@@ -1174,7 +1174,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
             }
         }
         MockYieldRepurchaseRecipient recipient = _newYieldRecipient(address(token), directVault_);
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
 
         vm.expectEmit(true, false, false, true, address(distributor));
@@ -1293,7 +1293,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         _configurationSeed = authority_;
         recipientKind_ = uint8(bound(recipientKind_, 0, 4));
         MockYieldRepurchaseRecipient yieldRecipient = _newYieldRecipient(address(token), true);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(yieldRecipient));
         bytes32 hashBefore = _seedRouteAndDebt();
         address[5] memory forbidden = [
@@ -1399,7 +1399,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         _configurationSeed = authority_;
         invalidKind_ = uint8(bound(invalidKind_, 0, 3));
         MockYieldRepurchaseRecipient recipient = _newYieldRecipient(address(token), true);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         bytes32 hashBefore = _seedRouteAndDebt();
         uint16 repurchaseBps;
@@ -1452,7 +1452,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         if (failureKind_ == 1) recipient.setVaultConfig(address(token), address(token), false);
         if (failureKind_ == 2)
             recipient.setVaultConfig(makeAddr("disabled vault"), address(token), false);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         bytes32 hashBefore = _seedRouteAndDebt();
         if (failureKind_ == 3) recipient.setRevertGetVaultConfig(true);
@@ -1482,7 +1482,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
         _grantConfigurationAuthority(authority_, operatorOnly_, overlap_);
         _configurationSeed = authority_;
         MockYieldRepurchaseRecipient recipient = _newYieldRecipient(address(token), true);
-        vm.prank(authority_);
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         bytes32 hashBefore = _seedRouteAndDebt();
         if (kernelInactive_) {
@@ -2357,7 +2357,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
             abi.encodeCall(MockYieldRepurchaseRecipient.getVaultConfig, (vault)),
             abi.encode(vault, address(token), makeAddr("underlying"), true)
         );
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
 
@@ -2383,7 +2383,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
             abi.encodeCall(MockYieldRepurchaseRecipient.getVaultConfig, (address(token))),
             abi.encode(address(token), makeAddr("separate shares"), makeAddr("underlying"), true)
         );
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         _assertInvalidVaultConfig(recipient);
     }
@@ -2407,7 +2407,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
                 true
             )
         );
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         _assertInvalidVaultConfig(recipient);
     }
@@ -2443,7 +2443,7 @@ contract RevenueDistributorSetAssetRoutesTest is RevenueDistributorTest {
             abi.encodeCall(MockYieldRepurchaseRecipient.getVaultConfig, (address(token))),
             data
         );
-        vm.prank(_configurationCaller());
+        vm.prank(admin);
         distributor.setYieldRecipient(address(recipient));
         _assertInvalidVaultConfig(recipient);
     }
