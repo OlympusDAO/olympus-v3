@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
 // solhint-disable custom-errors
 pragma solidity ^0.8.20;

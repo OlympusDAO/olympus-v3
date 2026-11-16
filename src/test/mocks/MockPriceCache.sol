@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 // Test setup must be able to model zero-address dependencies and assets.
 // forge-lint: disable-start(missing-zero-check)
 pragma solidity ^0.8.15;

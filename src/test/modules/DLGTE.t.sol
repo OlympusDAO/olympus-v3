@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MAGPL-3.0-only
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";

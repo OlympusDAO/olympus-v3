@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
 // Fork-only setup calls trusted VM/registry helpers; its bookkeeping is not a production entry point.

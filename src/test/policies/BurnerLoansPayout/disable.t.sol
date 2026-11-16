@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
 // Finite seed and invariant loops intentionally call real contracts.

@@ -13,6 +13,7 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {IPriceVariantReader} from "src/test/policies/BurnerLoansCore/fixtures/IPriceVariantReader.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
@@ -27,14 +28,6 @@ import {CoreService} from "./fixtures/CoreService.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {Actions, Kernel, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-
-// Isolates the variant overload so its selector is available without a signature literal.
-interface IPriceVariantReader {
-    function getPrice(
-        address asset,
-        IPRICEv2.Variant variant
-    ) external view returns (uint256, uint48);
-}
 
 contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     CoreService internal _actor;

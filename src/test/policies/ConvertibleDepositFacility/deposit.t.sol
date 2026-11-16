@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
 // Test calls intentionally ignore return values when asserting only revert behavior or one tuple

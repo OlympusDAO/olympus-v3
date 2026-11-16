@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
 // Scenario-specific constants and deliberate narrowing are exact test boundaries.

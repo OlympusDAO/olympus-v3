@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";

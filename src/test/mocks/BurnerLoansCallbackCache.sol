@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 

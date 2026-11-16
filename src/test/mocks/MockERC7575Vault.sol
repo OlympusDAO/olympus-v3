@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.27;
 
 // Test fixtures are kept together so invalid share-token variants stay local to onboarding tests.
@@ -10,18 +10,13 @@ import {IERC7575} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IMockMintableShareToken} from "src/test/mocks/IMockMintableShareToken.sol";
 
 // Libraries
 import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 
 // Contracts
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
-
-interface IMockMintableShareToken {
-    function mint(address recipient_, uint256 amount_) external;
-
-    function burn(address owner_, uint256 amount_) external;
-}
 
 contract MockERC7575ShareToken is ERC20, IMockMintableShareToken {
     error OnlyVault();

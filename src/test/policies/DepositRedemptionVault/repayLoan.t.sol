@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";

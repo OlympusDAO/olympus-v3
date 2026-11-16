@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.24;
 // Interfaces
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.27;
 
 // The share token is private to this vault fixture and is kept beside it for readable test setup.

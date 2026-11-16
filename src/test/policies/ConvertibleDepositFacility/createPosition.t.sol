@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
 import {stdError} from "@forge-std-1.16.2/StdError.sol";
