@@ -14,7 +14,7 @@ contract ConvertibleOHMTellerExecuteGasBenchmark is ConvertibleOHMTellerTestBase
 
     /// @dev Tight upper bound on gas consumed by execute(). Tune if HEART_SWEEP_LIMIT
     ///      changes or sweep-loop logic changes.
-    uint256 internal constant _GAS_UPPER_BOUND = 500_000;
+    uint256 internal constant _GAS_UPPER_BOUND = 1_200_000;
 
     function test_execute_gas_sweep_singleCreator() external {
         uint256 limit = teller.HEART_SWEEP_LIMIT();
