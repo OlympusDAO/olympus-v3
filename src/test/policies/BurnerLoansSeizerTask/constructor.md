@@ -120,7 +120,6 @@ Order: Seize address/ERC165, Seize.core(), Seize Kernel metadata, Lens ERC165/co
 | BLSZC-D12 | Fuzz deployers | Seize kernel() reverts, returns short bytes or a noncanonical address; seed each shape | PolicyDependency_InvalidDependency(Seize); no deployment | Unmapped |
 | BLSZC-T02 | Fuzz deployers | Seize.core() returns short or noncanonical address data | ABI decode revert with empty data; no deployment | Unmapped |
 | BLSZC-T03 | Fuzz deployers | Lens.core() returns short or noncanonical address data | ABI decode revert with empty data; no deployment | Unmapped |
-| BLSZC-P07 | Fuzz deployers | Lens has code and matching core() but no ERC165 implementation | Binding accepted; no Lens interface probe; immutable lens()/seize() getters exact | Unmapped |
 | BLSZC-I09 | Fuzz deployers | check=0 and seize=0; gas otherwise valid | BurnerLoansSeizer_InvalidScanLimits(0,0) | Unmapped |
 | BLSZC-I10 | Fuzz deployers | Invalid scan tuple plus gas0 | InvalidScanLimits(check,seize) before gas validation | Unmapped |
 | BLSZC-D13 | Fuzz deployers | Readable foreign Seize Kernel plus Seize inactive/disabled; all earlier checks pass | KernelMismatch(Seize,expected,reported), not a readiness failure | Unmapped |
@@ -128,13 +127,13 @@ Order: Seize address/ERC165, Seize.core(), Seize Kernel metadata, Lens ERC165/co
 
 ## Trusted Kernel and scan capability boundaries
 
-Kernel code is not independently validated by this constructor. A helper with matching core() is not probed for the expiry selector; deployments must select the updated Lens API. These rows describe current admission, not a proposal to add a new API or readiness gate.
+Kernel code is not independently validated by this constructor. Lens admission requires the current IBurnerLoansLens ERC165 interface as well as matching core(). Interface claims do not replace execution-time failure isolation.
 
 | ID | Caller | Input boundary | Execution / effects | Test |
 | --- | --- | --- | --- | --- |
 | BLSZC-P08 | Fuzz deployers | Kernel zero or EOA/MAX160; Seize test double reports that exact Kernel; other bindings valid | Constructor stores matching Kernel without a code/membership read; no promise of operational usability | Unmapped |
 
-Retired BLSZC-P09: accepting a same-Core helper without the required discovery capability is
+Retired BLSZC-P07 and BLSZC-P09: accepting a same-Core helper without the required discovery capability is
 replaced by D15-D18. Execution D23 retains isolation for a helper that falsely claims that capability.
 
 ## Required discovery capability
