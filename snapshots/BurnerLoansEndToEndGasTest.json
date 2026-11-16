@@ -29,10 +29,10 @@
     "BurnerLoansInventory.syncMintApproval.restoreAfterDefault": "84575",
     "BurnerLoansInventory.withdraw": "111885",
     "BurnerLoansRisk.setBackingOracle": "64667",
-    "BurnerLoansSeize.seize.single": "740880",
-    "BurnerLoansSeizerTask.execute.batch10": "1618549",
-    "BurnerLoansSeizerTask.execute.maximumBatch": "6370307",
-    "BurnerLoansSeizerTask.execute.noSeizures": "82810",
-    "BurnerLoansSeizerTask.execute.oneSeizure": "646070",
+    "BurnerLoansSeize.seize.single": "740881",
+    "BurnerLoansSeizerTask.execute.batch10": "1692717",
+    "BurnerLoansSeizerTask.execute.maximumBatch": "6778803",
+    "BurnerLoansSeizerTask.execute.noSeizures": "91218",
+    "BurnerLoansSeizerTask.execute.oneSeizure": "660393",
     "BurnerLoansYieldClaimerTask.claimYield.treasuryOnly": "290581"
 }
