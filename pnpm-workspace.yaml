@@ -1,5 +1,7 @@
 minimumReleaseAge: 10080
 preferFrozenLockfile: true
+trustPolicy: no-downgrade
+trustLockfile: false
 engineStrict: true
 strictDepBuilds: true
 blockExoticSubdeps: true
