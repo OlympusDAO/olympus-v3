@@ -33,8 +33,8 @@ jobs:
               run: pnpm audit --audit-level moderate
 
     audit-comments:
-        # Fork PR tokens cannot write comments. Manual runs have no PR to comment on.
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        # Fork and Dependabot PR tokens cannot write comments. Manual runs have no PR.
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
