@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 /// @title Yield Repurchase Recipient Interface
 /// @notice Describes the asset routes through which a repurchase facility can receive protocol yield.

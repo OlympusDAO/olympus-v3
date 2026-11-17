@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 /// @title YieldRepurchaseFacilityV2Constants
 /// @notice Shared compile-time constants of the YieldRepurchaseFacilityV2, its linked
