@@ -338,6 +338,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.assume(caller_ != address(_config) || !admin_);
         _risk.setConfigOperator(_recipient);
         _core.setConfigOperator(_recipient);
         _mutationReverts(

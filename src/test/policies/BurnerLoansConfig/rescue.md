@@ -107,7 +107,7 @@ Use [existing Config rescue tests](rescue.t.sol) for authorization, empty/nonemp
 [test_whenMaximumBalanceRescued]: ./rescue.t.sol#L308
 [test_givenTokenTransferFails_whenRescued]: ./rescue.t.sol#L318
 [test_givenCoreSelectsAnotherConfig_whenRescued_reverts]: ./rescue.t.sol#L336
-[test_givenRescueCallback_whenNestedRecoveryCaught]: ./rescue.t.sol#L351
-[test_givenRescueCallback_whenNestedRecoveryPropagated]: ./rescue.t.sol#L375
-[test_givenConfigDeselected_whenAnyViewerQuotesRecovery]: ./rescue.t.sol#L398
-[test_givenInactive_whenUnauthorizedAndInvalid_reverts]: rescue.t.sol#L416
+[test_givenRescueCallback_whenNestedRecoveryCaught]: ./rescue.t.sol#L352
+[test_givenRescueCallback_whenNestedRecoveryPropagated]: ./rescue.t.sol#L376
+[test_givenConfigDeselected_whenAnyViewerQuotesRecovery]: ./rescue.t.sol#L399
+[test_givenInactive_whenUnauthorizedAndInvalid_reverts]: rescue.t.sol#L417
