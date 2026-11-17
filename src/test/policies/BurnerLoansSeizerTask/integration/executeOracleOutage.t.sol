@@ -760,32 +760,46 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     }
 
     // Scenarios: BLSEIZ-EXECUTE-D09, BLSEIZ-SELF-EXECUTE-D06.
-    function test_givenStaleCursor_givenServiceFailure_whenExecuted(bool settlement_) public {
+    function test_givenStaleCursor_givenSettlementPaused_whenExecuted() public {
+        _prepareStaleCursorServiceFailure();
+        _liquidation.disable("");
+        vm.expectEmit(true, false, false, true, address(_task));
+        emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), IEnabler.NotEnabled.selector);
+        _task.execute();
+        _assertStaleCursorServiceFailure(1);
+        _liquidation.reEnable();
+        _assertStaleCursorServiceRecovery();
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-D09, BLSEIZ-SELF-EXECUTE-D06.
+    function test_givenStaleCursor_givenRiskPaused_whenExecuted() public {
+        _prepareStaleCursorServiceFailure();
+        _risk.disable("");
+        _expectScanFailure(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        _task.execute();
+        _assertStaleCursorServiceFailure(0);
+        _risk.reEnable();
+        _assertStaleCursorServiceRecovery();
+    }
+
+    function _prepareStaleCursorServiceFailure() private {
         _mixedDebt();
         _setBothBorrowerCursors(address(_asset), 2);
         _repay(_CAROL, 1e9);
         _expectPricedScans(1);
-        if (settlement_) {
-            _liquidation.disable("");
-            vm.expectEmit(true, false, false, true, address(_task));
-            emit IBurnerLoansSeizerTask.SeizureFailed(
-                address(_asset),
-                IEnabler.NotEnabled.selector
-            );
-        } else {
-            _risk.disable("");
-            _expectScanFailure(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        }
-        _task.execute();
+    }
+
+    /// @param expectedExpired_ Expiry offset committed by the failure path under test.
+    function _assertStaleCursorServiceFailure(uint256 expectedExpired_) private view {
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
-            settlement_ ? 1 : 0,
-            "Repair survives scan failure; rejected singleton advances one"
+            expectedExpired_,
+            "Expected failure-specific expiry progress"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             0,
-            "Expected independent unhealthy scan or retry offset"
+            "Unhealthy progress remains independent"
         );
         assertEq(
             _inventory.activePrincipalOhm(),
@@ -793,14 +807,15 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Failed service preserves remaining principal"
         );
         assertEq(_task.nextAssetIndex(), 1, "Service failure still rotates the asset");
-        if (settlement_) _liquidation.reEnable();
-        else _risk.reEnable();
+    }
+
+    function _assertStaleCursorServiceRecovery() private {
         _task.execute(); // B keeps its turn.
         _task.execute();
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             0,
-            "Restored service settles expired debt from repaired zero cursor"
+            "Restored service settles expired debt after cursor repair"
         );
         assertEq(_inventory.activePrincipalOhm(), 1e9, "Only unexpired debt remains after retry");
     }
@@ -930,26 +945,46 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _assertSettledExpired();
     }
 
-    // Scenarios: BLSEIZ-EXECUTE-D11, BLSEIZ-EXECUTE-D12.
-    function test_givenRiskUnavailable_whenExecuted(bool active_) public {
+    // Scenarios: BLSEIZ-EXECUTE-D11.
+    function test_givenRiskPaused_whenExecuted() public {
         _mixedDebt();
-        if (active_) _risk.disable("");
-        else _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
-        bytes memory reason = active_
-            ? abi.encodeWithSelector(IEnabler.NotEnabled.selector)
-            : abi.encodeWithSelector(
+        _risk.disable("");
+        _expectRiskServiceFailure(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        _task.execute();
+        _assertRiskServiceFailure();
+        _risk.reEnable();
+        _assertRiskServiceRecovery();
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-D12.
+    function test_givenRiskInactive_whenExecuted() public {
+        _mixedDebt();
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _expectRiskServiceFailure(
+            abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_risk)
-            );
-        _expectScanFailure(reason);
+            )
+        );
+        _task.execute();
+        _assertRiskServiceFailure();
+        _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
+        _assertRiskServiceRecovery();
+    }
+
+    /// @param reason_ Exact Risk lifecycle error expected before restoration.
+    function _expectRiskServiceFailure(bytes memory reason_) private {
+        _expectScanFailure(reason_);
         _expectPricedScans(1);
-        // Only the successful retry below may reach Seize; failed quotes must not call it.
+        // Only the successful retry may reach Seize; rejected quotes must not call it.
         vm.expectCall(
             address(_liquidation),
             abi.encodeWithSelector(_liquidation.seize.selector),
             uint64(1)
         );
-        _task.execute();
+    }
+
+    function _assertRiskServiceFailure() private view {
         assertEq(
             _inventory.activePrincipalOhm(),
             3e9,
@@ -958,15 +993,16 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
-            "Rejected settlement retains cursor"
+            "Failed quote retains expiry cursor"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             0,
-            "Expected independent unhealthy scan or retry offset"
+            "Failed quote retains independent unhealthy cursor"
         );
-        if (active_) _risk.reEnable();
-        else _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
+    }
+
+    function _assertRiskServiceRecovery() private {
         _task.execute();
         _task.execute();
         _assertSettledExpired();
@@ -2076,16 +2112,6 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _seedDebt(_BOB, 10e6, 1e9);
         _task.setScanLimits(1, 1);
         _price.setPrice(address(_asset), 1e16);
-    }
-
-    // Scenarios: BLSEIZ-EXECUTE-D11.
-    function test_givenRiskPaused_whenLifecycleBoundarySeeded() public {
-        test_givenRiskUnavailable_whenExecuted(true);
-    }
-
-    // Scenarios: BLSEIZ-EXECUTE-D12.
-    function test_givenRiskInactiveEnabled_whenLifecycleBoundarySeeded() public {
-        test_givenRiskUnavailable_whenExecuted(false);
     }
 
     // Scenarios: BLSEIZ-EXECUTE-D12.

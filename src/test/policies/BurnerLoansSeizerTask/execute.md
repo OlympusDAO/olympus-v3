@@ -83,7 +83,7 @@ persists. Adequate configured gas remains a progress prerequisite.
 | BLSEIZ-EXECUTE-P14 | HEART | Prices usable, mixed expired/unexpired unhealthy debt | Expired-only batch first; priced unhealthy batch on a later visit | Covered: [test][test_givenPricesAvailable_whenMixedUnhealthyPageScanned] |
 | BLSEIZ-EXECUTE-P15 | HEART task manager | Expired-containing page; PRICE consumes all forwarded gas if called | Settle expired without priced Lens/PRICE calls; later Heart task executes | Covered: [test][test_givenExpiredDebt_givenPriceConsumesGas_whenHeartRunsTasks] |
 | BLSEIZ-EXECUTE-D08 | HEART task manager | Expiry-empty prefix; priced Lens consumes all forwarded gas | ScanFailed(0) with sufficient catch gas; expiry advances, unhealthy remains pending; asset rotates and later Heart task executes | Covered: [test][test_givenUnexpiredPrefix_givenPriceConsumesGas_whenHeartRunsTasks] |
-| BLSEIZ-EXECUTE-D09 | HEART | Saved cursor becomes stale; active borrower count succeeds; expiry quote or settlement then fails | Persist zero repair after scan failure; singleton rejection advances one; retain debt and rotate | Covered: [test][test_givenStaleCursor_givenServiceFailure_whenExecuted] |
+| BLSEIZ-EXECUTE-D09 | HEART | Saved cursor becomes stale; active borrower count succeeds; expiry quote or settlement then fails | Persist zero repair after scan failure; singleton rejection advances one; retain debt and rotate | Covered: [test][test_givenStaleCursor_givenSettlementPaused_whenExecuted], [test][test_givenStaleCursor_givenRiskPaused_whenExecuted] |
 | BLSEIZ-EXECUTE-P16 | HEART | Nonzero expiry-empty suffix and priced failure; filtered results empty | Use suffix cursor in the active borrower list, wrap and reach expired debt on later bounded visits | Covered: [test][test_givenExpiryEmptySuffix_givenOutage_whenHeartBeatsRepeat] |
 
 ADMIN_ROLE and BURNER_LOANS_ADMIN_ROLE can use [setNextAssetIndex](./setNextAssetIndex.md) to choose the next managed asset, and [setExpiredAssetCursor](./setExpiredAssetCursor.md) or [setUnhealthyAssetCursor](./setUnhealthyAssetCursor.md) to recover one borrower lane independently. Recovery remains available while locally disabled. All recovery setters require the Task to be Kernel-active. Zero resets require no downstream reads; a nonzero borrower offset uses a zero-sized Lens scan for bounds validation.
@@ -168,8 +168,8 @@ Each row assumes an active/enabled Task, HEART caller, SEIZER grant and sufficie
 | ID | Caller | Condition / domain | Execution / effects | Test |
 | --- | --- | --- | --- | --- |
 | BLSEIZ-EXECUTE-D10 | HEART | All-unexpired page under pricing outage | ScanFailed(original pricing selector); advance/wrap expiry cursor, retain unhealthy cursor; no classification/settlement | Covered: [test][test_givenAllUnexpired_givenOutage_whenExecuted], [test][test_givenAllUnexpired_givenPriceReverts_whenExecuted], [test][test_givenAllUnexpired_givenBackingReverts_whenExecuted], [test][test_givenAllUnexpired_givenBackingPaused_whenExecuted], [test][test_givenAllUnexpired_givenPriceStale_whenExecuted], [test][test_givenAllUnexpired_givenCacheReverts_whenExecuted] |
-| BLSEIZ-EXECUTE-D11 | HEART | Expiry-positive page; Risk active but locally disabled | ScanFailed(NotEnabled); retain cursor/debt; no priced or Seize call; restore/retry | Covered: [test][test_givenRiskUnavailable_whenExecuted], [test][test_givenRiskPaused_whenLifecycleBoundarySeeded] |
-| BLSEIZ-EXECUTE-D12 | HEART | Expiry-positive page; Risk Kernel-inactive, enabled true/false independently | ScanFailed(PolicyNotActive); retain cursor/debt; no priced or Seize call | Covered: [test][test_givenRiskUnavailable_whenExecuted], [test][test_givenRiskInactiveEnabled_whenLifecycleBoundarySeeded], [test][test_givenRiskInactivePaused_whenExecuted] |
+| BLSEIZ-EXECUTE-D11 | HEART | Expiry-positive page; Risk active but locally disabled | ScanFailed(NotEnabled); retain cursor/debt; no priced or Seize call; restore/retry | Covered: [test][test_givenRiskPaused_whenExecuted] |
+| BLSEIZ-EXECUTE-D12 | HEART | Expiry-positive page; Risk Kernel-inactive, enabled true/false independently | ScanFailed(PolicyNotActive); retain cursor/debt; no priced or Seize call | Covered: [test][test_givenRiskInactive_whenExecuted], [test][test_givenRiskInactivePaused_whenExecuted] |
 | BLSEIZ-EXECUTE-D13 | HEART | Expiry-positive page; Seize active but locally paused | SeizureFailed(NotEnabled); retain debt; advance expiry offset one; restore/retry; unhealthy-first recovery may scan prices | Covered: [test][test_givenSeizePaused_givenOutage_whenExecuted] |
 | BLSEIZ-EXECUTE-D14 | HEART | Expiry-positive page; Core active/paused, inactive/enabled or inactive/paused; seed each | SeizureFailed(PolicyDependency_NotActive); retain debt; advance expiry offset one; restore/retry | Covered: [test][test_givenCoreUnavailable_givenOutage_whenExecuted], [test][test_givenCorePaused_whenLifecycleBoundarySeeded], [test][test_givenCoreInactiveEnabled_whenLifecycleBoundarySeeded], [test][test_givenCoreInactivePaused_givenOutage_whenExecuted] |
 | BLSEIZ-EXECUTE-D15 | HEART | Expiry-positive page; Seize Kernel-inactive; local enabled false/true | SeizureFailed(PolicyNotActive.selector), whose underlying error identifies Seize; no priced fallback; retain debt; advance expiry offset one | Covered: [test][test_givenSeizeInactive_givenOutage_whenExecuted] |
@@ -255,6 +255,8 @@ custody/accounting and Heart gas-isolation rows remain acceptance criteria.
 | BLSEIZ-EXECUTE-F608 | Task body exhausts gas; two managed assets | Asset and per-asset lane turns persist; an even asset count cannot pin one lane | Covered: [test][test_givenTaskGasExhausted_whenAssetVisitedAgain], [test][test_givenPausedTask_whenReEnabled], [test][test_givenPreviouslyVisitedAsset_whenRemovedAndAdded] |
 | BLSEIZ-EXECUTE-F609 | Eight expired or eight unexpired unhealthy loans; permanently rejected borrower between good loans; cursors1/5; check3/result2 | A persistently rejected batch requires governance recovery; after narrowing result limit to1 and resetting cursors, drain all good debt without maturing unhealthy loans; retain poisoned principal/custody and exact Treasury proceeds | Covered: [test][test_givenExpiredPoisonedBook_givenNonzeroCursors_whenVisitsRepeat], [test][test_givenUnhealthyPoisonedBook_givenNonzeroCursors_whenVisitsRepeat] |
 
+The persistent-outage invariant also drains every generated history in `afterInvariant`, keeping the PRICE outage and both saved cursors intact. With 1/1 pages and sufficient task gas, all eight expired loans must default while only Carol and Dave remain active, with 2e9 principal due and 8e9 defaulted. Time is unchanged and priced discovery must still revert after the drain.
+
 [invariant_schedulerAndAccountingRemainConsistent]: ./integration/progress.invariant.t.sol#L46
 [test_givenDisabled_whenExecuted_thenNoRotation]: ./execute.t.sol#L110
 [test_givenFiftyBorrowers_whenBatchLimitIsTwentyFive_thenAssetsRotateAndAllDebtSettles]: ./integration/execute.t.sol#L34
@@ -281,86 +283,86 @@ custody/accounting and Heart gas-isolation rows remain acceptance criteria.
 [test_givenAllUnexpired_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L645
 [test_givenExpiredPopulation_givenOutage_whenBatchesCompact]: ./integration/executeOracleOutage.t.sol#L686
 [test_givenStaleCursor_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L723
-[test_givenExpiryCanonicalFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L849
-[test_givenCustodyFailure_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L880
-[test_givenRiskUnavailable_whenExecuted]: ./integration/executeOracleOutage.t.sol#L934
-[test_givenSeizePaused_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L976
-[test_givenCoreUnavailable_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1002
-[test_givenHealthConfigurationFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1037
-[test_givenWithdrawalQuoteFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1063
-[test_givenPricesAvailable_whenMixedUnhealthyPageScanned]: ./integration/executeOracleOutage.t.sol#L1102
+[test_givenExpiryCanonicalFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L864
+[test_givenCustodyFailure_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L895
+[test_givenRiskPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L949
+[test_givenRiskInactive_whenExecuted]: ./integration/executeOracleOutage.t.sol#L960
+[test_givenSeizePaused_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1012
+[test_givenCoreUnavailable_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1038
+[test_givenHealthConfigurationFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1073
+[test_givenWithdrawalQuoteFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1099
+[test_givenPricesAvailable_whenMixedUnhealthyPageScanned]: ./integration/executeOracleOutage.t.sol#L1138
 [invariant_unexpiredDebtRemainsUnclassified]: ./integration/progressOracleOutage.invariant.t.sol#L32
 [test_givenExpiredScan_givenHelperExhaustsGas_whenExecuted_thenLaterHeartTaskExecutes]: ./execute.t.sol#L234
-[test_givenExpiredDebt_givenPriceConsumesGas_whenHeartRunsTasks]: ./integration/executeOracleOutage.t.sol#L1131
-[test_givenUnexpiredPrefix_givenPriceConsumesGas_whenHeartRunsTasks]: ./integration/executeOracleOutage.t.sol#L1153
-[test_givenStaleCursor_givenServiceFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L763
-[test_givenExpiryEmptySuffix_givenOutage_whenHeartBeatsRepeat]: ./integration/executeOracleOutage.t.sol#L809
-[test_givenAllExpired_givenBackingPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1294
-[test_givenAllExpired_givenBackingReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1289
-[test_givenAllExpired_givenCacheReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1304
-[test_givenAllExpired_givenPriceReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1284
-[test_givenAllExpired_givenPriceStale_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1299
-[test_givenAllUnexpired_givenBackingPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1319
-[test_givenAllUnexpired_givenBackingReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1314
-[test_givenAllUnexpired_givenCacheReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1329
-[test_givenAllUnexpired_givenPriceReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1309
-[test_givenAllUnexpired_givenPriceStale_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1324
+[test_givenExpiredDebt_givenPriceConsumesGas_whenHeartRunsTasks]: ./integration/executeOracleOutage.t.sol#L1167
+[test_givenUnexpiredPrefix_givenPriceConsumesGas_whenHeartRunsTasks]: ./integration/executeOracleOutage.t.sol#L1189
+[test_givenStaleCursor_givenSettlementPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L763
+[test_givenStaleCursor_givenRiskPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L775
+[test_givenExpiryEmptySuffix_givenOutage_whenHeartBeatsRepeat]: ./integration/executeOracleOutage.t.sol#L824
+[test_givenAllExpired_givenBackingPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1330
+[test_givenAllExpired_givenBackingReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1325
+[test_givenAllExpired_givenCacheReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1340
+[test_givenAllExpired_givenPriceReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1320
+[test_givenAllExpired_givenPriceStale_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1335
+[test_givenAllUnexpired_givenBackingPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1355
+[test_givenAllUnexpired_givenBackingReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1350
+[test_givenAllUnexpired_givenCacheReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1365
+[test_givenAllUnexpired_givenPriceReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1345
+[test_givenAllUnexpired_givenPriceStale_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1360
 [test_givenEmptyRegistry_givenBodyReverts_whenExecuted_thenFailureIsReported]: ./execute.t.sol#L765
 [test_givenEmptyRegistry_givenGasBelowReserve_whenExecuted_thenNoBody]: ./execute.t.sol#L754
-[test_givenExpiryEmptyPage_givenRiskInactive_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1388
-[test_givenExpiryEmptyPage_givenRiskPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1366
+[test_givenExpiryEmptyPage_givenRiskInactive_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1424
+[test_givenExpiryEmptyPage_givenRiskPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1402
 [test_givenGasBelowReserve_whenExecuted_thenNoBodyAndOneRotation]: ./execute.t.sol#L735
-[test_givenHeartOnlyCaller_givenTaskSeizerOnly_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1515
+[test_givenHeartOnlyCaller_givenTaskSeizerOnly_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1551
 [test_givenHeartRoleReadFails_whenExecuted_reverts]: ./execute.t.sol#L819
 [test_givenKernelActivityReadFails_whenExecuted_reverts]: ./execute.t.sol#L784
 [test_givenMalformedExpiryReturn_whenExecuted_thenOuterBoundaryRotates]: ./execute.t.sol#L670
 [test_givenMalformedPricedReturn_whenExecuted_thenOuterBoundaryRotates]: ./execute.t.sol#L690
 [test_givenMissingExpirySelector_whenExecuted_thenNoPricedFallback]: ./execute.t.sol#L714
-[test_givenMixedMaturity_givenBackingPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1269
-[test_givenMixedMaturity_givenBackingReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1262
-[test_givenMixedMaturity_givenCacheReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1279
-[test_givenMixedMaturity_givenPriceReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1257
-[test_givenMixedMaturity_givenPriceStale_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1274
-[test_givenSeizeInactive_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1334
+[test_givenMixedMaturity_givenBackingPaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1305
+[test_givenMixedMaturity_givenBackingReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1298
+[test_givenMixedMaturity_givenCacheReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1315
+[test_givenMixedMaturity_givenPriceReverts_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1293
+[test_givenMixedMaturity_givenPriceStale_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1310
+[test_givenSeizeInactive_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1370
 [test_givenTaskHeartOnly_whenExecuted_thenSeizerGrantStillRequired]: ./execute.t.sol#L797
 [test_givenTaskSeizerRoleReadFails_whenExecuted_thenOuterBoundaryRotates]: ./execute.t.sol#L833
-[test_givenUnexpiredUnhealthyDebt_givenPricedCustodyQuoteFails_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1420
-[test_givenUnexpiredUnhealthyDebt_givenPricedRewardQuoteFails_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1448
-[test_givenCollateralCallback_whenNestedExecuteCaught_thenOuterBatchSettlesOnce]: ./integration/executeOracleOutage.t.sol#L2219
-[test_givenCollateralCallback_whenNestedSelfCallCaught_thenOuterBatchSettlesOnce]: ./integration/executeOracleOutage.t.sol#L2239
-[test_givenCoreInactiveEnabled_whenLifecycleBoundarySeeded]: ./integration/executeOracleOutage.t.sol#L2128
-[test_givenCoreInactivePaused_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L2133
-[test_givenCorePaused_whenLifecycleBoundarySeeded]: ./integration/executeOracleOutage.t.sol#L2123
-[test_givenExpiredDebtAtMaturityPlusOne_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L2191
-[test_givenHealthyDebtAtMaturityMinusOne_whenExecuted]: ./integration/executeOracleOutage.t.sol#L2164
-[test_givenRiskInactiveEnabled_whenLifecycleBoundarySeeded]: ./integration/executeOracleOutage.t.sol#L2087
-[test_givenRiskInactivePaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L2092
-[test_givenRiskPaused_whenLifecycleBoundarySeeded]: ./integration/executeOracleOutage.t.sol#L2082
-[test_givenExpiredPrefix_givenUnderwaterSuffix_givenBackingOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1615
-[test_givenExternalCompaction_givenCursorStillValid_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1657
-[test_givenFailedExpiredBatch_givenUnderwaterDebt_whenServicesRecover]: ./integration/executeOracleOutage.t.sol#L1765
-[test_givenHealthyAndUnderwaterDebt_givenOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1859
-[test_givenMixedUnderwaterDebt_givenOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1565
-[test_givenMixedUnderwaterDebt_whenOutageCursorAndLimitBoundariesSeeded]: ./integration/executeOracleOutage.t.sol#L1596
-[test_givenOnlyUnderwaterDebt_givenPriceOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1819
-[test_givenStaleCursor_givenUnderwaterDebt_givenBackingOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1689
+[test_givenUnexpiredUnhealthyDebt_givenPricedCustodyQuoteFails_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1456
+[test_givenUnexpiredUnhealthyDebt_givenPricedRewardQuoteFails_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1484
+[test_givenCollateralCallback_whenNestedExecuteCaught_thenOuterBatchSettlesOnce]: ./integration/executeOracleOutage.t.sol#L2245
+[test_givenCollateralCallback_whenNestedSelfCallCaught_thenOuterBatchSettlesOnce]: ./integration/executeOracleOutage.t.sol#L2265
+[test_givenCoreInactiveEnabled_whenLifecycleBoundarySeeded]: ./integration/executeOracleOutage.t.sol#L2154
+[test_givenCoreInactivePaused_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L2159
+[test_givenCorePaused_whenLifecycleBoundarySeeded]: ./integration/executeOracleOutage.t.sol#L2149
+[test_givenExpiredDebtAtMaturityPlusOne_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L2217
+[test_givenHealthyDebtAtMaturityMinusOne_whenExecuted]: ./integration/executeOracleOutage.t.sol#L2190
+[test_givenRiskInactivePaused_whenExecuted]: ./integration/executeOracleOutage.t.sol#L2118
+[test_givenExpiredPrefix_givenUnderwaterSuffix_givenBackingOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1651
+[test_givenExternalCompaction_givenCursorStillValid_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1693
+[test_givenFailedExpiredBatch_givenUnderwaterDebt_whenServicesRecover]: ./integration/executeOracleOutage.t.sol#L1801
+[test_givenHealthyAndUnderwaterDebt_givenOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1895
+[test_givenMixedUnderwaterDebt_givenOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1601
+[test_givenMixedUnderwaterDebt_whenOutageCursorAndLimitBoundariesSeeded]: ./integration/executeOracleOutage.t.sol#L1632
+[test_givenOnlyUnderwaterDebt_givenPriceOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1855
+[test_givenStaleCursor_givenUnderwaterDebt_givenBackingOutage_whenPricesRecover]: ./integration/executeOracleOutage.t.sol#L1725
 
-[test_givenUnequalCursors_givenDisabled_whenExecuted_thenBothArePreserved]: execute.t.sol#L1104
-[test_givenUnderwaterPrefix_givenOutage_whenPricesRecover_thenFirstPricedBatchResumesPrefix]: integration/executeOracleOutage.t.sol#L1538
+[test_givenUnequalCursors_givenDisabled_whenExecuted_thenBothArePreserved]: execute.t.sol#L1054
+[test_givenUnderwaterPrefix_givenOutage_whenPricesRecover_thenFirstPricedBatchResumesPrefix]: integration/executeOracleOutage.t.sol#L1574
 
 [invariant_mixedBacklogRemainsReachable]: integration/progressMixedMaturity.invariant.t.sol#L50
-[test_givenPersistentExpiredRejection_whenAssetVisitedAgain]: ./execute.t.sol#L1283
-[test_givenContinuingExpiredBatches_whenAssetVisitedAgain]: ./execute.t.sol#L1304
-[test_givenRejectedExpiredPosition_whenCursorAdvances]: ./execute.t.sol#L1320
-[test_givenRejectedExpiredPosition_whenCursorBoundariesSeeded]: ./execute.t.sol#L1345
-[test_givenRejectedUnhealthyPosition_whenExecuted]: ./execute.t.sol#L1352
-[test_givenRejectedExpiredBatch_whenExecuted_thenNoSingletonRetry]: ./execute.t.sol#L1375
-[test_givenRejectedUnhealthyBatch_whenExecuted_thenNoSingletonRetry]: ./execute.t.sol#L1399
-[test_givenUnhealthyRefreshUnavailable_whenExecuted]: ./execute.t.sol#L1428
-[test_givenTaskGasExhausted_whenAssetVisitedAgain]: ./execute.t.sol#L1458
-[test_givenPausedTask_whenReEnabled]: ./execute.t.sol#L1476
-[test_givenPreviouslyVisitedAsset_whenRemovedAndAdded]: ./execute.t.sol#L1493
-[test_givenRejectedPosition_givenPopulationReadFails_whenExecuted]: ./execute.t.sol#L1505
+[test_givenPersistentExpiredRejection_whenAssetVisitedAgain]: ./execute.t.sol#L1194
+[test_givenContinuingExpiredBatches_whenAssetVisitedAgain]: ./execute.t.sol#L1215
+[test_givenRejectedExpiredPosition_whenCursorAdvances]: ./execute.t.sol#L1231
+[test_givenRejectedExpiredPosition_whenCursorBoundariesSeeded]: ./execute.t.sol#L1256
+[test_givenRejectedUnhealthyPosition_whenExecuted]: ./execute.t.sol#L1263
+[test_givenRejectedExpiredBatch_whenExecuted_thenNoSingletonRetry]: ./execute.t.sol#L1286
+[test_givenRejectedUnhealthyBatch_whenExecuted_thenNoSingletonRetry]: ./execute.t.sol#L1310
+[test_givenUnhealthyRefreshUnavailable_whenExecuted]: ./execute.t.sol#L1339
+[test_givenTaskGasExhausted_whenAssetVisitedAgain]: ./execute.t.sol#L1369
+[test_givenPausedTask_whenReEnabled]: ./execute.t.sol#L1387
+[test_givenPreviouslyVisitedAsset_whenRemovedAndAdded]: ./execute.t.sol#L1404
+[test_givenRejectedPosition_givenPopulationReadFails_whenExecuted]: ./execute.t.sol#L1416
 [test_givenPersistentExpiredRejection_givenUnhealthyDebt_whenAssetVisitedAgain]: ./integration/executeOracleOutage.t.sol#L166
 [test_givenExpiredBacklog_givenUnhealthyDebt_whenAssetVisitedAgain]: ./integration/executeOracleOutage.t.sol#L214
 [test_givenExpiredBatchWithUnseizableTail_whenAdminRecoversCursor]: ./integration/executeOracleOutage.t.sol#L278
@@ -370,7 +372,7 @@ custody/accounting and Heart gas-isolation rows remain acceptance criteria.
 [test_givenUnhealthyDebt_givenRefreshOnlyOutage_whenSeized_reverts]: ./integration/executeOracleOutage.t.sol#L507
 [test_givenUnhealthyDebt_givenRefreshOnlyOutage_whenTaskExecuted]: ./integration/executeOracleOutage.t.sol#L526
 [test_givenExpiredPrefixAndTail_givenSingleCheckPages_whenVisitsRepeat]: ./integration/executeOracleOutage.t.sol#L246
-[test_givenExpiredBatch_givenOtherCursorBecomesStale_whenExecuted]: ./execute.t.sol#L1527
+[test_givenExpiredBatch_givenOtherCursorBecomesStale_whenExecuted]: ./execute.t.sol#L1438
 [test_givenExpiredPoisonedBook_givenNonzeroCursors_whenVisitsRepeat]: ./integration/executeOracleOutage.t.sol#L95
 [test_givenUnhealthyPoisonedBook_givenNonzeroCursors_whenVisitsRepeat]: ./integration/executeOracleOutage.t.sol#L102
 [test_givenUnhealthyDebt_givenRefreshRevertsWithArguments_whenSeized_reverts]: ./integration/executeOracleOutage.t.sol#L483

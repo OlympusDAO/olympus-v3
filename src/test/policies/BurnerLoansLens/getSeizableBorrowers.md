@@ -20,9 +20,11 @@ These priced discovery/reward APIs still propagate pricing failures even for all
 During outages use [getExpiredBorrowersBoundedFor](./getExpiredBorrowersBoundedFor.md) for explicit
 maturity-only selection and an actor-specific aggregate reward quote. Protocol actors receive zero
 without prices. Risk owns reward pricing and retains its zero-configuration shortcuts; ordinary
-Seize execution and its preview still require valid prices even for zero rewards. SeizerTask prioritizes
-that separate expiry selection and runs priced discovery only for an expiry-empty page; it never
-classifies unexpired positions without prices.
+Seize execution and its preview still require valid prices even for zero rewards. SeizerTask alternates
+expired-first and unhealthy-first priority on successive visits to each asset, using independent saved
+cursors. An empty preferred page permits the other lane in the same visit; failed unhealthy discovery
+also permits expiry discovery. A nonempty selection consumes the visit, whether settlement succeeds
+or fails. The task never classifies unexpired positions without prices.
 
 For **every row**, prank only the convenience call as caller C. Then call `getSeizableBorrowersFor(C,asset,start,count)` directly from the test contract, without a prank, under identical relevant state. Require the same borrowers, cursor and reward, or the same exact revert data. The For consistency column records this paired assertion. C is an explicit reward actor, never a forwarded authorization identity. Role-specific rows control C's grants independently of the unpranked test contract.
 

@@ -259,6 +259,9 @@ contract BurnerLoansSeizerTask is
     ///      - The caller holds neither ADMIN nor burner_loans_admin, or reading roles fails.
     ///      - The asset is not managed.
     ///      - A nonzero offset is outside the active-borrower list, or Lens cannot validate it.
+    /// @param asset_ Managed collateral asset whose lane cursor is updated.
+    /// @param index_ Active-borrower offset; zero selects the first entry, including after wraparound.
+    /// @param expired_ Whether to update the expired lane rather than the unhealthy lane.
     function _setAssetBorrowerCursor(address asset_, uint256 index_, bool expired_) private {
         _requireOwnPolicyActive();
         _requireAdminOrBurnerLoansAdmin();
@@ -367,6 +370,7 @@ contract BurnerLoansSeizerTask is
     /// @dev Reverts if:
     ///      - Returned scan data is malformed or the task body exhausts gas.
     ///      Other count, discovery and settlement failures are caught and reported.
+    /// @param asset Managed collateral asset whose independent lane cursors are scanned.
     function _scanAsset(address asset) private {
         uint256 expiredStartIndex = expiredAssetCursor[asset];
         uint256 unhealthyStartIndex = unhealthyAssetCursor[asset];
@@ -401,6 +405,9 @@ contract BurnerLoansSeizerTask is
     /// @dev Reverts if:
     ///      - Returned scan data is malformed or the task body exhausts gas.
     ///      Caught dependency errors emit ScanFailed or SeizureFailed instead.
+    /// @param asset Managed collateral asset to scan for expired debt.
+    /// @param expiredStartIndex Saved active-borrower offset; zero starts or resumes after wraparound.
+    /// @return True when a selected batch or failed expiry discovery consumes this asset visit.
     function _scanExpired(address asset, uint256 expiredStartIndex) private returns (bool) {
         try
             _LENS.getExpiredBorrowersBoundedFor(
@@ -435,6 +442,9 @@ contract BurnerLoansSeizerTask is
     /// @dev Reverts if:
     ///      - Returned scan data is malformed or the task body exhausts gas.
     ///      Caught dependency errors emit ScanFailed or SeizureFailed instead.
+    /// @param asset Managed collateral asset to scan for unhealthy, unexpired debt.
+    /// @param unhealthyStartIndex Saved active-borrower offset; zero starts or resumes after wraparound.
+    /// @return True when a selected batch consumes the visit; false on empty or failed discovery.
     function _scanUnhealthy(address asset, uint256 unhealthyStartIndex) private returns (bool) {
         try
             _LENS.getUnhealthyBorrowersBoundedFor(
@@ -464,6 +474,11 @@ contract BurnerLoansSeizerTask is
     /// @dev Applies identical progress and atomic settlement rules to either discovery mode.
     ///      Seize call failures are caught here; local failures escape to execute's self-call boundary.
     ///      No contract-defined reverts; gas exhaustion rolls back the complete task body.
+    /// @param asset_ Managed collateral asset for the selected batch.
+    /// @param startIndex_ Active-borrower offset where this lane's scan started.
+    /// @param borrowers_ Eligible borrowers returned by the selected discovery lane.
+    /// @param scannedNextIndex_ Next active-borrower offset from Lens; zero denotes wraparound.
+    /// @param selection_ Expired or unhealthy lane whose progress is updated.
     function _seizeScannedBorrowers(
         address asset_,
         uint256 startIndex_,
@@ -513,6 +528,9 @@ contract BurnerLoansSeizerTask is
     /// @dev Advances one saved offset after a non-price seizure failure, not the full scanned
     ///      page, so other candidates remain reachable. Governance can isolate persistent failures.
     ///      No contract-defined reverts; a failed count read emits ScanFailed and retains the offset.
+    /// @param asset_ Managed collateral asset whose rejected lane advances.
+    /// @param startIndex_ Active-borrower scan offset to advance by one, wrapping to zero at the end.
+    /// @param selection_ Expired or unhealthy lane whose cursor is advanced.
     function _advanceRejectedCursor(
         address asset_,
         uint256 startIndex_,
@@ -531,6 +549,9 @@ contract BurnerLoansSeizerTask is
 
     /// @dev Identifies refresh-stage failures so unhealthy debt is retried after price recovery.
     ///      Does not intentionally revert; short reason data is zero-padded.
+    /// @param selection_ Discovery lane whose seizure failed.
+    /// @param reason_ Revert data returned by Seize.
+    /// @return Whether an unhealthy seizure failed at the price-snapshot refresh stage.
     function _isPriceFailure(
         IBurnerLoansLens.Selection selection_,
         bytes memory reason_

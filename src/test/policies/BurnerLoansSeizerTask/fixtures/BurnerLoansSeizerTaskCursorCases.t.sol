@@ -70,8 +70,8 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
         _assertOtherState();
     }
 
-    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P01, BLSEIZ-EXPIRED-CURSOR-P02, BLSEIZ-EXPIRED-CURSOR-P07, BLSEIZ-UNHEALTHY-CURSOR-P01, BLSEIZ-UNHEALTHY-CURSOR-P02, BLSEIZ-UNHEALTHY-CURSOR-P07.
-    function test_whenRoleLifecycleAndNumericBoundariesSeeded() public {
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P01, BLSEIZ-UNHEALTHY-CURSOR-P01.
+    function test_whenNonzeroCursorRoleLifecycleAndNumericBoundariesSeeded() public {
         uint256 checkpoint = vm.snapshotState();
         for (uint8 role; role < 3; ++role)
             for (uint8 state; state < 3; ++state) {
@@ -81,9 +81,25 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                 assertTrue(vm.revertToState(checkpoint), "Restore maximum cursor boundary");
                 vm.clearMockedCalls();
                 _assertNonzero(_DAVE, role, state, type(uint256).max, type(uint256).max - 1);
+            }
+    }
+
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P02, BLSEIZ-UNHEALTHY-CURSOR-P02.
+    function test_whenCursorResetRoleAndLifecycleBoundariesSeeded() public {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 role; role < 3; ++role)
+            for (uint8 state; state < 3; ++state) {
                 assertTrue(vm.revertToState(checkpoint), "Restore reset boundary");
                 vm.clearMockedCalls();
                 test_givenPermittedCaller_whenCursorReset_thenNoDownstreamReads(_DAVE, role, state);
+            }
+    }
+
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P07, BLSEIZ-UNHEALTHY-CURSOR-P07.
+    function test_whenZeroUnchangedRoleAndLifecycleBoundariesSeeded() public {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 role; role < 3; ++role)
+            for (uint8 state; state < 3; ++state) {
                 assertTrue(vm.revertToState(checkpoint), "Restore zero no-op boundary");
                 vm.clearMockedCalls();
                 test_givenPermittedCaller_whenZeroUnchanged_thenNoDownstreamReads(
@@ -92,6 +108,47 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                     state
                 );
             }
+    }
+
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P02, BLSEIZ-UNHEALTHY-CURSOR-P02.
+    function test_givenUnequalCursors_whenZeroSelected_thenNoDownstreamReads() public {
+        _mockCount(10);
+        _task.setExpiredAssetCursor(address(_asset), 2);
+        _task.setUnhealthyAssetCursor(address(_asset), 8);
+        assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            8,
+            "Independent unhealthy setup offset"
+        );
+        uint256 otherBefore = _otherCursor(address(_asset));
+        vm.expectCall(address(_lens), bytes(""), uint64(0));
+        _setCursor(address(_asset), 0);
+        assertEq(_cursor(address(_asset)), 0, "Zero resets the selected traversal");
+        assertEq(_otherCursor(address(_asset)), otherBefore, "Zero preserves the other traversal");
+    }
+
+    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P10, BLSEIZ-UNHEALTHY-CURSOR-P10.
+    function test_givenUnequalCursors_whenSelectedLaneUnchanged_thenEventFreeNoOp() public {
+        _mockCount(10);
+        _task.setExpiredAssetCursor(address(_asset), 2);
+        _task.setUnhealthyAssetCursor(address(_asset), 8);
+        assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            8,
+            "Independent unhealthy setup offset"
+        );
+        uint256 selected = _cursor(address(_asset));
+        vm.recordLogs();
+        _setCursor(address(_asset), selected);
+        assertEq(vm.getRecordedLogs().length, 0, "Equality checks only the selected lane");
+        assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Expiry offset remains exact");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            8,
+            "Unhealthy offset remains independently exact"
+        );
     }
 
     // Scenarios: BLSEIZ-EXPIRED-CURSOR-A01, BLSEIZ-UNHEALTHY-CURSOR-A01.

@@ -12,6 +12,32 @@ import {BurnerLoansSeizerTaskTest} from "./BurnerLoansSeizerTaskTest.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract BurnerLoansSeizerTaskRemoveAssetTest is BurnerLoansSeizerTaskTest {
+    // Scenarios: BLSEIZ-REMOVE-ASSET-P07.
+    function test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared() public {
+        _task.addAsset(address(_asset));
+        _mockCount(10);
+        _task.setScanLimits(2, 1);
+        _task.setExpiredAssetCursor(address(_asset), 2);
+        _task.setUnhealthyAssetCursor(address(_asset), 8);
+        assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            8,
+            "Independent unhealthy setup offset"
+        );
+        _task.removeAsset(address(_asset));
+        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Removal clears expiry progress");
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Removal clears unhealthy progress"
+        );
+        assertFalse(
+            _task.isAssetManaged(address(_asset)),
+            "Removed asset leaves both discovery lanes"
+        );
+    }
+
     function test_givenManagedAssetAndAdmin_removesAsset() public {
         _task.addAsset(address(_asset));
         _task.removeAsset(address(_asset));

@@ -292,7 +292,12 @@ contract BurnerLoansSeizerTaskReEnableTest is BurnerLoansSeizerTaskTest {
     }
 
     // Scenarios: BLSEIZ-REENABLE-D17.
-    function test_givenLensInterfaceUnavailable_whenActivated_reverts() public {
+    function test_givenLensInterfaceUnavailable_whenReEnabled_reverts(
+        address caller_,
+        uint8 roleClass_
+    ) public {
+        uint8 roleClass = uint8(bound(roleClass_, 0, 2));
+        _grantTaskAdmin(caller_, roleClass);
         _task.addAsset(address(_asset));
         _mockCount(3);
         _setBothBorrowerCursors(address(_asset), 1);
@@ -309,6 +314,7 @@ contract BurnerLoansSeizerTaskReEnableTest is BurnerLoansSeizerTaskTest {
                 address(_lens)
             )
         );
+        vm.prank(caller_);
         _task.reEnable();
         assertFalse(_task.isEnabled(), "Unsupported Lens preserves disabled state");
         assertEq(
@@ -327,7 +333,28 @@ contract BurnerLoansSeizerTaskReEnableTest is BurnerLoansSeizerTaskTest {
             "Failed activation preserves unhealthy progress"
         );
         vm.clearMockedCalls();
+        vm.prank(caller_);
         _task.reEnable();
         assertTrue(_task.isEnabled(), "Restoring Lens capability permits activation retry");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            1,
+            "Successful recovery preserves expiry progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "Successful recovery preserves unhealthy progress"
+        );
+    }
+
+    // Scenarios: BLSEIZ-REENABLE-D17.
+    function test_givenLensInterfaceUnavailable_whenPermittedCallerClassesSeeded_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 roleClass; roleClass < 3; ++roleClass) {
+            assertTrue(vm.revertToState(checkpoint), "Restore Lens recovery caller fixture");
+            test_givenLensInterfaceUnavailable_whenReEnabled_reverts(_DAVE, roleClass);
+        }
+        assertTrue(vm.revertToStateAndDelete(checkpoint), "Restore Lens recovery caller seeds");
     }
 }

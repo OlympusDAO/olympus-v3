@@ -1050,56 +1050,6 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
     }
 
-    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P08, BLSEIZ-UNHEALTHY-CURSOR-P08.
-    function test_givenUnequalCursors_whenBothSettersRun_thenBothCursorsAreUpdated() public {
-        _separateLaneCursors();
-        vm.recordLogs();
-        _task.setExpiredAssetCursor(address(_asset), 2);
-        assertEq(vm.getRecordedLogs().length, 0, "Unchanged expiry setter emits no event");
-        vm.expectEmit(true, false, false, true, address(_task));
-        emit IBurnerLoansSeizerTask.AssetCursorSet(
-            address(_asset),
-            2,
-            IBurnerLoansLens.Selection.Unhealthy
-        );
-        _task.setUnhealthyAssetCursor(address(_asset), 2);
-        assertEq(
-            _task.expiredAssetCursor(address(_asset)),
-            2,
-            "Expiry cursor keeps the selected value"
-        );
-        assertEq(
-            _task.unhealthyAssetCursor(address(_asset)),
-            2,
-            "Setter must not return early while the other lane differs"
-        );
-    }
-
-    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P02, BLSEIZ-UNHEALTHY-CURSOR-P02.
-    function test_givenUnequalCursors_whenZeroSelected_thenBothResetWithoutLensReads() public {
-        _separateLaneCursors();
-        vm.expectCall(address(_lens), bytes(""), uint64(0));
-        _setBothBorrowerCursors(address(_asset), 0);
-        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Zero resets expiry traversal");
-        assertEq(_task.unhealthyAssetCursor(address(_asset)), 0, "Zero resets unhealthy traversal");
-    }
-
-    // Scenarios: BLSEIZ-REMOVE-ASSET-P07.
-    function test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared() public {
-        _separateLaneCursors();
-        _task.removeAsset(address(_asset));
-        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Removal clears expiry progress");
-        assertEq(
-            _task.unhealthyAssetCursor(address(_asset)),
-            0,
-            "Removal clears unhealthy progress"
-        );
-        assertFalse(
-            _task.isAssetManaged(address(_asset)),
-            "Removed asset leaves both discovery lanes"
-        );
-    }
-
     // Scenarios: BLSEIZ-EXECUTE-L01.
     function test_givenUnequalCursors_givenDisabled_whenExecuted_thenBothArePreserved() public {
         _separateLaneCursors();
@@ -1238,45 +1188,6 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         assertEq(start, start_, "Event reports that lane's scan start");
         assertEq(next, next_, "Event reports that lane's stored next offset");
         assertEq(count, count_, "Event reports the actual selected batch length");
-    }
-
-    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P09.
-    function test_givenUnequalCursors_whenOnlyExpirySelected_thenUnhealthyIsPreserved() public {
-        _separateLaneCursors();
-        _task.setExpiredAssetCursor(address(_asset), 7);
-        assertEq(_task.expiredAssetCursor(address(_asset)), 7, "Selected expiry lane changes");
-        assertEq(
-            _task.unhealthyAssetCursor(address(_asset)),
-            8,
-            "Unselected unhealthy lane stays pending"
-        );
-    }
-
-    // Scenarios: BLSEIZ-UNHEALTHY-CURSOR-P09.
-    function test_givenUnequalCursors_whenOnlyUnhealthySelected_thenExpiryIsPreserved() public {
-        _separateLaneCursors();
-        _task.setUnhealthyAssetCursor(address(_asset), 3);
-        assertEq(
-            _task.expiredAssetCursor(address(_asset)),
-            2,
-            "Unselected expiry lane keeps its offset"
-        );
-        assertEq(_task.unhealthyAssetCursor(address(_asset)), 3, "Selected unhealthy lane changes");
-    }
-
-    // Scenarios: BLSEIZ-EXPIRED-CURSOR-P10, BLSEIZ-UNHEALTHY-CURSOR-P10.
-    function test_givenUnequalCursors_whenSelectedLaneUnchanged_thenEventFreeNoOp() public {
-        _separateLaneCursors();
-        vm.recordLogs();
-        _task.setExpiredAssetCursor(address(_asset), 2);
-        _task.setUnhealthyAssetCursor(address(_asset), 8);
-        assertEq(vm.getRecordedLogs().length, 0, "Equality checks only the selected lane");
-        assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Expiry offset remains exact");
-        assertEq(
-            _task.unhealthyAssetCursor(address(_asset)),
-            8,
-            "Unhealthy offset remains independently exact"
-        );
     }
 
     // Scenarios: BLSEIZ-EXECUTE-F601.

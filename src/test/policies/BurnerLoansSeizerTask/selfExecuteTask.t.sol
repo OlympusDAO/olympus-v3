@@ -8,6 +8,7 @@ import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurne
 
 // Contracts
 import {BurnerLoansSeizerTaskTest} from "./BurnerLoansSeizerTaskTest.sol";
+import {MockSeizerTaskDependency} from "./fixtures/MockSeizerTaskDependency.sol";
 
 contract BurnerLoansSeizerTaskSelfExecuteTaskTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-SELF-EXECUTE-A01.
@@ -112,6 +113,9 @@ contract BurnerLoansSeizerTaskSelfExecuteTaskTest is BurnerLoansSeizerTaskTest {
         _task.setNextAssetIndex(1);
         address removed = removeFirst_ ? address(_asset) : address(_otherAsset);
         address survivor = removeFirst_ ? address(_otherAsset) : address(_asset);
+        MockSeizerTaskDependency(address(_lens)).setPopulation(removed, 3);
+        _task.setExpiredAssetCursor(removed, 1);
+        _task.setUnhealthyAssetCursor(removed, 2);
         _task.removeAsset(removed);
         vm.expectCall(
             address(_lens),

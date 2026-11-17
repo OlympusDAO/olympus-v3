@@ -60,6 +60,6 @@ Local active=true, initialized ROLES. Seed first/middle/last removal in a three-
 | BLSEIZ-REMOVE-ASSET-P04 | Fuzz ADMIN holder | Assets remain; saved nextAssetIndex >= new count | Store oldNext % newCount; include boundary oldNext=newCount and removal of pending asset | Unmapped |
 | BLSEIZ-REMOVE-ASSET-P05 | Fuzz ADMIN holder | Enabled/disabled/re-enabled states; dependency calls all configured to fail | Removal still succeeds with exact set/cursor/event changes; no dependency calls | Unmapped |
 | BLSEIZ-REMOVE-ASSET-P06 | Fuzz ADMIN holder | Remove then attempt removal again | First succeeds; second AssetNotManaged(asset), with no further changes/logs | Unmapped |
-| BLSEIZ-REMOVE-ASSET-P07 | ADMIN | Independent expiry2/unhealthy8 after real task visits | Removing the asset clears both offsets | Covered: [test][test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared] |
+| BLSEIZ-REMOVE-ASSET-P07 | ADMIN | Independent expiry2/unhealthy8 in the managed asset | Removing the asset clears both offsets | Covered: [test][test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared] |
 
-[test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared]: execute.t.sol#L1088
+[test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared]: removeAsset.t.sol#L16

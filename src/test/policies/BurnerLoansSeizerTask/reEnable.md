@@ -157,9 +157,11 @@ The grace check precedes own activity and dependency readiness. enable remains A
 
 ## Required discovery capability
 
+Caller: fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlapping-role holders, with each class explicitly seeded.
+
 | ID | Lens admission | Expected failure and recovery | Test |
 | --- | --- | --- | --- |
-| BLSEIZ-REENABLE-D17 | Current IBurnerLoansLens support becomes unavailable after construction | InvalidLens; remain paused with transition time and both cursors unchanged; restored support permits retry | Covered: [test][test_givenLensInterfaceUnavailable_whenActivated_reverts] |
+| BLSEIZ-REENABLE-D17 | Current IBurnerLoansLens support becomes unavailable after construction | InvalidLens; remain paused with transition time and both cursors unchanged; restored support permits retry | Covered: [test][test_givenLensInterfaceUnavailable_whenReEnabled_reverts], [test][test_givenLensInterfaceUnavailable_whenPermittedCallerClassesSeeded_reverts] |
 
 [test_givenKernelDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L113
 [test_givenLensCoreDrift_whenReEnabled_reverts]: ./reEnable.t.sol#L137
@@ -170,4 +172,5 @@ The grace check precedes own activity and dependency readiness. enable remains A
 [test_givenCoreLifecycle_whenActivated]: ./reEnable.t.sol#L271
 [test_whenCoreLifecycleStatesSeeded_thenActivated]: ./reEnable.t.sol#L282
 
-[test_givenLensInterfaceUnavailable_whenActivated_reverts]: reEnable.t.sol#L295
+[test_givenLensInterfaceUnavailable_whenReEnabled_reverts]: reEnable.t.sol#L295
+[test_givenLensInterfaceUnavailable_whenPermittedCallerClassesSeeded_reverts]: reEnable.t.sol#L352

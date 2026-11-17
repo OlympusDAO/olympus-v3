@@ -12,21 +12,33 @@ contract MockLegacyBurnerLoansLens is IERC165 {
         _CORE = core_;
     }
 
-    function core() external view returns (address) {
+    /// @notice Returns the Core binding advertised by this legacy helper.
+    /// @return core_ Bound Core address.
+    function core() external view returns (address core_) {
         return _CORE;
     }
 
+    /// @inheritdoc IERC165
     function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
         return interfaceId_ == type(IERC165).interfaceId;
     }
 
+    /// @notice Returns an empty legacy scan without advancing its input cursor.
+    /// @param actor_ Reward actor, unused by this empty-result mock.
+    /// @param asset_ Collateral asset, unused by this empty-result mock.
+    /// @param start_ Active-borrower offset returned unchanged; zero can represent wraparound.
+    /// @param count_ Check limit, unused by this empty-result mock.
+    /// @param maxResults_ Result limit, unused by this empty-result mock.
+    /// @return borrowers Empty borrower selection.
+    /// @return nextIndex Unchanged input offset.
+    /// @return reward Zero keeper reward.
     function getSeizableBorrowersBoundedFor(
-        address,
-        address,
+        address actor_,
+        address asset_,
         uint256 start_,
-        uint256,
-        uint256
-    ) external pure returns (address[] memory, uint256, uint256) {
+        uint256 count_,
+        uint256 maxResults_
+    ) external pure returns (address[] memory borrowers, uint256 nextIndex, uint256 reward) {
         return (new address[](0), start_, 0);
     }
 }
