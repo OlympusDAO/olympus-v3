@@ -242,6 +242,12 @@ For Default Framework policy lifecycle scenarios and tests, also apply
 For configuration timelock design, target integration, conflict domains and execution-state guards,
 use [`config-timelock-design`](.agents/skills/config-timelock-design/SKILL.md).
 
+For SPDX defaults and license reviews of Solidity files, test fixtures, interfaces, templates and
+generators, use [`licensing`](.agents/skills/licensing/SKILL.md).
+
+Validate skill metadata with `pnpm skill:validate <skill-directory>` and run the validator's tests
+with `pnpm test:skills`. The repository validator uses Node.js and the pinned `yaml` dependency.
+
 ### MCP Servers
 
 The project includes Model Context Protocol (MCP) servers for enhanced AI capabilities:
