@@ -1,0 +1,4 @@
+interface:
+    display_name: "Licensing"
+    short_description: "Apply repository SPDX defaults and review licenses"
+    default_prompt: "Use $licensing to choose or review licenses for the requested files, preserve upstream terms, and keep changes within scope."

@@ -7,6 +7,10 @@ description: Write or review Olympus V3 Solidity tests, including external-funct
 
 This guide covers the standards for writing test files in the Olympus V3 codebase.
 
+Apply [licensing](../../../.agents/skills/licensing/SKILL.md) for file-level license defaults,
+including test fixtures and separate test interfaces. The [sample test](SAMPLE_TEST.md) uses the
+test-contract default.
+
 ## File Organization
 
 ### Organize Around External Actions
