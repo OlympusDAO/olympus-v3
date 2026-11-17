@@ -29,7 +29,7 @@
     "BurnerLoansInventory.syncMintApproval.restoreAfterDefault": "84575",
     "BurnerLoansInventory.withdraw": "111885",
     "BurnerLoansRisk.setBackingOracle": "64667",
-    "BurnerLoansSeize.seize.single": "740895",
+    "BurnerLoansSeize.seize.single": "740894",
     "BurnerLoansSeizerTask.execute.batch10": "1712885",
     "BurnerLoansSeizerTask.execute.maximumBatch": "6804013",
     "BurnerLoansSeizerTask.execute.noSeizures": "116863",
