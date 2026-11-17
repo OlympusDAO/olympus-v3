@@ -38,12 +38,14 @@ contract SeizerTaskProgressHandler is Test {
         if (!paused_ && !_TASK.isEnabled()) _TASK.reEnable();
     }
 
-    function recover(uint256 assetIndex_, uint256 borrowerIndex_) external {
+    function recover(uint256 assetIndex_, uint256 borrowerIndex_, bool unhealthy_) external {
         address[] memory assets = _TASK.getAssets();
         uint256 index = assetIndex_ % assets.length;
         _TASK.setNextAssetIndex(index);
         address asset = assets[index];
         uint256 count = IBurnerLoansLens(_TASK.lens()).getActiveBorrowers(asset).length;
-        _TASK.setNextAssetBorrowerIndex(asset, count == 0 ? 0 : borrowerIndex_ % count);
+        if (unhealthy_)
+            _TASK.setUnhealthyAssetCursor(asset, count == 0 ? 0 : borrowerIndex_ % count);
+        else _TASK.setExpiredAssetCursor(asset, count == 0 ? 0 : borrowerIndex_ % count);
     }
 }

@@ -67,11 +67,42 @@ contract MockSeizerTaskDependency is Policy, IERC165 {
         uint256 checks_,
         uint256
     ) external view returns (address[] memory, uint256, uint256) {
+        return _scanResult(asset_, start_, checks_);
+    }
+
+    function getUnhealthyBorrowersBoundedFor(
+        address,
+        address asset_,
+        uint256 start_,
+        uint256 checks_,
+        uint256
+    ) external view returns (address[] memory, uint256, uint256) {
+        return _scanResult(asset_, start_, checks_);
+    }
+
+    function _scanResult(
+        address asset_,
+        uint256 start_,
+        uint256 checks_
+    ) private view returns (address[] memory, uint256, uint256) {
         // Model Lens bounds responses; real pagination is exercised by integration tests.
         if (checks_ == 0 && start_ != 0 && start_ >= _populations[asset_]) {
             revert IBurnerLoansLens.BurnerLoansLens_InvalidStart(start_, _populations[asset_]);
         }
         return (_borrowers[asset_], _nextIndexes[asset_], 0);
+    }
+
+    function getExpiredBorrowersBoundedFor(
+        address,
+        address asset_,
+        uint256 start_,
+        uint256 checks_,
+        uint256
+    ) external view returns (address[] memory, uint256, uint256) {
+        if (checks_ == 0 && start_ != 0 && start_ >= _populations[asset_]) {
+            revert IBurnerLoansLens.BurnerLoansLens_InvalidStart(start_, _populations[asset_]);
+        }
+        return (new address[](0), 0, 0);
     }
 
     function seize(
@@ -85,6 +116,7 @@ contract MockSeizerTaskDependency is Policy, IERC165 {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IBurnerLoansCore).interfaceId ||
+            interfaceId_ == type(IBurnerLoansLens).interfaceId ||
             interfaceId_ == type(IBurnerLoansSeize).interfaceId;
     }
 }

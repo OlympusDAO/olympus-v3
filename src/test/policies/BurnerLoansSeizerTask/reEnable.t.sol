@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
@@ -288,5 +289,72 @@ contract BurnerLoansSeizerTaskReEnableTest is BurnerLoansSeizerTaskTest {
         assertTrue(vm.revertToState(snapshot), "Restore disabled active Core");
         test_givenCoreLifecycle_whenActivated(true, true);
         assertTrue(vm.revertToStateAndDelete(snapshot), "Restore enabled active Core");
+    }
+
+    // Scenarios: BLSEIZ-REENABLE-D17.
+    function test_givenLensInterfaceUnavailable_whenReEnabled_reverts(
+        address caller_,
+        uint8 roleClass_
+    ) public {
+        uint8 roleClass = uint8(bound(roleClass_, 0, 2));
+        _grantTaskAdmin(caller_, roleClass);
+        _task.addAsset(address(_asset));
+        _mockCount(3);
+        _setBothBorrowerCursors(address(_asset), 1);
+        _task.disable("");
+        uint48 transition = _task.lastTransitionAt();
+        vm.mockCall(
+            address(_lens),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBurnerLoansLens).interfaceId)),
+            abi.encode(false)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeizerTask.BurnerLoansSeizer_InvalidLens.selector,
+                address(_lens)
+            )
+        );
+        vm.prank(caller_);
+        _task.reEnable();
+        assertFalse(_task.isEnabled(), "Unsupported Lens preserves disabled state");
+        assertEq(
+            _task.lastTransitionAt(),
+            transition,
+            "Failed activation preserves transition time"
+        );
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            1,
+            "Failed activation preserves expiry progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "Failed activation preserves unhealthy progress"
+        );
+        vm.clearMockedCalls();
+        vm.prank(caller_);
+        _task.reEnable();
+        assertTrue(_task.isEnabled(), "Restoring Lens capability permits activation retry");
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            1,
+            "Successful recovery preserves expiry progress"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "Successful recovery preserves unhealthy progress"
+        );
+    }
+
+    // Scenarios: BLSEIZ-REENABLE-D17.
+    function test_givenLensInterfaceUnavailable_whenPermittedCallerClassesSeeded_reverts() public {
+        uint256 checkpoint = vm.snapshotState();
+        for (uint8 roleClass; roleClass < 3; ++roleClass) {
+            assertTrue(vm.revertToState(checkpoint), "Restore Lens recovery caller fixture");
+            test_givenLensInterfaceUnavailable_whenReEnabled_reverts(_DAVE, roleClass);
+        }
+        assertTrue(vm.revertToStateAndDelete(checkpoint), "Restore Lens recovery caller seeds");
     }
 }

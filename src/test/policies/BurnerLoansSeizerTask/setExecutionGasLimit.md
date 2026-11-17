@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.setExecutionGasLimit coverage plan
 
-Source: [setExecutionGasLimit](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L192). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setExecutionGasLimit](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L210). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -34,10 +34,6 @@ Fixed for this table: Accounting / events: Unchanged.
 
 Co-located API assertions: `executionGasLimit`. These must be asserted independently of the action return value.
 
-- [ ] Review these expectations.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
-
 ## Own policy activity
 
 Previously activated then Kernel-deactivated, retaining ROLES and valid caller authority; all direct operational dependencies/bindings remain ready. Inputs are valid. Restore Kernel membership then retry with a fresh valid input and assert the corresponding successful body effects; reactivation does not change positions or authorization. Use an unchanged-value seed too when the setter supports idempotence.
@@ -54,7 +50,16 @@ Previously activated then Kernel-deactivated, retaining ROLES and valid caller a
 
 | ID | Caller | Proposed value | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLSEIZ-EXECUTION-GAS-P04 | ADMIN_ROLE holder | Exact current budget | No-op after validation | No event or setter write | Covered: [test][test_whenGasLimitUnchanged_thenNoEvent] |
+| BLSEIZ-EXECUTION-GAS-P04 | Fuzz ADMIN-only, BL-admin-only and overlap; seed each | Exact current budget over1..MAX32; seed1,MAX32; enabled/disabled/re-enabled | No-op after activity/authorization | No event or setter write; other state unchanged | Partial: [test][test_whenGasLimitUnchanged_thenNoEvent]; missing caller, range and lifecycle partitions |
+
+## Recovery and precedence
+
+Gas is uint32; zero rejects and every nonzero value is accepted without promising a successful task execution. Failed operational dependencies do not gate this setter.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-EXECUTION-GAS-P05 | Fuzz permitted role family | Task re-enabled; budget1..MAX32; broken operational services | Exact changed getter/event without downstream reads; no work/cursor changes | Unmapped |
+| BLSEIZ-EXECUTION-GAS-L01 | Fuzz unauthorized caller | Task Kernel-inactive; zero/unchanged budget and failed ROLES | PolicyNotActive(Task) before authorization/input/no-op | Unmapped |
 
 [test_givenInactiveTask_whenGasLimitSet_reverts]: ./setExecutionGasLimit.t.sol#L78
 [test_givenPermittedCaller_whenGasLimitSet]: ./setExecutionGasLimit.t.sol#L19

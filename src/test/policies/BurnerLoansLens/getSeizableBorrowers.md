@@ -16,6 +16,16 @@ Out-of-range start rejects before count=0/empty-list shortcuts or pricing. Expec
 
 The implementation uses the forward-only signature and validates the current canonical borrower count. Lens remains plain and its reads are independent of Core lifecycle. No Inventory lifecycle or solvency gate is added.
 
+These priced discovery/reward APIs still propagate pricing failures even for all-expired pages.
+During outages use [getExpiredBorrowersBoundedFor](./getExpiredBorrowersBoundedFor.md) for explicit
+maturity-only selection and an actor-specific aggregate reward quote. Protocol actors receive zero
+without prices. Risk owns reward pricing and retains its zero-configuration shortcuts; ordinary
+Seize execution and its preview still require valid prices even for zero rewards. SeizerTask alternates
+expired-first and unhealthy-first priority on successive visits to each asset, using independent saved
+cursors. An empty preferred page permits the other lane in the same visit; failed unhealthy discovery
+also permits expiry discovery. A nonempty selection consumes the visit, whether settlement succeeds
+or fails. The task never classifies unexpired positions without prices.
+
 For **every row**, prank only the convenience call as caller C. Then call `getSeizableBorrowersFor(C,asset,start,count)` directly from the test contract, without a prank, under identical relevant state. Require the same borrowers, cursor and reward, or the same exact revert data. The For consistency column records this paired assertion. C is an explicit reward actor, never a forwarded authorization identity. Role-specific rows control C's grants independently of the unpranked test contract.
 
 Consumer integration: the Seize execution batch limit remains separate. SeizerTask must request a count no larger than the batch it can settle and must not discard candidates while advancing its cursor. It must also handle a cursor made invalid by repayment/default shrinking the borrower list: validate/reset before scanning or recover explicitly from InvalidStart; retaining an invalid cursor indefinitely would strand future scans. Lens performs no automatic normalization. A larger manual scan may need several seizure transactions; an aggregate reward quote need not equal separately rounded chunk quotes.
@@ -126,9 +136,6 @@ All unvaried dependencies work. Nonempty scans currently obtain a snapshot befor
 | BLLENS-SEIZABLE-T03 | Fuzz all callers | Unexpired candidate; Risk.health rejects with RiskHealthFailed() | Exact RiskHealthFailed() | No writes | Same exact error; actor=C, no prank | Covered: [test_givenHealthFailure_whenScanned_reverts][test_givenHealthFailure_whenScanned_reverts] |
 
 Legacy scans had separate check/return limits and circular traversal. Their eligibility and zero-work assertions inform these cases; the agreed forward-only pagination deliberately changes their wrap expectations. No legacy test is a Covered mapping by itself.
-
-- [x] Review these expectations.
-- [x] Implement focused tests and update Test mappings.
 
 [test_givenAboveCount_whenInvalidStartSeeded_reverts]: ./getSeizableBorrowers.t.sol#L133
 [test_givenActiveDisabledCore_whenQueried]: ./getSeizableBorrowers.t.sol#L34

@@ -23,7 +23,7 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
         vm.mockCall(
             address(_lens),
             abi.encodeCall(
-                IBurnerLoansLens.getSeizableBorrowersBoundedFor,
+                IBurnerLoansLens.getUnhealthyBorrowersBoundedFor,
                 (address(task), address(_asset), uint256(0), uint256(500), uint256(50))
             ),
             abi.encode(new address[](0), uint256(0), uint256(0))
@@ -31,7 +31,7 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
         vm.expectCall(
             address(_lens),
             abi.encodeCall(
-                IBurnerLoansLens.getSeizableBorrowersBoundedFor,
+                IBurnerLoansLens.getUnhealthyBorrowersBoundedFor,
                 (address(task), address(_asset), uint256(0), uint256(500), uint256(50))
             ),
             uint64(1)
@@ -43,29 +43,45 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
         public
     {
         _seedDebt(_ALICE, 10e6, 1e9);
-        vm.warp(_position(_ALICE).maturity);
-        _price.setTimestamp(uint48(block.timestamp));
         BurnerLoansSeizerTask task = _task(500);
         vm.mockCall(
             address(_lens),
             abi.encodeCall(
-                IBurnerLoansLens.getSeizableBorrowersBoundedFor,
+                IBurnerLoansLens.getUnhealthyBorrowersBoundedFor,
                 (address(task), address(_asset), uint256(0), uint256(500), uint256(50))
             ),
             abi.encode(new address[](0), uint256(3), uint256(0))
         );
         task.execute();
         assertEq(
-            task.assetCursor(address(_asset)),
+            task.unhealthyAssetCursor(address(_asset)),
             3,
             "Retained cursor predates borrower-list shrinkage"
         );
+        assertEq(
+            task.expiredAssetCursor(address(_asset)),
+            0,
+            "Expiry page independently wrapped before maturity"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 1e9, "Debt remains before stale-cursor recovery");
+        assertEq(
+            _lens.getActiveBorrowerCount(address(_asset)),
+            1,
+            "Saved offset exceeds live count"
+        );
         vm.clearMockedCalls();
+        vm.warp(_position(_ALICE).maturity);
+        _price.setTimestamp(uint48(block.timestamp));
         task.execute();
         assertEq(
-            task.assetCursor(address(_asset)),
+            task.expiredAssetCursor(address(_asset)),
             0,
-            "Invalid start is repaired and processed in the same tick"
+            "Expiry lane processes the current page in the same tick"
+        );
+        assertEq(
+            task.unhealthyAssetCursor(address(_asset)),
+            0,
+            "Stale unhealthy offset is independently repaired"
         );
         assertEq(
             _inventory.activePrincipalOhm(),
@@ -82,7 +98,7 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
     function test_givenTaskEqualLimits_whenExecuted() public {
         BurnerLoansSeizerTask task = _task(50);
         bytes memory callData = abi.encodeCall(
-            IBurnerLoansLens.getSeizableBorrowersBoundedFor,
+            IBurnerLoansLens.getUnhealthyBorrowersBoundedFor,
             (address(task), address(_asset), uint256(0), uint256(50), uint256(50))
         );
         vm.mockCall(address(_lens), callData, abi.encode(new address[](0), uint256(0), uint256(0)));

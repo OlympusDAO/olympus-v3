@@ -6,6 +6,12 @@ Scenario scope: `BLLENS-BOUNDED`. Plain permissionless Lens: caller and reward a
 
 The scan examines only the remaining forward suffix. Stop immediately when the result cap is reached: never select a larger page and discard candidates. The returned cursor is the first unexamined index, or zero at the end. An empty market, zero count or zero result cap avoids pricing work after asset/start validation. The existing unbounded scan APIs retain their behavior.
 
+Positive scans retain their priced eligibility and aggregate reward semantics, propagating dependency
+errors. Outage automation uses the separate [expired-only selection](./getExpiredBorrowersBoundedFor.md),
+which skips unexpired positions without classifying health and quotes the aggregate reward for
+the explicit actor. Risk owns reward pricing, including zero-configuration shortcuts. Ordinary
+Seize execution and its preview retain their pricing requirements.
+
 The fixed borrower list is `[Alice eligible, Bob healthy, Carol eligible, Dave healthy]`, at
 indices 0..3. `count` bounds entries examined, including healthy borrowers. `maxResults` bounds
 eligible borrowers returned. Those limits are independent: count=4 and maxResults=1 return only
@@ -45,10 +51,6 @@ formula. Reward arithmetic is tested separately.
 | --- | --- | --- | --- | --- |
 | BLLENS-BOUNDED-I01 | Unregistered asset, including zero; arbitrary start/count/cap | BurnerLoansCore_AssetNotConfigured(asset) before bounds | No pricing reads or writes | Covered: [test][test_whenAssetIsUnknown_reverts] |
 | BLLENS-BOUNDED-I02 | Fuzz start outside nonempty population through MAX256, or nonzero start in empty market; count/cap independently include zero/MAX256; seed maximum start and population explicitly | BurnerLoansLens_InvalidStart(start,population) before zero-limit shortcut | No pricing reads or writes | Covered: [test][test_whenStartIsInvalid_reverts], [test][test_givenEmptyMarket_whenStartNonzero_reverts], [seeds][test_whenMaximumStartBoundariesSeeded_reverts] |
-
-- [x] Review expected independent bounds and cursor semantics.
-- [x] Implement fuzz tests and boundary seed driver.
-- [x] Map compatible rows to passing tests.
 
 [test_whenScanLimitZero_whenStartingAtZero]: ./getSeizableBorrowersBoundedFor.t.sol#L17
 [test_whenResultLimitOne_whenScanLimitGreaterThanOne]: ./getSeizableBorrowersBoundedFor.t.sol#L89

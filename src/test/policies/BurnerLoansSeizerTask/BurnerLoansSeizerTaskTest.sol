@@ -111,7 +111,7 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
     function _boundedScan(address asset_, uint256 start_) internal view returns (bytes memory) {
         return
             abi.encodeCall(
-                IBurnerLoansLens.getSeizableBorrowersBoundedFor,
+                IBurnerLoansLens.getUnhealthyBorrowersBoundedFor,
                 (
                     address(_task),
                     asset_,
@@ -134,5 +134,10 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
         accounts = new address[](2);
         accounts[0] = first_;
         accounts[1] = second_;
+    }
+
+    function _setBothBorrowerCursors(address asset_, uint256 index_) internal {
+        _task.setExpiredAssetCursor(asset_, index_);
+        _task.setUnhealthyAssetCursor(asset_, index_);
     }
 }

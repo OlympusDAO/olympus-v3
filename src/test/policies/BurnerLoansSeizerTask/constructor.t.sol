@@ -13,6 +13,7 @@ import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurne
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
 // Contracts
+import {MockLegacyBurnerLoansLens} from "./fixtures/MockLegacyBurnerLoansLens.sol";
 import {BurnerLoansSeizerTaskTest} from "./BurnerLoansSeizerTaskTest.sol";
 import {Actions} from "src/Kernel.sol";
 import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerTask.sol";
@@ -59,7 +60,8 @@ contract BurnerLoansSeizerTaskConstructorTest is BurnerLoansSeizerTaskTest {
         assertFalse(_kernel.isPolicyActive(task), "Deployment does not activate policy");
         assertEq(task.getAssets().length, 0, "Initial managed asset set is empty");
         assertEq(task.nextAssetIndex(), 0, "Initial asset iterator is zero");
-        assertEq(task.assetCursor(address(_asset)), 0, "Initial borrower cursor is zero");
+        assertEq(task.expiredAssetCursor(address(_asset)), 0, "Initial borrower cursor is zero");
+        assertEq(task.unhealthyAssetCursor(address(_asset)), 0, "Initial borrower cursor is zero");
         assertEq(task.lastTransitionAt(), 0, "Deployment has no prior local transition");
         assertEq(task.gracePeriod(), 7 days, "Initial re-enable grace is seven days");
     }
@@ -289,6 +291,71 @@ contract BurnerLoansSeizerTaskConstructorTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectRevert(BindingReadFailed.selector);
         new BurnerLoansSeizerTask(_kernel, _liquidation, _lens, 1, 1, 1);
+    }
+
+    // Scenarios: BLSZC-D15.
+    function test_givenSameCoreLegacyLens_whenConstructed_reverts(address caller_) public {
+        MockLegacyBurnerLoansLens legacy = new MockLegacyBurnerLoansLens(address(_core));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeizerTask.BurnerLoansSeizer_InvalidLens.selector,
+                address(legacy)
+            )
+        );
+        vm.prank(caller_);
+        new BurnerLoansSeizerTask(
+            _kernel,
+            _liquidation,
+            IBurnerLoansLens(address(legacy)),
+            1,
+            1,
+            1
+        );
+    }
+
+    // Scenarios: BLSZC-D16.
+    function test_givenLensRejectsCurrentInterface_whenConstructed_reverts(address caller_) public {
+        vm.mockCall(
+            address(_lens),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBurnerLoansLens).interfaceId)),
+            abi.encode(false)
+        );
+        _expectInvalidLens();
+        vm.prank(caller_);
+        _newTask();
+    }
+
+    // Scenarios: BLSZC-D17.
+    function test_givenLensInterfaceProbeReverts_whenConstructed_reverts(address caller_) public {
+        vm.mockCallRevert(
+            address(_lens),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBurnerLoansLens).interfaceId)),
+            abi.encodeWithSelector(BindingReadFailed.selector)
+        );
+        _expectInvalidLens();
+        vm.prank(caller_);
+        _newTask();
+    }
+
+    // Scenarios: BLSZC-D18.
+    function test_givenLensInterfaceProbeMalformed_whenConstructed_reverts(address caller_) public {
+        vm.mockCall(
+            address(_lens),
+            abi.encodeCall(IERC165.supportsInterface, (type(IBurnerLoansLens).interfaceId)),
+            hex"01"
+        );
+        _expectInvalidLens();
+        vm.prank(caller_);
+        _newTask();
+    }
+
+    function _expectInvalidLens() private {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeizerTask.BurnerLoansSeizer_InvalidLens.selector,
+                address(_lens)
+            )
+        );
     }
 
     function _newTask() private returns (BurnerLoansSeizerTask) {

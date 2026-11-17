@@ -7,6 +7,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
 
 // Libraries
 import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
@@ -83,7 +84,12 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
         bytes32 beforeState = _stateDigestFor(address(_asset), _keeper);
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         _liquidation.previewSeizeFor(_keeper, address(_asset), borrowers);
-        vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeize.BurnerLoans_PriceSnapshotUnavailable.selector,
+                abi.encodeWithSelector(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector)
+            )
+        );
         vm.prank(_keeper);
         _liquidation.seize(address(_asset), borrowers);
         assertEq(
@@ -243,7 +249,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
         );
         _injectOracleFault(fault_);
         _expectNoSeizurePricing();
-        _assertOracleFailure(
+        _assertAdmissionFailure(
             borrowers,
             abi.encodeWithSelector(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector)
         );
@@ -262,7 +268,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
             emptyFirst_
         );
         _expectNoSeizurePricing();
-        _assertOracleFailure(
+        _assertAdmissionFailure(
             borrowers,
             abi.encodeWithSelector(IBurnerLoansCore.BurnerLoansCore_NoDebt.selector)
         );

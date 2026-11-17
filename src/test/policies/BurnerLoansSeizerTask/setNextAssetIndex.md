@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.setNextAssetIndex coverage plan
 
-Source: [setNextAssetIndex](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L204).
+Source: [setNextAssetIndex](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L223).
 
 Scenario scope: `BLSEIZ-ASSET-INDEX`. Recovery controls follow the existing scan/gas configuration authority: ADMIN_ROLE alone, BURNER_LOANS_ADMIN_ROLE alone, or both. Exclude every holder of either role from unauthorized fuzzing. Require own Kernel activity before authorization/input validation, including for unchanged values. Enabled, disabled and re-enabled states permit recovery.
 
@@ -20,8 +20,14 @@ The index addresses the Task's managed-asset set, in `getAssets()` order. Zero i
 | BLSEIZ-ASSET-INDEX-P05 | ADMIN_ROLE then HEART_ROLE | true | Enabled | Select second asset, then execute | Second asset scanned; traversal wraps to first | Covered: [test][test_whenSecondAssetSelected_thenNextExecutionScansIt] |
 | BLSEIZ-ASSET-INDEX-P06 | Authorized handler | true | Arbitrary pause/re-enable history | Arbitrary valid cursor recovery between beats | Registry bounds, next-beat rotation and authoritative accounting remain consistent | Covered: [invariant][invariant_schedulerAndAccountingRemainConsistent] |
 
-- [x] Write named tests, then implement the recovery setter.
-- [x] Run focused tests, invariant, formatting/lint and reciprocal mapping checks.
+## Same-zero recovery boundary
+
+Own activity and permitted-role checks still apply before every no-op. No downstream service is needed for any valid asset-index change.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-ASSET-INDEX-P07 | ADMIN-only, BL-admin-only or both; seed each | nextAssetIndex0 in nonempty set; proposed0; services fail | Event-free no-op; no service reads or borrower-cursor changes | Unmapped |
+| BLSEIZ-ASSET-INDEX-L02 | Fuzz unauthorized caller | Task inactive; proposedMAX256; cached ROLES fails | PolicyNotActive(Task) before authority/range checks | Unmapped |
 
 [invariant_schedulerAndAccountingRemainConsistent]: ./integration/progress.invariant.t.sol#L46
 [test_givenDownstreamUnavailable_whenReset_thenNoDownstreamReads]: ./setNextAssetIndex.t.sol#L174
@@ -33,14 +39,12 @@ The index addresses the Task's managed-asset set, in `getAssets()` order. Zero i
 [test_whenIndexUnchanged_thenEventFreeNoOp]: ./setNextAssetIndex.t.sol#L165
 [test_whenInvalidIndexBoundariesSeeded_reverts]: ./setNextAssetIndex.t.sol#L132
 [test_whenSecondAssetSelected_thenNextExecutionScansIt]: ./setNextAssetIndex.t.sol#L220
-
 [test_givenEnabled_whenPermittedCallerChangesAssetIndex]: ./setNextAssetIndex.t.sol#L33
 [test_givenEnabled_whenRoleAndIndexBoundariesSeeded]: ./setNextAssetIndex.t.sol#L42
 [test_givenDisabled_whenPermittedCallerChangesAssetIndex]: ./setNextAssetIndex.t.sol#L52
 [test_givenDisabled_whenRoleAndIndexBoundariesSeeded]: ./setNextAssetIndex.t.sol#L61
 [test_givenReEnabled_whenPermittedCallerChangesAssetIndex]: ./setNextAssetIndex.t.sol#L71
 [test_givenReEnabled_whenRoleAndIndexBoundariesSeeded]: ./setNextAssetIndex.t.sol#L80
-
 [test_givenInactiveEnabledTask_whenAssetIndexSet_reverts]: ./setNextAssetIndex.t.sol#L197
 [test_givenInactiveDisabledTask_whenAssetIndexSet_reverts]: ./setNextAssetIndex.t.sol#L202
 [test_whenInactiveLifecycleAndIndexBoundariesSeeded_reverts]: ./setNextAssetIndex.t.sol#L209

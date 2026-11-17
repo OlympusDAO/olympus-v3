@@ -89,7 +89,16 @@ contract BurnerLoansSeizerTaskAddAssetTest is BurnerLoansSeizerTaskTest {
         _task.addAsset(asset_);
         assertFalse(_task.isAssetManaged(asset_), "Unsupported asset is not admitted");
         assertEq(_task.getAssets().length, 0, "Unsupported asset creates no registry entry");
-        assertEq(_task.assetCursor(asset_), 0, "Unsupported asset creates no borrower cursor");
+        assertEq(
+            _task.expiredAssetCursor(asset_),
+            0,
+            "Unsupported asset creates no borrower cursor"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(asset_),
+            0,
+            "Unsupported asset creates no borrower cursor"
+        );
     }
 
     // Scenarios: BLSEIZ-ADD-ASSET-I03.
@@ -149,7 +158,8 @@ contract BurnerLoansSeizerTaskAddAssetTest is BurnerLoansSeizerTaskTest {
         _task.addAsset(address(_asset));
         assertTrue(_task.isAssetManaged(address(_asset)), "Registered asset is managed");
         assertEq(_task.getAssets(), _one(address(_asset)), "Managed registry has one entry");
-        assertEq(_task.assetCursor(address(_asset)), 0, "Initial borrower cursor");
+        assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Initial borrower cursor");
+        assertEq(_task.unhealthyAssetCursor(address(_asset)), 0, "Initial borrower cursor");
         assertEq(_task.lastTransitionAt(), transition, "Adding an asset preserves lifecycle");
         assertEq(_task.isEnabled(), enabled_, "Adding an asset preserves local enablement");
     }

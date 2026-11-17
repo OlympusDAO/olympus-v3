@@ -102,9 +102,6 @@ Use the base integration fixture, except the selected-Risk mock replacement case
 
 These are fixture/arithmetic precedents, not Covered mappings for this API. Keep fixed expected integers and update only mappings once tests prove the scenarios.
 
-- [x] Review these expectations.
-- [x] Implement focused tests and update Test mappings.
-
 [test_givenActiveDisabledCore_whenQueried]: ./positionHealthFactor.t.sol#L29
 [test_givenActiveEnabledCore_whenQueried]: ./positionHealthFactor.t.sol#L22
 [test_givenArbitrary_whenHealthForwarded]: ./positionHealthFactor.t.sol#L141
@@ -132,19 +129,19 @@ These are fixture/arithmetic precedents, not Covered mappings for this API. Keep
 [test_givenOhmPriceChanges_whenQuoted]: ./positionHealthFactorIntegration.t.sol#L246
 [test_givenOneRawCollateral_whenRealHealthQuoted]: ./positionHealthFactorIntegration.t.sol#L84
 [test_givenOneRawPrices_whenRealHealthQuoted]: ./positionHealthFactorIntegration.t.sol#L98
-[test_givenReplacementActiveCache_whenQuoted]: ./positionHealthFactorIntegration.t.sol#L387
+[test_givenReplacementActiveCache_whenQuoted]: ./positionHealthFactorIntegration.t.sol#L388
 [test_givenReplacementOracleChanges_whenQuoted]: ./positionHealthFactorIntegration.t.sol#L303
-[test_givenReplacementPriceModule_whenQuoted]: ./positionHealthFactorIntegration.t.sol#L367
+[test_givenReplacementPriceModule_whenQuoted]: ./positionHealthFactorIntegration.t.sol#L368
 [test_givenReplacementRisk_whenQuoted]: ./positionHealthFactor.t.sol#L207
 [test_givenSnapshotFailure_whenQuoted_reverts]: ./positionHealthFactor.t.sol#L176
-[test_givenStalePrice_whenQuoted_reverts]: ./positionHealthFactorIntegration.t.sol#L358
+[test_givenStalePrice_whenQuoted_reverts]: ./positionHealthFactorIntegration.t.sol#L359
 [test_givenUnavailablePrice_whenDebtIsZero]: ./positionHealthFactor.t.sol#L72
 [test_givenUnknownAsset_whenDebtIsZero]: ./positionHealthFactor.t.sol#L61
 [test_givenZeroAsset_whenDebtIsZero]: ./positionHealthFactor.t.sol#L50
-[test_givenZeroBacking_whenQuoted_reverts]: ./positionHealthFactorIntegration.t.sol#L349
-[test_givenZeroCollateralPrice_whenQuoted_reverts]: ./positionHealthFactorIntegration.t.sol#L323
+[test_givenZeroBacking_whenQuoted_reverts]: ./positionHealthFactorIntegration.t.sol#L350
+[test_givenZeroCollateralPrice_whenQuoted_reverts]: ./positionHealthFactorIntegration.t.sol#L324
 [test_givenZeroCollateral_whenDebtIsZero]: ./positionHealthFactor.t.sol#L83
 [test_givenZeroCollateral_whenRealHealthQuoted]: ./positionHealthFactorIntegration.t.sol#L70
-[test_givenZeroOhmPrice_whenQuoted_reverts]: ./positionHealthFactorIntegration.t.sol#L336
+[test_givenZeroOhmPrice_whenQuoted_reverts]: ./positionHealthFactorIntegration.t.sol#L337
 [test_whenUnknownDebtBearingAsset_reverts]: ./positionHealthFactor.t.sol#L123
 [test_whenZeroDebtBearingAsset_reverts]: ./positionHealthFactor.t.sol#L105

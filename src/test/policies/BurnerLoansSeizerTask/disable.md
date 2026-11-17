@@ -6,7 +6,7 @@ Source: [disable](../../../bases/EnablerV2.sol#L72). Coverage is recorded in the
 
 Scenario scope: `BLSEIZ-DISABLE` identifies this contract/function.
 
-Implemented lifecycle payload rule: this contract does not use lifecycle data. Accept only `data.length == 0`; reject every nonempty payload with `BurnerLoans_InvalidEnablerData()`. Check local transition state and caller authorization first, then any existing settlement guard, then payload length, then enable-hook dependencies. The concrete hook rejects nonempty data. Authorization, lifecycle and dependency rows use `data=0x` unless a payload/competing-fault row explicitly overrides it. Existing nonempty-success tests are regression evidence to revise, not proof of this requirement.
+Implemented lifecycle payload rule: this contract does not use lifecycle data. Accept only `data.length == 0`; reject every nonempty payload with `BurnerLoans_InvalidEnablerData()`. Check local transition state and caller authorization first, then payload length. This pause hook has no settlement guard or operational-dependency checks. The concrete hook rejects nonempty data. Authorization, lifecycle and dependency rows use `data=0x` unless a payload/competing-fault row explicitly overrides it. Existing nonempty-success tests are regression evidence to revise, not proof of this requirement.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
 
@@ -33,14 +33,14 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: true
 | BLSEIZ-DISABLE-L02 | Fuzz all callers | false | false | true | true | data empty | `NotEnabled()` | Unchanged; state error before caller | Unmapped |
 | BLSEIZ-DISABLE-L03 | ADMIN_ROLE holder | true | true | false | true | Core inactive | `Success` | Only local pause/timestamp/events change; no dependency validation on disable | Unmapped |
 | BLSEIZ-DISABLE-L04 | ADMIN_ROLE holder | false | true | false | true | Kernel-activated and enabled, then Kernel-deactivated; cached ROLES retained; data=0x | `Success` | Only local pause/timestamp/events change; no dependency validation on disable | Unmapped |
-| BLSEIZ-DISABLE-L05 | ADMIN_ROLE holder | true | true | true | true | Seize inactive | `Success` | Only local pause/timestamp/events change; no dependency validation on disable | Unmapped |
-| BLSEIZ-DISABLE-L06 | ADMIN_ROLE holder | false | true | true | true | Kernel-activated and enabled, then Kernel-deactivated; cached ROLES retained; data=0x | `Success` | Only local pause/timestamp/events change; no dependency validation on disable | Unmapped |
-| BLSEIZ-DISABLE-L07 | ADMIN_ROLE holder | true | true | true | true | other dependencies ready | `Success` | Local transition and exact events; canonical positions and balances preserved | Unmapped |
-| BLSEIZ-DISABLE-L08 | ADMIN_ROLE holder | false | true | true | true | Kernel-activated and enabled, then Kernel-deactivated; cached ROLES retained; data=0x | `Success` | Local transition and exact events; canonical positions and balances preserved | Unmapped |
-| BLSEIZ-DISABLE-L09 | ADMIN_ROLE holder | true | true | true | false | other dependencies ready | `Success` | Local transition and exact events; canonical positions and balances preserved | Unmapped |
-| BLSEIZ-DISABLE-L10 | ADMIN_ROLE holder | false | true | true | false | Kernel-activated and enabled, then Kernel-deactivated; cached ROLES retained; data=0x | `Success` | Local transition and exact events; canonical positions and balances preserved | Unmapped |
-| BLSEIZ-DISABLE-L11 | ADMIN_ROLE holder | true | true | false | false | other dependencies ready | `Success` | Local transition and exact events; canonical positions and balances preserved | Unmapped |
-| BLSEIZ-DISABLE-L12 | ADMIN_ROLE holder | false | true | false | false | Kernel-activated and enabled, then Kernel-deactivated; cached ROLES retained; data=0x | `Success` | Local transition and exact events; canonical positions and balances preserved | Unmapped |
+| BLSEIZ-DISABLE-L05 | ADMIN_ROLE holder | true | true | true | true | Seize active=false, enabled=true | `Success` | Only local pause/timestamp/events change; no dependency validation on disable | Unmapped |
+| BLSEIZ-DISABLE-L06 | ADMIN_ROLE holder | false | true | true | true | Task previously enabled then deactivated; Seize active=false, enabled=true; cached ROLES retained; data=0x | `Success` | Only local pause/timestamp/events change; no dependency validation on disable | Unmapped |
+| BLSEIZ-DISABLE-L07 | ADMIN_ROLE holder | true | true | true | true | other dependencies ready | `Success` | Local transition and exact events; positions and balances preserved | Unmapped |
+| BLSEIZ-DISABLE-L08 | ADMIN_ROLE holder | false | true | true | true | Kernel-activated and enabled, then Kernel-deactivated; cached ROLES retained; data=0x | `Success` | Local transition and exact events; positions and balances preserved | Unmapped |
+| BLSEIZ-DISABLE-L09 | ADMIN_ROLE holder | true | true | true | false | other dependencies ready | `Success` | Local transition and exact events; positions and balances preserved | Unmapped |
+| BLSEIZ-DISABLE-L10 | ADMIN_ROLE holder | false | true | true | false | Kernel-activated and enabled, then Kernel-deactivated; cached ROLES retained; data=0x | `Success` | Local transition and exact events; positions and balances preserved | Unmapped |
+| BLSEIZ-DISABLE-L11 | ADMIN_ROLE holder | true | true | false | false | other dependencies ready | `Success` | Local transition and exact events; positions and balances preserved | Unmapped |
+| BLSEIZ-DISABLE-L12 | ADMIN_ROLE holder | false | true | false | false | Kernel-activated and enabled, then Kernel-deactivated; cached ROLES retained; data=0x | `Success` | Local transition and exact events; positions and balances preserved | Unmapped |
 
 ## Inputs
 
@@ -65,10 +65,6 @@ Construct only reachable dependency drift: deactivation/local disable/migration 
 
 Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These must be asserted independently of the action return value.
 
-- [ ] Review these expectations.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
-
 ## Never-activated policy
 
 Use the actual constructor and never call configureDependencies or Kernel ActivatePolicy. Other bound contracts remain valid. data=0x. This table tests admission precedence without assuming that a requested role is readable through this policy.
@@ -82,3 +78,14 @@ Use the actual constructor and never call configureDependencies or Kernel Activa
 No dedicated same-name legacy suite exists. Use related custody, arithmetic and lifecycle regression families in the suite index; this API needs new direct tests.
 
 Retired duplicate caller IDs: BLSEIZ-DISABLE-A02, BLSEIZ-DISABLE-I02. Retained families include both exclusive classes and overlap seeds; test mappings stay Partial until their full combined domain is proved.
+
+## Broken-service and repeated-transition branches
+
+Local enabled=true, initialized ROLES; local active is independently false/true with both seeds. Pausing consumes no Core/Lens/Seize/Risk/price service. Exact events are Disabled followed by Transition(caller,false,0x,now); only local enabled/timestamp change.
+
+| ID | Caller | Condition / domain | Execution / effects | Test |
+| --- | --- | --- | --- | --- |
+| BLSEIZ-DISABLE-D01 | ADMIN-only, EMERGENCY-only or both; seed each | Seize active=true, enabled=false | Pause succeeds without Seize readiness call; positions/cursors unchanged | Unmapped |
+| BLSEIZ-DISABLE-D02 | ADMIN-only, EMERGENCY-only or both; seed each | Seize active=false, enabled=false | Pause succeeds without Seize readiness call | Unmapped |
+| BLSEIZ-DISABLE-D03 | ADMIN-only, EMERGENCY-only or both; seed each | Every operational-service and metadata getter configured to revert | Pause succeeds; assert zero calls to those getters | Unmapped |
+| BLSEIZ-DISABLE-P01 | Fuzz permitted role family | Disable, re-enable with valid grace, then disable again | Each successful transition updates timestamp/events once and retains registry/accounting | Unmapped |

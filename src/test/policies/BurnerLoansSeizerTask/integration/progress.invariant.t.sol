@@ -20,7 +20,7 @@ import {SeizerTaskProgressHandler} from "../fixtures/SeizerTaskProgressHandler.s
 contract BurnerLoansSeizerTaskProgressInvariantTest is BurnerLoansSeizerTaskProgressTest {
     SeizerTaskProgressHandler internal _handler;
 
-    function setUp() public override {
+    function setUp() public virtual override {
         super.setUp();
         _task.addAsset(address(_asset));
         _task.addAsset(address(_otherAsset));
@@ -42,25 +42,38 @@ contract BurnerLoansSeizerTaskProgressInvariantTest is BurnerLoansSeizerTaskProg
         targetContract(address(_handler));
     }
 
-    // Scenarios: BLSEIZ-SELF-EXECUTE-P02, BLSEIZ-EXECUTE-P03, BLSEIZ-EXECUTE-L01, BLSEIZ-ASSET-INDEX-P06, BLSEIZ-BORROWER-CURSOR-P05.
+    // Scenarios: BLSEIZ-SELF-EXECUTE-P02, BLSEIZ-EXECUTE-P03, BLSEIZ-EXECUTE-L01, BLSEIZ-ASSET-INDEX-P06, BLSEIZ-EXPIRED-CURSOR-P05, BLSEIZ-UNHEALTHY-CURSOR-P05.
     function invariant_schedulerAndAccountingRemainConsistent() public view {
         assertTrue(_handler.progressValid(), "Every enabled beat fairly rotates assets");
         assertLt(_task.nextAssetIndex(), 2, "Asset iterator remains within the fixed registry");
         assertEq(
-            _task.assetCursor(address(_otherAsset)),
+            _task.expiredAssetCursor(address(_otherAsset)),
             0,
             "Empty B market keeps a zero borrower cursor after recovery"
         );
         uint32 market = _core.marketId(address(_asset));
-        uint256 population = _floan.getActiveBorrowerCount(market);
-        if (population == 0)
-            assertEq(_task.assetCursor(address(_asset)), 0, "Empty market cursor is zero");
-        else
-            assertLt(
-                _task.assetCursor(address(_asset)),
-                population,
-                "Committed cursor remains usable after defaults"
-            );
+        // Each fixed-book loan has 1e9 principal. The handler neither adds loans nor repays debt,
+        // so (due + defaulted) / 1e9 independently recovers the original book size (8 or 12).
+        // Compaction may leave a saved offset outside the current population between visits;
+        // execute's boundary tests prove repair before discovery, and drain tests prove reachability.
+        // forge-lint: disable-next-line(literal-instead-of-constant)
+        uint256 originalPopulation = (_floan.getMarketPrincipalDue(market) +
+            _floan.getMarketPrincipalDefaulted(market)) / 1e9;
+        assertLt(
+            _task.expiredAssetCursor(address(_asset)),
+            originalPopulation,
+            "Expiry offset stays within original book"
+        );
+        assertLt(
+            _task.unhealthyAssetCursor(address(_asset)),
+            originalPopulation,
+            "Unhealthy offset stays within original book"
+        );
+        assertEq(
+            _task.unhealthyAssetCursor(address(_otherAsset)),
+            0,
+            "Empty B market has no pending unhealthy offset"
+        );
         assertEq(
             _inventory.activePrincipalOhm(),
             _floan.getMarketPrincipalDue(market),
