@@ -86,7 +86,7 @@ Assert each snapshot field against independently calculated prices/backing conve
 
 ## Legacy regression cases to retain
 
-Port one refresh call and one backing read per priced action with cache getter deliberately reverting; pair orientation both address orders, fresh cache round unchanged, stale round refreshed, and rollback of refresh on failed settlement. Debt-bearing deposits and partial repayments each capture one snapshot; debt-free deposits and full repayments perform no pricing calls.
+Port one refresh call and one backing read per priced action with cache getter deliberately reverting; pair orientation both address orders, fresh cache round unchanged, stale round refreshed, and rollback of refresh on failed settlement. Collateral deposits and repayments perform no pricing calls, regardless of remaining debt. Debt-bearing withdrawals retain their snapshot and final-health checks.
 
 ## Backing lifecycle acceptance
 

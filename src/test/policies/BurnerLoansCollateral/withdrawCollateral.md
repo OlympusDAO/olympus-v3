@@ -202,7 +202,7 @@ Rejection preserves authoritative accounting, custody and emitted logs.
 | ID | Scenario | Expected execution and preview | Test |
 | --- | --- | --- | --- |
 | BLCOL-WITHDRAW-D08 | Debt=100e9; oracle disabled; change collateral by 1e6 | Preview/execution: PolicyDependency_NotActive(oracle); accounting/custody unchanged | Covered: [test][test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement] |
-| BLCOL-WITHDRAW-D09 | Debt-free collateral=100e6; oracle disabled; change collateral by 1e6 | Exact 1e6 credit/output and 101e6 deposit or 99e6 withdrawal remainder; uint256.max health | Covered: [test][test_givenDebtFreeAndBackingPaused_whenCollateralChanged] |
+| BLCOL-WITHDRAW-D09 | Debt-free collateral=100e6; oracle disabled; withdraw 1e6 | Exact 1e6 withdrawal output, 99e6 remaining collateral and uint256.max withdrawal health | Covered: [test][test_givenDebtFreeAndBackingPaused_whenCollateralChanged] |
 
 ## Authorization completion callbacks
 
