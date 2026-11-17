@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.constructor coverage plan
 
-Source: [constructor](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L88). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [constructor](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L94). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -77,10 +77,6 @@ Fixed for this table: other bindings and inputs valid.
 Constructor revert leaves no contract/state/events. Read exact zero/default fields, immutable address relationships and actual initial lifecycle/gas values, not only successful deployment. Supported interfaces and runtime budget separately verified.
 
 Co-located API assertions: `seize`, `lens`, and the Core derived through `seize().core()`. Assert each binding independently.
-
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
 
 ## Test organization
 

@@ -17,6 +17,10 @@ interface IBurnerLoansSeize {
     /// @param borrower Borrower that cannot be seized.
     error BurnerLoans_PositionNotSeizable(address borrower);
 
+    /// @notice Required execution pricing could not be refreshed.
+    /// @param reason Complete revert data returned by the pricing dependency.
+    error BurnerLoans_PriceSnapshotUnavailable(bytes reason);
+
     /// @notice Defaults and redeems a complete batch; protocol callers receive no keeper reward.
     /// @param asset Configured underlying collateral token shared by the positions.
     /// @param borrowers Distinct nonzero accounts whose positions must all be seizable.

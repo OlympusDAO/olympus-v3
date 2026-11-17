@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.setGracePeriod coverage plan
 
-Source: [setGracePeriod](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L423), which applies own activity before the [inherited setter](../../../bases/ReEnablerGracePeriod.sol#L74). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setGracePeriod](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L578), which applies own activity before the [inherited setter](../../../bases/ReEnablerGracePeriod.sol#L74). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -58,10 +58,6 @@ Fixed for this table: Core active: true; Core enabled: true; Local enabled: true
 Construct only reachable dependency drift: deactivation/local disable/migration after successful binding. Restoration then retry proves recovery, not only initial failure. Getter assertions include exact enabled/timestamp/grace values. Core callback guard enforcement is specific to Core; do not add cross-contract sessions.
 
 Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These must be asserted independently of the action return value.
-
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
 
 ## Test organization
 

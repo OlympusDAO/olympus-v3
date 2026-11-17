@@ -126,7 +126,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _mature();
         _task.execute(); // B receives its turn before A repairs the stale cursor.
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 3), uint64(0));
-        vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(0));
+        vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
         vm.expectCall(
             address(_lens),
             abi.encodeCall(

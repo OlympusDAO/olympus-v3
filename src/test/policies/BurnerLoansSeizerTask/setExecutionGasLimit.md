@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.setExecutionGasLimit coverage plan
 
-Source: [setExecutionGasLimit](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L192). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setExecutionGasLimit](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L210). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -33,10 +33,6 @@ Fixed for this table: Accounting / events: Unchanged.
 | BLSEIZ-EXECUTION-GAS-P02 | Fuzz permitted role caller | gas1..MAX32; changed value; seed1,MAX32 | Store exact budget; emit once | No immediate task work; too-small gas tested through execute | Covered: [test][test_givenPermittedCaller_whenGasLimitSet], [test][test_whenRoleAndNumericBoundariesSeeded] |
 
 Co-located API assertions: `executionGasLimit`. These must be asserted independently of the action return value.
-
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
 
 ## Own policy activity
 

@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.configureDependencies coverage plan
 
-Source: [configureDependencies](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L116). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [configureDependencies](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L122). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -31,10 +31,6 @@ Fixed for this table: Accounting / events: Entire call rollback, previous pointe
 No own-policy activity or ADMIN gate invented. Missing cached ROLES before setup is tested as actual ABI failure in role-dependent calls, not a proposed lifecycle rule.
 
 Co-located API assertions: `ROLES`. These must be asserted independently of the action return value.
-
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
 
 ## Test organization
 

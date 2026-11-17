@@ -57,10 +57,6 @@ Construct only reachable dependency drift: deactivation/local disable/migration 
 
 Co-located API assertions: `isEnabled`, `lastTransitionAt`, `gracePeriod`. These must be asserted independently of the action return value.
 
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
-
 ## Local transition state
 
 | ID | Caller | Local active | Local enabled | lastTransitionAt | Execution | Effects | Test |

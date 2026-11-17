@@ -11,6 +11,7 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
 import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurnerLoansSeizerTask.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IDiscoveryPrice, IDiscoveryWithdrawal} from "src/test/policies/BurnerLoansSeizerTask/fixtures/IDiscoveryDependencies.sol";
@@ -40,9 +41,514 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         CacheReverts
     }
     error OracleUnavailable();
+    error OracleObservationInvalid(address feed, int256 answer);
     error CanonicalReadFailed();
     error CustodyFailed();
     error ConfigurationFailed();
+
+    // Scenarios: BLSEIZ-EXECUTE-F607.
+    function test_givenUnhealthyDebt_givenEmptyRefreshRevert_whenTaskExecuted() public {
+        _seedThreeUnhealthyBorrowers();
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeCall(_risk.refreshSnapshot, (address(_asset))),
+            bytes("")
+        );
+        vm.expectEmit(true, false, false, true, address(_task));
+        emit IBurnerLoansSeizerTask.SeizureFailed(
+            address(_asset),
+            IBurnerLoansSeize.BurnerLoans_PriceSnapshotUnavailable.selector
+        );
+        _task.execute();
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "Empty pricing revert retains pending offset"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 3e9, "Pricing failure settles no debt");
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F606.
+    function test_givenUnhealthyDebt_givenEmptySettlementRevert_whenTaskExecuted() public {
+        _seedThreeUnhealthyBorrowers();
+        vm.mockCallRevert(address(_core), abi.encodePacked(_core.settleSeize.selector), bytes(""));
+        vm.expectEmit(true, false, false, true, address(_task));
+        emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), bytes4(0));
+        _task.execute();
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            2,
+            "Same empty bytes from settlement advance one offset"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 3e9, "Settlement failure rolls back all debt");
+    }
+
+    function _seedThreeUnhealthyBorrowers() private {
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _seedDebt(_BOB, 10e6, 1e9);
+        _seedDebt(_CAROL, 10e6, 1e9);
+        _price.setPrice(address(_asset), 1e16);
+        _task.setUnhealthyAssetCursor(address(_asset), 1);
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F609.
+    function test_givenExpiredPoisonedBook_givenNonzeroCursors_whenVisitsRepeat() public {
+        _seedPoisonedBook();
+        _mature();
+        _assertGoodDebtDrainsAroundPoison();
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F609.
+    function test_givenUnhealthyPoisonedBook_givenNonzeroCursors_whenVisitsRepeat() public {
+        _seedPoisonedBook();
+        _price.setPrice(address(_asset), 1e16);
+        _assertGoodDebtDrainsAroundPoison();
+    }
+
+    function _seedPoisonedBook() private {
+        for (uint256 i; i < 8; ++i) _seedDebt(address(uint160(0x30000 + i)), 10e6, 1e9);
+        (, uint64 poisonedId) = _floan.getPositionIdForMarketAndBorrowerAt(
+            _core.marketId(address(_asset)),
+            address(0x30003),
+            0
+        );
+        vm.mockCallRevert(
+            address(_floan),
+            abi.encodeCall(_floan.defaultPosition, (poisonedId)),
+            abi.encodeWithSelector(CanonicalReadFailed.selector)
+        );
+        _task.setScanLimits(3, 2);
+        _task.setExpiredAssetCursor(address(_asset), 1);
+        _task.setUnhealthyAssetCursor(address(_asset), 5);
+    }
+
+    function _assertGoodDebtDrainsAroundPoison() private {
+        uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        uint256 now_ = vm.getBlockTimestamp();
+        for (uint256 i; i < 64; ++i) _task.execute();
+        assertEq(
+            _inventory.activePrincipalOhm(),
+            2e9,
+            "A rejected tail can keep one good loan in a failing batch"
+        );
+        // Cursor setters and a one-result limit recover good debt without hidden retries.
+        _task.setScanLimits(3, 1);
+        _task.setExpiredAssetCursor(address(_asset), 0);
+        _task.setUnhealthyAssetCursor(address(_asset), 0);
+        for (uint256 i; i < 64 && _inventory.activePrincipalOhm() > 1e9; ++i) _task.execute();
+        assertEq(vm.getBlockTimestamp(), now_, "Drain cannot rely on further maturation");
+        for (uint256 i; i < 8; ++i) {
+            assertEq(
+                _lens.getPosition(address(_asset), address(uint160(0x30000 + i))).debtOhm,
+                i == 3 ? 1e9 : 0,
+                "Every good borrower before and after poisoned debt remains reachable"
+            );
+        }
+        uint32 market = _core.marketId(address(_asset));
+        assertEq(_floan.getActiveBorrowerCount(market), 1, "Only poisoned borrower stays active");
+        assertEq(_floan.getMarketPrincipalDue(market), 1e9, "Poisoned debt remains due");
+        assertEq(_floan.getMarketPrincipalDefaulted(market), 7e9, "Seven good loans default once");
+        assertEq(_inventory.activePrincipalOhm(), 1e9, "Inventory retains only poisoned principal");
+        assertEq(
+            _depositManager.getOperatorLiabilities(IERC20(address(_asset)), address(_core)),
+            10e6,
+            "Only poisoned collateral remains in custody"
+        );
+        // Seven 10e6 collateral positions settle with protocol reward zero.
+        assertEq(
+            _asset.balanceOf(_payout.treasury()) - treasuryBefore,
+            70e6,
+            "Exact Treasury proceeds"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F601.
+    function test_givenPersistentExpiredRejection_givenUnhealthyDebt_whenAssetVisitedAgain()
+        public
+    {
+        _mixedDebt();
+        _markMixedDebtUnderwater();
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), _one(_BOB), address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        _task.execute();
+        assertEq(
+            _inventory.activePrincipalOhm(),
+            3e9,
+            "Rejected expiry attempt settles no principal"
+        );
+        _task.execute();
+        _task.execute();
+        assertEq(
+            _lens.getPosition(address(_asset), _BOB).debtOhm,
+            1e9,
+            "Rejected expired debt remains pending"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _CAROL).debtOhm,
+            0,
+            "Unhealthy Carol receives a turn despite expired rejection"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _DAVE).debtOhm,
+            0,
+            "Unhealthy Dave receives a turn despite expired rejection"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 1e9, "Only the unseizable expired debt remains");
+        assertEq(
+            _floan.getMarketPrincipalDefaulted(_core.marketId(address(_asset))),
+            2e9,
+            "Only the two unhealthy loans default"
+        );
+        assertEq(
+            _asset.balanceOf(_payout.treasury()) - treasuryBefore,
+            20e6,
+            "Unhealthy settlement delivers actual collateral"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F602.
+    function test_givenExpiredBacklog_givenUnhealthyDebt_whenAssetVisitedAgain() public {
+        address thirdExpired = makeAddr("third expired borrower");
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _seedDebt(_BOB, 10e6, 1e9);
+        _seedDebt(thirdExpired, 10e6, 1e9);
+        _mature();
+        _seedDebt(_CAROL, 10e6, 1e9);
+        _seedDebt(_DAVE, 10e6, 1e9);
+        _markMixedDebtUnderwater();
+        _task.setScanLimits(500, 1);
+        _task.execute();
+        _task.execute();
+        _task.execute();
+        assertEq(
+            _lens.getPosition(address(_asset), _DAVE).debtOhm,
+            0,
+            "Unhealthy borrower settles before the expired backlog is exhausted"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _BOB).debtOhm,
+            1e9,
+            "Expired backlog is still nonempty"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), thirdExpired).debtOhm,
+            1e9,
+            "A second expired borrower is still pending"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 3e9, "Exactly one batch per visit settles");
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F602.
+    function test_givenExpiredPrefixAndTail_givenSingleCheckPages_whenVisitsRepeat() public {
+        address fifthExpired = makeAddr("fifth expired");
+        address sixthExpired = makeAddr("sixth expired");
+        address unhealthy = makeAddr("unhealthy between expired entries");
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _seedDebt(_BOB, 10e6, 1e9);
+        _seedDebt(_CAROL, 10e6, 1e9);
+        _seedDebt(_DAVE, 10e6, 1e9);
+        _seedDebt(fifthExpired, 10e6, 1e9);
+        _seedDebt(sixthExpired, 10e6, 1e9);
+        _mature();
+        _seedDebt(unhealthy, 10e6, 1e9);
+        _repay(_BOB, 1e9); // Swap the future borrower into index1, behind the expired prefix.
+        _price.setPrice(address(_asset), 1e16);
+        _task.setScanLimits(1, 1);
+        for (uint256 i; i < 4; ++i) {
+            _task.execute();
+            _task.execute();
+        }
+        assertEq(
+            _lens.getPosition(address(_asset), unhealthy).debtOhm,
+            0,
+            "Expired compaction cannot repeatedly erase unhealthy scan progress"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _CAROL).debtOhm,
+            1e9,
+            "Unhealthy loan settles while the expired backlog remains"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F605.
+    function test_givenExpiredBatchWithUnseizableTail_whenAdminRecoversCursor() public {
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _seedDebt(_BOB, 10e6, 1e9);
+        _mature();
+        address[] memory batch = new address[](2);
+        batch[0] = _ALICE;
+        batch[1] = _BOB;
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), batch, address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), _one(_BOB), address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        _task.execute();
+        assertEq(_inventory.activePrincipalOhm(), 2e9, "Rejected batch rolls back all principal");
+        assertEq(
+            _asset.balanceOf(_payout.treasury()),
+            treasuryBefore,
+            "Rejected batch transfers no collateral"
+        );
+        // Governance isolates the good prefix rather than adding an automatic retry.
+        _task.setScanLimits(2, 1);
+        _task.setExpiredAssetCursor(address(_asset), 0);
+        _task.setNextAssetIndex(0);
+        _task.execute();
+        assertEq(
+            _lens.getPosition(address(_asset), _ALICE).debtOhm,
+            0,
+            "Unseizable tail cannot roll back the good borrower's operator-selected singleton"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _BOB).debtOhm,
+            1e9,
+            "Rejected borrower's debt remains outstanding"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 1e9, "Only the successful singleton defaults");
+        assertEq(
+            _floan.getMarketPrincipalDefaulted(_core.marketId(address(_asset))),
+            1e9,
+            "Default accounting applies exactly once"
+        );
+        assertEq(
+            _asset.balanceOf(_payout.treasury()) - treasuryBefore,
+            10e6,
+            "Only settled collateral reaches Treasury"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F606.
+    function test_givenExpiredBatchWithUnseizablePrefix_whenAssetVisitedAgain() public {
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _seedDebt(_BOB, 10e6, 1e9);
+        _mature();
+        address[] memory batch = new address[](2);
+        batch[0] = _ALICE;
+        batch[1] = _BOB;
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), batch, address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), _one(_ALICE), address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        _task.execute();
+        assertEq(
+            _task.expiredAssetCursor(address(_asset)),
+            1,
+            "Rejected first position advances one"
+        );
+        _task.execute();
+        _task.execute();
+        assertEq(
+            _lens.getPosition(address(_asset), _BOB).debtOhm,
+            0,
+            "Subsequent eligible borrower remains reachable"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _ALICE).debtOhm,
+            1e9,
+            "Unseizable debt is retained for a later lap"
+        );
+        assertEq(
+            _inventory.activePrincipalOhm(),
+            1e9,
+            "Failed prefix does not prevent exact successful settlement"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F604, BLSEIZ-EXECUTE-F606.
+    function test_givenUnhealthyBatchWithUnseizablePrefix_whenAssetVisitedAgain() public {
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _seedDebt(_BOB, 10e6, 1e9);
+        _price.setPrice(address(_asset), 1e16);
+        address[] memory batch = new address[](2);
+        batch[0] = _ALICE;
+        batch[1] = _BOB;
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), batch, address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), _one(_ALICE), address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        _task.execute();
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "Rejected unhealthy singleton advances one offset"
+        );
+        assertEq(
+            _inventory.activePrincipalOhm(),
+            2e9,
+            "Rejected batch and singleton settle no debt"
+        );
+        _task.execute();
+        _task.execute();
+        assertEq(
+            _lens.getPosition(address(_asset), _BOB).debtOhm,
+            0,
+            "Unhealthy borrower behind the rejected position remains reachable"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _ALICE).debtOhm,
+            1e9,
+            "Failed unhealthy debt remains pending"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 1e9, "Only one unhealthy position settles");
+        assertEq(
+            _asset.balanceOf(_payout.treasury()) - treasuryBefore,
+            10e6,
+            "Successful unhealthy position delivers its collateral"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F605.
+    function test_givenUnhealthyBatchWithUnseizableTail_whenAdminRecoversCursor() public {
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _seedDebt(_BOB, 10e6, 1e9);
+        _price.setPrice(address(_asset), 1e16);
+        address[] memory batch = new address[](2);
+        batch[0] = _ALICE;
+        batch[1] = _BOB;
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), batch, address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeCall(_core.settleSeize, (address(_asset), _one(_BOB), address(_task))),
+            abi.encodeWithSelector(CustodyFailed.selector)
+        );
+        uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        _task.execute();
+        assertEq(_inventory.activePrincipalOhm(), 2e9, "Rejected batch rolls back all principal");
+        assertEq(
+            _asset.balanceOf(_payout.treasury()),
+            treasuryBefore,
+            "Rejected batch transfers no collateral"
+        );
+        // Governance isolates the good prefix rather than adding an automatic retry.
+        _task.setScanLimits(2, 1);
+        _task.setUnhealthyAssetCursor(address(_asset), 0);
+        _task.setNextAssetIndex(0);
+        _task.execute();
+        assertEq(
+            _lens.getPosition(address(_asset), _ALICE).debtOhm,
+            0,
+            "Good unhealthy prefix settles through singleton operator-selected singleton"
+        );
+        assertEq(
+            _lens.getPosition(address(_asset), _BOB).debtOhm,
+            1e9,
+            "Failed atomic batch does not settle its tail"
+        );
+        assertEq(
+            _inventory.activePrincipalOhm(),
+            1e9,
+            "Operator-selected singleton defaults one unhealthy loan exactly once"
+        );
+        assertEq(
+            _floan.getMarketPrincipalDefaulted(_core.marketId(address(_asset))),
+            1e9,
+            "Default ledger matches the operator-selected singleton loan"
+        );
+        assertEq(
+            _asset.balanceOf(_payout.treasury()) - treasuryBefore,
+            10e6,
+            "Operator-selected singleton pays only one loan's collateral"
+        );
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F607.
+    function test_givenUnhealthyDebt_givenRefreshRevertsWithArguments_whenSeized_reverts() public {
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _price.setPrice(address(_asset), 1e16);
+        bytes memory reason = abi.encodeWithSelector(
+            OracleObservationInvalid.selector,
+            address(_price),
+            int256(-1)
+        );
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeCall(_risk.refreshSnapshot, (address(_asset))),
+            reason
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeize.BurnerLoans_PriceSnapshotUnavailable.selector,
+                reason
+            )
+        );
+        vm.prank(address(_task));
+        _liquidation.seize(address(_asset), _one(_ALICE));
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F607.
+    function test_givenUnhealthyDebt_givenRefreshOnlyOutage_whenSeized_reverts() public {
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _price.setPrice(address(_asset), 1e16);
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeCall(_risk.refreshSnapshot, (address(_asset))),
+            abi.encodeWithSelector(OracleUnavailable.selector)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeize.BurnerLoans_PriceSnapshotUnavailable.selector,
+                abi.encodeWithSelector(OracleUnavailable.selector)
+            )
+        );
+        vm.prank(address(_task));
+        _liquidation.seize(address(_asset), _one(_ALICE));
+    }
+
+    // Scenarios: BLSEIZ-EXECUTE-F607.
+    function test_givenUnhealthyDebt_givenRefreshOnlyOutage_whenTaskExecuted() public {
+        _seedDebt(_ALICE, 10e6, 1e9);
+        _seedDebt(_BOB, 10e6, 1e9);
+        _price.setPrice(address(_asset), 1e16);
+        _task.setUnhealthyAssetCursor(address(_asset), 1);
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeCall(_risk.refreshSnapshot, (address(_asset))),
+            abi.encodeWithSelector(OracleUnavailable.selector)
+        );
+        _task.execute();
+        assertEq(
+            _task.unhealthyAssetCursor(address(_asset)),
+            1,
+            "View pricing succeeded but execution pricing failure cannot skip Bob"
+        );
+        assertEq(_inventory.activePrincipalOhm(), 2e9, "Refresh failure settles no debt");
+        vm.clearMockedCalls();
+        _task.execute();
+        _task.execute();
+        assertEq(
+            _lens.getPosition(address(_asset), _BOB).debtOhm,
+            0,
+            "Recovery revisits the preserved unhealthy position"
+        );
+    }
 
     function setUp() public override {
         super.setUp();
@@ -258,7 +764,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _mixedDebt();
         _setBothBorrowerCursors(address(_asset), 2);
         _repay(_CAROL, 1e9);
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         if (settlement_) {
             _liquidation.disable("");
             vm.expectEmit(true, false, false, true, address(_task));
@@ -273,8 +779,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _task.execute();
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
-            0,
-            "Authoritative count repair survives a caught service failure"
+            settlement_ ? 1 : 0,
+            "Repair survives scan failure; rejected singleton advances one"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -385,14 +891,14 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeWithSelector(IDiscoveryWithdrawal.withdraw.selector),
             abi.encodeWithSelector(CustodyFailed.selector)
         );
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), CustodyFailed.selector);
         _task.execute();
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
-            1,
-            "Failed redemption preserves retry cursor"
+            2,
+            "Failed redemption advances one saved offset"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -419,6 +925,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _outage(OracleFault.PriceReverts);
         _task.execute();
         _task.execute();
+        _task.execute();
+        _task.execute();
         _assertSettledExpired();
     }
 
@@ -434,7 +942,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
                 address(_risk)
             );
         _expectScanFailure(reason);
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         // Only the successful retry below may reach Seize; failed quotes must not call it.
         vm.expectCall(
             address(_liquidation),
@@ -469,15 +977,15 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _mixedDebt();
         _outage(OracleFault.PriceReverts);
         _liquidation.disable("");
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), IEnabler.NotEnabled.selector);
         _task.execute();
         assertEq(_inventory.activePrincipalOhm(), 3e9, "Paused Seize retains all debt");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
-            0,
-            "Paused Seize cannot advance settlement progress"
+            1,
+            "Rejected singleton advances without settling debt"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -496,7 +1004,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _outage(OracleFault.PriceReverts);
         if (active_) _core.disable("");
         else _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(
             address(_asset),
@@ -510,8 +1018,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
-            0,
-            "Core admission failure preserves cursor"
+            1,
+            "Non-price admission failure advances one offset"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -561,7 +1069,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeWithSelector(CustodyFailed.selector)
         );
         _expectScanFailure(abi.encodeWithSelector(CustodyFailed.selector));
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         // Only the successful retry below may reach Seize; failed quotes must not call it.
         vm.expectCall(
             address(_liquidation),
@@ -828,7 +1336,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _outage(OracleFault.PriceReverts);
         if (!enabled_) _liquidation.disable("");
         _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(
             address(_asset),
@@ -837,8 +1345,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _task.execute();
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
-            0,
-            "Inactive Seize preserves retry cursor"
+            1,
+            "Inactive Seize rejection advances one saved offset"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -1071,7 +1579,12 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             OracleFault(bound(fault_, 0, uint8(OracleFault.CacheReverts)))
         );
         _setBothBorrowerCursors(address(_asset), bound(start_, 0, 2));
-        vm.expectRevert(reason);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansSeize.BurnerLoans_PriceSnapshotUnavailable.selector,
+                reason
+            )
+        );
         vm.prank(address(_task));
         _liquidation.seize(address(_asset), _one(_DAVE));
         _settleExpiredWithoutSeizingUnderwater();
@@ -1265,8 +1778,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _task.execute();
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
-            1,
-            "Rejected expiry batch preserves its retry offset"
+            2,
+            "Rejected expiry position advances one offset"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -1275,9 +1788,31 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         assertEq(_inventory.activePrincipalOhm(), 3e9, "Rejected expiry batch settles no debt");
         _restoreOracleReads();
-        _task.execute(); // B turn.
-        _settleExpiredWithoutSeizingUnderwater();
-        _drainRecoveredUnderwater(3e9);
+        _assertUnexpiredUnderwater(_CAROL);
+        _assertUnexpiredUnderwater(_DAVE);
+        uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        for (uint256 i; i < 5; ++i) {
+            _task.execute();
+            _task.execute();
+        }
+        assertEq(
+            _lens.getPosition(address(_asset), _BOB).debtOhm,
+            0,
+            "Expired debt remains reachable"
+        );
+        assertEq(_lens.getPosition(address(_asset), _CAROL).debtOhm, 0, "Carol is not starved");
+        assertEq(_lens.getPosition(address(_asset), _DAVE).debtOhm, 0, "Dave is not skipped");
+        assertEq(_inventory.activePrincipalOhm(), 0, "Both lanes drain eligible principal");
+        assertEq(
+            _floan.getMarketPrincipalDefaulted(_core.marketId(address(_asset))),
+            3e9,
+            "Every default occurs once"
+        );
+        assertEq(
+            _asset.balanceOf(_payout.treasury()) - treasuryBefore,
+            30e6,
+            "Recovered collateral reaches Treasury"
+        );
     }
 
     // Scenarios: BLSEIZ-EXECUTE-P28.
@@ -1351,8 +1886,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
-            1,
-            "Expected independent unhealthy scan or retry offset"
+            3,
+            "Settlement preserves the saved unhealthy offset until next visit's repair"
         );
         assertEq(
             _inventory.activePrincipalOhm(),
@@ -1558,7 +2093,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _mixedDebt();
         _risk.disable("");
         _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         _expectScanFailure(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -1600,7 +2135,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _outage(OracleFault.PriceReverts);
         _core.disable("");
         _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
-        _expectNoPricedScan();
+        _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(
             address(_asset),
@@ -1609,8 +2144,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _task.execute();
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
-            0,
-            "Inactive paused Core retains retry start"
+            1,
+            "Inactive Core rejection advances one offset"
         );
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -1785,6 +2320,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     }
 
     function _expectNoPricedScan() internal {
+        _expectPricedScans(0);
+    }
+
+    function _expectPricedScans(uint64 calls_) private {
         vm.expectCall(
             address(_lens),
             abi.encodeWithSelector(
@@ -1792,7 +2331,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
                 address(_task),
                 address(_asset)
             ),
-            uint64(0)
+            calls_
         );
     }
 

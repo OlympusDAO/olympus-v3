@@ -45,6 +45,8 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     ///      - Required prices are unavailable or custody is insolvent.
     ///      - A positive keeper reward names zero or the selected Payout as its recipient.
     ///      - Core’s atomic default, redemption, receipt validation or payout credit fails.
+    ///      Refresh failures are wrapped once with the full original revert bytes. Task catches
+    ///      this error without rethrowing; its failure event records only the error category.
     function seize(
         address asset_,
         address[] calldata borrowers_
@@ -55,7 +57,17 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
         bool allExpired = _validateBorrowersAndDebt(asset_, borrowers_);
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
         IBurnerLoansRisk.PriceSnapshot memory snapshot;
-        if (_requiresSnapshot(msg.sender, allExpired)) snapshot = evaluator.refreshSnapshot(asset_);
+        if (_requiresSnapshot(msg.sender, allExpired)) {
+            try evaluator.refreshSnapshot(asset_) returns (
+                IBurnerLoansRisk.PriceSnapshot memory fresh
+            ) {
+                snapshot = fresh;
+            } catch (bytes memory reason) {
+                // Task must retain its cursor for this refresh failure but advance on later settlement
+                // failures. Tag the failing call; an arbitrary raw selector cannot identify its stage.
+                revert BurnerLoans_PriceSnapshotUnavailable(reason);
+            }
+        }
         // Admit the complete batch before the first default. One ineligible borrower rejects the
         // entire request instead of leaving the keeper with a partially executed selection.
         _validatePositions(evaluator, snapshot, asset_, borrowers_);
@@ -69,6 +81,7 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
 
     /// @notice Advertises this public action interface and the inherited lifecycle interface.
     /// @dev Pure interface identifiers or inherited lifecycle identifiers only; no dependency calls.
+    ///      Does not intentionally revert.
     /// @param id_ Canonical interface or position identifier.
     /// @return bool Whether the interface identifier is supported.
     function supportsInterface(bytes4 id_) public view override returns (bool) {
@@ -170,7 +183,10 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     }
 
     /// @notice Validates borrower identities and principal before any pricing decision.
-    /// @dev Reverts for zero/duplicate borrowers or any position without debt.
+    /// @dev Reverts if:
+    ///      - A borrower is zero or duplicated.
+    ///      - A selected position has no debt.
+    ///      - Reading the Core market/FLOAN binding or a canonical position fails.
     /// @param asset_ Underlying collateral token identifying the market.
     /// @param borrowers_ Complete selected borrower list.
     /// @return allExpired Whether every selected debt episode has matured.
@@ -198,6 +214,8 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
     }
 
     /// @notice Reports whether health or keeper rewards need a price snapshot.
+    /// @dev Reverts if:
+    ///      - Reading keeper roles fails when the selection is entirely expired.
     /// @param actor_ Keeper whose roles determine reward eligibility.
     /// @param allExpired_ Whether the validated selection contains only matured debt.
     /// @return bool Whether the priced path is required.
@@ -211,7 +229,7 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
 
     /// @notice Rechecks the direct funding/default service before enabling this action.
     /// @dev Reverts if:
-    ///      - The shared activation checks or Inventory readiness fails.
+    ///      - The shared activation checks, Inventory readiness or Payout readiness fails.
     function _validateActivation() internal view override {
         super._validateActivation();
         _requireInventoryOperational();

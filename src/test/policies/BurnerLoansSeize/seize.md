@@ -1,6 +1,6 @@
 # BurnerLoansSeize.seize coverage plan
 
-Source: [seize](../../../policies/burnerloans/BurnerLoansSeize.sol#L48). Coverage mappings below identify the implemented Foundry proofs.
+Source: [seize](../../../policies/burnerloans/BurnerLoansSeize.sol#L50). Coverage mappings below identify the implemented Foundry proofs.
 
 Coverage records implemented domains and assertions independently of execution results. `Partial` identifies missing proof, not a production failure. New required behavior remains `Unmapped` until corresponding tests assert it.
 
@@ -77,7 +77,7 @@ Fixed for this table: Accounting / events: Unchanged; no committed logs.
 | BLLIQ-SEIZE-I01 | Fuzz keeper | Batch length=0 | `BurnerLoans_InvalidBatch()` | Same BurnerLoans_InvalidBatch() with all earlier preview checks satisfied; assert no writes | Covered: [test_whenBatchEmpty_reverts][test_whenBatchEmpty_reverts] |
 | BLLIQ-SEIZE-I02 | Fuzz keeper | Batch length fuzz51..256, containing zero addresses; seed51 | `BurnerLoans_ZeroAddress()` | Same zero-address error after removing the former length ceiling; assert no writes | Covered: [test_whenLargeBatchContainsZeroBorrower_reverts][test_whenLargeBatchContainsZeroBorrower_reverts], [test_whenBatchFiftyOneContainsZeroBorrower_reverts][test_whenBatchFiftyOneContainsZeroBorrower_reverts] |
 | BLLIQ-SEIZE-I03 | Fuzz keeper | One zero borrower; seed first/middle/last position | `BurnerLoans_ZeroAddress()` | Same BurnerLoans_ZeroAddress() with all earlier preview checks satisfied; assert no writes | Covered: [test_whenBorrowerZero_reverts][test_whenBorrowerZero_reverts], [test_givenZeroBorrowerAtAnyIndex_whenSeized_reverts][test_givenZeroBorrowerAtAnyIndex_whenSeized_reverts], [test_whenZeroBorrowerAtFirstMiddleAndLast_reverts][test_whenZeroBorrowerAtFirstMiddleAndLast_reverts] |
-| BLLIQ-SEIZE-I04 | Ordinary keeper with nonzero configured reward | Snapshot invalid; all loans expired | `BurnerLoans_InvalidPrice()` | Expiry establishes eligibility, but reward calculation must retain backing protection; same pricing error and no writes | Covered: [test_givenMaturedDebt_givenOrdinaryKeeper_givenRealPriceStale_whenSeized_reverts][test_givenMaturedDebt_givenOrdinaryKeeper_givenRealPriceStale_whenSeized_reverts] |
+| BLLIQ-SEIZE-I04 | Ordinary keeper with nonzero configured reward | Snapshot invalid; all loans expired | `BurnerLoans_PriceSnapshotUnavailable(abi.encodeWithSelector(InvalidPrice.selector))` | Expiry establishes eligibility, but reward calculation must retain backing protection; preview retains InvalidPrice; execution tags the refresh failure; no writes | Covered: [test_givenMaturedDebt_givenOrdinaryKeeper_givenRealPriceStale_whenSeized_reverts][test_givenMaturedDebt_givenOrdinaryKeeper_givenRealPriceStale_whenSeized_reverts] |
 
 ## Successful execution
 
@@ -152,10 +152,6 @@ the campaign; empty balances or unavailable modeled inputs may skip an operation
 Action unit tests use mock Risk for snapshot, fee, health and reward responses used by this function. Assert exact method arguments and call counts, actual Core/FLOAN state and returned configured values; do not duplicate Risk arithmetic in action assertions. Debt-free or full-repayment price-free paths configure the mock to reject unexpected pricing calls. Risk’s suite independently proves math and rounding.
 
 Current Risk applies to existing positions; role change changes reward. Core emits Seized and SeizureBatchSettled, not action. Liquidation.previewSeizeFor rejects an ineligible batch with the same validation error as seizure; compare equivalent snapshots/states and preserve validation order. A propagated collateral-token callback failure must roll back defaults and payout credits.
-
-- [x] Review these expectations.
-- [x] Implement named Foundry tests and boundary seed drivers.
-- [x] Map each row to passing tests.
 
 ## Legacy regression cases to retain
 
@@ -258,7 +254,7 @@ position must not read health after the outage. Test exact maturity and one seco
 In mixed rows, the maturity of each unhealthy position is stated explicitly.
 
 Each outage row below applies independently to each fault in this input domain. Other dependencies
-remain ready. E denotes the exact error in the last column.
+remain ready. E denotes the exact underlying error below. Execution price refresh failure is reported as W(E) = BurnerLoans_PriceSnapshotUnavailable(E); previews retain E.
 
 | Fault | PRICE | PriceCache | Backing oracle | E |
 | --- | --- | --- | --- | --- |
@@ -282,12 +278,12 @@ exception described above does not apply to mixed batches containing unexpired d
 
 | ID | Caller | Selected position mix | Pricing availability / required reads | Execution | Preview | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLLIQ-SEIZE-D13 | Ordinary | All expired and healthy | OUTAGE: each fault above | Revert E for the priced reward path | Revert E; no writes | Covered: [test_givenExpiredHealthyOrdinaryDebt_givenOracleOutage_reverts][test_givenExpiredHealthyOrdinaryDebt_givenOracleOutage_reverts], [zero reward configuration][test_givenExpiredOrdinaryDebt_givenZeroRewardConfig_givenOracleOutage_reverts] |
+| BLLIQ-SEIZE-D13 | Ordinary | All expired and healthy | OUTAGE: each fault above | Revert W(E) for the priced reward path | Revert E; no writes | Covered: [test_givenExpiredHealthyOrdinaryDebt_givenOracleOutage_reverts][test_givenExpiredHealthyOrdinaryDebt_givenOracleOutage_reverts], [zero reward configuration][test_givenExpiredOrdinaryDebt_givenZeroRewardConfig_givenOracleOutage_reverts] |
 | BLLIQ-SEIZE-D14 | Protocol; each exclusive role and their overlap | All expired and healthy | OUTAGE: each fault above | Protocol success without prices | Successful zero-reward quote without prices | Covered: [test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenSeized][test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenSeized], [test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenSeized][test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenSeized], [test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenSeized][test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenSeized], [test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenSeized][test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenSeized], [test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenSeized][test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenSeized], [test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenPreviewed][test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenPreviewed], [test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenPreviewed][test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenPreviewed], [test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenPreviewed][test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenPreviewed], [test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenPreviewed][test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenPreviewed], [test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenPreviewed][test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenPreviewed] |
-| BLLIQ-SEIZE-D24 | Ordinary or protocol | All unexpired and unhealthy | OUTAGE: each fault above | Revert E: health eligibility requires prices | Revert E; no writes | Covered: [test_givenUnexpiredUnhealthyDebt_givenOracleOutage_reverts][test_givenUnexpiredUnhealthyDebt_givenOracleOutage_reverts] |
-| BLLIQ-SEIZE-D25 | Ordinary or protocol | Expired healthy positions plus unexpired unhealthy positions | OUTAGE: each fault above | Entire explicit batch reverts E; no partial default of the expired subset | Revert E for the entire quote | Covered: [test_givenMixedMaturityDebt_givenOracleOutage_reverts][test_givenMixedMaturityDebt_givenOracleOutage_reverts], [test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredSelected][test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredSelected], [test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredPreviewed][test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredPreviewed] |
+| BLLIQ-SEIZE-D24 | Ordinary or protocol | All unexpired and unhealthy | OUTAGE: each fault above | Revert W(E): health eligibility requires prices | Revert E; no writes | Covered: [test_givenUnexpiredUnhealthyDebt_givenOracleOutage_reverts][test_givenUnexpiredUnhealthyDebt_givenOracleOutage_reverts] |
+| BLLIQ-SEIZE-D25 | Ordinary or protocol | Expired healthy positions plus unexpired unhealthy positions | OUTAGE: each fault above | Entire explicit batch reverts W(E); no partial default of the expired subset | Revert E for the entire quote | Covered: [test_givenMixedMaturityDebt_givenOracleOutage_reverts][test_givenMixedMaturityDebt_givenOracleOutage_reverts], [test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredSelected][test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredSelected], [test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredPreviewed][test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredPreviewed] |
 | BLLIQ-SEIZE-D26 | Protocol; each exclusive role and their overlap | Expired healthy positions plus expired unhealthy positions; none unexpired | OUTAGE: each fault above | Protocol success: maturity qualifies every position independently of health | Successful zero-reward quote without prices | Covered: [test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenSeized][test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenSeized], [test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenSeized][test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenSeized], [test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenSeized][test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenSeized], [test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenSeized][test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenSeized], [test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenSeized][test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenSeized], [test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenPreviewed][test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenPreviewed], [test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenPreviewed][test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenPreviewed], [test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenPreviewed][test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenPreviewed], [test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenPreviewed][test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenPreviewed], [test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenPreviewed][test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenPreviewed] |
-| BLLIQ-SEIZE-D27 | Ordinary | Expired healthy positions plus expired unhealthy positions; none unexpired | OUTAGE: each fault above | Revert E for the priced reward path | Revert E; no writes | Covered: [test_givenExpiredMixedHealthOrdinaryDebt_givenOracleOutage_reverts][test_givenExpiredMixedHealthOrdinaryDebt_givenOracleOutage_reverts] |
+| BLLIQ-SEIZE-D27 | Ordinary | Expired healthy positions plus expired unhealthy positions; none unexpired | OUTAGE: each fault above | Revert W(E) for the priced reward path | Revert E; no writes | Covered: [test_givenExpiredMixedHealthOrdinaryDebt_givenOracleOutage_reverts][test_givenExpiredMixedHealthOrdinaryDebt_givenOracleOutage_reverts] |
 | BLLIQ-SEIZE-P21 | Ordinary | All expired and unhealthy, below required backing | NO OUTAGE: PRICE/cache/backing operational; principal=100e9 OHM, collateral=2000e6 assets, asset=$1, OHM=$25, backing=$20, multiplier=12500 BPS, maxLTV=8500 BPS | Required backing=2500e6 > collateral; default succeeds, reward=0, Treasury=2000e6 | Same zero reward and complete Treasury allocation, using available prices/backing | Covered: [test_givenMaturedDebt_givenOrdinaryKeeper_givenCollateralBelowBacking_whenSeized][test_givenMaturedDebt_givenOrdinaryKeeper_givenCollateralBelowBacking_whenSeized] |
 | BLLIQ-SEIZE-P22 | Protocol | Expired healthy positions plus unexpired unhealthy positions | NO OUTAGE: PRICE/cache/backing operational; snapshot and health reads required | Success using prices to verify unexpired health; zero reward | Same allocation and eligibility; no writes | Covered: [test_givenMixedMaturityProtocolDebt_givenOperationalOracles][test_givenMixedMaturityProtocolDebt_givenOperationalOracles] |
 | BLLIQ-SEIZE-P23 | Ordinary | Expired healthy positions plus unexpired unhealthy positions | NO OUTAGE: PRICE/cache/backing operational; health and reward pricing required | Success using prices to verify unexpired health; reward retains the backing-surplus cap | Same capped reward/Treasury allocation; no writes | Covered: [test_givenMixedMaturityOrdinaryDebt_givenOperationalOracles][test_givenMixedMaturityOrdinaryDebt_givenOperationalOracles] |
@@ -309,17 +305,17 @@ ordinary execution still requires prices and protocol all-expired selections rec
 [test_givenActionKernelGetterReverts_whenSeized_thenGetterIsNotRead]: seize.t.sol#L401
 [test_givenActionReEnabled_whenSeized_thenDefaultSucceeds]: seize.t.sol#L535
 [test_givenActionReactivated_whenSeized_thenDefaultSucceeds]: seize.t.sol#L542
-[test_givenMaturedDebt_givenOrdinaryKeeper_givenRealPriceStale_whenSeized_reverts]: seizeIntegration.t.sol#L76
+[test_givenMaturedDebt_givenOrdinaryKeeper_givenRealPriceStale_whenSeized_reverts]: seizeIntegration.t.sol#L77
 [test_givenBothPayoutsFail_whenSeized_thenBothRemainPending]: seizePayout.t.sol#L33
 [test_givenCoreUnavailable_whenSeized_thenDependencyIdentified]: seize.t.sol#L472
 [test_givenCustodyCreditFailure_whenSeized_thenEverythingRollsBack]: seizeSettlement.t.sol#L78
-[test_givenDefaultedPosition_whenBorrowerReopens_thenPositionIdReused]: seizeIntegration.t.sol#L165
+[test_givenDefaultedPosition_whenBorrowerReopens_thenPositionIdReused]: seizeIntegration.t.sol#L171
 [test_givenDepositManagerInactive_whenSeizedOrPreviewed_reverts]: seize.t.sol#L28
 [test_givenDepositManagerPaused_whenSeizedOrPreviewed_reverts]: seize.t.sol#L49
 [test_givenDepositPeriodDisabled_whenSeized_thenExitRemainsAvailable]: seize.t.sol#L43
 [test_givenDisabledActionAndEveryCoreState_whenSeized_thenLocalPauseWins]: seize.t.sol#L549
 [test_givenDisabledAction_whenSeized_thenLocalPauseWins]: seize.t.sol#L461
-[test_givenEachProtocolRole_whenSeized_thenNoReward]: seizeIntegration.t.sol#L107
+[test_givenEachProtocolRole_whenSeized_thenNoReward]: seizeIntegration.t.sol#L113
 [test_givenEachUnavailableInventoryState_whenSeized_thenDependencyIdentified]: seize.t.sol#L597
 [test_givenEachUnavailablePayoutState_whenSeized_thenDependencyIdentified]: seize.t.sol#L525
 [test_givenEveryUnavailableCoreState_whenSeized_thenDependencyIdentified]: seize.t.sol#L587
@@ -338,27 +334,27 @@ ordinary execution still requires prices and protocol all-expired selections rec
 [test_givenKeeperPayoutFails_whenSeized_thenOnlyKeeperRemainsPending]: seizePayout.t.sol#L21
 [test_givenLateInventoryFailure_whenSeized_thenAllAccountingRollsBack]: seizeSettlement.t.sol#L38
 [test_givenOldCustodySurplus_whenNewReceiptShort_thenSurplusCannotMaskIt]: seizeSettlement.t.sol#L60
-[test_givenOriginationsDisabled_whenSeized_thenDefaultStillSucceeds]: seizeIntegration.t.sol#L193
+[test_givenOriginationsDisabled_whenSeized_thenDefaultStillSucceeds]: seizeIntegration.t.sol#L199
 [test_givenPayoutReportsAnotherKernel_whenSeizedOrPreviewed_reverts]: seize.t.sol#L489
 [test_givenPayoutUnavailable_whenSeizedOrPreviewed_reverts]: seize.t.sol#L507
 [test_givenPositiveCreditAndZeroShareOutput_whenSeized_thenNoPayout]: seizeSharesIntegration.t.sol#L49
 [test_givenPropagatedCollateralCallback_whenSeized_thenMandatoryTransferRollsBack]: seizeCallback.t.sol#L72
-[test_givenProtocolKeeper_whenSeized_thenNoReward]: seizeIntegration.t.sol#L47
-[test_givenRealUnhealthyUnexpiredDebt_whenSeized_thenHealthAndBalancesMatch]: seizeIntegration.t.sol#L201
-[test_givenRedemptionFeeConsumesSurplus_whenSeized_thenKeeperCannotTakeBacking]: seizeIntegration.t.sol#L122
+[test_givenProtocolKeeper_whenSeized_thenNoReward]: seizeIntegration.t.sol#L48
+[test_givenRealUnhealthyUnexpiredDebt_whenSeized_thenHealthAndBalancesMatch]: seizeIntegration.t.sol#L207
+[test_givenRedemptionFeeConsumesSurplus_whenSeized_thenKeeperCannotTakeBacking]: seizeIntegration.t.sol#L128
 [test_givenReportedKernelMismatch_whenAnyKeeperSeizes]: seize.t.sol#L412
 [test_givenReportedKernelMismatch_whenSeized_thenGetterIsNotRead]: seize.t.sol#L390
 [test_givenRiskRewardExceedsOutput_whenSeized_reverts]: seizeSettlement.t.sol#L24
 [test_givenSettlementRoleRevoked_whenSeized_reverts]: seize.t.sol#L380
 [test_givenSubShareReward_whenSharesSeized_thenWholeShareToTreasury]: seizeSharesIntegration.t.sol#L40
-[test_givenSubUnitPercentageRemainder_whenSeized_thenIntegerConservation]: seizeIntegration.t.sol#L38
-[test_givenSubUnitReward_whenUnderlyingSeized_thenZeroReward]: seizeIntegration.t.sol#L29
+[test_givenSubUnitPercentageRemainder_whenSeized_thenIntegerConservation]: seizeIntegration.t.sol#L39
+[test_givenSubUnitReward_whenUnderlyingSeized_thenZeroReward]: seizeIntegration.t.sol#L30
 [test_givenTreasuryPayoutFails_whenSeized_thenOnlyTreasuryRemainsPending]: seizePayout.t.sol#L27
 [test_givenUnexpectedRedemptionToken_whenSeized_thenDefaultRollsBack]: seizeSettlement.t.sol#L48
 [test_givenUnexpiredDebt_whenHealthBelowThreshold_thenSeizes]: seize.t.sol#L296
 [test_givenUnhealthyDebt_whenSeized_thenDefaultAndPayoutConserveOutput]: seize.t.sol#L110
 [test_givenZeroBorrowerAtAnyIndex_whenSeized_reverts]: seize.t.sol#L271
-[test_givenZeroCollateralDebt_whenSeized_thenDebtDefaultsWithoutRedemption]: seizeIntegration.t.sol#L147
+[test_givenZeroCollateralDebt_whenSeized_thenDebtDefaultsWithoutRedemption]: seizeIntegration.t.sol#L153
 [test_givenZeroReward_whenKeeperDestinationUnused]: seizePayout.t.sol#L155
 [test_whenAdjacentDuplicate_reverts]: seize.t.sol#L160
 [test_whenBatchEmpty_reverts]: seize.t.sol#L129
@@ -380,37 +376,37 @@ ordinary execution still requires prices and protocol all-expired selections rec
 [test_whenZeroAddressKeeperSeizes_reverts]: seizePayout.t.sol#L123
 [test_whenZeroBorrowerAtFirstMiddleAndLast_reverts]: seize.t.sol#L340
 
-[test_givenExpiredHealthyOrdinaryDebt_givenOracleOutage_reverts]: seizeIntegration.t.sol#L272
-[test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenSeized]: seizeIntegration.t.sol#L305
-[test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenSeized]: seizeIntegration.t.sol#L319
-[test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenSeized]: seizeIntegration.t.sol#L333
-[test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenSeized]: seizeIntegration.t.sol#L347
-[test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenSeized]: seizeIntegration.t.sol#L361
-[test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenPreviewed]: seizeIntegration.t.sol#L375
-[test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenPreviewed]: seizeIntegration.t.sol#L389
-[test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenPreviewed]: seizeIntegration.t.sol#L403
-[test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenPreviewed]: seizeIntegration.t.sol#L417
-[test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenPreviewed]: seizeIntegration.t.sol#L431
-[test_givenUnexpiredUnhealthyDebt_givenOracleOutage_reverts]: seizeIntegration.t.sol#L445
-[test_givenMixedMaturityDebt_givenOracleOutage_reverts]: seizeIntegration.t.sol#L466
-[test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredSelected]: seizeIntegration.t.sol#L670
-[test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredPreviewed]: seizeIntegration.t.sol#L752
-[test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenSeized]: seizeIntegration.t.sol#L500
-[test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenSeized]: seizeIntegration.t.sol#L517
-[test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenSeized]: seizeIntegration.t.sol#L534
-[test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenSeized]: seizeIntegration.t.sol#L551
-[test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenSeized]: seizeIntegration.t.sol#L568
-[test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenPreviewed]: seizeIntegration.t.sol#L585
-[test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenPreviewed]: seizeIntegration.t.sol#L602
-[test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenPreviewed]: seizeIntegration.t.sol#L619
-[test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenPreviewed]: seizeIntegration.t.sol#L636
-[test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenPreviewed]: seizeIntegration.t.sol#L653
-[test_givenExpiredMixedHealthOrdinaryDebt_givenOracleOutage_reverts]: seizeIntegration.t.sol#L484
-[test_givenMaturedDebt_givenOrdinaryKeeper_givenCollateralBelowBacking_whenSeized]: seizeIntegration.t.sol#L789
-[test_givenMixedMaturityProtocolDebt_givenOperationalOracles]: seizeIntegration.t.sol#L804
-[test_givenMixedMaturityOrdinaryDebt_givenOperationalOracles]: seizeIntegration.t.sol#L821
+[test_givenExpiredHealthyOrdinaryDebt_givenOracleOutage_reverts]: seizeIntegration.t.sol#L278
+[test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenSeized]: seizeIntegration.t.sol#L311
+[test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenSeized]: seizeIntegration.t.sol#L325
+[test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenSeized]: seizeIntegration.t.sol#L339
+[test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenSeized]: seizeIntegration.t.sol#L353
+[test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenSeized]: seizeIntegration.t.sol#L367
+[test_givenExpiredHealthyProtocolDebt_givenPriceReverts_whenPreviewed]: seizeIntegration.t.sol#L381
+[test_givenExpiredHealthyProtocolDebt_givenCacheReverts_whenPreviewed]: seizeIntegration.t.sol#L395
+[test_givenExpiredHealthyProtocolDebt_givenBackingReverts_whenPreviewed]: seizeIntegration.t.sol#L409
+[test_givenExpiredHealthyProtocolDebt_givenBackingPaused_whenPreviewed]: seizeIntegration.t.sol#L423
+[test_givenExpiredHealthyProtocolDebt_givenPriceStale_whenPreviewed]: seizeIntegration.t.sol#L437
+[test_givenUnexpiredUnhealthyDebt_givenOracleOutage_reverts]: seizeIntegration.t.sol#L451
+[test_givenMixedMaturityDebt_givenOracleOutage_reverts]: seizeIntegration.t.sol#L472
+[test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredSelected]: seizeIntegration.t.sol#L676
+[test_givenMixedMaturityProtocolDebt_givenOracleOutage_whenOnlyExpiredPreviewed]: seizeIntegration.t.sol#L758
+[test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenSeized]: seizeIntegration.t.sol#L506
+[test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenSeized]: seizeIntegration.t.sol#L523
+[test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenSeized]: seizeIntegration.t.sol#L540
+[test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenSeized]: seizeIntegration.t.sol#L557
+[test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenSeized]: seizeIntegration.t.sol#L574
+[test_givenExpiredMixedHealthProtocolDebt_givenPriceReverts_whenPreviewed]: seizeIntegration.t.sol#L591
+[test_givenExpiredMixedHealthProtocolDebt_givenCacheReverts_whenPreviewed]: seizeIntegration.t.sol#L608
+[test_givenExpiredMixedHealthProtocolDebt_givenBackingReverts_whenPreviewed]: seizeIntegration.t.sol#L625
+[test_givenExpiredMixedHealthProtocolDebt_givenBackingPaused_whenPreviewed]: seizeIntegration.t.sol#L642
+[test_givenExpiredMixedHealthProtocolDebt_givenPriceStale_whenPreviewed]: seizeIntegration.t.sol#L659
+[test_givenExpiredMixedHealthOrdinaryDebt_givenOracleOutage_reverts]: seizeIntegration.t.sol#L490
+[test_givenMaturedDebt_givenOrdinaryKeeper_givenCollateralBelowBacking_whenSeized]: seizeIntegration.t.sol#L795
+[test_givenMixedMaturityProtocolDebt_givenOperationalOracles]: seizeIntegration.t.sol#L810
+[test_givenMixedMaturityOrdinaryDebt_givenOperationalOracles]: seizeIntegration.t.sol#L827
 
-[test_givenDebtFreeBorrower_givenReadyOracles_whenSeizedOrPreviewed_reverts]: seizeIntegration.t.sol#L253
-[test_givenDebtFreeBorrower_givenOracleOutage_whenSeizedOrPreviewed_reverts]: seizeIntegration.t.sol#L231
+[test_givenDebtFreeBorrower_givenReadyOracles_whenSeizedOrPreviewed_reverts]: seizeIntegration.t.sol#L259
+[test_givenDebtFreeBorrower_givenOracleOutage_whenSeizedOrPreviewed_reverts]: seizeIntegration.t.sol#L237
 
-[test_givenExpiredOrdinaryDebt_givenZeroRewardConfig_givenOracleOutage_reverts]: seizeIntegration.t.sol#L282
+[test_givenExpiredOrdinaryDebt_givenZeroRewardConfig_givenOracleOutage_reverts]: seizeIntegration.t.sol#L288

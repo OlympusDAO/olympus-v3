@@ -7,6 +7,7 @@ import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
 
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
@@ -459,11 +460,31 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
     }
 
     function _assertOracleFailure(address[] memory borrowers_, bytes memory reason_) internal {
+        // Execution identifies the refresh stage; the view keeps its original dependency error.
+        _assertSeizureRejection(
+            borrowers_,
+            reason_,
+            abi.encodeWithSelector(
+                IBurnerLoansSeize.BurnerLoans_PriceSnapshotUnavailable.selector,
+                reason_
+            )
+        );
+    }
+
+    function _assertAdmissionFailure(address[] memory borrowers_, bytes memory reason_) internal {
+        _assertSeizureRejection(borrowers_, reason_, reason_);
+    }
+
+    function _assertSeizureRejection(
+        address[] memory borrowers_,
+        bytes memory previewReason_,
+        bytes memory executionReason_
+    ) private {
         bytes32 beforeState = _oracleBatchDigest(borrowers_);
-        vm.expectRevert(reason_);
+        vm.expectRevert(previewReason_);
         _liquidation.previewSeizeFor(_keeper, address(_asset), borrowers_);
         assertEq(_oracleBatchDigest(borrowers_), beforeState, "Rejected quote preserves state");
-        vm.expectRevert(reason_);
+        vm.expectRevert(executionReason_);
         vm.prank(_keeper);
         _liquidation.seize(address(_asset), borrowers_);
         assertEq(

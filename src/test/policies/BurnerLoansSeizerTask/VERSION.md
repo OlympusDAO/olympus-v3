@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.VERSION coverage plan
 
-Source: [VERSION](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L140). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [VERSION](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L148). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -21,10 +21,6 @@ Fixed for this table: Accounting / events: No effects.
 ## Shared assertions
 
 Assert both returned components directly: major=1 and minor=0. No dependency read, lifecycle change, event or token effect occurs.
-
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
 
 ## Existing tests informing this plan
 

@@ -102,9 +102,6 @@ Use the base integration fixture, except the selected-Risk mock replacement case
 
 These are fixture/arithmetic precedents, not Covered mappings for this API. Keep fixed expected integers and update only mappings once tests prove the scenarios.
 
-- [x] Review these expectations.
-- [x] Implement focused tests and update Test mappings.
-
 [test_givenActiveDisabledCore_whenQueried]: ./positionHealthFactor.t.sol#L29
 [test_givenActiveEnabledCore_whenQueried]: ./positionHealthFactor.t.sol#L22
 [test_givenArbitrary_whenHealthForwarded]: ./positionHealthFactor.t.sol#L141

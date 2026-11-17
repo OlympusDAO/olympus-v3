@@ -231,30 +231,59 @@ Payout validates token code and destination restrictions, including zero, itself
 SeizerTask binds Lens and Seize directly. They must report the same Core, and Seize must belong to the task's Kernel. The bound Lens must advertise the current IBurnerLoansLens interface, including both discovery methods. Adding an asset requires a configured market. The task visits one managed asset per `execute()` call, then rotates to the next asset even if that visit fails.
 
 The task keeps `expiredAssetCursor` and `unhealthyAssetCursor` for each asset. Both index the
-shared active-borrower list. It first requests `getExpiredBorrowersBoundedFor` at the expiry cursor.
-A nonempty selection attempts the visit's only settlement batch, without priced discovery.
-An empty expiry page stores its next offset, then `getUnhealthyBorrowersBoundedFor` scans from the
-independent unhealthy cursor. This getter selects only unexpired, positive debt with health below
+shared active-borrower list. Each asset alternates which lane goes first, starting with expiry.
+The lane turn persists even if an attempted gas-bounded body rolls back. A nonempty selection
+consumes the visit. Empty discovery permits the other lane to scan its independent cursor.
+Failed unhealthy discovery permits expiry fallback; failed expired discovery ends the visit.
+`getUnhealthyBorrowersBoundedFor` selects only unexpired, positive debt with health below
 1e18. The existing combined seizable getters continue to return the union for other callers.
+
+Asset rotation happens on every call; the task does not visit the same asset twice before moving
+to the next one. With newly added assets A then B and the asset index starting at A, the initial
+preferred scan order is:
+
+| `execute()` call | Asset visited | First scan |
+| --- | --- | --- |
+| 1 | A | Expired |
+| 2 | B | Expired |
+| 3 | A | Unhealthy |
+| 4 | B | Unhealthy |
+
+If both categories return candidates, each visit attempts only the first category's batch. If the
+first scan is empty, or unhealthy discovery fails because pricing is unavailable, the other scan
+can run during that same visit. Four calls give each asset both scan priorities; they do not
+necessarily examine or settle every position. The check and result limits can require many visits
+to traverse a larger borrower list.
 
 A priced discovery failure reports ScanFailed and retains the unhealthy cursor; successful expiry
 progress remains stored. For `[underwater A, expired B, underwater C]` starting at zero, the task
-can pass A and settle B during an outage, then resume with A when prices recover. Continuous
-expired arrivals can delay unhealthy work because expired batches take priority.
+can pass A and settle B during an outage, then resume with A when prices recover. Continuing
+expired arrivals cannot prevent an unhealthy-first turn on every second visit to that asset.
 
 Custody and Risk reward-quote requirements remain intact. Seize retains its role, lifecycle,
 solvency and atomic custody admission. A count read repairs either stale cursor before scanning;
-a failed count read preserves both. Failed settlement retains the selected lane's retry offset.
+a failed count read preserves both. A non-price seizure failure advances the saved offset by one
+and wraps at the active population, rather than skipping the full selected page. Each asset visit
+makes at most one seizure attempt. Seize tags execution-price refresh
+failures with `BurnerLoans_PriceSnapshotUnavailable`, preserving the complete underlying revert data;
+these leave the unhealthy cursor unchanged and end the seizure attempt. Deploy the updated Seize and Task together for this error contract.
+Task catches the Seize error without rethrowing. Its failure event contains only the error category
+selector; the complete underlying pricing error is available in the Seize revert and call trace.
 Successful settlement rewinds that lane by the selected borrower count, retaining the end-zero
-sentinel. The other lane keeps an earlier offset, but rewinds to the scan start if its offset is at
-or after it; an end scan wraps it to zero. This revisits possible swap-and-pop destinations.
+sentinel. Settlement leaves the other lane's cursor unchanged. The next visit repairs stale offsets
+before either discovery call, using the existing authoritative count read. Rewinding every valid
+offset would let expired settlements repeatedly erase unhealthy progress. Swap-ins behind a valid
+offset are revisited on that lane's next lap, as with external compaction. Saved offsets can be
+temporarily out of range between visits; a failed count read preserves them for a later retry.
 
 The check limit applies to each lane separately: a visit can inspect two different bounded pages,
-with at most one settlement batch. The existing metered self-call and reserved cleanup gas contain
+with at most one seizure attempt. A persistent settlement failure can require governance recovery:
+select a later cursor, or reduce the result limit to isolate positions from a rejected batch.
+The task does not automatically retry part of a failed batch. The existing metered self-call and reserved cleanup gas contain
 whole-body failures and rotate assets; a whole-body rollback restores both borrower cursors.
 Progress requires adequate configured gas. An inactive task rejects execution; an active but paused
 task returns without work. Governance can select the next asset, or recover one borrower cursor through
-`setExpiredAssetCursor` and `setUnhealthyAssetCursor`. Each setter leaves the other lane unchanged. Removing an asset clears both offsets. `SeizureExecuted` uses the shared `IBurnerLoansLens.Selection` enum to identify the `Expired` or `Unhealthy`
+`setExpiredAssetCursor` and `setUnhealthyAssetCursor`. Each setter leaves the other lane unchanged. Removing an asset clears both offsets and its lane turn. `SeizureExecuted` uses the shared `IBurnerLoansLens.Selection` enum to identify the `Expired` or `Unhealthy`
 lane alongside its start/next offsets and batch length.
 
 YieldClaimerTask instead iterates Core's append-only asset registry. It advances its cursor before each isolated claim, retains cleanup gas and stops before another attempt when the budget is too low. Its inactive execution reverts; local disablement returns without work. It skips the body while Core is unavailable. A registry-read failure can roll back the whole self-call, including that beat's cursor changes.

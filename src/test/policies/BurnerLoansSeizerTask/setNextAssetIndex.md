@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.setNextAssetIndex coverage plan
 
-Source: [setNextAssetIndex](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L204).
+Source: [setNextAssetIndex](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L223).
 
 Scenario scope: `BLSEIZ-ASSET-INDEX`. Recovery controls follow the existing scan/gas configuration authority: ADMIN_ROLE alone, BURNER_LOANS_ADMIN_ROLE alone, or both. Exclude every holder of either role from unauthorized fuzzing. Require own Kernel activity before authorization/input validation, including for unchanged values. Enabled, disabled and re-enabled states permit recovery.
 
@@ -19,9 +19,6 @@ The index addresses the Task's managed-asset set, in `getAssets()` order. Zero i
 | BLSEIZ-ASSET-INDEX-L01 | ADMIN_ROLE | false then restored | Enabled/disabled independently | Valid index, including reset0 | Own PolicyNotActive before body/no-op; successful retry after activation | Covered: [enabled][test_givenInactiveEnabledTask_whenAssetIndexSet_reverts], [disabled][test_givenInactiveDisabledTask_whenAssetIndexSet_reverts], [seeds][test_whenInactiveLifecycleAndIndexBoundariesSeeded_reverts] |
 | BLSEIZ-ASSET-INDEX-P05 | ADMIN_ROLE then HEART_ROLE | true | Enabled | Select second asset, then execute | Second asset scanned; traversal wraps to first | Covered: [test][test_whenSecondAssetSelected_thenNextExecutionScansIt] |
 | BLSEIZ-ASSET-INDEX-P06 | Authorized handler | true | Arbitrary pause/re-enable history | Arbitrary valid cursor recovery between beats | Registry bounds, next-beat rotation and authoritative accounting remain consistent | Covered: [invariant][invariant_schedulerAndAccountingRemainConsistent] |
-
-- [x] Write named tests, then implement the recovery setter.
-- [x] Run focused tests, invariant, formatting/lint and reciprocal mapping checks.
 
 ## Same-zero recovery boundary
 

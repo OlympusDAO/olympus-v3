@@ -2,7 +2,7 @@
 
 Implemented scan binding: read the constructor-bound Lens directly. Core owns no Lens pointer. Lens has no local enabled state or Kernel membership prerequisite; Seize is the direct operational Policy dependency. Core is derived from Seize and must match Lens.
 
-Source: [selfExecuteTask](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L276). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [selfExecuteTask](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L336). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -17,11 +17,11 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 SeizerTask management requires its own Kernel activity and remains available while paused. Add/removeAsset is ADMIN-only; scan/gas/cursor updates accept ADMIN or BL admin. Added assets must be registered in Core. Execute checks own Kernel activity, authenticates HEART, then returns if disabled. Self execution is self-only and requires own Kernel activity. Each invocation processes one asset. Lens and Seize are immutable bindings.
 
 The task keeps independent `expiredAssetCursor` and `unhealthyAssetCursor` offsets per asset.
-Expiry discovery runs first from its own offset. A nonempty selection attempts the visit's only
-settlement batch and stops, with no priced scan. An empty expiry page commits its next offset;
-`getUnhealthyBorrowersBoundedFor` then scans from its own saved start. A priced failure retains the
-unhealthy cursor and the successful expiry progress. Expiry failures stop without optional priced
-work. Both getters retain custody and aggregate actor reward quoting.
+The preferred lane alternates separately per asset, starting with expiry. Empty discovery permits
+the other lane to use its saved offset; a priced failure also permits expiry fallback. Expiry
+discovery failure ends this visit. A nonempty selection consumes the visit, with at most one
+successful settlement. Priced failures retain the unhealthy cursor. Both getters retain custody
+and aggregate actor reward quoting.
 
 ## Borrower cursors and list compaction
 
@@ -31,14 +31,17 @@ back repairs and both cursors. The outer execute still rotates the asset using i
 Seizure remains one atomic batch, so gas exhaustion never commits a partial default.
 
 A successful settlement rewinds its own next offset by the selected count, floored at zero, with
-end0 preserved. The other lane keeps offsets before the scanned start; offsets at or after that
-start rewind to it, or wrap0 if the scan reached the end. All removed entries were in that suffix,
-so this conservatively revisits possible swap-and-pop destinations. Failed settlement preserves
+end0 preserved. The other lane's saved offset remains unchanged until the next visit's existing
+pre-scan repair. Repeated cross-lane rewinds must not erase traversal progress.
+Swap-ins behind a valid cursor remain reachable after wrap for a finite backlog. A rejected selection
+advances one saved offset with population wrap, with no second seizure attempt. Unhealthy execution-price refresh failures retain
 retry progress. External compaction can move work behind a still-valid offset; subsequent wrap
 keeps finite backlogs reachable, while out-of-range offsets are repaired in the same visit.
 
 Each lane receives the configured check/result caps independently. A visit can inspect two different
-bounded pages but settle only one batch. Retaining both offsets avoids repeatedly scanning a healthy
+bounded pages but make only one seizure attempt. A persistent settlement failure may require
+governance to select a recovery cursor or narrow the result limit. Preferred lanes alternate per asset, including across whole-body failure.
+Retaining both offsets avoids repeatedly scanning a healthy
 prefix and preserves the unhealthy lane's pending work during oracle outages. The whole-body gas
 budget still covers all count, scan and settlement work. See [execute scenarios](./execute.md).
 
@@ -80,17 +83,13 @@ Any caller except this contract is rejected before lifecycle, registry or gas-de
 | BLSEIZ-SELF-EXECUTE-P04 | Self through execute | Lens raises injected ScanReadFailed(); current borrower cursor is valid | ScanFailed(asset, first4bytes); no seizure | Asset iterator advances; borrower progress unchanged | Covered: [test][test_givenScanReverts_whenExecuted_thenOtherAssetGetsNextTurn] |
 | BLSEIZ-SELF-EXECUTE-P05 | Self through execute | Saved start=3/count=1 or start=2/count=2; guarantee both | Read the live count, reset the stale cursor to zero, and issue expiry discovery from zero; never attempt start=3 or priced discovery for the resulting nonempty expiry selection | Remaining expired debt settles without consuming a reset-only turn; rotate to next asset | Covered: [test][test_givenStaleCursor_whenAssetVisited_thenRecoveryAndSettlementShareOneTurn], [test][test_givenStaleCursor_givenOutage_whenExecuted] |
 | BLSEIZ-SELF-EXECUTE-P06 | Self through execute | Empty active list with saved start=1 | Read count=0; run expiry and then priced discovery from zero within this visit | Cursor resets to zero; no pricing reads or seizure; rotate normally | Covered: [test][test_givenEmptyMarketWithStaleCursor_whenVisited_thenRecoveryCompletesSameTurn] |
-| BLSEIZ-SELF-EXECUTE-P07 | Self through execute | Lens selects a batch; Seize raises SettlementFailed() | SeizureFailed(asset,selector) | Rotate assets; preserve cursor/debt; later A visit retries successfully | Covered: [test][test_givenSeizureReverts_whenExecuted_thenEntireBatchRemainsForRetry] |
+| BLSEIZ-SELF-EXECUTE-P07 | Self through execute | Lens selects the sole borrower in a one-entry population; Seize raises SettlementFailed() | SeizureFailed(asset,selector) | Rotate assets; advance one wraps to0; preserve debt; later A visit retries successfully | Covered: [test][test_givenSeizureReverts_whenExecuted_thenEntireBatchRemainsForRetry] |
 | BLSEIZ-SELF-EXECUTE-P08 | Self through execute | Lens consumes forwarded gas and reverts without error bytes; bounded task retains enough gas for the catch | ScanFailed(asset,0x00000000) | Asset iterator advances; borrower cursor preserved; no partial positions; later Heart task still executes | Covered: [test][test_givenLensExhaustsGas_givenCatchGasSufficient_whenHeartRunsTasks] |
 | BLSEIZ-SELF-EXECUTE-P09 | Self through execute | Check limit 4, seizure limit 1; first two borrowers healthy, third eligible | Scan beyond the seizure count; forward third borrower only; fourth index unread | No eligible candidate discarded by truncation | Covered: [test][test_givenSparseCandidates_whenScanLimitExceedsBatchLimit_thenNoCandidateIsDiscarded] |
 | BLSEIZ-SELF-EXECUTE-P10 | Self through execute | Task entry's registration report was previously true; current Core market lookup rejects it | ScanFailed(asset,AssetNotConfigured.selector) | No borrower progress; rotate; following registered asset remains reachable | Covered: [test][test_givenUnsupportedEntry_whenExecuted_thenScanFailureIsIsolated] |
 | BLSEIZ-SELF-EXECUTE-P14 | Self through execute | Nonzero saved cursor; Lens borrower-count read fails | ScanFailed(asset,selector); no scan or seizure | Preserve borrower cursor; asset iterator advances | Covered: [test][test_givenBorrowerCountReadReverts_whenExecuted_thenCursorPreservedAndAssetsRotate] |
 
 Co-located API assertions: `expiredAssetCursor`, `nextAssetIndex`. These must be asserted independently of the action return value.
-
-- [x] Review concrete branches and inherited guard order.
-- [x] Implement named Foundry tests and boundary seed drivers.
-- [x] Map each row to passing tests.
 
 ## Test organization
 
@@ -117,18 +116,18 @@ Task holds SEIZER; active; gas sufficient unless stated. Both scanners use the s
 | ID | Caller | Condition / domain | Execution / effects | Test |
 | --- | --- | --- | --- | --- |
 | BLSEIZ-SELF-EXECUTE-D01 | Self through execute | Expiry scan returns a nonempty batch; Seize succeeds | One expiry scan and one aggregate settlement; no priced scan before/after; compaction rewind | Covered: [test][test_givenExpiryCandidates_whenExecuted_thenOnlyExpiryBatchSettles] |
-| BLSEIZ-SELF-EXECUTE-D02 | Self through execute | Expiry scan returns a nonempty batch; Seize reverts | SeizureFailed; repaired cursor retained; no priced scan; debt rollback | Covered: [test][test_givenStaleCursor_givenExpirySettlementFails_whenExecuted_thenRepairPersists], [test][test_givenSeizureReverts_whenExecuted_thenEntireBatchRemainsForRetry] |
+| BLSEIZ-SELF-EXECUTE-D02 | Self through execute | First visit; expiry scan selects the sole borrower in a one-entry population; Seize reverts | SeizureFailed; advance one wraps to0; no priced scan; debt rollback | Covered: [test][test_givenStaleCursor_givenExpirySettlementFails_whenExecuted_thenRepairPersists], [test][test_givenSeizureReverts_whenExecuted_thenEntireBatchRemainsForRetry] |
 | BLSEIZ-SELF-EXECUTE-D03 | Self through execute | Expiry scan reverts, even though a hypothetical priced scan could succeed | ScanFailed with exact expiry selector; no priced/settlement calls; cursor retained | Covered: [test][test_givenValidCursor_givenExpiryScanFails_whenExecuted_thenCursorIsRetained] |
 | BLSEIZ-SELF-EXECUTE-D04 | Self through execute | Expiry scan empty; priced scan reverts with pricing/config/lifecycle/custody quote error | ScanFailed with original selector; store expiry next, which may be nonzero or0 | Covered: [test][test_givenEmptyExpiryPage_givenPricedFailure_whenExecuted_thenProvenCursorIsStored] |
 | BLSEIZ-SELF-EXECUTE-D05 | Self through execute | Valid nonzero saved cursor; authoritative count greater than start | Retain saved start and issue expiry scan from that exact input | Covered: [test][test_givenValidCursor_givenExpiryScanFails_whenExecuted_thenCursorIsRetained] |
-| BLSEIZ-SELF-EXECUTE-D06 | Self through execute | Count proves saved cursor stale; expiry quote or settlement fails inside catch | Persist repaired cursor0; retain debt; next asset gets turn | Covered: [test][test_givenStaleCursor_givenExpirySettlementFails_whenExecuted_thenRepairPersists], [test][test_givenStaleCursor_givenServiceFailure_whenExecuted] |
+| BLSEIZ-SELF-EXECUTE-D06 | Self through execute | Count proves saved cursor stale; expiry quote or settlement fails inside catch | Scan failure retains repair0; singleton rejection advances one with wrap; retain debt; next asset gets turn | Covered: [test][test_givenStaleCursor_givenExpirySettlementFails_whenExecuted_thenRepairPersists], [test][test_givenStaleCursor_givenServiceFailure_whenExecuted] |
 | BLSEIZ-SELF-EXECUTE-D07 | Self through execute | Count proves saved cursor stale; whole body later fails/OOG | Repair and body events roll back; outer execute rotates assets and reports failure | Covered: [test][test_givenExpiredScan_givenHelperExhaustsGas_whenExecuted_thenLaterHeartTaskExecutes] |
 | BLSEIZ-SELF-EXECUTE-D08 | Self through execute | Saved cursor0; count getter would fail if called | Skip count read; discovery can still succeed from0 | Covered: [test][test_givenZeroCursor_givenCountReadBroken_whenExecuted_thenDiscoveryStillRuns] |
 | BLSEIZ-SELF-EXECUTE-D09 | Self through execute | Independent expiry2/unhealthy8; both scans empty | Each scan uses its own saved start and commits its own next offset | Covered: [test][test_givenIndependentCursors_whenPagesEmpty_thenEachLaneAdvancesItsOwnPage] |
 | BLSEIZ-SELF-EXECUTE-D10 | Self through execute | Expiry2/unhealthy8; expiry succeeds, unhealthy fails | Expiry advances4; unhealthy retains8 | Covered: [test][test_givenIndependentCursors_whenUnhealthyScanFails_thenItsRetryOffsetIsRetained] |
-| BLSEIZ-SELF-EXECUTE-D11 | Self through execute | Expired batch succeeds; other cursor equal to or later than scan start; include end0 | Rewind executing lane by selected count; other lane revisits start or wraps for end0 | Covered: [test][test_givenExpiredBatch_whenUnhealthyCursorIsLater_thenCompactionRewindsIt], [test][test_givenExpiredBatchAtEnd_whenUnhealthyCursorIsLater_thenBothCursorsWrap], [test][test_givenEqualCursors_whenExpiryBatchCompacts_thenOtherLaneRevisitsStart] |
-| BLSEIZ-SELF-EXECUTE-D12 | Self through execute | Unhealthy batch succeeds; expiry offset earlier/later than priced scan start | Preserve earlier expiry offset; rewind later expiry offset to priced start | Covered: [test][test_givenUnhealthyBatch_whenExpiryCursorIsEarlier_thenItIsPreserved], [test][test_givenUnhealthyBatch_whenExpiryCursorIsLater_thenCompactionRewindsIt] |
-| BLSEIZ-SELF-EXECUTE-D13 | Self through execute | Only one of two unequal cursors is stale | Reset only stale offset; scan valid lane from its saved offset | Covered: [test][test_givenOnlyUnhealthyCursorStale_whenExecuted_thenExpiryOffsetIsPreserved], [test][test_givenOnlyExpiryCursorStale_whenExecuted_thenUnhealthyOffsetIsPreserved] |
+| BLSEIZ-SELF-EXECUTE-D11 | Self through execute | Expired batch succeeds; other cursor equal to or later than scan start; include end0 | Rewind executing lane by selected count; retain the other lane while its offset is valid | Covered: [test][test_givenExpiredBatch_givenValidUnhealthyCursor_whenExecuted], [test][test_givenExpiredEndBatch_givenValidUnhealthyCursor_whenExecuted], [test][test_givenEqualCursors_whenExpiryBatchCompacts_thenOtherLaneRevisitsStart] |
+| BLSEIZ-SELF-EXECUTE-D12 | Self through execute | Unhealthy batch succeeds; expiry offset earlier/later than priced scan start | Preserve valid expiry progress regardless of its ordering relative to this scan | Covered: [test][test_givenUnhealthyBatch_whenExpiryCursorIsEarlier_thenItIsPreserved], [test][test_givenUnhealthyBatch_givenValidExpiredCursor_whenExecuted] |
+| BLSEIZ-SELF-EXECUTE-D13 | Self through execute | One cursor is stale before discovery or becomes stale after the other lane settles | Settlement preserves other offset; next visit resets only stale offsets before scanning; retain valid lane progress | Covered: [test][test_givenOnlyUnhealthyCursorStale_whenExecuted_thenExpiryOffsetIsPreserved], [test][test_givenOnlyExpiryCursorStale_whenExecuted_thenUnhealthyOffsetIsPreserved], [test][test_givenExpiredBatch_givenOtherCursorBecomesStale_whenExecuted] |
 | BLSEIZ-SELF-EXECUTE-D14 | Self through execute | Expiry or unhealthy batch completes; empty unhealthy pages included | SeizureExecuted identifies its shared Lens Selection lane and that lane's exact start/next offsets and batch length | Covered: [test][test_givenExpiredBatch_whenExecuted_thenEventIdentifiesItsLane], [test][test_givenUnhealthyBatch_whenExecuted_thenEventIdentifiesItsLane] |
 | BLSEIZ-SELF-EXECUTE-P19 | Self through execute | Randomized mixed-maturity history and independent cursor changes | Bounded final drain preserves cursor/order and settles every expired and future-maturity unhealthy borrower before maturity; authoritative accounting clears | Covered: [test][invariant_mixedBacklogRemainsReachable] |
 
@@ -145,7 +144,7 @@ The limits bound inspected entries per lane and selected results independently; 
 [test_givenEmptyMarketWithStaleCursor_whenVisited_thenRecoveryCompletesSameTurn]: ./integration/execute.t.sol#L364
 [test_givenFiftyBorrowers_whenBatchLimitIsTwentyFive_thenAssetsRotateAndAllDebtSettles]: ./integration/execute.t.sol#L34
 [test_givenHealthyPrefix_whenBoundedScansRepeat_thenEligibleSuffixRemainsReachable]: ./integration/execute.t.sol#L232
-[test_givenScanReverts_whenExecuted_thenOtherAssetGetsNextTurn]: ./execute.t.sol#L86
+[test_givenScanReverts_whenExecuted_thenOtherAssetGetsNextTurn]: ./execute.t.sol#L87
 [test_givenSeizureReverts_whenExecuted_thenEntireBatchRemainsForRetry]: ./integration/execute.t.sol#L266
 [test_givenSparseCandidates_whenScanLimitExceedsBatchLimit_thenNoCandidateIsDiscarded]: ./integration/execute.t.sol#L75
 [test_givenStaleCursor_whenAssetVisited_thenRecoveryAndSettlementShareOneTurn]: ./integration/execute.t.sol#L105
@@ -153,42 +152,43 @@ The limits bound inspected entries per lane and selected results independently; 
 [test_givenThirdPartySeizesBetweenVisits_whenCursorIsStale_thenSameVisitSeizesRemainingDebt]: ./integration/execute.t.sol#L194
 [test_givenUnsupportedEntry_whenExecuted_thenScanFailureIsIsolated]: ./integration/execute.t.sol#L297
 [test_whenCallerIsNotSelf_reverts]: ./selfExecuteTask.t.sol#L14
-[test_givenBorrowerCountReadReverts_whenExecuted_thenCursorPreservedAndAssetsRotate]: ./execute.t.sol#L324
-[test_givenStaleCursor_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L217
-[test_whenScanReturnsBorrowers_thenForwardsExactBatchAndRewindsCursor]: ./execute.t.sol#L357
-[test_whenScanReturnsNoBorrowers_thenStoresCursorWithoutSettlement]: ./execute.t.sol#L384
-[test_givenSeizerRoleMissing_whenExecuted_thenAssetStillRotates]: ./execute.t.sol#L142
+[test_givenBorrowerCountReadReverts_whenExecuted_thenCursorPreservedAndAssetsRotate]: ./execute.t.sol#L325
+[test_givenStaleCursor_givenOutage_whenExecuted]: ./integration/executeOracleOutage.t.sol#L723
+[test_whenScanReturnsBorrowers_thenForwardsExactBatchAndRewindsCursor]: ./execute.t.sol#L358
+[test_whenScanReturnsNoBorrowers_thenStoresCursorWithoutSettlement]: ./execute.t.sol#L385
+[test_givenSeizerRoleMissing_whenExecuted_thenAssetStillRotates]: ./execute.t.sol#L143
 [test_givenDisabled_whenSelfCalls_thenBodyStillRuns]: ./selfExecuteTask.t.sol#L38
-[test_givenEmptyExpiryPage_givenPricedFailure_whenExecuted_thenProvenCursorIsStored]: ./execute.t.sol#L603
+[test_givenEmptyExpiryPage_givenPricedFailure_whenExecuted_thenProvenCursorIsStored]: ./execute.t.sol#L604
 [test_givenEmptyRegistry_whenSelfCalls_thenNoWork]: ./selfExecuteTask.t.sol#L70
-[test_givenExpiredScan_givenHelperExhaustsGas_whenExecuted_thenLaterHeartTaskExecutes]: ./execute.t.sol#L233
-[test_givenExpiryBatchAtPopulationEnd_whenExecuted_thenCursorRemainsZero]: ./execute.t.sol#L856
-[test_givenExpiryCandidates_whenExecuted_thenOnlyExpiryBatchSettles]: ./execute.t.sol#L475
-[test_givenExpiryNextEqualsBatchLength_whenExecuted_thenCursorIsZero]: ./execute.t.sol#L508
+[test_givenExpiredScan_givenHelperExhaustsGas_whenExecuted_thenLaterHeartTaskExecutes]: ./execute.t.sol#L234
+[test_givenExpiryBatchAtPopulationEnd_whenExecuted_thenCursorRemainsZero]: ./execute.t.sol#L857
+[test_givenExpiryCandidates_whenExecuted_thenOnlyExpiryBatchSettles]: ./execute.t.sol#L476
+[test_givenExpiryNextEqualsBatchLength_whenExecuted_thenCursorIsZero]: ./execute.t.sol#L509
 [test_givenInactive_givenRolesBroken_whenCallerIsNotSelf_reverts]: ./selfExecuteTask.t.sol#L57
-[test_givenMaximumLimits_givenOneUnexpiredBorrower_whenExecuted]: ./integration/executeOracleOutage.t.sol#L968
-[test_givenMaximumLimits_whenExecuted_thenBothStagesReceiveFullWidthInputs]: ./execute.t.sol#L650
+[test_givenMaximumLimits_givenOneUnexpiredBorrower_whenExecuted]: ./integration/executeOracleOutage.t.sol#L1476
+[test_givenMaximumLimits_whenExecuted_thenBothStagesReceiveFullWidthInputs]: ./execute.t.sol#L651
 [test_givenSingleAsset_whenSelfCalls_thenCursorWraps]: ./selfExecuteTask.t.sol#L77
-[test_givenStaleCursor_givenExpirySettlementFails_whenExecuted_thenRepairPersists]: ./execute.t.sol#L537
-[test_givenStaleCursor_givenServiceFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L257
-[test_givenValidCursor_givenExpiryScanFails_whenExecuted_thenCursorIsRetained]: ./execute.t.sol#L571
-[test_givenZeroCursor_givenCountReadBroken_whenExecuted_thenDiscoveryStillRuns]: ./execute.t.sol#L630
+[test_givenStaleCursor_givenExpirySettlementFails_whenExecuted_thenRepairPersists]: ./execute.t.sol#L538
+[test_givenStaleCursor_givenServiceFailure_whenExecuted]: ./integration/executeOracleOutage.t.sol#L763
+[test_givenValidCursor_givenExpiryScanFails_whenExecuted_thenCursorIsRetained]: ./execute.t.sol#L572
+[test_givenZeroCursor_givenCountReadBroken_whenExecuted_thenDiscoveryStillRuns]: ./execute.t.sol#L631
 [test_givenAssetRemoved_whenSelfCalls_thenSurvivorIsVisited]: ./selfExecuteTask.t.sol#L109
-[test_givenLensExhaustsGas_givenCatchGasSufficient_whenHeartRunsTasks]: ./execute.t.sol#L1317
+[test_givenLensExhaustsGas_givenCatchGasSufficient_whenHeartRunsTasks]: ./execute.t.sol#L1571
 [test_givenMaximumDefensiveAssetIndex_whenSelfCalls_thenIndexNormalizes]: ./selfExecuteTask.t.sol#L140
 [test_givenTwoAssets_whenPendingIndexSelected]: ./selfExecuteTask.t.sol#L85
 
-[test_givenIndependentCursors_whenPagesEmpty_thenEachLaneAdvancesItsOwnPage]: execute.t.sol#L885
-[test_givenIndependentCursors_whenUnhealthyScanFails_thenItsRetryOffsetIsRetained]: execute.t.sol#L909
-[test_givenExpiredBatch_whenUnhealthyCursorIsLater_thenCompactionRewindsIt]: execute.t.sol#L933
-[test_givenExpiredBatchAtEnd_whenUnhealthyCursorIsLater_thenBothCursorsWrap]: execute.t.sol#L951
-[test_givenEqualCursors_whenExpiryBatchCompacts_thenOtherLaneRevisitsStart]: execute.t.sol#L1185
-[test_givenUnhealthyBatch_whenExpiryCursorIsEarlier_thenItIsPreserved]: execute.t.sol#L965
-[test_givenUnhealthyBatch_whenExpiryCursorIsLater_thenCompactionRewindsIt]: execute.t.sol#L987
-[test_givenOnlyUnhealthyCursorStale_whenExecuted_thenExpiryOffsetIsPreserved]: execute.t.sol#L1020
-[test_givenOnlyExpiryCursorStale_whenExecuted_thenUnhealthyOffsetIsPreserved]: execute.t.sol#L1144
+[test_givenIndependentCursors_whenPagesEmpty_thenEachLaneAdvancesItsOwnPage]: execute.t.sol#L886
+[test_givenIndependentCursors_whenUnhealthyScanFails_thenItsRetryOffsetIsRetained]: execute.t.sol#L910
+[test_givenExpiredBatch_givenValidUnhealthyCursor_whenExecuted]: execute.t.sol#L934
+[test_givenExpiredEndBatch_givenValidUnhealthyCursor_whenExecuted]: execute.t.sol#L952
+[test_givenEqualCursors_whenExpiryBatchCompacts_thenOtherLaneRevisitsStart]: execute.t.sol#L1169
+[test_givenUnhealthyBatch_whenExpiryCursorIsEarlier_thenItIsPreserved]: execute.t.sol#L974
+[test_givenUnhealthyBatch_givenValidExpiredCursor_whenExecuted]: execute.t.sol#L996
+[test_givenOnlyUnhealthyCursorStale_whenExecuted_thenExpiryOffsetIsPreserved]: execute.t.sol#L1029
+[test_givenOnlyExpiryCursorStale_whenExecuted_thenUnhealthyOffsetIsPreserved]: execute.t.sol#L1128
 
-[test_givenExpiredBatch_whenExecuted_thenEventIdentifiesItsLane]: ./execute.t.sol#L1204
-[test_givenUnhealthyBatch_whenExecuted_thenEventIdentifiesItsLane]: ./execute.t.sol#L1217
+[test_givenExpiredBatch_whenExecuted_thenEventIdentifiesItsLane]: ./execute.t.sol#L1188
+[test_givenUnhealthyBatch_whenExecuted_thenEventIdentifiesItsLane]: ./execute.t.sol#L1201
 
 [invariant_mixedBacklogRemainsReachable]: integration/progressMixedMaturity.invariant.t.sol#L50
+[test_givenExpiredBatch_givenOtherCursorBecomesStale_whenExecuted]: ./execute.t.sol#L1527

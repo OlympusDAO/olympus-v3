@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.supportsInterface coverage plan
 
-Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L471). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [supportsInterface](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L647). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -29,10 +29,6 @@ Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scen
 ## Shared assertions
 
 Compile the exact IDs listed above. Imported interfaces do not add advertised support.
-
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
 
 ## Test organization
 

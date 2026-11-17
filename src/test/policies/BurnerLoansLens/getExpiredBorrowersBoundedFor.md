@@ -48,14 +48,6 @@ this method makes only static reads.
 | BLLENS-EXPIRED-D04 | Protocol actor | Risk keeper reward fails | Exact Risk error | Unchanged | Covered: [test][test_givenRewardQuoteFailure_whenQueried_reverts] |
 | BLLENS-EXPIRED-A03 | Ordinary actor | Real priced expiry quote followed by unchanged Seize execution | Lens reward equals Seize preview and actual keeper-token delta | Expired principal fully settled | Covered: [test][test_givenPricesAvailable_whenOrdinaryExpiredQuoteSettled] |
 
-## Work checklist
-
-- [x] Choose and document behavior before implementation.
-- [x] Add actor/reward regression tests before the API revision.
-- [x] Implement the actor-aware bounded selection and task call.
-- [x] Delegate reward pricing solely to Risk; verify zero-configuration quote/execution distinction.
-- [x] Run revised focused suites, mapping checks, lint and size checks.
-
 [test_givenInvalidStart_whenQueried_reverts]: ./getExpiredBorrowersBoundedFor.t.sol#L38
 
 [test_givenInvalidStart_whenBoundarySeedsQueried_reverts]: ./getExpiredBorrowersBoundedFor.t.sol#L46
@@ -100,6 +92,6 @@ this method makes only static reads.
 
 [test_givenRewardQuoteFailure_whenQueried_reverts]: ./getExpiredBorrowersBoundedFor.t.sol#L334
 
-[test_givenPricesAvailable_whenOrdinaryExpiredQuoteSettled]: ../BurnerLoansSeizerTask/integration/executeOracleOutage.t.sol#L717
+[test_givenPricesAvailable_whenOrdinaryExpiredQuoteSettled]: ../BurnerLoansSeizerTask/integration/executeOracleOutage.t.sol#L1225
 
-[test_givenZeroRewardConfig_givenOutage_whenOrdinaryExpiredQuoteRequested]: ../BurnerLoansSeizerTask/integration/executeOracleOutage.t.sol#L675
+[test_givenZeroRewardConfig_givenOutage_whenOrdinaryExpiredQuoteRequested]: ../BurnerLoansSeizerTask/integration/executeOracleOutage.t.sol#L1183

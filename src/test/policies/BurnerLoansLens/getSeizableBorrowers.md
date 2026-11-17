@@ -135,9 +135,6 @@ All unvaried dependencies work. Nonempty scans currently obtain a snapshot befor
 
 Legacy scans had separate check/return limits and circular traversal. Their eligibility and zero-work assertions inform these cases; the agreed forward-only pagination deliberately changes their wrap expectations. No legacy test is a Covered mapping by itself.
 
-- [x] Review these expectations.
-- [x] Implement focused tests and update Test mappings.
-
 [test_givenAboveCount_whenInvalidStartSeeded_reverts]: ./getSeizableBorrowers.t.sol#L133
 [test_givenActiveDisabledCore_whenQueried]: ./getSeizableBorrowers.t.sol#L34
 [test_givenActiveEnabledCore_whenQueried]: ./getSeizableBorrowers.t.sol#L25

@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.removeAsset coverage plan
 
-Source: [removeAsset](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L163). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [removeAsset](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L175). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -38,10 +38,6 @@ Fixed for this table: Accounting / events: AssetRemoved; unrelated cursor remain
 
 Co-located API assertions: `isAssetManaged`, `getAssets`, `expiredAssetCursor`, `unhealthyAssetCursor`, `nextAssetIndex`. These must be asserted independently of the action return value.
 
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
-
 ## Own policy activity
 
 Previously activated then Kernel-deactivated, retaining ROLES and valid caller authority; all direct operational dependencies/bindings remain ready. Inputs are valid. Restore Kernel membership then retry with a fresh valid input and assert the corresponding successful body effects; reactivation does not change positions or authorization. Use an unchanged-value seed too when the setter supports idempotence.
@@ -66,4 +62,4 @@ Local active=true, initialized ROLES. Seed first/middle/last removal in a three-
 | BLSEIZ-REMOVE-ASSET-P06 | Fuzz ADMIN holder | Remove then attempt removal again | First succeeds; second AssetNotManaged(asset), with no further changes/logs | Unmapped |
 | BLSEIZ-REMOVE-ASSET-P07 | ADMIN | Independent expiry2/unhealthy8 after real task visits | Removing the asset clears both offsets | Covered: [test][test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared] |
 
-[test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared]: execute.t.sol#L1079
+[test_givenUnequalCursors_whenAssetRemoved_thenBothCursorsAreCleared]: execute.t.sol#L1088

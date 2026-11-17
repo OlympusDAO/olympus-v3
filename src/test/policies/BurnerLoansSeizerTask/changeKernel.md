@@ -23,10 +23,6 @@ After migration test Kernel.isPolicyActive independently and action enable/Core 
 
 Co-located API assertions: `kernel`, `isActive`. These must be asserted independently of the action return value.
 
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
-
 ## Existing tests informing this plan
 
 No dedicated same-name legacy suite exists. Use related custody, arithmetic and lifecycle regression families in the suite index; this API needs new direct tests.

@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.setExpiredAssetCursor coverage plan
 
-Source: [setExpiredAssetCursor](../../../policies/burnerloans/BurnerLoansSeizerTask.sol).
+Source: [setExpiredAssetCursor](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L241).
 Scenario scope: `BLSEIZ-EXPIRED-CURSOR`.
 
 The setter changes only expired discovery progress. Its companion setter owns the other lane.
@@ -28,7 +28,7 @@ The mixed-maturity stateful campaign also drains its backlog without resetting e
 | BLSEIZ-EXPIRED-CURSOR-L01 | ADMIN | Inactive then reactivated; local enabled independently true/false | Managed asset; proposed0/1 | PolicyNotActive(Task) before body; successful independent update after reactivation | Covered: [test][test_givenInactiveTask_whenCursorSelected_reverts] |
 | BLSEIZ-EXPIRED-CURSOR-P04 | ADMIN then HEART | Active; enabled | Real three-borrower market; select2 only in this lane, other0; then execute | Each scan starts at its own offset; healthy full suffix wraps; real principal unchanged | Covered: [test][test_whenBorrowerCursorSelected_thenExecutionResumesThere] |
 | BLSEIZ-EXPIRED-CURSOR-P06 | ADMIN | Active; enabled | Other asset has selected cursor1 and pending turn; select A cursor2 | Only A selected cursor changes; B progress/turn and A accounting unchanged | Covered: [test][test_givenOtherAssetHasProgress_whenBorrowerCursorSet_thenOtherProgressIsPreserved] |
-| BLSEIZ-EXPIRED-CURSOR-P05 | Authorized stateful handler | Arbitrary pause/re-enable history | Arbitrary independent valid lane recovery between bounded beats | Both cursor bounds, rotation, inventory and canonical custody remain consistent | Covered: [test][invariant_schedulerAndAccountingRemainConsistent] |
+| BLSEIZ-EXPIRED-CURSOR-P05 | Authorized stateful handler | Arbitrary pause/re-enable history | Arbitrary independent valid lane recovery between bounded beats | Saved offsets stay within the original book; compaction may make them stale until next discovery; rotation, inventory and canonical custody remain consistent | Covered: [test][invariant_schedulerAndAccountingRemainConsistent] |
 | BLSEIZ-EXPIRED-CURSOR-P07 | Fuzz all permitted role/state partitions; each seeded | Active; enabled/disabled/re-enabled | Selected current/proposed0; Lens bounds read reverts | Event-free no-op without downstream reads; both cursors remain0 | Covered: [test][test_whenRoleLifecycleAndNumericBoundariesSeeded], [test][test_givenPermittedCaller_whenZeroUnchanged_thenNoDownstreamReads] |
 | BLSEIZ-EXPIRED-CURSOR-L02 | Fuzz unauthorized caller incl0 | Inactive; enabled independently true/false | Broken ROLES; unmanaged asset0/indexMAX256 | PolicyNotActive(Task) before authorization and invalid inputs; both cursors unchanged | Covered: [test][test_givenInactiveTask_givenRolesBroken_whenUnauthorized_reverts] |
 | BLSEIZ-EXPIRED-CURSOR-P08 | ADMIN | Active; enabled | Unequal cursors2/8; invoke the two named setters to select2 | First expiry setter is a no-op, unhealthy setter updates its own lane; exact unhealthy event; both end2 | Covered: [test][test_givenUnequalCursors_whenBothSettersRun_thenBothCursorsAreUpdated] |
@@ -38,11 +38,11 @@ The mixed-maturity stateful campaign also drains its backlog without resetting e
 [test_whenCallerHasNeitherRole_reverts]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L98
 [test_givenPermittedCaller_whenNonzeroCursorSet]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L32
 [test_whenRoleLifecycleAndNumericBoundariesSeeded]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L74
-[test_givenUnequalCursors_whenZeroSelected_thenBothResetWithoutLensReads]: execute.t.sol#L1070
+[test_givenUnequalCursors_whenZeroSelected_thenBothResetWithoutLensReads]: execute.t.sol#L1079
 [test_givenPermittedCaller_whenCursorReset_thenNoDownstreamReads]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L43
 [test_whenAssetUnmanaged_reverts]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L114
 [test_whenUnmanagedAddressBoundariesSeeded_reverts]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L120
-[test_givenRealLoans_givenOutage_whenInvalidBorrowerCursorSelected_reverts]: integration/executeOracleOutage.t.sol#L1402
+[test_givenRealLoans_givenOutage_whenInvalidBorrowerCursorSelected_reverts]: integration/executeOracleOutage.t.sol#L1937
 [test_whenCursorOutsidePopulation_reverts]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L127
 [test_whenInvalidNumericBoundariesSeeded_reverts]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L133
 [test_whenCursorUnchanged_thenValidateAndNoEvent]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L142
@@ -55,6 +55,6 @@ The mixed-maturity stateful campaign also drains its backlog without resetting e
 [invariant_schedulerAndAccountingRemainConsistent]: integration/progress.invariant.t.sol#L46
 [test_givenPermittedCaller_whenZeroUnchanged_thenNoDownstreamReads]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L200
 [test_givenInactiveTask_givenRolesBroken_whenUnauthorized_reverts]: fixtures/BurnerLoansSeizerTaskCursorCases.t.sol#L222
-[test_givenUnequalCursors_whenBothSettersRun_thenBothCursorsAreUpdated]: execute.t.sol#L1045
-[test_givenUnequalCursors_whenOnlyExpirySelected_thenUnhealthyIsPreserved]: execute.t.sol#L1260
-[test_givenUnequalCursors_whenSelectedLaneUnchanged_thenEventFreeNoOp]: execute.t.sol#L1284
+[test_givenUnequalCursors_whenBothSettersRun_thenBothCursorsAreUpdated]: execute.t.sol#L1054
+[test_givenUnequalCursors_whenOnlyExpirySelected_thenUnhealthyIsPreserved]: execute.t.sol#L1244
+[test_givenUnequalCursors_whenSelectedLaneUnchanged_thenEventFreeNoOp]: execute.t.sol#L1268

@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.addAsset coverage plan
 
-Source: [addAsset](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L149). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [addAsset](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L159). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -39,10 +39,6 @@ Fixed for this table: Accounting / events: No cursor change.
 | BLSEIZ-ADD-ASSET-P04 | ADMIN_ROLE holder | Registered asset with originations disabled | Admission succeeds; existing loans remain manageable | Membership added; lifecycle and positions unchanged | Covered: [test][test_givenOriginationsDisabled_whenRegisteredAssetAdded] |
 
 Co-located API assertions: `isAssetManaged`, `getAssets`. These must be asserted independently of the action return value.
-
-- [x] Review these expectations.
-- [ ] Implement the remaining Unmapped tests and boundary seed drivers.
-- [ ] Map every remaining row to passing tests.
 
 ## Own policy activity
 

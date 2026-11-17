@@ -52,26 +52,23 @@ contract BurnerLoansSeizerTaskProgressInvariantTest is BurnerLoansSeizerTaskProg
             "Empty B market keeps a zero borrower cursor after recovery"
         );
         uint32 market = _core.marketId(address(_asset));
-        uint256 population = _floan.getActiveBorrowerCount(market);
-        if (population == 0) {
-            assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Empty market cursor is zero");
-            assertEq(
-                _task.unhealthyAssetCursor(address(_asset)),
-                0,
-                "Empty market unhealthy cursor is zero"
-            );
-        } else {
-            assertLt(
-                _task.expiredAssetCursor(address(_asset)),
-                population,
-                "Committed cursor remains usable after defaults"
-            );
-            assertLt(
-                _task.unhealthyAssetCursor(address(_asset)),
-                population,
-                "Unhealthy cursor remains usable after either lane defaults debt"
-            );
-        }
+        // Each fixed-book loan has 1e9 principal. The handler neither adds loans nor repays debt,
+        // so (due + defaulted) / 1e9 independently recovers the original book size (8 or 12).
+        // Compaction may leave a saved offset outside the current population between visits;
+        // execute's boundary tests prove repair before discovery, and drain tests prove reachability.
+        // forge-lint: disable-next-line(literal-instead-of-constant)
+        uint256 originalPopulation = (_floan.getMarketPrincipalDue(market) +
+            _floan.getMarketPrincipalDefaulted(market)) / 1e9;
+        assertLt(
+            _task.expiredAssetCursor(address(_asset)),
+            originalPopulation,
+            "Expiry offset stays within original book"
+        );
+        assertLt(
+            _task.unhealthyAssetCursor(address(_asset)),
+            originalPopulation,
+            "Unhealthy offset stays within original book"
+        );
         assertEq(
             _task.unhealthyAssetCursor(address(_otherAsset)),
             0,

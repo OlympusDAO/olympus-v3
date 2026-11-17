@@ -1,6 +1,6 @@
 # BurnerLoansSeizerTask.setScanLimits coverage plan
 
-Source: [setScanLimits](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L178). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
+Source: [setScanLimits](../../../policies/burnerloans/BurnerLoansSeizerTask.sol#L194). Coverage is recorded in the Test column; legacy references alone do not prove the rewritten API.
 
 ## Domains and notation
 
@@ -13,7 +13,7 @@ Fuzz permitted role caller: independently fuzz a nonzero caller holding ADMIN_RO
 Own-policy admission: require Kernel-active BurnerLoansSeizerTask; own inactivity uses `BurnerLoans_PolicyNotActive(BurnerLoansSeizerTask)` before body/input/idempotent work. Preserve earlier local-state and authorization guards. Successful body scenarios assume Local active=true, except explicit admission failures.
 
 ADMIN or BL admin, local enablement is independent; own policy activity is enforced before role/input validation; check:uint16, seize:uint8. Accepted 1<=check<=MAX16;1<=seize<=MAX8;seize<=check. Input types define maxima; there are no additional 500/50 ceilings. The check limit bounds distinct entries in the active borrower list per visit; an expiry-empty page may be read
-again by priced discovery. Only one seizure batch is attempted per visit. Practical settings follow
+again by priced discovery. At most one seizure batch is attempted per visit. Practical settings follow
 the gas budget and measured workload.
 
 Use the [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md) for numeric maxima, identity partitions, exact revert data, rollback and independent expected results.
@@ -38,10 +38,6 @@ Fixed for this table: Accounting / events: ScanLimitsSet; seed1/1,501/51,MAX16/M
 | BLSEIZ-SCAN-LIMITS-P01 | Fuzz permitted role caller | check1..MAX16,seize1..min(MAX8,check); changed tuple | Store exact changed limits; emit once | Covered: [test][test_givenPermittedCaller_whenLimitsSet] |
 
 Co-located API assertions: `maxBorrowersToCheck`, `maxBorrowersToSeize`. These must be asserted independently of the action return value.
-
-- [x] Review concrete branches and inherited guard order.
-- [ ] Implement named Foundry tests and boundary seed drivers.
-- [ ] Map each row to passing tests.
 
 ## Own policy activity
 
@@ -92,21 +88,23 @@ The fixture uses real Core/FLOAN/Risk/Inventory/DepositManager/Payout/Seize cont
 
 | Borrowers checked or seized | Healthy scan, gas | All expired and seized, gas |
 | --- | --- | --- |
-| 1 | 234,654 | 553,321 |
-| 25 | 1,577,988 | 2,248,963 |
-| 50 | 2,983,325 | 4,284,617 |
-| 51 | Not measured | 4,371,384 |
-| 100 | 5,812,466 | 9,178,617 |
-| 255 | Not measured | 31,641,265 |
-| 500 | 29,331,875 | Not representable by the uint8 seizure limit |
-| 1000 | 60,946,859 | Not representable by the uint8 seizure limit |
+| 1 | 260,299 | 573,432 |
+| 25 | 1,603,633 | 2,269,073 |
+| 50 | 3,008,970 | 4,304,728 |
+| 51 | Not measured | 4,391,495 |
+| 100 | 5,838,111 | 9,198,728 |
+| 255 | Not measured | 31,666,403 |
+| 500 | 29,357,520 | Not representable by the uint8 seizure limit |
+| 1000 | 60,972,504 | Not representable by the uint8 seizure limit |
 
 Expiry-first avoids the priced scan for a nonempty expired batch. A healthy page requires both
 bounded discovery lanes, which may use different offsets. Compared with the preceding
-expiry-first implementation, healthy-25 increases by 6,826 gas and expired-25 increases by 3,087 gas.
+expiry-first implementation at commit `31abbdb44`, healthy-25 increases by 25,645 gas and expired-25 by 20,110 gas.
+These rows measure the first expiry-first visit, excluding failed-batch retries and populated
+unhealthy-first visits; the late-rejection cases below cover those paths separately.
 
 The 100-per-lane disjoint-page case starts expiry at 0 and unhealthy at 100 in a 200-borrower
-market. It uses 7,234,428 gas, including the extra borrower-count read. This differs
+market. It uses 7,260,073 gas, including the extra borrower-count read. This differs
 from the aligned-offset measurements above.
 
 These are workload examples, not universal safe limits. Duplicate detection in Seize is quadratic, so larger eligible batches do not scale linearly. Vault-backed collateral, price routes, payout behavior and borrower state can change costs. The body budget must also cover stale-cursor recovery; Heart needs gas for the outer reserve and subsequent tasks. Under this fixture, check=500 cannot finish a healthy page within a 10-million body budget; reducing check to 100 restores progress. Tune the scan and batch limits independently, leaving margin below the heartbeat's available gas, then rerun against the intended markets.
@@ -117,6 +115,24 @@ These are workload examples, not universal safe limits. Duplicate detection in S
 | BLSEIZ-SCAN-LIMITS-G02 | HEART_ROLE holder | Expired batches of 1,25,50,51,100,255 | All selected principal and collateral settled; no Task custody; gas measured separately from setup | Covered: [test][test_whenEligibleBatchIsOne_thenMeasureGas], [test][test_whenEligibleBatchIsTwentyFive_thenMeasureGas], [test][test_whenEligibleBatchIsFifty_thenMeasureGas], [test][test_whenEligibleBatchIsFiftyOne_thenMeasureGas], [test][test_whenEligibleBatchIsOneHundred_thenMeasureGas], [test][test_whenEligibleBatchIsMaxUint8_thenMeasureGas] |
 | BLSEIZ-SCAN-LIMITS-G03 | HEART_ROLE holder | 500 healthy borrowers, 10-million body gas; change check500 to check100 | Oversized scan fails without progress; reduced page succeeds and saves cursor100 | Covered: [test][test_givenTenMillionGas_whenScanReduced_thenProgressResumes] |
 | BLSEIZ-SCAN-LIMITS-G04 | HEART_ROLE holder | Two hundred healthy borrowers; check100/seize1; expiry starts0, unhealthy starts100 | Measure two disjoint bounded pages plus stale-offset count check; exact expiry100/unhealthy0 and unchanged200e9 principal | Covered: [test][test_givenSeparateCursors_whenHealthyPagesDiffer_thenMeasureGas] |
+| BLSEIZ-SCAN-LIMITS-G05 | HEART task manager | One hundred expired or unhealthy loans; both lane orders; cursors25/25; check100/seize25; body budget10 million | Reject aggregate withdrawal after all25 real defaults; roll back the entire batch, advance only the rejected lane by one, make no retry and execute later Heart task | Covered: [test][test_givenExpiredBatch_givenLateRejection_whenExpiryFirst_thenMeasureGas], [test][test_givenExpiredBatch_givenLateRejection_whenUnhealthyFirst_thenMeasureGas], [test][test_givenUnhealthyBatch_givenLateRejection_whenExpiryFirst_thenMeasureGas], [test][test_givenUnhealthyBatch_givenLateRejection_whenUnhealthyFirst_thenMeasureGas] |
+
+The late-rejection benchmarks use the launch limits of 100 checks, 25 results and a 10-million
+task-body budget. Both saved offsets start at 25 in a 100-loan book. DepositManager rejects only the
+aggregate 250e6 withdrawal, after Core has defaulted all 25 selected positions. The complete batch
+rolls back; the task advances that selection's cursor from 25 to 26 without retrying. An earlier
+empty scan of the other lane retains its own successful scan progress. Measurements include the task manager and one subsequent Heart task,
+excluding deployment and loan setup; the enclosing Heart call receives 12 million gas.
+All four cases assert that principal, custody and Treasury balances remain unchanged.
+These cases exercise costly rollback and cursor advancement; they do not establish gas limits for every vault,
+oracle route or token configuration.
+
+| Debt selected | Preferred lane | Task manager call, gas |
+| --- | --- | --- |
+| Expired | Expired | 2,866,365 |
+| Expired | Unhealthy, then expired fallback | 4,174,519 |
+| Unhealthy | Expired, then unhealthy fallback | 5,481,573 |
+| Unhealthy | Unhealthy | 4,181,645 |
 
 ## Independent changes and recovery states
 
@@ -132,25 +148,29 @@ Own policy active; callers cover ADMIN-only, BL-admin-only and overlap with dete
 
 [test_givenInactiveTask_whenLimitsSet_reverts]: ./setScanLimits.t.sol#L114
 [test_givenPermittedCaller_whenLimitsSet]: ./setScanLimits.t.sol#L19
-[test_givenTenMillionGas_whenScanReduced_thenProgressResumes]: ./integration/scanGas.t.sol#L75
+[test_givenTenMillionGas_whenScanReduced_thenProgressResumes]: ./integration/scanGas.t.sol#L86
 [test_whenCallerHasNeitherRole_whenScanLimitsSet_reverts]: ./setScanLimits.t.sol#L61
 [test_whenCheckLimitZero_reverts]: ./setScanLimits.t.sol#L78
-[test_whenEligibleBatchIsFiftyOne_thenMeasureGas]: ./integration/scanGas.t.sol#L60
-[test_whenEligibleBatchIsFifty_thenMeasureGas]: ./integration/scanGas.t.sol#L55
-[test_whenEligibleBatchIsMaxUint8_thenMeasureGas]: ./integration/scanGas.t.sol#L70
-[test_whenEligibleBatchIsOneHundred_thenMeasureGas]: ./integration/scanGas.t.sol#L65
-[test_whenEligibleBatchIsOne_thenMeasureGas]: ./integration/scanGas.t.sol#L45
-[test_whenEligibleBatchIsTwentyFive_thenMeasureGas]: ./integration/scanGas.t.sol#L50
-[test_whenHealthyScanIsFifty_thenMeasureGas]: ./integration/scanGas.t.sol#L25
-[test_whenHealthyScanIsFiveHundred_thenMeasureGas]: ./integration/scanGas.t.sol#L35
-[test_whenHealthyScanIsOneHundred_thenMeasureGas]: ./integration/scanGas.t.sol#L30
-[test_whenHealthyScanIsOneThousand_thenMeasureGas]: ./integration/scanGas.t.sol#L40
-[test_whenHealthyScanIsOne_thenMeasureGas]: ./integration/scanGas.t.sol#L15
-[test_whenHealthyScanIsTwentyFive_thenMeasureGas]: ./integration/scanGas.t.sol#L20
+[test_whenEligibleBatchIsFiftyOne_thenMeasureGas]: ./integration/scanGas.t.sol#L71
+[test_whenEligibleBatchIsFifty_thenMeasureGas]: ./integration/scanGas.t.sol#L66
+[test_whenEligibleBatchIsMaxUint8_thenMeasureGas]: ./integration/scanGas.t.sol#L81
+[test_whenEligibleBatchIsOneHundred_thenMeasureGas]: ./integration/scanGas.t.sol#L76
+[test_whenEligibleBatchIsOne_thenMeasureGas]: ./integration/scanGas.t.sol#L56
+[test_whenEligibleBatchIsTwentyFive_thenMeasureGas]: ./integration/scanGas.t.sol#L61
+[test_whenHealthyScanIsFifty_thenMeasureGas]: ./integration/scanGas.t.sol#L36
+[test_whenHealthyScanIsFiveHundred_thenMeasureGas]: ./integration/scanGas.t.sol#L46
+[test_whenHealthyScanIsOneHundred_thenMeasureGas]: ./integration/scanGas.t.sol#L41
+[test_whenHealthyScanIsOneThousand_thenMeasureGas]: ./integration/scanGas.t.sol#L51
+[test_whenHealthyScanIsOne_thenMeasureGas]: ./integration/scanGas.t.sol#L26
+[test_whenHealthyScanIsTwentyFive_thenMeasureGas]: ./integration/scanGas.t.sol#L31
 [test_whenInvalidBoundariesSeeded_reverts]: ./setScanLimits.t.sol#L97
 [test_whenLimitsUnchanged_thenNoEvent]: ./setScanLimits.t.sol#L107
 [test_whenRolesAndFullWidthBoundariesSeeded]: ./setScanLimits.t.sol#L42
 [test_whenSeizureLimitExceedsCheckLimit_reverts]: ./setScanLimits.t.sol#L90
 [test_whenSeizureLimitZero_reverts]: ./setScanLimits.t.sol#L84
 
-[test_givenSeparateCursors_whenHealthyPagesDiffer_thenMeasureGas]: ./integration/scanGas.t.sol#L115
+[test_givenSeparateCursors_whenHealthyPagesDiffer_thenMeasureGas]: ./integration/scanGas.t.sol#L126
+[test_givenExpiredBatch_givenLateRejection_whenExpiryFirst_thenMeasureGas]: ./integration/scanGas.t.sol#L158
+[test_givenExpiredBatch_givenLateRejection_whenUnhealthyFirst_thenMeasureGas]: ./integration/scanGas.t.sol#L165
+[test_givenUnhealthyBatch_givenLateRejection_whenExpiryFirst_thenMeasureGas]: ./integration/scanGas.t.sol#L173
+[test_givenUnhealthyBatch_givenLateRejection_whenUnhealthyFirst_thenMeasureGas]: ./integration/scanGas.t.sol#L180
