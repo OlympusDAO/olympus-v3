@@ -10,10 +10,10 @@ import {BackingOracleBatchScript} from "src/scripts/ops/lib/BackingOracleBatchSc
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
-import {IYieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2ConfigTimelock.sol";
-import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Config.sol";
+import {IYieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2ConfigTimelock.sol";
+import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2View.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 

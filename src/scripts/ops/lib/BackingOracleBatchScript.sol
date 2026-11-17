@@ -10,8 +10,8 @@ import {ConfigTimelockBatchScript} from "src/scripts/ops/lib/ConfigTimelockBatch
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
-import {IBackingOracleConfigTimelock} from "src/policies/interfaces/IBackingOracleConfigTimelock.sol";
+import {IBackingOracle} from "src/policies/interfaces/backing-oracle/IBackingOracle.sol";
+import {IBackingOracleConfigTimelock} from "src/policies/interfaces/backing-oracle/IBackingOracleConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 

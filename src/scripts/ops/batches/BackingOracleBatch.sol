@@ -9,7 +9,7 @@ pragma solidity ^0.8.24;
 import {console2} from "@forge-std-1.16.2/console2.sol";
 
 // Interfaces
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
+import {IBackingOracle} from "src/policies/interfaces/backing-oracle/IBackingOracle.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 
 // Contracts

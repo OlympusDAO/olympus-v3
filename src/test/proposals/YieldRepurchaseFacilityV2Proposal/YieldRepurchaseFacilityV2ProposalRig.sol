@@ -11,8 +11,8 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
-import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepoV1_2} from "src/policies/interfaces/IYieldRepoV1_2.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYieldRepurchaseFacilityV2Activator.sol";
 
 // Libraries
@@ -31,14 +31,14 @@ import {ModuleWithSubmodules, toSubKeycode} from "src/Submodules.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {BackingOracle} from "src/policies/BackingOracle.sol";
-import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
+import {BackingOracle} from "src/policies/backing-oracle/BackingOracle.sol";
+import {BackingOracleConfigTimelock} from "src/policies/backing-oracle/BackingOracleConfigTimelock.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
-import {YieldRepurchaseFacilityV2Config} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Config.sol";
-import {YieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ConfigTimelock.sol";
-import {YieldRepurchaseFacilityV2Lens} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Lens.sol";
+import {YieldRepurchaseFacilityV2} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2.sol";
+import {YieldRepurchaseFacilityV2Config} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2Config.sol";
+import {YieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2ConfigTimelock.sol";
+import {YieldRepurchaseFacilityV2Lens} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2Lens.sol";
 import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseFacilityV2Activator.sol";
 import {ProposalTest} from "src/test/proposals/ProposalTest.sol";
 import {YieldRepurchaseFacilityV2ProposalHarness, YieldRepurchaseFacilityV2ProposalSnapshotHarness} from "./YieldRepurchaseFacilityV2ProposalHarness.sol";
@@ -160,7 +160,7 @@ abstract contract YieldRepurchaseFacilityV2ProposalRig is ProposalTest {
     CHREGv1 internal chreg;
     OlympusHeart internal heart;
     GovernorBravoDelegate internal governor;
-    IYieldRepoV1 internal yieldRepoV1;
+    IYieldRepoV1_2 internal yieldRepoV1;
     IBondAuctioneer internal bondAuctioneer;
     AggregatorV2V3Interface internal usdeUsdFeed;
 
@@ -249,7 +249,7 @@ abstract contract YieldRepurchaseFacilityV2ProposalRig is ProposalTest {
         rolesAdmin = RolesAdmin(addresses.getAddress("olympus-policy-roles-admin"));
         heart = OlympusHeart(addresses.getAddress("olympus-policy-heart-1_7"));
         governor = GovernorBravoDelegate(addresses.getAddress("olympus-governor"));
-        yieldRepoV1 = IYieldRepoV1(
+        yieldRepoV1 = IYieldRepoV1_2(
             addresses.getAddress("olympus-policy-yieldrepurchasefacility-1_2")
         );
         priceConfig = addresses.getAddress("olympus-policy-price-config-2_0");
@@ -1067,7 +1067,7 @@ abstract contract YieldRepurchaseFacilityV2ProposalRig is ProposalTest {
     /// @notice Shuts the YieldRepurchaseFacility v1.2 down from a holder of `loop_daddy`,
     ///         without a token to transfer.
     function _shutdownV1(address caller_) internal {
-        IYieldRepoV1 rigV1 = yieldRepoV1;
+        IYieldRepoV1_2 rigV1 = yieldRepoV1;
         vm.prank(caller_);
         rigV1.shutdown(new address[](0));
     }

@@ -20,9 +20,9 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 // Contracts
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
-import {BackingOracle} from "src/policies/BackingOracle.sol";
-import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
+import {IBackingOracle} from "src/policies/interfaces/backing-oracle/IBackingOracle.sol";
+import {BackingOracle} from "src/policies/backing-oracle/BackingOracle.sol";
+import {BackingOracleConfigTimelock} from "src/policies/backing-oracle/BackingOracleConfigTimelock.sol";
 import {Kernel, Module} from "src/Kernel.sol";
 
 // Bridge

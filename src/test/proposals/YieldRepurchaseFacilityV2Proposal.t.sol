@@ -7,8 +7,8 @@ import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.so
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {IBackingOracle} from "src/policies/interfaces/backing-oracle/IBackingOracle.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYieldRepurchaseFacilityV2Activator.sol";
 
 // Libraries

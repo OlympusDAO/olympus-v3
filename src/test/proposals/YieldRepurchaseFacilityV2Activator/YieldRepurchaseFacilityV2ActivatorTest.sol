@@ -38,14 +38,14 @@ import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {BackingOracle} from "src/policies/BackingOracle.sol";
-import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
+import {BackingOracle} from "src/policies/backing-oracle/BackingOracle.sol";
+import {BackingOracleConfigTimelock} from "src/policies/backing-oracle/BackingOracleConfigTimelock.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol";
-import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
-import {YieldRepurchaseFacilityV2Config} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Config.sol";
-import {YieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ConfigTimelock.sol";
+import {YieldRepurchaseFacilityV2} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2.sol";
+import {YieldRepurchaseFacilityV2Config} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2Config.sol";
+import {YieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2ConfigTimelock.sol";
 import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseFacilityV2Activator.sol";
 
 /// @notice Shared rig of the `YieldRepurchaseFacilityV2Activator` suites: a local Kernel with the

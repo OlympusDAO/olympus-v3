@@ -12,13 +12,13 @@ import {console2} from "@forge-std-1.16.2/console2.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
-import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2View.sol";
+import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Write.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 
 // Libraries
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/yield-repurchase-facility/libraries/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2ConfigLib} from "src/scripts/ops/lib/YieldRepurchaseFacilityV2ConfigLib.sol";
 
 // Contracts

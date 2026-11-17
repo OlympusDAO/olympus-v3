@@ -20,13 +20,13 @@ import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
+import {IBackingOracle} from "src/policies/interfaces/backing-oracle/IBackingOracle.sol";
 import {IClearinghouseReserve} from "src/policies/interfaces/IClearinghouseReserve.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
-import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
-import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
-import {IYieldRepurchaseFacilityV2Lens} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Lens.sol";
-import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
+import {IYieldRepoV1_2} from "src/policies/interfaces/IYieldRepoV1_2.sol";
+import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Config.sol";
+import {IYieldRepurchaseFacilityV2Lens} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Lens.sol";
+import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2View.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYieldRepurchaseFacilityV2Activator.sol";
@@ -34,7 +34,7 @@ import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYie
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/yield-repurchase-facility/libraries/YieldRepurchaseFacilityV2Constants.sol";
 import {BackingOracleConfigLib} from "src/scripts/ops/lib/BackingOracleConfigLib.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {YieldRepurchaseFacilityV2ConfigLib} from "src/scripts/ops/lib/YieldRepurchaseFacilityV2ConfigLib.sol";
@@ -611,7 +611,7 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
                 )
         );
         _check(_isActive(kernel, v1), "v1.2 is active in the Kernel");
-        _check(!IYieldRepoV1(v1).isShutdown(), "v1.2 is not shut down");
+        _check(!IYieldRepoV1_2(v1).isShutdown(), "v1.2 is not shut down");
         _check(
             IPeriodicTaskManager(heart).getPeriodicTaskIndex(facility) == type(uint256).max,
             "the v2 facility is not a periodic task of the Heart yet"
@@ -1429,7 +1429,7 @@ contract YieldRepurchaseFacilityV2SetupBatch is YieldRepurchaseFacilityV2BatchSc
         address heart = _envAddressNotZero(HEART_KEY);
 
         require(
-            IYieldRepoV1(v1_).isShutdown(),
+            IYieldRepoV1_2(v1_).isShutdown(),
             _fail(
                 "v1.2 is not shut down; the launch proposal shuts it down, so the deactivation follows the proposal"
             )

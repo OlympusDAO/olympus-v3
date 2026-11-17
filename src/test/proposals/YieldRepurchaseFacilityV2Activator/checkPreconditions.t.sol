@@ -5,8 +5,8 @@ pragma solidity ^0.8.24;
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2View.sol";
 import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYieldRepurchaseFacilityV2Activator.sol";
 
 // Mocks

@@ -11,15 +11,15 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBackingOracleConfigTimelock} from "src/policies/interfaces/IBackingOracleConfigTimelock.sol";
+import {IBackingOracleConfigTimelock} from "src/policies/interfaces/backing-oracle/IBackingOracleConfigTimelock.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
-import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
-import {IYieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2ConfigTimelock.sol";
-import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
-import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
+import {IYieldRepoV1_2} from "src/policies/interfaces/IYieldRepoV1_2.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Config.sol";
+import {IYieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2ConfigTimelock.sol";
+import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2View.sol";
+import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Write.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYieldRepurchaseFacilityV2Activator.sol";
 
@@ -427,7 +427,7 @@ contract YieldRepurchaseFacilityV2Activator is IYieldRepurchaseFacilityV2Activat
     /// @return poolSeed The USDS value the YieldRepurchaseFacility v1.2 held, in USDS (18
     ///         decimals).
     function _migrateV1() private returns (uint48 epoch, uint256 nextYield, uint256 poolSeed) {
-        IYieldRepoV1 yieldRepoV1 = IYieldRepoV1(_YIELD_REPO_V1);
+        IYieldRepoV1_2 yieldRepoV1 = IYieldRepoV1_2(_YIELD_REPO_V1);
         epoch = yieldRepoV1.epoch();
         nextYield = yieldRepoV1.nextYield();
         uint256 lastReserveBalance = yieldRepoV1.lastReserveBalance();
@@ -584,7 +584,7 @@ contract YieldRepurchaseFacilityV2Activator is IYieldRepurchaseFacilityV2Activat
         if (IPeriodicTaskManager(_HEART).hasPeriodicTask(_FACILITY))
             revert YieldRepurchaseFacilityV2Activator_FacilityAlreadyHeartTask();
 
-        IYieldRepoV1 yieldRepoV1 = IYieldRepoV1(_YIELD_REPO_V1);
+        IYieldRepoV1_2 yieldRepoV1 = IYieldRepoV1_2(_YIELD_REPO_V1);
         if (yieldRepoV1.isShutdown()) revert YieldRepurchaseFacilityV2Activator_V1ShutDown();
         // The registration of a vault stores the conversion rate snapshot unchecked, and the
         // facility projects no vault yield from a zero one. A zero reserve balance snapshot
@@ -769,7 +769,7 @@ contract YieldRepurchaseFacilityV2Activator is IYieldRepurchaseFacilityV2Activat
 
         _requireBinding(
             "YieldRepurchaseFacility v1.2 sReserve",
-            IYieldRepoV1(_YIELD_REPO_V1).sReserve(),
+            IYieldRepoV1_2(_YIELD_REPO_V1).sReserve(),
             _SUSDS
         );
         _requireBinding("sUSDS asset", IERC4626(_SUSDS).asset(), _USDS);

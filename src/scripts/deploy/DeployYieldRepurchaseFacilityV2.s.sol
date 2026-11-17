@@ -15,10 +15,10 @@ import {YieldRepurchaseFacilityV2ConfigLib} from "src/scripts/ops/lib/YieldRepur
 
 // Contracts
 import {Kernel} from "src/Kernel.sol";
-import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
-import {YieldRepurchaseFacilityV2Config} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Config.sol";
-import {YieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ConfigTimelock.sol";
-import {YieldRepurchaseFacilityV2Lens} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Lens.sol";
+import {YieldRepurchaseFacilityV2} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2.sol";
+import {YieldRepurchaseFacilityV2Config} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2Config.sol";
+import {YieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2ConfigTimelock.sol";
+import {YieldRepurchaseFacilityV2Lens} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2Lens.sol";
 import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseFacilityV2Activator.sol";
 
 // solhint-disable gas-custom-errors

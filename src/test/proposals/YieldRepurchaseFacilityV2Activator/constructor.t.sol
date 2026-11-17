@@ -11,9 +11,9 @@ import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
 // Contracts
 import {Actions, Kernel, Policy} from "src/Kernel.sol";
-import {BackingOracle} from "src/policies/BackingOracle.sol";
-import {BackingOracleConfigTimelock} from "src/policies/BackingOracleConfigTimelock.sol";
-import {YieldRepurchaseFacilityV2Config} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Config.sol";
+import {BackingOracle} from "src/policies/backing-oracle/BackingOracle.sol";
+import {BackingOracleConfigTimelock} from "src/policies/backing-oracle/BackingOracleConfigTimelock.sol";
+import {YieldRepurchaseFacilityV2Config} from "src/policies/yield-repurchase-facility/YieldRepurchaseFacilityV2Config.sol";
 import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseFacilityV2Activator.sol";
 import {YieldRepurchaseFacilityV2ActivatorTest} from "./YieldRepurchaseFacilityV2ActivatorTest.sol";
 

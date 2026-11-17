@@ -8,10 +8,10 @@ import {VmSafe} from "@forge-std-1.16.2/Vm.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
-import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
-import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
+import {IYieldRepoV1_2} from "src/policies/interfaces/IYieldRepoV1_2.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Config.sol";
+import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Write.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYieldRepurchaseFacilityV2Activator.sol";
 
@@ -523,7 +523,7 @@ contract YieldRepurchaseFacilityV2ActivatorTests_activate is
             abi.encodeCall(IConfigOperator.setConfigOperator, (address(configTimelock))),
             abi.encodeCall(IEnabler.enable, ("")),
             abi.encodeWithSelector(IEnabler.enable.selector),
-            abi.encodeWithSelector(IYieldRepoV1.shutdown.selector),
+            abi.encodeWithSelector(IYieldRepoV1_2.shutdown.selector),
             // The first member of the registration is the vault
             abi.encodeWithSelector(
                 IYieldRepurchaseFacilityV2Config.addAsset.selector,

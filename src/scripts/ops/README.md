@@ -48,7 +48,7 @@ Without `--multisig true`, EOA transactions continue to use Forge's selected wal
 
 ## YieldRepurchaseFacilityV2 and BackingOracle
 
-These batches prepare the launch of the YieldRepurchaseFacilityV2 stack (the facility, its configuration policy and its config timelock, and the BackingOracle with its config timelock) and operate it afterwards. The launch itself is OCG proposal 20, `YieldRepurchaseFacilityV2Proposal`, which calls the one-use `YieldRepurchaseFacilityV2Activator`; `documentation/yield_repurchase_facility_v2_launch_runbook.md` describes the whole rollout.
+These batches prepare the launch of the YieldRepurchaseFacilityV2 stack (the facility, its configuration policy and its config timelock, and the BackingOracle with its config timelock) and operate it afterwards. The launch itself is OCG proposal 20, `YieldRepurchaseFacilityV2Proposal`, which calls the one-use `YieldRepurchaseFacilityV2Activator`; `documentation/yield-repurchase-facility/launch-runbook.md` describes the whole rollout.
 
 Every entry point reads the live state and adds only the calls that are missing, so a second run on a converged state ends with `No batch targets to execute`. Preconditions are checked while the batch is built; a failed one stops the run with a message that names the way out. Every non-empty batch is simulated and validated before it is proposed.
 
@@ -186,4 +186,4 @@ Queued actions survive a disable and keep their configuration keys. Before a `re
 
 ### Rehearsal
 
-`shell/yrf/anvil-deployment/run.sh` deploys the stack and the activator on an Anvil fork of mainnet, replays the launch proposal from the OCG timelock and runs every entry point above against the fork; see its README.
+`shell/anvil-deployment/yield-repurchase-facility/run.sh` deploys the stack and the activator on an Anvil fork of mainnet, replays the launch proposal from the OCG timelock and runs every entry point above against the fork; see its README.

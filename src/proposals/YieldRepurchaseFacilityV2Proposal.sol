@@ -25,11 +25,11 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
-import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
-import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
+import {IBackingOracle} from "src/policies/interfaces/backing-oracle/IBackingOracle.sol";
+import {IYieldRepoV1_2} from "src/policies/interfaces/IYieldRepoV1_2.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2Config.sol";
+import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/yield-repurchase-facility/IYieldRepurchaseFacilityV2View.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IYieldRepurchaseFacilityV2Activator} from "src/proposals/interfaces/IYieldRepurchaseFacilityV2Activator.sol";
 
@@ -319,9 +319,9 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 // forum posts, as the other proposals do.
                 "## Resources\n",
                 "\n",
-                "- Operator documentation: `documentation/yield_repurchase_facility_v2_launch_runbook.md` in the olympus-v3 repository.\n",
-                "- Contracts: `src/policies/YieldRepurchaseFacility/`, `src/policies/BackingOracle.sol`, `src/policies/BackingOracleConfigTimelock.sol`, `src/proposals/YieldRepurchaseFacilityV2Activator.sol`.\n",
-                "- Backing oracle documentation: `documentation/backing_oracle.md` in the olympus-v3 repository.\n",
+                "- Operator documentation: `documentation/yield-repurchase-facility/launch-runbook.md` in the olympus-v3 repository.\n",
+                "- Contracts: `src/policies/yield-repurchase-facility/`, `src/policies/backing-oracle/`, `src/proposals/YieldRepurchaseFacilityV2Activator.sol`.\n",
+                "- Backing oracle documentation: `documentation/backing-oracle/overview.md` in the olympus-v3 repository.\n",
                 "\n",
                 "## Assumptions\n",
                 "\n",
@@ -805,7 +805,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
         IYieldRepurchaseFacilityV2Activator.LaunchParameters memory parameters_
     ) internal view {
         IYieldRepurchaseFacilityV2View facility = IYieldRepurchaseFacilityV2View(c.facility);
-        IYieldRepoV1 yieldRepoV1 = IYieldRepoV1(c.yieldRepoV1);
+        IYieldRepoV1_2 yieldRepoV1 = IYieldRepoV1_2(c.yieldRepoV1);
 
         address[] memory vaults = facility.getVaults();
         _requireParameter("YieldRepurchaseFacilityV2 vault count", vaults.length, _ASSET_COUNT);
@@ -872,7 +872,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
         _requireParameter(
             "YieldRepurchaseFacilityV2 epoch",
             facility.epoch(),
-            IYieldRepoV1(c.yieldRepoV1).epoch()
+            IYieldRepoV1_2(c.yieldRepoV1).epoch()
         );
         if (facility.isCycleSeedable()) revert YieldRepurchaseFacilityV2Proposal_CycleNotSeeded();
     }
@@ -972,7 +972,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
     /// @notice Reverts unless the YieldRepurchaseFacility v1.2 is shut down and holds no USDS,
     ///         sUSDS or OHM.
     function _validateV1(Contracts memory c) internal view {
-        if (!IYieldRepoV1(c.yieldRepoV1).isShutdown())
+        if (!IYieldRepoV1_2(c.yieldRepoV1).isShutdown())
             revert YieldRepurchaseFacilityV2Proposal_V1NotShutDown();
         address[3] memory tokens = [c.usds, c.sUsds, c.ohm];
         for (uint256 i = 0; i < tokens.length; ++i) {

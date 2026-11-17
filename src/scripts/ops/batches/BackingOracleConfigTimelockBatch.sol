@@ -10,8 +10,8 @@ import {console2} from "@forge-std-1.16.2/console2.sol";
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
-import {IBackingOracleConfigTimelock} from "src/policies/interfaces/IBackingOracleConfigTimelock.sol";
+import {IBackingOracle} from "src/policies/interfaces/backing-oracle/IBackingOracle.sol";
+import {IBackingOracleConfigTimelock} from "src/policies/interfaces/backing-oracle/IBackingOracleConfigTimelock.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 

@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/yield-repurchase-facility/libraries/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2ConfigLib} from "src/scripts/ops/lib/YieldRepurchaseFacilityV2ConfigLib.sol";
 
 import {YieldRepurchaseFacilityV2ConfigLibHarness} from "src/test/scripts/ops/lib/mocks/YieldRepurchaseFacilityV2ConfigLibHarness.sol";

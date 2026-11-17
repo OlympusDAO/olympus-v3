@@ -12,7 +12,7 @@ import {stdJson} from "@forge-std-1.16.2/StdJson.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/yield-repurchase-facility/libraries/YieldRepurchaseFacilityV2Constants.sol";
 
 /// @title YieldRepurchaseFacilityV2ConfigLib
 /// @notice Reads the desired state of the YieldRepurchaseFacilityV2 stack (the facility, its
