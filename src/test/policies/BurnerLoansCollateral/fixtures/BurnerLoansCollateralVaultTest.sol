@@ -48,7 +48,7 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
             beforeState,
             "Vault preview preserves all accounting"
         );
-        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
+        (uint128 credit, uint128 collateral) = _collateral.depositCollateral(
             address(token_),
             amount_,
             _borrower
@@ -57,7 +57,6 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
         // quote uses the pre-deposit rate; execution must book the actual post-deposit credit.
         assertEq(quotedTotal, quote, "New-position preview total equals estimated credit");
         assertEq(collateral, credit, "New-position total equals actual settled credit");
-        assertEq(health, type(uint256).max, "Initial vault deposit remains debt-free");
         assertEq(
             _lens.getPosition(address(token_), _borrower).depositedCollateral,
             credit,
@@ -100,8 +99,13 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
             5,
             _borrower
         );
+        vm.mockCallRevert(
+            address(_risk),
+            bytes(""),
+            abi.encodeWithSelector(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector)
+        );
         vm.prank(_borrower);
-        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
+        (uint128 credit, uint128 collateral) = _collateral.depositCollateral(
             address(token),
             5,
             _borrower
@@ -110,7 +114,12 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
         // Required backing=$100*1.25=$125. H=2002/125=16.016 WAD, or /32=0.5005 WAD.
         assertEq(credit, 3, "Actual credit differs from five input units");
         assertEq(collateral, 2002, "Position uses credited top-up, not nominal input");
-        assertEq(health, expectedHealth_, "Independent real Risk health");
+        vm.clearMockedCalls();
+        assertEq(
+            _lens.positionHealthFactor(address(token), collateral, debt_),
+            expectedHealth_,
+            "Independent health query after deposit"
+        );
         assertEq(quotedCredit, credit, "Stable conversion credit matches quote");
         assertEq(quotedCollateral, collateral, "Stable canonical collateral matches quote");
         assertEq(
@@ -195,15 +204,9 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
         );
         vm.prank(_borrower);
         uint128 total;
-        uint256 health;
-        (credit, total, health) = _collateral.depositCollateral(
-            address(token_),
-            amount_,
-            _borrower
-        );
+        (credit, total) = _collateral.depositCollateral(address(token_), amount_, _borrower);
         assertEq(credit, expectedCredit, "Actual credit follows independently calculated shares");
         assertEq(total, prior + expectedCredit, "Returned collateral adds Q, never nominal input");
-        assertEq(health, type(uint256).max, "Debt-free returned health");
         assertLe(credit, amount_, "Rounding cannot create collateral");
         assertEq(token_.balanceOf(_borrower), 0, "Payer funds the full nominal input");
         assertEq(token_.balanceOf(address(_core)), 0, "Core retains no transient assets");

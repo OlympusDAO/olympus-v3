@@ -16,14 +16,14 @@ Own-policy admission: require Kernel-active BurnerLoansCollateral; own inactivit
 
 Approved acceptance criteria: execution returns `(uint128 credit, uint128 collateral)` only. Preview retains `(uint256 credit, uint256 collateral)`. Neither path reads Core's Risk pointer, Risk lifecycle/status, snapshot, refresh, health, PRICE, backing oracle or price cache, regardless of debt. A positive collateral deposit needs no valuation and may leave the borrower unhealthy. DepositManager custody conversion, final solvency, actual credit and all existing authorization/admission checks remain mandatory.
 
-Current implementation still returns health and refreshes prices/backing for debt-bearing deposits. Existing tests expecting pricing failures or a third return value are migration evidence, not proof of the proposed behavior. Changed rows are Partial until tests and their reciprocal mappings migrate and focused execution passes; new rows are Unmapped. Other Covered labels retain their prior scope and were not revalidated in this documentation-only update.
+Execution and preview implement the approved two-value API without Risk, PRICE, backing or cache calls. Coverage mappings below describe the current tests; Covered requires focused execution and the stated assertions. Legacy arbitrary mocked-health returns are retired with that output; compatible collateral/principal fuzz ranges, numeric maxima and independently derived healthy/boundary/unhealthy cases remain covered.
 
 - [x] Compare the current code with V12 commit `cd50b43f984212495138882f229a821abbdc732e` and trace the deposit settlement boundary.
 - [x] Update this existing scenario plan for oracle-independent deposits.
 - [x] Obtain Crit approval before changing contracts or tests.
-- [ ] Write regression tests and demonstrate failure against the current implementation.
-- [ ] Update the interface, implementation, callers and protocol documentation.
-- [ ] Pass focused validation and refresh scenario-to-test mappings.
+- [x] Write regression tests and demonstrate failure against the prior implementation.
+- [x] Update the interface, implementation, callers and protocol documentation.
+- [x] Pass focused validation and refresh scenario-to-test mappings.
 
 Cap applies to actual credited amount Q, not input amount A: DepositManager enforces pre-utilization U+Q<=cap. For direct custody Q=A; vault conversion may make them differ. Minimum deposit remains an input-amount check. No duplicate input-amount cap check belongs to the action.
 
@@ -56,9 +56,9 @@ retain their current health fields and admission requirements.
 
 | ID | Caller | Existing debt / dependencies | Required preview result | Execution control | Test |
 | --- | --- | --- | --- | --- | --- |
-| BLCOL-DEPOSIT-P22 | Fuzz every viewer without role exclusions | New/existing position; compatible C,Q and uint128 maximum seeds | Exactly two values (estimated Q,C+Q), 64-byte success result; no health field or writes | Authorized stable execution returns exactly two values (actual Q,C+Q), 64 bytes; no health output | Partial: [test][test_whenDepositQuoted_thenOnlyCreditAndCollateralReturned], [test][test_whenAnyViewerQuotesCompatibleCollateral], [test][test_whenDepositQuoteMaximumSeeds], [test][test_givenExistingCollateral_whenDepositQuoteReachesMaximum]; execution ABI assertions require migration |
-| BLCOL-DEPOSIT-P23 | Unrelated viewer quotes; B executes | Debt>0; independently poison Core.risk, Risk.snapshot, refreshSnapshot and health; independently disable/deactivate Risk | Quote Q,C+Q without touching any price/health service | Deposit succeeds with actual Q,C+Q; no Risk pointer/status/calculator call; debt/maturity unchanged | Partial: [test][test_givenDebtAndPricingUnavailable_whenDepositQuoted_thenNoPricingRead], [test][test_givenDebtAndRiskSnapshotUnavailable_whenDepositQuoted], [test][test_givenDebtAndRiskPointerUnavailable_whenDepositQuoted], [test][test_givenDebt_whenRiskHealthFails_thenDepositRollsBack], [test][test_givenDebt_whenSnapshotRefreshFails_thenIndependentViewAndRollback], [test][test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement], [test][test_givenDebtAndPriceCachePaused_whenCollateralDeposited]; execution/no-call and Risk lifecycle coverage pending |
-| BLCOL-DEPOSIT-P24 | B | Debt>0; backing or PRICE unavailable after debt creation | Quote Q,C+Q | Deposit completes; a subsequent separate Lens query reverts with the exact configured dependency error | Unmapped |
+| BLCOL-DEPOSIT-P22 | Fuzz every viewer without role exclusions | New/existing position; compatible C,Q and uint128 maximum seeds | Exactly two values (estimated Q,C+Q), 64-byte success result; no health field or writes | Authorized stable execution returns exactly two values (actual Q,C+Q), 64 bytes; no health output | Covered: [test][test_whenDepositQuoted_thenOnlyCreditAndCollateralReturned], [test][test_whenAnyViewerQuotesCompatibleCollateral], [test][test_whenDepositQuoteMaximumSeeds], [test][test_givenExistingCollateral_whenDepositQuoteReachesMaximum], [test][test_whenDeposited_thenOnlyCreditAndCollateralReturned] |
+| BLCOL-DEPOSIT-P23 | Unrelated viewer quotes; B executes | Debt>0; independently poison Core.risk, Risk.snapshot, refreshSnapshot and health; independently disable/deactivate Risk | Quote Q,C+Q without touching any price/health service | Deposit succeeds with actual Q,C+Q; no Risk pointer/status/calculator call; debt/maturity unchanged | Covered: [test][test_givenDebtAndPricingUnavailable_whenDepositQuoted_thenNoPricingRead], [test][test_givenDebtAndRiskSnapshotUnavailable_whenDepositQuoted], [test][test_givenDebtAndRiskPointerUnavailable_whenDepositQuoted], [test][test_givenDebtAndRiskHealthUnavailable_whenDeposited], [test][test_givenDebtAndRiskSnapshotsUnavailable_whenDeposited], [test][test_givenDebtAndBackingPaused_whenToppedUpBeforeWithdrawal], [test][test_givenDebtAndPriceCachePaused_whenCollateralDeposited], [test][test_givenDebtAndPricingUnavailable_whenDeposited], [test][test_givenDebtAndRiskPointerUnavailable_whenDeposited], [test][test_givenDebtAndRiskDisabled_whenDeposited], [test][test_givenDebtAndRiskInactive_whenDeposited] |
+| BLCOL-DEPOSIT-P24 | B | Debt>0; backing or PRICE unavailable after debt creation | Quote Q,C+Q | Deposit completes; a subsequent separate Lens query reverts with the exact configured dependency error | Covered: [test][test_givenDebtAndSnapshotUnavailable_whenHealthQueriedAfterDeposit_reverts], [test][test_givenBackingOutage_whenHealthQueriedAfterDeposit_reverts], [test][test_givenPriceOutage_whenHealthQueriedAfterDeposit_reverts] |
 
 ## Lifecycle
 
@@ -118,7 +118,7 @@ The action retains its own active/enabled gates; Core retains its own lifecycle 
 | ID | Caller | Input / pre-state | Execution / return | Accounting / events | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
 | BLCOL-DEPOSIT-A09 | Borrower | Action settlement role revoked after public enablement | `ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE)` | Unchanged; no committed logs | Same ROLES_RequireRole(BL_COLLATERAL_POLICY_ROLE) | Covered: [test_givenSettlementRoleRevoked_whenDepositing_thenBothPathsReject][test_givenSettlementRoleRevoked_whenDepositing_thenBothPathsReject] |
-| BLCOL-DEPOSIT-A10 | Borrower or authorized operator | Required settlement role retained; own activity/enabled state unchanged; external action `kernel()` reports another Kernel or reverts; seed both | Return (Q,C+Q) | Credit actual Q once to the selected position and Core receipts/liabilities; actual caller funds the deposit; no new debt; no caller `kernel()` read | Same economic quote under unchanged prices/conversion; no caller metadata read, writes or logs | Partial: [test_givenReportedKernelMismatch_whenDeposited_thenGetterIsNotRead][test_givenReportedKernelMismatch_whenDeposited_thenGetterIsNotRead], [test_givenActionKernelGetterReverts_whenDeposited_thenGetterIsNotRead][test_givenActionKernelGetterReverts_whenDeposited_thenGetterIsNotRead]; execution ABI migration and focused rerun pending |
+| BLCOL-DEPOSIT-A10 | Borrower or authorized operator | Required settlement role retained; own activity/enabled state unchanged; external action `kernel()` reports another Kernel or reverts; seed both | Return (Q,C+Q) | Credit actual Q once to the selected position and Core receipts/liabilities; actual caller funds the deposit; no new debt; no caller `kernel()` read | Same economic quote under unchanged prices/conversion; no caller metadata read, writes or logs | Covered: [test_givenReportedKernelMismatch_whenDeposited_thenGetterIsNotRead][test_givenReportedKernelMismatch_whenDeposited_thenGetterIsNotRead], [test_givenActionKernelGetterReverts_whenDeposited_thenGetterIsNotRead][test_givenActionKernelGetterReverts_whenDeposited_thenGetterIsNotRead] |
 
 ## Invalid inputs
 
@@ -142,17 +142,17 @@ Let A be the requested deposit, Q DepositManager’s actual credited amount and 
 
 | ID | Caller | Input / pre-state | Execution / return | Accounting / events | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-DEPOSIT-N01 | Borrower | Direct payout; no prior position; fuzz amount max(1,minimum)..MAX128, actual credit Q=amount fits cap room and representable aggregate; seed minimum, 1 when valid, MAX128 | `Return (amount,amount)` | Payer→Core→DM; Core receipt balance and liabilities +amount; new FLOAN collateral=amount; action CollateralDeposited | Independently quote (A,A); compare credit and total collateral with execution; no health output, Risk/PRICE call or writes | Partial: [test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree][test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree], [test_whenOneUnitDeposited_thenFullCredit][test_whenOneUnitDeposited_thenFullCredit], [test_whenMaximumDeposited_thenAllReturnsAndCustodyAgree][test_whenMaximumDeposited_thenAllReturnsAndCustodyAgree], [test_givenMinimumDeposit_whenExactMinimum_thenAllReturnsAndCustodyAgree][test_givenMinimumDeposit_whenExactMinimum_thenAllReturnsAndCustodyAgree]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-N02 | Borrower | Direct payout; existing collateral C; fuzz positive amount through min(actualCreditCapRoom,MAX128-C); direct payout has Q=amount | `Return (amount,C+amount)` | Only selected position/receipt/operator accounting increases | Independently quote credit and total collateral; compare both action results under stable conversion; no Risk/PRICE calls or writes | Partial: [test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition][test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition], [test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached][test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-N03 | Borrower | Synchronous vault; fuzz positive amount with nonzero representable actual credit Q; seed Q=1 and MAX128; include reachable rounding cases `0<Q<A` | `Return (Q,C+Q)` | Credit Q independently derived from actual shares/conversion; returned/stored collateral=C+Q, not C+A; asset/share/receipt/liability deltas verified | Independently quote credit and total collateral; compare both action results under stable conversion; no Risk/PRICE calls or writes | Partial: [test_givenMaximumVaultCredit_whenFullyWithdrawn_thenFullWidthUnitsPreserved][test_givenMaximumVaultCredit_whenFullyWithdrawn_thenFullWidthUnitsPreserved], [test_givenOneRawVaultUnit_whenWithdrawn_thenExactOutput][test_givenOneRawVaultUnit_whenWithdrawn_thenExactOutput], [test_givenSynchronousVault_whenUnderlyingWithdrawn][test_givenSynchronousVault_whenUnderlyingWithdrawn], [test_givenSynchronousVault_whenSharesWithdrawn][test_givenSynchronousVault_whenSharesWithdrawn], [test_givenMaximumVaultCredit_whenUnderlyingFullyWithdrawn][test_givenMaximumVaultCredit_whenUnderlyingFullyWithdrawn], [test_givenOneVaultUnit_whenSharesWithdrawn][test_givenOneVaultUnit_whenSharesWithdrawn], [rounded credit below cap][test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted], [rounded credit at cap][test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted], [test_givenNonUnitVaultRate_whenDepositedAcrossFullRange_thenActualCreditAndCustodyAgree][test_givenNonUnitVaultRate_whenDepositedAcrossFullRange_thenActualCreditAndCustodyAgree], [test_givenExistingVaultCollateral_whenToppedUpAcrossFullRange_thenActualCreditAddsOnce][test_givenExistingVaultCollateral_whenToppedUpAcrossFullRange_thenActualCreditAddsOnce], [test_givenNonUnitVaultRate_whenCreditIsOne_thenAllReturnsAndCustodyAgree][test_givenNonUnitVaultRate_whenCreditIsOne_thenAllReturnsAndCustodyAgree], [test_givenNonUnitVaultRate_whenCreditIsMaximum_thenAllReturnsAndCustodyAgree][test_givenNonUnitVaultRate_whenCreditIsMaximum_thenAllReturnsAndCustodyAgree]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-N04 | Borrower | Raw amount > deposit cap room; vault credit Q < remaining cap room | `Success` | Cap checks converted Q; returned/stored collateral=C+Q, not C+A; receipt/liability deltas=Q | Independently quote credit and total collateral; compare both action results under stable conversion; no Risk/PRICE calls or writes | Partial: [test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted][test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-N05 | Borrower | Actual credit Q exactly remaining deposit cap room | `Success` | Utilization reaches exact configured cap | Independently quote credit and total collateral; compare both action results under stable conversion; no Risk/PRICE calls or writes | Partial: [test_givenExactDepositCapRoom_whenDeposited_thenCapReached][test_givenExactDepositCapRoom_whenDeposited_thenCapReached], [test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted][test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted]; execution ABI migration and focused rerun pending |
+| BLCOL-DEPOSIT-N01 | Borrower | Direct payout; no prior position; fuzz amount max(1,minimum)..MAX128, actual credit Q=amount fits cap room and representable aggregate; seed minimum, 1 when valid, MAX128 | `Return (amount,amount)` | Payer→Core→DM; Core receipt balance and liabilities +amount; new FLOAN collateral=amount; action CollateralDeposited | Independently quote (A,A); compare credit and total collateral with execution; no health output, Risk/PRICE call or writes | Covered: [test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree][test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree], [test_whenOneUnitDeposited_thenFullCredit][test_whenOneUnitDeposited_thenFullCredit], [test_whenMaximumDeposited_thenAllReturnsAndCustodyAgree][test_whenMaximumDeposited_thenAllReturnsAndCustodyAgree], [test_givenMinimumDeposit_whenExactMinimum_thenAllReturnsAndCustodyAgree][test_givenMinimumDeposit_whenExactMinimum_thenAllReturnsAndCustodyAgree] |
+| BLCOL-DEPOSIT-N02 | Borrower | Direct payout; existing collateral C; fuzz positive amount through min(actualCreditCapRoom,MAX128-C); direct payout has Q=amount | `Return (amount,C+amount)` | Only selected position/receipt/operator accounting increases | Independently quote credit and total collateral; compare both action results under stable conversion; no Risk/PRICE calls or writes | Covered: [test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition][test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition], [test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached][test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached] |
+| BLCOL-DEPOSIT-N03 | Borrower | Synchronous vault; fuzz positive amount with nonzero representable actual credit Q; seed Q=1 and MAX128; include reachable rounding cases `0<Q<A` | `Return (Q,C+Q)` | Credit Q independently derived from actual shares/conversion; returned/stored collateral=C+Q, not C+A; asset/share/receipt/liability deltas verified | Independently quote credit and total collateral; compare both action results under stable conversion; no Risk/PRICE calls or writes | Covered: [test_givenMaximumVaultCredit_whenFullyWithdrawn_thenFullWidthUnitsPreserved][test_givenMaximumVaultCredit_whenFullyWithdrawn_thenFullWidthUnitsPreserved], [test_givenOneRawVaultUnit_whenWithdrawn_thenExactOutput][test_givenOneRawVaultUnit_whenWithdrawn_thenExactOutput], [test_givenSynchronousVault_whenUnderlyingWithdrawn][test_givenSynchronousVault_whenUnderlyingWithdrawn], [test_givenSynchronousVault_whenSharesWithdrawn][test_givenSynchronousVault_whenSharesWithdrawn], [test_givenMaximumVaultCredit_whenUnderlyingFullyWithdrawn][test_givenMaximumVaultCredit_whenUnderlyingFullyWithdrawn], [test_givenOneVaultUnit_whenSharesWithdrawn][test_givenOneVaultUnit_whenSharesWithdrawn], [rounded credit below cap][test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted], [rounded credit at cap][test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted], [test_givenNonUnitVaultRate_whenDepositedAcrossFullRange_thenActualCreditAndCustodyAgree][test_givenNonUnitVaultRate_whenDepositedAcrossFullRange_thenActualCreditAndCustodyAgree], [test_givenExistingVaultCollateral_whenToppedUpAcrossFullRange_thenActualCreditAddsOnce][test_givenExistingVaultCollateral_whenToppedUpAcrossFullRange_thenActualCreditAddsOnce], [test_givenNonUnitVaultRate_whenCreditIsOne_thenAllReturnsAndCustodyAgree][test_givenNonUnitVaultRate_whenCreditIsOne_thenAllReturnsAndCustodyAgree], [test_givenNonUnitVaultRate_whenCreditIsMaximum_thenAllReturnsAndCustodyAgree][test_givenNonUnitVaultRate_whenCreditIsMaximum_thenAllReturnsAndCustodyAgree], [test][_withdrawSynchronousVault] |
+| BLCOL-DEPOSIT-N04 | Borrower | Raw amount > deposit cap room; vault credit Q < remaining cap room | `Success` | Cap checks converted Q; returned/stored collateral=C+Q, not C+A; receipt/liability deltas=Q | Independently quote credit and total collateral; compare both action results under stable conversion; no Risk/PRICE calls or writes | Covered: [test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted][test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted] |
+| BLCOL-DEPOSIT-N05 | Borrower | Actual credit Q exactly remaining deposit cap room | `Success` | Utilization reaches exact configured cap | Independently quote credit and total collateral; compare both action results under stable conversion; no Risk/PRICE calls or writes | Covered: [test_givenExactDepositCapRoom_whenDeposited_thenCapReached][test_givenExactDepositCapRoom_whenDeposited_thenCapReached], [test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted][test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted] |
 | BLCOL-DEPOSIT-N06 | Borrower | Finite cap room R<MAX128; fuzz reachable vault credit Q in R+1..MAX128; seed R+1 and MAX128; all prior validations pass | `AssetManager_DepositCapExceeded(asset,utilization,cap)` | Unchanged; no committed logs | Same input/custody/cap failure with earlier preview admission satisfied; no Risk/PRICE calls or writes | Covered: [test_givenDepositCap_whenActualCreditExceedsCap_reverts][test_givenDepositCap_whenActualCreditExceedsCap_reverts], [test_givenVaultDepositCap_whenActualCreditExceedsRoom_thenFullRollback][test_givenVaultDepositCap_whenActualCreditExceedsRoom_thenFullRollback], [test_givenVaultCap_whenOneOverRoom_thenBothPathsReject][test_givenVaultCap_whenOneOverRoom_thenBothPathsReject], [test_givenVaultCapZero_whenMaximumCredit_thenBothPathsReject][test_givenVaultCapZero_whenMaximumCredit_thenBothPathsReject] |
 | BLCOL-DEPOSIT-N07 | Borrower | Existing C<=MAX128; positive actual Q<=MAX128; C+Q>MAX128; seed C=MAX128,Q=1; DM aggregate/cap otherwise valid | Current FLOAN uint128 collateral addition reverts Panic(0x11) | Full DM/receipt/token and position rollback; no committed logs | Revert for the same unrepresentable resulting collateral as execution; the uint256 quote must respect the uint128 position bound | Covered: [test_givenMaximumCollateral_whenAnotherUnitDeposited_thenSameOverflowAndRollback][test_givenMaximumCollateral_whenAnotherUnitDeposited_thenSameOverflowAndRollback], [test_givenExistingCollateral_whenTopUpOverflowsUint128_thenBothPathsRollBack][test_givenExistingCollateral_whenTopUpOverflowsUint128_thenBothPathsRollBack] |
-| BLCOL-DEPOSIT-P15 | Borrower or authorized operator | originationsEnabled=false; no canonical position; direct custody Q=amount; fuzz amount max(1,minimum)..MAX128 within deposit-cap room; seed minimum, 1 when valid and MAX128 | Return (Q,Q) | Create one collateral-only position; credit Q to FLOAN and Core receipts/liabilities; actual caller funds the deposit; principal stays zero; emit CollateralDeposited; originations remain disabled | Independently quote (Q,Q); no position creation, Risk/PRICE call or writes | Partial: [test_givenOriginationsDisabled_whenBorrowerFirstDeposits][test_givenOriginationsDisabled_whenBorrowerFirstDeposits], [test_givenOriginationsDisabled_whenOperatorFirstDeposits][test_givenOriginationsDisabled_whenOperatorFirstDeposits], [test_givenOriginationsDisabled_whenFirstDepositAmountSeeds][test_givenOriginationsDisabled_whenFirstDepositAmountSeeds]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-P12 | Borrower | originationsEnabled=false; existing collateral-only position C, including C=0; actual credit Q>0 | Return (Q,C+Q) | Existing position credited once by Q; no new position or debt | Quote (Q,C+Q); no health output, Risk/PRICE call or writes | Partial: [test_givenOriginationsDisabled_givenDebtFreePosition_whenTopUpQuoted_thenCreditReturned][test_givenOriginationsDisabled_givenDebtFreePosition_whenTopUpQuoted_thenCreditReturned], [test_givenOriginationsDisabled_givenDebtFreePosition_whenToppedUp_thenExistingPositionCredited][test_givenOriginationsDisabled_givenDebtFreePosition_whenToppedUp_thenExistingPositionCredited], [test_givenOriginationsDisabled_givenEmptyPosition_whenTopUpQuoted_thenExistenceAllowsDeposit][test_givenOriginationsDisabled_givenEmptyPosition_whenTopUpQuoted_thenExistenceAllowsDeposit], [test_givenOriginationsDisabled_givenEmptyPosition_whenToppedUp_thenSamePositionReused][test_givenOriginationsDisabled_givenEmptyPosition_whenToppedUp_thenSamePositionReused]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-P13 | Borrower | originationsEnabled=false; existing debt D>0 and collateral C; independent fixture remains unhealthy after actual Q credit | Return (Q,C+Q); succeeds | Actual Q added; debt/expiry unchanged; partial health-improving top-up allowed | Quote (Q,C+Q) under stable conversion; do not read Risk or return H; execution returns no health; optional separate Lens query confirms partial improvement | Partial: [test_givenOriginationsDisabled_givenUnhealthyDebt_whenPartialTopUpQuoted][test_givenOriginationsDisabled_givenUnhealthyDebt_whenPartialTopUpQuoted], [test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenPartialImprovementAllowed][test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenPartialImprovementAllowed]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-P14 | Borrower | originationsEnabled=false; existing debt-bearing position; independently derived pre-deposit health=0.9e18 and post-deposit health=1.2e18 for actual credit Q | Return (Q,C+Q) | Actual Q credited once; debt/expiry unchanged; top-up restores health above liquidation threshold | Quote (Q,C+Q) under stable conversion; no health output or pricing call; execution returns no health; separate Lens query confirms 1.2e18 when feeds work | Partial: [test_givenOriginationsDisabled_givenUnhealthyDebt_whenCuringTopUpQuoted][test_givenOriginationsDisabled_givenUnhealthyDebt_whenCuringTopUpQuoted], [test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenHealthCuredWithoutNewDebt][test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenHealthCuredWithoutNewDebt]; execution ABI migration and focused rerun pending |
+| BLCOL-DEPOSIT-P15 | Borrower or authorized operator | originationsEnabled=false; no canonical position; direct custody Q=amount; fuzz amount max(1,minimum)..MAX128 within deposit-cap room; seed minimum, 1 when valid and MAX128 | Return (Q,Q) | Create one collateral-only position; credit Q to FLOAN and Core receipts/liabilities; actual caller funds the deposit; principal stays zero; emit CollateralDeposited; originations remain disabled | Independently quote (Q,Q); no position creation, Risk/PRICE call or writes | Covered: [test_givenOriginationsDisabled_whenBorrowerFirstDeposits][test_givenOriginationsDisabled_whenBorrowerFirstDeposits], [test_givenOriginationsDisabled_whenOperatorFirstDeposits][test_givenOriginationsDisabled_whenOperatorFirstDeposits], [test_givenOriginationsDisabled_whenFirstDepositAmountSeeds][test_givenOriginationsDisabled_whenFirstDepositAmountSeeds] |
+| BLCOL-DEPOSIT-P12 | Borrower | originationsEnabled=false; existing collateral-only position C, including C=0; actual credit Q>0 | Return (Q,C+Q) | Existing position credited once by Q; no new position or debt | Quote (Q,C+Q); no health output, Risk/PRICE call or writes | Covered: [test_givenOriginationsDisabled_givenDebtFreePosition_whenTopUpQuoted_thenCreditReturned][test_givenOriginationsDisabled_givenDebtFreePosition_whenTopUpQuoted_thenCreditReturned], [test_givenOriginationsDisabled_givenDebtFreePosition_whenToppedUp_thenExistingPositionCredited][test_givenOriginationsDisabled_givenDebtFreePosition_whenToppedUp_thenExistingPositionCredited], [test_givenOriginationsDisabled_givenEmptyPosition_whenTopUpQuoted_thenExistenceAllowsDeposit][test_givenOriginationsDisabled_givenEmptyPosition_whenTopUpQuoted_thenExistenceAllowsDeposit], [test_givenOriginationsDisabled_givenEmptyPosition_whenToppedUp_thenSamePositionReused][test_givenOriginationsDisabled_givenEmptyPosition_whenToppedUp_thenSamePositionReused] |
+| BLCOL-DEPOSIT-P13 | Borrower | originationsEnabled=false; existing debt D>0 and collateral C; independent fixture remains unhealthy after actual Q credit | Return (Q,C+Q); succeeds | Actual Q added; debt/expiry unchanged; partial health-improving top-up allowed | Quote (Q,C+Q) under stable conversion; do not read Risk or return H; execution returns no health; optional separate Lens query confirms partial improvement | Covered: [test_givenOriginationsDisabled_givenUnhealthyDebt_whenPartialTopUpQuoted][test_givenOriginationsDisabled_givenUnhealthyDebt_whenPartialTopUpQuoted], [test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenPartialImprovementAllowed][test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenPartialImprovementAllowed] |
+| BLCOL-DEPOSIT-P14 | Borrower | originationsEnabled=false; existing debt-bearing position; independently derived pre-deposit health=0.9e18 and post-deposit health=1.2e18 for actual credit Q | Return (Q,C+Q) | Actual Q credited once; debt/expiry unchanged; top-up restores health above liquidation threshold | Quote (Q,C+Q) under stable conversion; no health output or pricing call; execution returns no health; separate Lens query confirms 1.2e18 when feeds work | Covered: [test_givenOriginationsDisabled_givenUnhealthyDebt_whenCuringTopUpQuoted][test_givenOriginationsDisabled_givenUnhealthyDebt_whenCuringTopUpQuoted], [test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenHealthCuredWithoutNewDebt][test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenHealthCuredWithoutNewDebt] |
 
 ## Transfer and custody failures
 
@@ -179,8 +179,8 @@ Compare preview with actual credit only under unchanged conversion. Preview move
 The transfer callback matrix retains payer-token, DM/vault and receipt interactions. Test payer=borrower and payer=operator explicitly; preserve unrelated borrower, asset and operator accounting. Price-refresh callbacks are replaced by no-call checks below.
 
 - [x] Review the updated expectations in Crit.
-- [ ] Migrate named Foundry tests and retain existing boundary seed drivers.
-- [ ] Map each changed row to passing tests.
+- [x] Migrate named Foundry tests and retain existing boundary seed drivers.
+- [x] Map each changed row to passing tests.
 
 ## Position state and pricing independence
 
@@ -188,13 +188,13 @@ Action/Core operational; borrower authorized; supported asset; custody/cap const
 
 | ID | Caller | Existing debt D | Prior / resulting position | Pricing dependency behavior | Return / execution | Effects | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-DEPOSIT-P01 | Borrower | 0 | New position; Q>0 | Revert on any pricing read | (Q,Q), exactly 64 bytes | Actual collateral credited; debt stays zero | Quote (Q,Q); no health or Risk call | Partial: [test][test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree]; migrate execution ABI/no-call assertions |
-| BLCOL-DEPOSIT-P02 | Borrower | 0 | Existing C; Q>0 | Revert on any pricing read | (Q,C+Q) | Existing collateral becomes C+Q; debt stays zero | Quote (Q,C+Q); existing-position accounting retained | Partial: [test][test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition], [test][test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached]; migrate execution ABI/no-call assertions |
-| BLCOL-DEPOSIT-P03 | Borrower | D>0 | Independently healthy position; compatible C,Q,D | Revert on any pricing read | (Q,C+Q) | Actual Q credited; principal/maturity unchanged | Quote (Q,C+Q); no health output | Partial: [test][test_givenDebt_whenHealthBoundarySeedsUsed_thenNoCureThreshold], [test][test_givenVariableDebtAndCollateral_whenToppedUp_thenExactHealthHandoff]; replace mocked health handoff with real position/no-call assertions |
-| BLCOL-DEPOSIT-P04 | Borrower | D>0 | Independently derived post-top-up health exactly WAD | Revert on any pricing read | (Q,C+Q) | No minimum-health rejection; principal/maturity unchanged | Quote (Q,C+Q); assess boundary independently outside deposit | Partial: [test][test_givenDebt_whenHealthBoundarySeedsUsed_thenNoCureThreshold], [test][test_givenVariableDebtAndCollateral_whenToppedUp_thenExactHealthHandoff]; migrate boundary fixture and ABI |
-| BLCOL-DEPOSIT-P05 | Borrower | D>0 | Positive top-up leaves position unhealthy; fixed real arithmetic case below WAD plus broad compatible C,Q,D fuzzing | Revert on any pricing read | (Q,C+Q); succeeds | Helpful deposit allowed without curing shortfall; debt/maturity unchanged | Quote (Q,C+Q); any health calculation is a separate test step | Partial: [test][test_givenDebt_whenHealthBoundarySeedsUsed_thenNoCureThreshold], [test][test_givenVariableDebtAndCollateral_whenToppedUp_thenExactHealthHandoff], [test][test_givenUnhealthyDebt_whenPartialTopUpIsDeposited_thenUnhealthyHealthIsReturned]; retain collateral/debt numeric ranges and independently derived health boundaries, replace arbitrary mocked H with no-call proof |
-| BLCOL-DEPOSIT-P06 | Borrower | D>0 | Positive Q; custody otherwise succeeds | refreshSnapshot reverts if called | (Q,C+Q); succeeds without refresh | Actual custody/position credit once; cache unchanged | Quote agrees under stable conversion; neither path refreshes | Partial: [test][test_givenDebt_whenSnapshotRefreshFails_thenIndependentViewAndRollback]; invert old execution-revert expectation and assert no call |
-| BLCOL-DEPOSIT-P07 | Borrower | D>0 | Positive Q; custody otherwise succeeds | health reverts if called | (Q,C+Q); succeeds without health calculation | Settlement persists; no oracle/cache mutation | Quote and execution both exclude health | Partial: [test][test_givenDebt_whenRiskHealthFails_thenDepositRollsBack], [test][test_givenRealCacheRefresh_whenFinalHealthReportFails_thenCacheAndSettlementRollBack]; invert old rollback expectations |
+| BLCOL-DEPOSIT-P01 | Borrower | 0 | New position; Q>0 | Revert on any pricing read | (Q,Q), exactly 64 bytes | Actual collateral credited; debt stays zero | Quote (Q,Q); no health or Risk call | Covered: [test][test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree] |
+| BLCOL-DEPOSIT-P02 | Borrower | 0 | Existing C; Q>0 | Revert on any pricing read | (Q,C+Q) | Existing collateral becomes C+Q; debt stays zero | Quote (Q,C+Q); existing-position accounting retained | Covered: [test][test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition], [test][test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached] |
+| BLCOL-DEPOSIT-P03 | Borrower | D>0 | Independently healthy position; compatible C,Q,D | Revert on any pricing read | (Q,C+Q) | Actual Q credited; principal/maturity unchanged | Quote (Q,C+Q); no health output | Covered: [test][test_givenDebt_whenCollateralAndDebtBoundarySeedsUsed], [test][test_givenVariableDebtAndCollateral_whenToppedUp], [test][test_givenRoundedVaultCredit_whenHealthyTopUp_thenRealHealthUsesActualCredit] |
+| BLCOL-DEPOSIT-P04 | Borrower | D>0 | Independently derived post-top-up health exactly WAD | Revert on any pricing read | (Q,C+Q) | No minimum-health rejection; principal/maturity unchanged | Quote (Q,C+Q); assess boundary independently outside deposit | Covered: [test][test_givenDebt_whenCollateralAndDebtBoundarySeedsUsed], [test][test_givenVariableDebtAndCollateral_whenToppedUp], [test][test_givenRoundedVaultCredit_whenHealthExactlyOne_thenAccepted] |
+| BLCOL-DEPOSIT-P05 | Borrower | D>0 | Positive top-up leaves position unhealthy; fixed real arithmetic case below WAD plus broad compatible C,Q,D fuzzing | Revert on any pricing read | (Q,C+Q); succeeds | Helpful deposit allowed without curing shortfall; debt/maturity unchanged | Quote (Q,C+Q); any health calculation is a separate test step | Covered: [test][test_givenDebt_whenCollateralAndDebtBoundarySeedsUsed], [test][test_givenVariableDebtAndCollateral_whenToppedUp], [test][test_givenUnhealthyDebt_whenPartialTopUpIsDeposited], [test][test_givenRoundedVaultCredit_whenPartialTopUp_thenRealHealthUsesActualCredit] |
+| BLCOL-DEPOSIT-P06 | Borrower | D>0 | Positive Q; custody otherwise succeeds | refreshSnapshot reverts if called | (Q,C+Q); succeeds without refresh | Actual custody/position credit once; cache unchanged | Quote agrees under stable conversion; neither path refreshes | Covered: [test][test_givenDebtAndRiskSnapshotsUnavailable_whenDeposited] |
+| BLCOL-DEPOSIT-P07 | Borrower | D>0 | Positive Q; custody otherwise succeeds | health reverts if called | (Q,C+Q); succeeds without health calculation | Settlement persists; no oracle/cache mutation | Quote and execution both exclude health | Covered: [test][test_givenDebtAndRiskHealthUnavailable_whenDeposited], [test][test_givenStaleCacheAndHealthUnavailable_whenDeposited] |
 
 The existing shared SafeERC20Exact helper rejects over-receipt as well as short receipt. Keep one representative BL over-receipt regression; exhaustive transfer-shape coverage belongs to that helper. Relaxing it would require deciding whether excess is credited or remains Core surplus; this plan retains the existing helper semantics.
 
@@ -204,9 +204,9 @@ Use existing depositCollateralIntegration.t.sol with real Core, FLOAN, DepositMa
 
 | ID | Caller | Position / custody | Pricing state | Execution / return | Accounting / events | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-DEPOSIT-P08 | Borrower | D>0; existing C; vault rounding gives 0<Q<A; retain below/equal/above-WAD fixtures | Working feeds; poison Risk during deposit only | (Q,C+Q) | Returned/stored collateral=C+Q; receipts/liabilities +Q; debt/maturity unchanged; independent Lens check after restoring feeds uses Q, not A | Quote Q,C+Q under stable conversion; no pricing read | Partial: [test][test_givenRoundedVaultCredit_whenHealthyTopUp_thenRealHealthUsesActualCredit], [test][test_givenRoundedVaultCredit_whenPartialTopUp_thenRealHealthUsesActualCredit], [test][test_givenRoundedVaultCredit_whenHealthExactlyOne_thenAccepted]; migrate health to separate Lens check |
-| BLCOL-DEPOSIT-P09 | Borrower | D>0; positive representable Q | Cache fresh at max-age equality, stale one second beyond, absent or disabled; guarantee each independent state | (Q,C+Q), no refresh | Cache price/timestamp unchanged; actual custody and position deltas verified | Both deposit paths ignore cache; compare conversion results | Partial: [test][test_givenRealStaleCache_whenToppedUp_thenRefreshAndCanonicalHealthAgree]; replace refresh expectation and add remaining cache states |
-| BLCOL-DEPOSIT-P10 | Borrower | D>0; positive representable Q | No usable cache; OHM PRICE fails or collateral PRICE fails independently; seed stale-price rejection and exact feed revert for each asset | (Q,C+Q); succeeds without PRICE calls | Actual collateral/custody credited once; debt/maturity unchanged; no cache writes | Quote and execution remain pricing-independent | Partial: [test][test_givenRealStalePrice_whenDepositExecuted_reverts], [test][test_givenStaleRealCache_whenPriceFeedFails_reverts]; invert rejection expectations and prove both feed fault classes |
+| BLCOL-DEPOSIT-P08 | Borrower | D>0; existing C; vault rounding gives 0<Q<A; retain below/equal/above-WAD fixtures | Working feeds; poison Risk during deposit only | (Q,C+Q) | Returned/stored collateral=C+Q; receipts/liabilities +Q; debt/maturity unchanged; independent Lens check after restoring feeds uses Q, not A | Quote Q,C+Q under stable conversion; no pricing read | Covered: [test][test_givenRoundedVaultCredit_whenHealthyTopUp_thenRealHealthUsesActualCredit], [test][test_givenRoundedVaultCredit_whenPartialTopUp_thenRealHealthUsesActualCredit], [test][test_givenRoundedVaultCredit_whenHealthExactlyOne_thenAccepted] |
+| BLCOL-DEPOSIT-P09 | Borrower | D>0; positive representable Q | Cache fresh at max-age equality, stale one second beyond, absent or disabled; guarantee each independent state | (Q,C+Q), no refresh | Cache price/timestamp unchanged; actual custody and position deltas verified | Both deposit paths ignore cache; compare conversion results | Covered: [test][test_givenPriceCacheState_whenDeposited], [test][test_givenPriceCacheStateBoundarySeeds_whenDeposited] |
+| BLCOL-DEPOSIT-P10 | Borrower | D>0; positive representable Q | No usable cache; OHM PRICE fails or collateral PRICE fails independently; seed stale-price rejection and exact feed revert for each asset | (Q,C+Q); succeeds without PRICE calls | Actual collateral/custody credited once; debt/maturity unchanged; no cache writes | Quote and execution remain pricing-independent | Covered: [test][test_givenStalePrice_whenDeposited], [test][test_givenStaleRealCacheAndZeroPrice_whenDeposited], [test][test_givenPriceFeedReverts_whenDeposited] |
 
 Partial top-ups need no minimum-health condition. Withdrawals and borrowing retain their own health admission rules; outage resilience here does not authorize them to bypass valuation.
 
@@ -216,9 +216,9 @@ Deposits no longer call Risk or the price cache. Arm the existing cache callback
 
 | ID | Caller | Armed callback | Execution | Effects | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-DEPOSIT-C01 | Borrower | Cache callback would repay the same borrower's debt | (Q,C+Q); no cache call | Principal/maturity unchanged; no callback OHM movement or Inventory mutation; one collateral credit | Both paths leave cache and callback state unchanged | Partial: [test][test_givenCacheFullyRepays_whenTopUpSettles_thenActualDebtFreeHealthReturned]; replace callback execution/health expectation with no-call assertions |
-| BLCOL-DEPOSIT-C03 | Borrower | Cache callback would attempt an unauthorized nested action and catch its error | (Q,C+Q); callback not invoked | No nested action or catch state; one outer settlement | Quote agrees under stable conversion; no callback | Partial: [test][test_givenCaughtUnauthorizedCacheAction_whenDepositing_thenOneCredit]; assert callback remains unexecuted |
-| BLCOL-DEPOSIT-C04 | Borrower | Cache callback would propagate an unauthorized nested-action error | (Q,C+Q); callback not invoked | Successful outer deposit; no nested mutation/cache write | Quote agrees under stable conversion; no callback | Partial: [test][test_givenPropagatedUnauthorizedCacheAction_whenDepositing_thenRollback]; replace obsolete outer-revert expectation |
+| BLCOL-DEPOSIT-C01 | Borrower | Cache callback would repay the same borrower's debt | (Q,C+Q); no cache call | Principal/maturity unchanged; no callback OHM movement or Inventory mutation; one collateral credit | Both paths leave cache and callback state unchanged | Covered: [test][test_givenCacheRepaymentArmed_whenDeposited] |
+| BLCOL-DEPOSIT-C03 | Borrower | Cache callback would attempt an unauthorized nested action and catch its error | (Q,C+Q); callback not invoked | No nested action or catch state; one outer settlement | Quote agrees under stable conversion; no callback | Covered: [test][test_givenCaughtUnauthorizedCacheAction_whenDeposited] |
+| BLCOL-DEPOSIT-C04 | Borrower | Cache callback would propagate an unauthorized nested-action error | (Q,C+Q); callback not invoked | Successful outer deposit; no nested mutation/cache write | Quote agrees under stable conversion; no callback | Covered: [test][test_givenPropagatedUnauthorizedCacheAction_whenDeposited] |
 
 Retired BLCOL-DEPOSIT-C02 remains retired. C01/C03/C04 retain their fixture distinctions while proving that the former deposit preparation boundary is no longer reached.
 
@@ -251,13 +251,14 @@ Action, Core and DepositManager are active/enabled; custody and grants otherwise
 
 | ID | Caller | Existing debt | Backing fault | PRICE fault | Expected execution and preview | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLCOL-DEPOSIT-D05 | B | 100e9 | Oracle locally disabled | None | Both return (1e6,C+1e6), using actual Q for execution; no backing call. Split withdrawal assertions into the existing BLCOL-WITHDRAW-D08 test; measure withdrawal rollback from post-deposit state | Partial: [test][test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement]; invert deposit rejection and retain independent withdrawal proof |
-| BLCOL-DEPOSIT-D06 | B | 0; C=100e6 | Oracle locally disabled | None | Preview and execution return (1e6,101e6), no health output. Existing debt-free withdrawal retains its own health semantics | Partial: [test][test_givenDebtFreeAndBackingPaused_whenCollateralChanged]; migrate deposit ABI and separate withdrawal assertions |
-| BLCOL-DEPOSIT-D07 | B | Positive | Oracle Kernel-inactive, locally enabled | None | Both return Q,C+Q without probing backing lifecycle; ordinary custody checks remain enforced | Unmapped |
-| BLCOL-DEPOSIT-D08 | B | Positive | backing() reverts with a configured custom error | None | Both return Q,C+Q; backing() never called | Unmapped |
-| BLCOL-DEPOSIT-D09 | B | Positive | backing() returns zero | None | Both return Q,C+Q; zero backing is never consumed or substituted into a price | Unmapped |
-| BLCOL-DEPOSIT-D10 | B and O; guarantee each | Positive; originations enabled/disabled independently | Disabled or reverting; guarantee each | OHM and collateral PRICE reads revert | Both return Q,C+Q; execute direct and rounded-vault custody cases with actual Q; operator grant completes normally; no oracle/cache reads or writes | Unmapped |
-| BLCOL-DEPOSIT-D11 | Fuzz X excluding B and every authorized operator | Positive | Disabled | PRICE reads revert | Permissionless preview returns quote; unauthorized execution retains exact OperatorAuth_InvalidContext and full rollback | Unmapped |
+| BLCOL-DEPOSIT-D05 | B | 100e9 | Oracle locally disabled | None | Both return (1e6,C+1e6), using actual Q for execution; no backing call. Withdrawal controls retain BLCOL-WITHDRAW-D08; measure withdrawal rollback from post-deposit state | Covered: [test][test_givenDebtAndBackingPaused_whenToppedUpBeforeWithdrawal], [test][test_givenDebtAndBackingPaused_whenDeposited] |
+| BLCOL-DEPOSIT-D06 | B | 0; C=100e6 | Oracle locally disabled | None | Preview and execution return (1e6,101e6), no health output. Debt-free withdrawal retains its own health semantics in BLCOL-WITHDRAW-D09 | Covered: [test][test_givenDebtFreeAndBackingPaused_whenDeposited] |
+| BLCOL-DEPOSIT-D07 | B | Positive | Oracle Kernel-inactive, locally enabled | None | Both return Q,C+Q without probing backing lifecycle; ordinary custody checks remain enforced | Covered: [test][test_givenDebtAndBackingInactive_whenDeposited] |
+| BLCOL-DEPOSIT-D08 | B | Positive | backing() reverts with a configured custom error | None | Both return Q,C+Q; backing() never called | Covered: [test][test_givenDebtAndBackingReverting_whenDeposited] |
+| BLCOL-DEPOSIT-D09 | B | Positive | backing() returns zero | None | Both return Q,C+Q; zero backing is never consumed or substituted into a price | Covered: [test][test_givenDebtAndZeroBacking_whenDeposited] |
+| BLCOL-DEPOSIT-D10 | B and O; guarantee each | Positive; originations enabled/disabled independently | Disabled or reverting; guarantee each | OHM and collateral PRICE reads revert | Both return Q,C+Q; execute direct and rounded-vault custody cases with actual Q; operator grant completes normally; no oracle/cache reads or writes | Covered: [test][test_givenVaultDebtAndBothOraclesUnavailable_whenDeposited], [test][test_givenVaultOracleOutageBoundarySeeds_whenDeposited], [test][test_givenDebtAndBothOraclesUnavailable_whenDeposited], [test][test_givenOracleOutageBoundarySeeds_whenDeposited] |
+| BLCOL-DEPOSIT-D11 | Fuzz nonzero X excluding B and every authorized operator | Positive | Disabled | PRICE reads revert | Permissionless preview returns quote; unauthorized execution retains exact OperatorAuth_InvalidContext and full rollback | Covered: [test][test_givenOracleOutage_whenUnauthorizedCallerDeposits_reverts] |
+| BLCOL-DEPOSIT-D12 | Zero caller | Positive | Disabled | PRICE reads revert | Permissionless preview still quotes; execution rejects OperatorAuth_InvalidIdentity with full rollback | Covered: [test][test_givenOracleOutage_whenZeroCallerDeposits_reverts] |
 
 ## Auth completion and delegated vault rounding
 
@@ -274,7 +275,7 @@ Action, Core and DepositManager are active/enabled; custody and grants otherwise
 
 | ID | Setup | Expected result | Test |
 | --- | --- | --- | --- |
-| BLCOL-DEPOSIT-AUTH-C05 | Borrower or delegated operator; armed cache callback would rotate Auth A to B to A | Deposit succeeds without invoking callback; Auth pointer/global/pair epochs unchanged apart from normal grant completion; actual Q credited once | Partial: [rotation][test_givenPreparationCallback_whenAuthRotatesAndReturns_reverts]; replace unreachable preparation callback expectation; retain C01/C02 token-callback epoch rejection |
+| BLCOL-DEPOSIT-AUTH-C05 | Borrower or delegated operator; armed cache callback would rotate Auth A to B to A | Deposit succeeds without invoking callback; Auth pointer/global/pair epochs unchanged apart from normal grant completion; actual Q credited once | Covered: [rotation][test_givenPreparationAuthRotation_whenDeposited] |
 
 ## Insolvency
 
@@ -301,140 +302,139 @@ Preview exception: `previewDepositCollateral` returns only its current custody c
 It cannot execute a vault deposit and does not prove the final custody solvency condition.
 For the stable loss fixture, it returns credit=8 and projected collateral=108 for B, despite the
 execution rejection. For a new borrower C, projected collateral is 8. No health value is returned.
-No preview authorization, funding, pricing or solvency precheck is added. This exception is part of sign-off.
+No preview authorization, funding, pricing or solvency precheck is added.
 
 | ID | Caller | Position / namespace | Deposit input or transition | Execution and authoritative effects | Preview / consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
 | BLCOL-DEPOSIT-T10 | B | Existing B collateral=100; Core custody has the default loss | A=8 | Exact DM insolvency error; full rollback; B keeps A and no collateral credit survives | Quote credit=8,total=108; no health output; final solvency remains execution-only | Covered: [test][test_givenVaultLoss_whenExistingBorrowerDeposits_reverts], [test][test_givenVaultLossAndOriginationsDisabled_whenExistingBorrowerDeposits_reverts], [test][test_givenVaultLoss_whenExistingBorrowerDeposits_thenFinalInsolvencyRollsBack] |
 | BLCOL-DEPOSIT-T11 | C, a first-time borrower | B's loss makes the shared Core namespace insolvent; C has no position | A=8 | Same exact DM insolvency error; full rollback; C's position/index remains absent | Quote credit=8,total=8; no health output; final solvency remains execution-only | Covered: [test][test_givenVaultLoss_whenNewBorrowerDeposits_reverts], [test][test_givenVaultLossAndOriginationsDisabled_whenNewBorrowerDeposits_reverts] |
 | BLCOL-DEPOSIT-T12 | Authorized O for B | Valid current grant and sufficient remaining cap; default loss | A=8 funded by O | Same exact DM error; O's funds/allowance and B's grant usage/completion unchanged | Permissionless viewer receives B's credit/collateral quote without grant or Risk/PRICE read | Covered: [test][test_givenVaultLoss_whenAuthorizedOperatorDeposits_reverts] |
-| BLCOL-DEPOSIT-T13 | B | Debt-bearing position; namespace insolvent; poison backing/PRICE after setup | Valid positive top-up with no pricing read | Exact final DM insolvency error; full settlement rollback; no oracle/cache calls or writes | Quote estimated credit/total collateral; final custody solvency remains execution-only | Partial: [test][test_givenDebtAndVaultLoss_whenTopUpRefreshesCache_reverts]; remove expected refresh and prove DM error wins during outage |
+| BLCOL-DEPOSIT-T13 | B | Debt-bearing position; namespace insolvent; poison backing/PRICE after setup | Valid positive top-up with no pricing read | Exact final DM insolvency error; full settlement rollback; no oracle/cache calls or writes | Quote estimated credit/total collateral; final custody solvency remains execution-only | Covered: [test][test_givenDebtAndVaultLoss_whenPricingUnavailable_reverts] |
 | BLCOL-DEPOSIT-N08 | B | Fixed real-vault fixture ends one raw unit short of liabilities after deposit | Small deterministic A chosen for exact conversion | DM error includes final one-unit deficit; full rollback | Conversion/total-collateral estimate only; no health output | Covered: [test][test_givenOneUnitDeficit_whenCollateralDeposited_reverts] |
 | BLCOL-DEPOSIT-T14 | B | Namespace starts solvent | Deposit callback realizes enough vault loss to make final state insolvent | DM final-state error; rollback callback loss and all settlement effects | Pre-call quote cannot predict mutation | Covered: [test][test_givenSolventCustody_whenVaultRealizesLossDuringDeposit_reverts] |
 | BLCOL-DEPOSIT-P16 | B | Permissionless donor supplies 8 underlying to Core's namespace; custody becomes 88 against L=100 | Subsequent A=8 -> candidate custody=96,L=108 | `DepositManager_Insolvent(asset,108,96,0)`; prior donation persists; top-up fully rolls back | Stable quote remains an estimate | Covered: [test][test_givenPartialDonation_whenBorrowerDeposits_reverts] |
-| BLCOL-DEPOSIT-P17 | B | Donor supplies 20 underlying to Core's namespace; custody=L=100 | A=8, then withdraw the 108 recorded collateral using a funded, debt-free position | Deposit credits exactly 8; existing plus new collateral exits for 108 underlying units; donation creates no FLOAN collateral or receipts | Quote matches actual top-up after repair; stable withdrawal quote agrees | Partial: [test][test_givenFullDonation_whenBorrowerDepositsAndWithdraws]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-P18 | B | Vault exchange rate below one but Core's assets cover liabilities; separate healthy starting fixture | Valid nonzero top-up | Deposit succeeds; independent custody/receipts/FLOAN credit agree; no health output | Stable quote matches actual conversion | Partial: [test][test_givenSolventCustodyBelowUnitExchangeRate_whenBorrowerDeposits]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-P19 | B | Unhealthy individual loan; Core custody remains solvent | Partial helpful top-up leaves health below 1e18 | Deposit succeeds; retain existing partial-improvement behavior, with actual credit and debt preserved | Stable quote matches actual credit and collateral; execution returns no health; optional separate Lens query may assess the position | Partial: [test][test_givenUnhealthyDebt_whenPartialTopUpIsDeposited_thenUnhealthyHealthIsReturned]; execution ABI migration and focused rerun pending |
-| BLCOL-DEPOSIT-P20 | B | Same asset in independent operator X is insolvent; Core namespace solvent | Valid Core top-up | Deposit succeeds; no lookup or accounting mutation in X | Stable quote matches actual credit | Partial: [test][test_givenOtherOperatorInsolvent_whenCoreDeposits]; execution ABI migration and focused rerun pending |
+| BLCOL-DEPOSIT-P17 | B | Donor supplies 20 underlying to Core's namespace; custody=L=100 | A=8, then withdraw the 108 recorded collateral using a funded, debt-free position | Deposit credits exactly 8; existing plus new collateral exits for 108 underlying units; donation creates no FLOAN collateral or receipts | Quote matches actual top-up after repair; stable withdrawal quote agrees | Covered: [test][test_givenFullDonation_whenBorrowerDepositsAndWithdraws] |
+| BLCOL-DEPOSIT-P18 | B | Vault exchange rate below one but Core's assets cover liabilities; separate healthy starting fixture | Valid nonzero top-up | Deposit succeeds; independent custody/receipts/FLOAN credit agree; no health output | Stable quote matches actual conversion | Covered: [test][test_givenSolventCustodyBelowUnitExchangeRate_whenBorrowerDeposits] |
+| BLCOL-DEPOSIT-P19 | B | Unhealthy individual loan; Core custody remains solvent | Partial helpful top-up leaves health below 1e18 | Deposit succeeds; retain existing partial-improvement behavior, with actual credit and debt preserved | Stable quote matches actual credit and collateral; execution returns no health; optional separate Lens query may assess the position | Covered: [test][test_givenUnhealthyDebt_whenPartialTopUpIsDeposited] |
+| BLCOL-DEPOSIT-P20 | B | Same asset in independent operator X is insolvent; Core namespace solvent | Valid Core top-up | Deposit succeeds; no lookup or accounting mutation in X | Stable quote matches actual credit | Covered: [test][test_givenOtherOperatorInsolvent_whenCoreDeposits] |
 | BLCOL-DEPOSIT-T15 | B | Separate ERC-7575 share token and asynchronous-redemption vault, each with real loss; guarantee both variants | Valid synchronous-deposit top-up | Exact DM insolvency error; no redemption call; full rollback through Core | Use live supported conversion path; estimate only | Covered: [test][test_givenSeparateShareVaultLoss_whenBorrowerDeposits_reverts], [test][test_givenAsyncRedemptionVaultLoss_whenBorrowerDeposits_reverts] |
-| BLCOL-DEPOSIT-P21 | B | Core owns all 100 vault shares and has L=100; backing=99 after loss; B is debt-free | A=2 -> S=2,Q=floor(2*101/102)=1 | Deposit succeeds through action and Core; custody=L=101; B collateral=101; payer spends 2; no precheck prevents full rounding repair | Quote credit=1,total=101; no health output or pre-deposit solvency guard | Partial: [test][test_givenOneUnitLoss_whenDepositRoundingRepairsCustody]; execution ABI migration and focused rerun pending |
+| BLCOL-DEPOSIT-P21 | B | Core owns all 100 vault shares and has L=100; backing=99 after loss; B is debt-free | A=2 -> S=2,Q=floor(2*101/102)=1 | Deposit succeeds through action and Core; custody=L=101; B collateral=101; payer spends 2; no precheck prevents full rounding repair | Quote credit=1,total=101; no health output or pre-deposit solvency guard | Covered: [test][test_givenOneUnitLoss_whenDepositRoundingRepairsCustody] |
 
 Repeat T10/T11 with originations disabled while ordinary collateral deposits remain permitted.
 Use otherwise authorized callers and usable dependencies; the deficit must reach the new DM check.
 These integration cases supplement the full donation/custody scenarios in
 [DepositManager.donate](../DepositManager/donate.md) and
 [DepositManager.deposit](../DepositManager/deposit.md). They do not duplicate DM's token failure matrix.
-
-[test_givenActionKernelGetterReverts_whenDeposited_thenGetterIsNotRead]: depositCollateral.t.sol#L1113
-[test_whenDepositQuoted_thenOnlyCreditAndCollateralReturned]: ./depositCollateral.t.sol#L43
-[test_givenDebtAndPricingUnavailable_whenDepositQuoted_thenNoPricingRead]: ./depositCollateral.t.sol#L55
+[test_givenActionKernelGetterReverts_whenDeposited_thenGetterIsNotRead]: depositCollateral.t.sol#L1121
+[test_whenDepositQuoted_thenOnlyCreditAndCollateralReturned]: ./depositCollateral.t.sol#L81
+[test_givenDebtAndPricingUnavailable_whenDepositQuoted_thenNoPricingRead]: ./depositCollateral.t.sol#L93
 [test_givenVaultLoss_whenExistingBorrowerDeposits_thenFinalInsolvencyRollsBack]: ./depositCollateralIntegration.t.sol#L65
-[test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected]: depositCollateral.t.sol#L1503
-[test_givenAssetNoLongerConfiguredInManager_whenDeposited_reverts]: depositCollateral.t.sol#L745
-[test_givenAuthorizationExpired_whenOperatorDeposits_reverts]: depositCollateral.t.sol#L568
-[test_givenCacheFullyRepays_whenTopUpSettles_thenActualDebtFreeHealthReturned]: depositCollateralPriceCallbacks.t.sol#L58
-[test_givenCancelledGrant_whenOperatorActs_reverts]: depositCollateral.t.sol#L1017
-[test_givenCaughtUnauthorizedCacheAction_whenDepositing_thenOneCredit]: depositCollateralPriceCallbacks.t.sol#L106
-[test_givenCoreDepositPeriodDisabled_whenDeposited_reverts]: depositCollateral.t.sol#L782
-[test_givenCoreIncomingPull_whenDepositManagerRejects_thenPullRollsBack]: depositCollateral.t.sol#L972
-[test_givenCoreUnavailable_whenInvoked_thenDependencyIdentified]: depositCollateral.t.sol#L1075
-[test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition]: depositCollateral.t.sol#L1154
-[test_givenDebt_whenHealthBoundarySeedsUsed_thenNoCureThreshold]: depositCollateral.t.sol#L1130
-[test_givenDebt_whenRiskHealthFails_thenDepositRollsBack]: depositCollateral.t.sol#L531
-[test_givenDebt_whenSnapshotRefreshFails_thenIndependentViewAndRollback]: depositCollateral.t.sol#L666
-[test_givenDepositCap_whenActualCreditExceedsCap_reverts]: depositCollateral.t.sol#L461
-[test_givenDepositManagerDisabled_whenDeposited_reverts]: depositCollateral.t.sol#L739
-[test_givenDepositManagerInactive_whenDeposited_reverts]: depositCollateral.t.sol#L727
-[test_givenDisabledAction_whenInvoked_thenLocalPauseWins]: depositCollateral.t.sol#L1063
-[test_givenDisabled_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1383
-[test_givenExactDepositCapRoom_whenDeposited_thenCapReached]: depositCollateral.t.sol#L809
-[test_givenExistingCollateral_whenTopUpOverflowsUint128_thenBothPathsRollBack]: depositCollateral.t.sol#L1519
+[test_givenAnotherOperatorGrant_whenIndependentBoundaryTimesUsed_thenUnrelatedCallerRejected]: depositCollateral.t.sol#L1455
+[test_givenAssetNoLongerConfiguredInManager_whenDeposited_reverts]: depositCollateral.t.sol#L753
+[test_givenAuthorizationExpired_whenOperatorDeposits_reverts]: depositCollateral.t.sol#L605
+[test_givenCacheRepaymentArmed_whenDeposited]: depositCollateralPriceCallbacks.t.sol#L63
+[test_givenCancelledGrant_whenOperatorActs_reverts]: depositCollateral.t.sol#L1025
+[test_givenCaughtUnauthorizedCacheAction_whenDeposited]: depositCollateralPriceCallbacks.t.sol#L97
+[test_givenCoreDepositPeriodDisabled_whenDeposited_reverts]: depositCollateral.t.sol#L790
+[test_givenCoreIncomingPull_whenDepositManagerRejects_thenPullRollsBack]: depositCollateral.t.sol#L980
+[test_givenCoreUnavailable_whenInvoked_thenDependencyIdentified]: depositCollateral.t.sol#L1083
+[test_givenDebtFreeCollateral_whenToppedUp_thenActualCreditAddsToExistingPosition]: depositCollateral.t.sol#L1151
+[test_givenDebt_whenCollateralAndDebtBoundarySeedsUsed]: depositCollateral.t.sol#L1138
+[test_givenDebtAndRiskHealthUnavailable_whenDeposited]: depositCollateral.t.sol#L587
+[test_givenDebtAndRiskSnapshotsUnavailable_whenDeposited]: depositCollateral.t.sol#L703
+[test_givenDepositCap_whenActualCreditExceedsCap_reverts]: depositCollateral.t.sol#L517
+[test_givenDepositManagerDisabled_whenDeposited_reverts]: depositCollateral.t.sol#L747
+[test_givenDepositManagerInactive_whenDeposited_reverts]: depositCollateral.t.sol#L735
+[test_givenDisabledAction_whenInvoked_thenLocalPauseWins]: depositCollateral.t.sol#L1071
+[test_givenDisabled_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1379
+[test_givenExactDepositCapRoom_whenDeposited_thenCapReached]: depositCollateral.t.sol#L817
+[test_givenExistingCollateral_whenTopUpOverflowsUint128_thenBothPathsRollBack]: depositCollateral.t.sol#L1471
 [test_givenDelegatedDeposit_whenAccountCancelsDuringPayerPull_reverts]: depositCollateralCallbacks.t.sol#L210
 [test_givenDelegatedDeposit_whenIdenticalPermissionsReacceptedDuringPayerPull_reverts]: depositCollateralCallbacks.t.sol#L215
-[test_givenDelegatedVaultDeposit_whenActualCreditExceedsGrant_thenFullRollback]: depositCollateralIntegration.t.sol#L386
-[test_givenDelegatedVaultDeposit_whenNominalExceedsGrantButActualCreditEqualsCap_thenAccepted]: depositCollateralIntegration.t.sol#L357
-[test_givenExistingVaultCollateral_whenToppedUpAcrossFullRange_thenActualCreditAddsOnce]: depositCollateralIntegration.t.sol#L453
-[test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized]: depositCollateral.t.sol#L1493
-[test_givenExpiredGrant_whenOperatorActs_reverts]: depositCollateral.t.sol#L1028
-[test_givenExpiredGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1604
-[test_givenFirstUnrepresentableCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1480
-[test_givenGrantDeadline_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1595
-[test_givenInactiveAction_whenInvoked_thenOwnAddressIdentified]: depositCollateral.t.sol#L1046
-[test_givenInactive_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1366
-[test_givenIncomingOverReceipt_whenDeposited_thenExactTransferBoundaryRejects]: depositCollateral.t.sol#L626
-[test_givenInexactCoreReceipt_whenDeposited_reverts]: depositCollateral.t.sol#L486
+[test_givenDelegatedVaultDeposit_whenActualCreditExceedsGrant_thenFullRollback]: depositCollateralIntegration.t.sol#L348
+[test_givenDelegatedVaultDeposit_whenNominalExceedsGrantButActualCreditEqualsCap_thenAccepted]: depositCollateralIntegration.t.sol#L319
+[test_givenExistingVaultCollateral_whenToppedUpAcrossFullRange_thenActualCreditAddsOnce]: depositCollateralIntegration.t.sol#L415
+[test_givenExpiredGrant_whenDeadlineBoundarySeedsUsed_thenUnauthorized]: depositCollateral.t.sol#L1445
+[test_givenExpiredGrant_whenOperatorActs_reverts]: depositCollateral.t.sol#L1036
+[test_givenExpiredGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1556
+[test_givenFirstUnrepresentableCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1432
+[test_givenGrantDeadline_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1547
+[test_givenInactiveAction_whenInvoked_thenOwnAddressIdentified]: depositCollateral.t.sol#L1054
+[test_givenInactive_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1362
+[test_givenIncomingOverReceipt_whenDeposited_thenExactTransferBoundaryRejects]: depositCollateral.t.sol#L663
+[test_givenInexactCoreReceipt_whenDeposited_reverts]: depositCollateral.t.sol#L542
 [test_givenManagerPullCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L59
 [test_givenManagerPullCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L75
 [test_givenManagerPullCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L67
 [test_givenManagerPullCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L84
-[test_givenMaximumActualCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1347
-[test_givenMaximumCollateral_whenAnotherUnitDeposited_thenSameOverflowAndRollback]: depositCollateral.t.sol#L589
-[test_givenMaximumOperatorDeadline_whenDepositBoundaryTimesUsed]: depositCollateral.t.sol#L1236
+[test_givenMaximumActualCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1343
+[test_givenMaximumCollateral_whenAnotherUnitDeposited_thenSameOverflowAndRollback]: depositCollateral.t.sol#L626
+[test_givenMaximumOperatorDeadline_whenDepositBoundaryTimesUsed]: depositCollateral.t.sol#L1232
 [test_givenMaximumVaultCredit_whenFullyWithdrawn_thenFullWidthUnitsPreserved]: withdrawCollateralIntegration.t.sol#L218
 [test_givenMaximumVaultCredit_whenUnderlyingFullyWithdrawn]: withdrawCollateralIntegration.t.sol#L515
-[test_givenMinimumDeposit_whenExactMinimum_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1317
-[test_givenMinimumDeposit_whenImmediatelyBelowMinimum_reverts]: depositCollateral.t.sol#L1301
-[test_givenMinimumDeposit_whenInputBelowMinimum_reverts]: depositCollateral.t.sol#L788
-[test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached]: depositCollateral.t.sol#L1189
-[test_givenNoGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1576
-[test_givenNonUnitVaultRate_whenCreditIsMaximum_thenAllReturnsAndCustodyAgree]: depositCollateralIntegration.t.sol#L470
-[test_givenNonUnitVaultRate_whenCreditIsOne_thenAllReturnsAndCustodyAgree]: depositCollateralIntegration.t.sol#L463
-[test_givenNonUnitVaultRate_whenDepositedAcrossFullRange_thenActualCreditAndCustodyAgree]: depositCollateralIntegration.t.sol#L441
+[test_givenMinimumDeposit_whenExactMinimum_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1313
+[test_givenMinimumDeposit_whenImmediatelyBelowMinimum_reverts]: depositCollateral.t.sol#L1297
+[test_givenMinimumDeposit_whenInputBelowMinimum_reverts]: depositCollateral.t.sol#L796
+[test_givenNearMaximumDebtFreeCollateral_whenOneUnitAdded_thenMaximumReached]: depositCollateral.t.sol#L1185
+[test_givenNoGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1528
+[test_givenNonUnitVaultRate_whenCreditIsMaximum_thenAllReturnsAndCustodyAgree]: depositCollateralIntegration.t.sol#L432
+[test_givenNonUnitVaultRate_whenCreditIsOne_thenAllReturnsAndCustodyAgree]: depositCollateralIntegration.t.sol#L425
+[test_givenNonUnitVaultRate_whenDepositedAcrossFullRange_thenActualCreditAndCustodyAgree]: depositCollateralIntegration.t.sol#L403
 [test_givenOneRawVaultUnit_whenWithdrawn_thenExactOutput]: withdrawCollateralIntegration.t.sol#L223
 [test_givenOneVaultUnit_whenSharesWithdrawn]: withdrawCollateralIntegration.t.sol#L520
-[test_givenOnlyAnotherOperatorPeriod_whenDeposited_reverts]: depositCollateral.t.sol#L759
+[test_givenOnlyAnotherOperatorPeriod_whenDeposited_reverts]: depositCollateral.t.sol#L767
 [test_givenOperatorFundedDeposit_whenCallbackCaught]: depositCollateralCallbacks.t.sol#L127
 [test_givenOperatorFundedDeposit_whenCallbackPropagated]: depositCollateralCallbacks.t.sol#L135
-[test_givenOperatorGrant_whenAtDeadline_thenDepositSucceeds]: depositCollateral.t.sol#L1228
-[test_givenOperatorGrant_whenBeforeDeadline_thenAllDepositEffectsAgree]: depositCollateral.t.sol#L1215
-[test_givenOriginationsDisabled_givenDebtFreePosition_whenTopUpQuoted_thenCreditReturned]: depositCollateral.t.sol#L263
-[test_givenOriginationsDisabled_givenDebtFreePosition_whenToppedUp_thenExistingPositionCredited]: depositCollateral.t.sol#L273
-[test_givenOriginationsDisabled_givenEmptyPosition_whenTopUpQuoted_thenExistenceAllowsDeposit]: depositCollateral.t.sol#L283
-[test_givenOriginationsDisabled_givenEmptyPosition_whenToppedUp_thenSamePositionReused]: depositCollateral.t.sol#L293
-[test_givenOriginationsDisabled_givenUnhealthyDebt_whenCuringTopUpQuoted]: depositCollateral.t.sol#L323
-[test_givenOriginationsDisabled_givenUnhealthyDebt_whenPartialTopUpQuoted]: depositCollateral.t.sol#L303
-[test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenHealthCuredWithoutNewDebt]: depositCollateral.t.sol#L333
-[test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenPartialImprovementAllowed]: depositCollateral.t.sol#L313
-[test_givenOriginationsDisabled_whenBorrowerFirstDeposits]: depositCollateral.t.sol#L184
-[test_givenOriginationsDisabled_whenFirstDepositAmountSeeds]: depositCollateral.t.sol#L207
-[test_givenOriginationsDisabled_whenOperatorFirstDeposits]: depositCollateral.t.sol#L195
-[test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts]: depositCollateral.t.sol#L999
-[test_givenOversizedActualCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1326
+[test_givenOperatorGrant_whenAtDeadline_thenDepositSucceeds]: depositCollateral.t.sol#L1224
+[test_givenOperatorGrant_whenBeforeDeadline_thenAllDepositEffectsAgree]: depositCollateral.t.sol#L1211
+[test_givenOriginationsDisabled_givenDebtFreePosition_whenTopUpQuoted_thenCreditReturned]: depositCollateral.t.sol#L303
+[test_givenOriginationsDisabled_givenDebtFreePosition_whenToppedUp_thenExistingPositionCredited]: depositCollateral.t.sol#L313
+[test_givenOriginationsDisabled_givenEmptyPosition_whenTopUpQuoted_thenExistenceAllowsDeposit]: depositCollateral.t.sol#L323
+[test_givenOriginationsDisabled_givenEmptyPosition_whenToppedUp_thenSamePositionReused]: depositCollateral.t.sol#L333
+[test_givenOriginationsDisabled_givenUnhealthyDebt_whenCuringTopUpQuoted]: depositCollateral.t.sol#L373
+[test_givenOriginationsDisabled_givenUnhealthyDebt_whenPartialTopUpQuoted]: depositCollateral.t.sol#L343
+[test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenHealthCuredWithoutNewDebt]: depositCollateral.t.sol#L384
+[test_givenOriginationsDisabled_givenUnhealthyDebt_whenToppedUp_thenPartialImprovementAllowed]: depositCollateral.t.sol#L354
+[test_givenOriginationsDisabled_whenBorrowerFirstDeposits]: depositCollateral.t.sol#L224
+[test_givenOriginationsDisabled_whenFirstDepositAmountSeeds]: depositCollateral.t.sol#L247
+[test_givenOriginationsDisabled_whenOperatorFirstDeposits]: depositCollateral.t.sol#L235
+[test_givenOtherOperatorGrant_whenUnrelatedCallerActs_reverts]: depositCollateral.t.sol#L1007
+[test_givenOversizedActualCredit_whenDeposited_reverts]: depositCollateral.t.sol#L1322
 [test_givenPayerPullCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L25
 [test_givenPayerPullCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L41
 [test_givenPayerPullCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L33
 [test_givenPayerPullCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L50
-[test_givenPreexistingCoreSurplus_whenIncomingReceiptIsShort_reverts]: depositCollateral.t.sol#L1273
-[test_givenPreparationCallback_whenAuthRotatesAndReturns_reverts]: depositCollateralPriceCallbacks.t.sol#L24
-[test_givenProjectedCreditEndpoints_whenPreviewed_reverts]: depositCollateral.t.sol#L1485
-[test_givenProjectedZeroCredit_whenPreviewed_reverts]: depositCollateral.t.sol#L931
-[test_givenPropagatedUnauthorizedCacheAction_whenDepositing_thenRollback]: depositCollateralPriceCallbacks.t.sol#L124
-[test_givenReEnabledAction_whenDeposited_thenOperational]: depositCollateral.t.sol#L1352
-[test_givenReactivatedAction_whenDeposited_thenOperational]: depositCollateral.t.sol#L1359
-[test_givenRealCacheRefresh_whenFinalHealthReportFails_thenCacheAndSettlementRollBack]: depositCollateralIntegration.t.sol#L502
-[test_givenRealStaleCache_whenToppedUp_thenRefreshAndCanonicalHealthAgree]: depositCollateralIntegration.t.sol#L227
-[test_givenRealStalePrice_whenDepositExecuted_reverts]: depositCollateralIntegration.t.sol#L273
+[test_givenPreexistingCoreSurplus_whenIncomingReceiptIsShort_reverts]: depositCollateral.t.sol#L1269
+[test_givenPreparationAuthRotation_whenDeposited]: depositCollateralPriceCallbacks.t.sol#L23
+[test_givenProjectedCreditEndpoints_whenPreviewed_reverts]: depositCollateral.t.sol#L1437
+[test_givenProjectedZeroCredit_whenPreviewed_reverts]: depositCollateral.t.sol#L939
+[test_givenPropagatedUnauthorizedCacheAction_whenDeposited]: depositCollateralPriceCallbacks.t.sol#L117
+[test_givenReEnabledAction_whenDeposited_thenOperational]: depositCollateral.t.sol#L1348
+[test_givenReactivatedAction_whenDeposited_thenOperational]: depositCollateral.t.sol#L1355
+[test_givenStaleCacheAndHealthUnavailable_whenDeposited]: depositCollateralIntegration.t.sol#L461
+[test_givenPriceCacheState_whenDeposited]: depositCollateralIntegration.t.sol#L227
+[test_givenStalePrice_whenDeposited]: depositCollateralIntegration.t.sol#L258
 [test_givenReceiptApprovalCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L144
 [test_givenReceiptApprovalCallback_whenActionReentryPropagated]: depositCollateralCallbacks.t.sol#L167
 [test_givenReceiptApprovalCallback_whenCoreReentryCaught]: depositCollateralCallbacks.t.sol#L185
 [test_givenReceiptApprovalCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L200
-[test_givenReceiptBurnApprovalRejected_whenDeposited_thenFullRollback]: depositCollateral.t.sol#L891
-[test_givenReportedKernelMismatch_whenDeposited_thenGetterIsNotRead]: depositCollateral.t.sol#L1101
-[test_givenRevokedGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1617
+[test_givenReceiptBurnApprovalRejected_whenDeposited_thenFullRollback]: depositCollateral.t.sol#L899
+[test_givenReportedKernelMismatch_whenDeposited_thenGetterIsNotRead]: depositCollateral.t.sol#L1109
+[test_givenRevokedGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1569
 [test_givenRoundedVaultCredit_whenHealthExactlyOne_thenAccepted]: depositCollateralIntegration.t.sol#L204
 [test_givenRoundedVaultCredit_whenHealthyTopUp_thenRealHealthUsesActualCredit]: depositCollateralIntegration.t.sol#L102
 [test_givenRoundedVaultCredit_whenPartialTopUp_thenRealHealthUsesActualCredit]: depositCollateralIntegration.t.sol#L108
-[test_givenSettlementRoleRevoked_whenDepositing_thenBothPathsReject]: depositCollateral.t.sol#L1263
-[test_givenStaleRealCache_whenPriceFeedFails_reverts]: depositCollateralIntegration.t.sol#L481
+[test_givenSettlementRoleRevoked_whenDepositing_thenBothPathsReject]: depositCollateral.t.sol#L1259
+[test_givenStaleRealCacheAndZeroPrice_whenDeposited]: depositCollateralIntegration.t.sol#L443
 [test_givenSynchronousVault_whenSharesWithdrawn]: withdrawCollateralIntegration.t.sol#L507
 [test_givenSynchronousVault_whenUnderlyingWithdrawn]: withdrawCollateralIntegration.t.sol#L499
 [test_givenUnauthorizedAuthCallback_whenFailureCaught_thenOriginalGrantCompletes]: depositCollateralCallbacks.t.sol#L262
 [test_givenUnauthorizedAuthCallback_whenFailurePropagated_thenFullRollback]: depositCollateralCallbacks.t.sol#L305
-[test_givenUnavailableCore_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1399
-[test_givenUnhealthyDebt_whenPartialTopUpIsDeposited_thenUnhealthyHealthIsReturned]: depositCollateralIntegration.t.sol#L307
-[test_givenUnrepresentableProjectedCredit_whenPreviewed_reverts]: depositCollateral.t.sol#L949
-[test_givenValidGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1587
-[test_givenVariableDebtAndCollateral_whenToppedUp_thenExactHealthHandoff]: depositCollateral.t.sol#L1415
+[test_givenUnavailableCore_whenAllLifecycleSeedsUsed_thenAdmissionWins]: depositCollateral.t.sol#L1395
+[test_givenUnhealthyDebt_whenPartialTopUpIsDeposited]: depositCollateralIntegration.t.sol#L273
+[test_givenUnrepresentableProjectedCredit_whenPreviewed_reverts]: depositCollateral.t.sol#L957
+[test_givenValidGrant_whenUnrelatedViewerQuotes]: depositCollateral.t.sol#L1539
+[test_givenVariableDebtAndCollateral_whenToppedUp]: depositCollateral.t.sol#L1411
 [test_givenVaultCapZero_whenMaximumCredit_thenBothPathsReject]: depositCollateralIntegration.t.sol#L219
 [test_givenVaultCap_whenOneOverRoom_thenBothPathsReject]: depositCollateralIntegration.t.sol#L211
 [test_givenVaultDepositCallback_whenActionReentryCaught]: depositCollateralCallbacks.t.sol#L93
@@ -443,41 +443,83 @@ These integration cases supplement the full donation/custody scenarios in
 [test_givenVaultDepositCallback_whenCoreReentryPropagated]: depositCollateralCallbacks.t.sol#L118
 [test_givenVaultDepositCap_whenActualCreditExceedsRoom_thenFullRollback]: depositCollateralIntegration.t.sol#L159
 [test_givenVaultMisreportsShares_whenDeposited_thenReceiptDeltaEnforced]: depositCollateralIntegration.t.sol#L114
-[test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted]: depositCollateralIntegration.t.sol#L350
-[test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted]: depositCollateralIntegration.t.sol#L343
-[test_givenZeroDepositManagerCredit_whenDeposited_reverts]: depositCollateral.t.sol#L513
-[test_whenAmountIsZero_reverts]: depositCollateral.t.sol#L146
-[test_whenAnyViewerQuotesWithoutAuthorizationRead]: depositCollateral.t.sol#L1542
-[test_whenAssetIsUnregistered_reverts]: depositCollateral.t.sol#L155
-[test_whenBorrowerIsZero_thenPreviewAndExecutionReject]: depositCollateral.t.sol#L1247
-[test_whenCallerIsUnauthorized_reverts]: depositCollateral.t.sol#L455
-[test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1197
-[test_whenMaximumDeposited_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1210
-[test_whenOneUnitDeposited_thenFullCredit]: depositCollateral.t.sol#L1205
-[test_whenTransferFromReturnsFalse_thenNoCredit]: depositCollateral.t.sol#L831
-[test_whenTransferFromReverts_thenExactErrorAndNoCredit]: depositCollateral.t.sol#L862
-[test_whenViewerHasAnotherPosition_thenSpecifiedBorrowerQuoted]: depositCollateral.t.sol#L1631
-[test_whenZeroAsset_thenExactRegistrationError]: depositCollateral.t.sol#L1537
-[test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement]: ./depositCollateral.t.sol#L1647
-[test_givenDebtFreeAndBackingPaused_whenCollateralChanged]: ./depositCollateral.t.sol#L1686
-[test_whenAnyViewerQuotesCompatibleCollateral]: ./depositCollateral.t.sol#L74
-[test_whenDepositQuoteMaximumSeeds]: ./depositCollateral.t.sol#L85
-[test_givenExistingCollateral_whenDepositQuoteReachesMaximum]: ./depositCollateral.t.sol#L90
-[test_givenDebtAndRiskSnapshotUnavailable_whenDepositQuoted]: ./depositCollateral.t.sol#L120
-[test_givenDebtAndRiskPointerUnavailable_whenDepositQuoted]: ./depositCollateral.t.sol#L133
-[test_givenDebtAndPriceCachePaused_whenCollateralDeposited]: ./depositCollateralIntegration.t.sol#L34
+[test_givenVaultRounding_whenRawInputExceedsCapAndCreditEqualsCap_thenAccepted]: depositCollateralIntegration.t.sol#L312
+[test_givenVaultRounding_whenRawInputExceedsCapAndCreditIsBelowCap_thenAccepted]: depositCollateralIntegration.t.sol#L305
+[test_givenZeroDepositManagerCredit_whenDeposited_reverts]: depositCollateral.t.sol#L569
+[test_whenAmountIsZero_reverts]: depositCollateral.t.sol#L186
+[test_whenAnyViewerQuotesWithoutAuthorizationRead]: depositCollateral.t.sol#L1494
+[test_whenAssetIsUnregistered_reverts]: depositCollateral.t.sol#L195
+[test_whenBorrowerIsZero_thenPreviewAndExecutionReject]: depositCollateral.t.sol#L1243
+[test_whenCallerIsUnauthorized_reverts]: depositCollateral.t.sol#L511
+[test_whenDirectDepositAcrossFullRange_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1193
+[test_whenMaximumDeposited_thenAllReturnsAndCustodyAgree]: depositCollateral.t.sol#L1206
+[test_whenOneUnitDeposited_thenFullCredit]: depositCollateral.t.sol#L1201
+[test_whenTransferFromReturnsFalse_thenNoCredit]: depositCollateral.t.sol#L839
+[test_whenTransferFromReverts_thenExactErrorAndNoCredit]: depositCollateral.t.sol#L870
+[test_whenViewerHasAnotherPosition_thenSpecifiedBorrowerQuoted]: depositCollateral.t.sol#L1583
+[test_whenZeroAsset_thenExactRegistrationError]: depositCollateral.t.sol#L1489
+[test_givenDebtAndBackingPaused_whenToppedUpBeforeWithdrawal]: ./depositCollateral.t.sol#L1599
+[test_givenDebtFreeAndBackingPaused_whenDeposited]: ./depositCollateral.t.sol#L1624
+[test_whenAnyViewerQuotesCompatibleCollateral]: ./depositCollateral.t.sol#L112
+[test_whenDepositQuoteMaximumSeeds]: ./depositCollateral.t.sol#L123
+[test_givenExistingCollateral_whenDepositQuoteReachesMaximum]: ./depositCollateral.t.sol#L128
+[test_givenDebtAndRiskSnapshotUnavailable_whenDepositQuoted]: ./depositCollateral.t.sol#L160
+[test_givenDebtAndRiskPointerUnavailable_whenDepositQuoted]: ./depositCollateral.t.sol#L173
+[test_givenDebtAndPriceCachePaused_whenCollateralDeposited]: ./depositCollateralIntegration.t.sol#L36
 [test_givenVaultLoss_whenExistingBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L30
 [test_givenVaultLossAndOriginationsDisabled_whenExistingBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L38
 [test_givenVaultLoss_whenNewBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L49
 [test_givenVaultLossAndOriginationsDisabled_whenNewBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L58
 [test_givenVaultLoss_whenAuthorizedOperatorDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L68
-[test_givenDebtAndVaultLoss_whenTopUpRefreshesCache_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L107
-[test_givenOneUnitDeficit_whenCollateralDeposited_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L148
-[test_givenSolventCustody_whenVaultRealizesLossDuringDeposit_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L158
-[test_givenPartialDonation_whenBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L175
-[test_givenFullDonation_whenBorrowerDepositsAndWithdraws]: ./depositCollateralInsolvencyIntegration.t.sol#L194
-[test_givenSolventCustodyBelowUnitExchangeRate_whenBorrowerDeposits]: ./depositCollateralInsolvencyIntegration.t.sol#L229
-[test_givenOtherOperatorInsolvent_whenCoreDeposits]: ./depositCollateralInsolvencyIntegration.t.sol#L250
-[test_givenSeparateShareVaultLoss_whenBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L279
-[test_givenAsyncRedemptionVaultLoss_whenBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L284
-[test_givenOneUnitLoss_whenDepositRoundingRepairsCustody]: ./depositCollateralInsolvencyIntegration.t.sol#L289
+[test_givenDebtAndVaultLoss_whenPricingUnavailable_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L107
+[test_givenOneUnitDeficit_whenCollateralDeposited_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L159
+[test_givenSolventCustody_whenVaultRealizesLossDuringDeposit_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L169
+[test_givenPartialDonation_whenBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L186
+[test_givenFullDonation_whenBorrowerDepositsAndWithdraws]: ./depositCollateralInsolvencyIntegration.t.sol#L205
+[test_givenSolventCustodyBelowUnitExchangeRate_whenBorrowerDeposits]: ./depositCollateralInsolvencyIntegration.t.sol#L240
+[test_givenOtherOperatorInsolvent_whenCoreDeposits]: ./depositCollateralInsolvencyIntegration.t.sol#L261
+[test_givenSeparateShareVaultLoss_whenBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L290
+[test_givenAsyncRedemptionVaultLoss_whenBorrowerDeposits_reverts]: ./depositCollateralInsolvencyIntegration.t.sol#L295
+[test_givenOneUnitLoss_whenDepositRoundingRepairsCustody]: ./depositCollateralInsolvencyIntegration.t.sol#L300
+
+[test_whenDeposited_thenOnlyCreditAndCollateralReturned]: ./depositCollateral.t.sol#L43
+
+[test_givenDebtAndPricingUnavailable_whenDeposited]: ./depositCollateral.t.sol#L68
+
+[test_givenDebtAndRiskPointerUnavailable_whenDeposited]: ./depositCollateral.t.sol#L1630
+
+[test_givenDebtAndRiskDisabled_whenDeposited]: ./depositCollateral.t.sol#L1648
+
+[test_givenDebtAndRiskInactive_whenDeposited]: ./depositCollateral.t.sol#L1655
+
+[test_givenDebtAndSnapshotUnavailable_whenHealthQueriedAfterDeposit_reverts]: ./depositCollateral.t.sol#L1726
+
+[test_givenBackingOutage_whenHealthQueriedAfterDeposit_reverts]: ./depositCollateral.t.sol#L1777
+
+[test_givenPriceOutage_whenHealthQueriedAfterDeposit_reverts]: ./depositCollateral.t.sol#L1789
+
+[_withdrawSynchronousVault]: ./withdrawCollateralIntegration.t.sol#L28
+
+[test_givenPriceCacheStateBoundarySeeds_whenDeposited]: ./depositCollateralIntegration.t.sol#L518
+
+[test_givenPriceFeedReverts_whenDeposited]: ./depositCollateralIntegration.t.sol#L502
+
+[test_givenDebtAndBackingPaused_whenDeposited]: ./depositCollateral.t.sol#L57
+
+[test_givenDebtAndBackingInactive_whenDeposited]: ./depositCollateral.t.sol#L1662
+
+[test_givenDebtAndBackingReverting_whenDeposited]: ./depositCollateral.t.sol#L1670
+
+[test_givenDebtAndZeroBacking_whenDeposited]: ./depositCollateral.t.sol#L1682
+
+[test_givenVaultDebtAndBothOraclesUnavailable_whenDeposited]: ./depositCollateralIntegration.t.sol#L528
+
+[test_givenVaultOracleOutageBoundarySeeds_whenDeposited]: ./depositCollateralIntegration.t.sol#L620
+
+[test_givenDebtAndBothOraclesUnavailable_whenDeposited]: ./depositCollateral.t.sol#L1690
+
+[test_givenOracleOutageBoundarySeeds_whenDeposited]: ./depositCollateral.t.sol#L1748
+
+[test_givenOracleOutage_whenUnauthorizedCallerDeposits_reverts]: ./depositCollateral.t.sol#L1710
+
+[test_givenOracleOutage_whenZeroCallerDeposits_reverts]: ./depositCollateral.t.sol#L1762

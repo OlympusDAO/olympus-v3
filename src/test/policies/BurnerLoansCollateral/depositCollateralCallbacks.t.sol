@@ -278,7 +278,7 @@ contract BurnerLoansCollateralDepositCollateralCallbacksTest is
         );
         uint256 epoch = _auth.pairEpochs(_borrower, _recipient);
         vm.prank(_recipient);
-        (uint128 credit, uint128 total, ) = _collateral.depositCollateral(
+        (uint128 credit, uint128 total) = _collateral.depositCollateral(
             address(_token),
             1e18,
             _borrower
@@ -377,14 +377,9 @@ contract BurnerLoansCollateralDepositCollateralCallbacksTest is
     function _assertDepositCaughtWithoutTokenHook(address caller_) internal {
         uint256 beforeWallet = _token.balanceOf(caller_);
         vm.prank(caller_);
-        (uint128 q, uint128 c, uint256 h) = _collateral.depositCollateral(
-            address(_token),
-            1e18,
-            _borrower
-        );
+        (uint128 q, uint128 c) = _collateral.depositCollateral(address(_token), 1e18, _borrower);
         assertEq(q, 1e18, "One actual credit");
         assertEq(c, 11e18, "Only outer deposit applies");
-        assertEq(h, type(uint256).max, "Debt remains zero");
         assertEq(_token.balanceOf(caller_), beforeWallet - 1e18, "Payer debited once");
         assertEq(
             _lens.getPosition(address(_token), _OTHER_BORROWER).depositedCollateral,

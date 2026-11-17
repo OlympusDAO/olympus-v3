@@ -62,17 +62,18 @@ interface IBurnerLoansCollateral {
     // ========== FUNCTIONS ========== //
 
     /// @notice Deposits the caller's assets for an authorized borrower.
+    /// @dev Returns actual collateral credit without reading pricing or evaluating position health.
+    ///      Health can be queried separately through BurnerLoansLens.
     /// @param asset Configured underlying collateral token.
     /// @param amount Requested deposit in underlying token units.
     /// @param borrower Account receiving collateral credit.
     /// @return credit Collateral actually credited by DepositManager, in underlying units.
     /// @return collateral Borrower's total collateral after the deposit, in underlying units.
-    /// @return resultingHealthFactor Actual WAD-scaled health; uint256.max when no debt exists.
     function depositCollateral(
         address asset,
         uint128 amount,
         address borrower
-    ) external returns (uint128 credit, uint128 collateral, uint256 resultingHealthFactor);
+    ) external returns (uint128 credit, uint128 collateral);
 
     /// @notice Withdraws collateral for an authorized borrower and validates actual resulting health atomically.
     /// @param asset Configured underlying collateral token.

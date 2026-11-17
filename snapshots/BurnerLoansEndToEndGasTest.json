@@ -1,6 +1,6 @@
 {
-    "BurnerLoansCollateral.depositCollateral.additional": "336088",
-    "BurnerLoansCollateral.depositCollateral.first": "665893",
+    "BurnerLoansCollateral.depositCollateral.additional": "324711",
+    "BurnerLoansCollateral.depositCollateral.first": "654517",
     "BurnerLoansCollateral.withdrawCollateral.partial": "280043",
     "BurnerLoansConfig.admin.addAsset": "622353",
     "BurnerLoansConfig.admin.disableOriginations": "117066",
@@ -29,7 +29,7 @@
     "BurnerLoansInventory.syncMintApproval.restoreAfterDefault": "84575",
     "BurnerLoansInventory.withdraw": "111885",
     "BurnerLoansRisk.setBackingOracle": "64667",
-    "BurnerLoansSeize.seize.single": "740881",
+    "BurnerLoansSeize.seize.single": "740880",
     "BurnerLoansSeizerTask.execute.batch10": "1618549",
     "BurnerLoansSeizerTask.execute.maximumBatch": "6370307",
     "BurnerLoansSeizerTask.execute.noSeizures": "82810",

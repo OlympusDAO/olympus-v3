@@ -40,6 +40,44 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     error UnexpectedPricingCall();
 
     // Scenarios: BLCOL-DEPOSIT-P22.
+    function test_whenDeposited_thenOnlyCreditAndCollateralReturned() public {
+        vm.prank(_borrower);
+        (bool success, bytes memory result) = address(_collateral).call(
+            abi.encodeCall(_collateral.depositCollateral, (address(_asset), uint128(1), _borrower))
+        );
+        assertTrue(success, "Valid deposit succeeds");
+        assertEq(result.length, 64, "Deposit execution returns exactly two ABI words");
+        (uint128 credit, uint128 total) = abi.decode(result, (uint128, uint128));
+        assertEq(credit, 1, "Actual credit is one raw unit");
+        assertEq(total, 1, "First deposit records one raw unit");
+        _assertDirectCollateral(total);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D05.
+    function test_givenDebtAndBackingPaused_whenDeposited() public givenDebtBearingPosition {
+        MockBackingOracle(_risk.backingOracle()).setEnabled(false);
+        uint256 wallet = _asset.balanceOf(_borrower);
+        vm.prank(_borrower);
+        _collateral.depositCollateral(address(_asset), 1e6, _borrower);
+        _assertDirectCollateral(2001e6);
+        assertEq(_asset.balanceOf(_borrower), wallet - 1e6, "Borrower funds the protective top-up");
+        assertEq(_inventory.activePrincipalOhm(), 100e9, "Top-up preserves aggregate principal");
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P23.
+    function test_givenDebtAndPricingUnavailable_whenDeposited() public givenDebtBearingPosition {
+        _blockPricing();
+        vm.prank(_borrower);
+        _collateral.depositCollateral(address(_asset), 1e6, _borrower);
+        _assertDirectCollateral(2001e6);
+        assertEq(
+            _inventory.activePrincipalOhm(),
+            100e9,
+            "Unavailable pricing does not change debt"
+        );
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P22.
     function test_whenDepositQuoted_thenOnlyCreditAndCollateralReturned() public {
         (bool success, bytes memory result) = address(_collateral).staticcall(
             abi.encodeCall(_collateral.previewDepositCollateral, (address(_asset), 1, _borrower))
@@ -109,11 +147,13 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         assertEq(_accountingDigest(address(_asset)), beforeQuote, "Raw quote preserves accounting");
         _asset.mint(_borrower, amount_);
         vm.prank(_borrower);
-        (uint128 actualCredit, uint128 actualCollateral, uint256 health) = _collateral
-            .depositCollateral(address(_asset), amount_, _borrower);
+        (uint128 actualCredit, uint128 actualCollateral) = _collateral.depositCollateral(
+            address(_asset),
+            amount_,
+            _borrower
+        );
         assertEq(actualCredit, credit, "Stable execution matches credit quote");
         assertEq(actualCollateral, collateral, "Stable execution matches collateral quote");
-        assertEq(health, type(uint256).max, "Execution retains its third health return");
     }
 
     // Scenarios: BLCOL-DEPOSIT-P23.
@@ -276,7 +316,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         givenOriginationsDisabled
     {
         _blockPricing();
-        _assertExistingTopUpDeposit(1e6, type(uint256).max);
+        _assertExistingTopUpDeposit(1e6);
     }
 
     // Scenarios: BLCOL-DEPOSIT-P12.
@@ -296,7 +336,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         givenOriginationsDisabled
     {
         _blockPricing();
-        _assertExistingTopUpDeposit(type(uint128).max, type(uint256).max);
+        _assertExistingTopUpDeposit(type(uint128).max);
     }
 
     // Scenarios: BLCOL-DEPOSIT-P13.
@@ -305,8 +345,9 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         givenDebtBearingPosition
         givenOriginationsDisabled
     {
-        _mockTopUpHealth(0.95e18);
-        _assertExistingTopUpQuote(1e6);
+        _prepareUnhealthyTopUp();
+        _blockPricing();
+        _assertExistingTopUpQuote(100e6);
     }
 
     // Scenarios: BLCOL-DEPOSIT-P13.
@@ -315,8 +356,17 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         givenDebtBearingPosition
         givenOriginationsDisabled
     {
-        _mockTopUpHealth(0.95e18);
-        _assertExistingTopUpDeposit(1e6, 0.95e18);
+        _prepareUnhealthyTopUp();
+        _blockPricing();
+        _assertExistingTopUpDeposit(100e6);
+        vm.clearMockedCalls();
+        // C=1500 assets at $0.075; D=100 OHM requires $125 backing.
+        // After Q=100 or 500 assets, H is $120/$125=0.96 or $150/$125=1.2 WAD.
+        assertEq(
+            _lens.positionHealthFactor(address(_asset), 1500e6 + 100e6, 100e9),
+            0.96e18,
+            "Independent post-deposit health query"
+        );
     }
 
     // Scenarios: BLCOL-DEPOSIT-P14.
@@ -325,8 +375,9 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         givenDebtBearingPosition
         givenOriginationsDisabled
     {
-        _mockTopUpHealth(1.2e18);
-        _assertExistingTopUpQuote(1e6);
+        _prepareUnhealthyTopUp();
+        _blockPricing();
+        _assertExistingTopUpQuote(500e6);
     }
 
     // Scenarios: BLCOL-DEPOSIT-P14.
@@ -335,34 +386,40 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         givenDebtBearingPosition
         givenOriginationsDisabled
     {
-        _mockTopUpHealth(1.2e18);
-        _assertExistingTopUpDeposit(1e6, 1.2e18);
+        _prepareUnhealthyTopUp();
+        _blockPricing();
+        _assertExistingTopUpDeposit(500e6);
+        vm.clearMockedCalls();
+        // C=1500 assets at $0.075; D=100 OHM requires $125 backing.
+        // After Q=100 or 500 assets, H is $120/$125=0.96 or $150/$125=1.2 WAD.
+        assertEq(
+            _lens.positionHealthFactor(address(_asset), 1500e6 + 500e6, 100e9),
+            1.2e18,
+            "Independent post-deposit health query"
+        );
     }
 
     function _blockPricing() internal {
         bytes memory reason = abi.encodeWithSelector(UnexpectedPricingCall.selector);
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeWithSelector(IBurnerLoansCore.risk.selector),
+            reason
+        );
         vm.mockCallRevert(address(_risk), bytes(""), reason);
         vm.mockCallRevert(address(_price), bytes(""), reason);
     }
 
-    function _mockTopUpHealth(uint256 resultingHealth_) internal {
-        IBurnerLoansRisk.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
-        uint32 market = _core.marketId(address(_asset));
-        bytes memory beforeHealth = abi.encodeCall(
-            IBurnerLoansRisk.health,
-            (snapshot, market, 2000e6, 100e9)
-        );
-        vm.mockCall(address(_risk), beforeHealth, abi.encode(uint256(0.9e18)));
+    function _prepareUnhealthyTopUp() internal {
+        vm.prank(_borrower);
+        _collateral.withdrawCollateral(address(_asset), 500e6, _borrower, _borrower);
+        _price.setPrice(address(_asset), 75e15);
+        // C=1500 (6 decimals) * $0.075 = $112.5; D=100 OHM requires $125.
         assertEq(
-            _risk.health(snapshot, market, 2000e6, 100e9),
+            _lens.positionHealthFactor(address(_asset), 1500e6, 100e9),
             0.9e18,
-            "Position starts below full health"
+            "Position starts unhealthy"
         );
-        bytes memory afterHealth = abi.encodeCall(
-            IBurnerLoansRisk.health,
-            (snapshot, market, 2001e6, 100e9)
-        );
-        vm.mockCall(address(_risk), afterHealth, abi.encode(resultingHealth_));
     }
 
     function _assertExistingTopUpQuote(uint128 amount_) internal {
@@ -394,7 +451,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         assertEq(_floan.getPositionCount(), positions, "Quote creates no position");
     }
 
-    function _assertExistingTopUpDeposit(uint128 amount_, uint256 expectedHealth_) internal {
+    function _assertExistingTopUpDeposit(uint128 amount_) internal {
         (bool exists, uint64 id, IFLOANv1.Position memory beforePosition) = LoanPositions.forCore(
             _core,
             address(_asset),
@@ -413,7 +470,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
             amount_
         );
         vm.prank(_borrower);
-        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
+        (uint128 credit, uint128 collateral) = _collateral.depositCollateral(
             address(_asset),
             amount_,
             _borrower
@@ -421,7 +478,6 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         assertEq(credit, amount_, "Actual direct credit equals Q");
         beforePosition.collateral += amount_;
         assertEq(collateral, beforePosition.collateral, "Return adds Q exactly once");
-        assertEq(health, expectedHealth_, "Execution returns independent configured health");
         assertEq(_asset.balanceOf(_borrower), wallet - amount_, "Borrower funds the exact top-up");
         assertEq(
             keccak256(abi.encode(_floan.getPosition(id))),
@@ -528,40 +584,21 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     }
 
     // Scenarios: BLCOL-DEPOSIT-P07, BLCOL-DEPOSIT-P23.
-    function test_givenDebt_whenRiskHealthFails_thenDepositRollsBack()
+    function test_givenDebtAndRiskHealthUnavailable_whenDeposited()
         public
         givenDebtBearingPosition
     {
-        uint256 balance = _asset.balanceOf(_borrower);
         vm.mockCallRevert(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
-            abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector)
+            abi.encodeWithSelector(UnexpectedPricingCall.selector)
         );
-        bytes32 rollbackState = _accountingDigest(address(_asset));
-        vm.prank(_borrower);
-        (uint256 quotedCredit, uint256 quotedCollateral) = _collateral.previewDepositCollateral(
-            address(_asset),
-            1e6,
-            _borrower
+        vm.expectCall(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
+            uint64(0)
         );
-        assertEq(quotedCredit, 1e6, "Risk health failure does not affect credit quote");
-        assertEq(quotedCollateral, 2001e6, "Risk health failure does not affect collateral quote");
-        vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidParam.selector);
-        vm.prank(_borrower);
-        _collateral.depositCollateral(address(_asset), 1e6, _borrower);
-        assertEq(_asset.balanceOf(_borrower), balance, "Risk failure restores payer funds");
-        vm.clearMockedCalls();
-        assertEq(
-            _lens.getPosition(address(_asset), _borrower).depositedCollateral,
-            2000e6,
-            "Risk failure restores FLOAN collateral"
-        );
-        assertEq(
-            _accountingDigest(address(_asset)),
-            rollbackState,
-            "Rejected action restores complete accounting"
-        );
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
     }
 
     // Scenarios: BLCOL-DEPOSIT-A08.
@@ -663,52 +700,23 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     }
 
     // Scenarios: BLCOL-DEPOSIT-P06, BLCOL-DEPOSIT-P23.
-    function test_givenDebt_whenSnapshotRefreshFails_thenIndependentViewAndRollback()
+    function test_givenDebtAndRiskSnapshotsUnavailable_whenDeposited()
         public
         givenDebtBearingPosition
     {
-        bytes memory failure = abi.encodeWithSelector(
-            IBurnerLoansErrors.BurnerLoans_InvalidParam.selector
-        );
+        bytes memory failure = abi.encodeWithSelector(UnexpectedPricingCall.selector);
         vm.mockCallRevert(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.refreshSnapshot.selector),
             failure
         );
-        vm.prank(_borrower);
-        (uint256 quotedCredit, ) = _collateral.previewDepositCollateral(
-            address(_asset),
-            1,
-            _borrower
-        );
-        assertEq(quotedCredit, 1, "Stored-snapshot quote can remain readable when refresh fails");
-        bytes32 rollbackState = _accountingDigest(address(_asset));
-        vm.expectRevert(failure);
-        vm.prank(_borrower);
-        _collateral.depositCollateral(address(_asset), 1, _borrower);
         vm.mockCallRevert(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.snapshot.selector),
             failure
         );
-        vm.prank(_borrower);
-        (uint256 credit, uint256 total) = _collateral.previewDepositCollateral(
-            address(_asset),
-            1,
-            _borrower
-        );
-        assertEq(credit, 1, "Snapshot failure does not affect credit quote");
-        assertEq(total, 2000e6 + 1, "Snapshot failure does not affect collateral quote");
-        assertEq(
-            _lens.getPosition(address(_asset), _borrower).depositedCollateral,
-            2000e6,
-            "Snapshot failures leave collateral unchanged"
-        );
-        assertEq(
-            _accountingDigest(address(_asset)),
-            rollbackState,
-            "Rejected action restores complete accounting"
-        );
+        vm.expectCall(address(_risk), bytes(""), uint64(0));
+        _assertDirectDeposit(_borrower, 1, 2000e6);
     }
 
     function _expectDeposit(bytes memory reason_, uint128 amount_) internal {
@@ -817,7 +825,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
             _borrower
         );
         vm.prank(_borrower);
-        (uint128 credit, , ) = _collateral.depositCollateral(address(_asset), amount_, _borrower);
+        (uint128 credit, ) = _collateral.depositCollateral(address(_asset), amount_, _borrower);
         assertEq(quote, amount_, "Exact cap quote");
         assertEq(credit, amount_, "Exact cap accepted");
         assertEq(
@@ -1127,27 +1135,16 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     }
 
     // Scenarios: BLCOL-DEPOSIT-P03, BLCOL-DEPOSIT-P04, BLCOL-DEPOSIT-P05.
-    function test_givenDebt_whenHealthBoundarySeedsUsed_thenNoCureThreshold() public {
-        uint256[5] memory seeds = [
-            uint256(0),
-            uint256(1e18 - 1),
-            uint256(1e18),
-            uint256(1e18 + 1),
-            type(uint256).max
-        ];
-        for (uint256 i; i < seeds.length; ++i) {
-            uint256 checkpoint = vm.snapshotState();
-            test_givenVariableDebtAndCollateral_whenToppedUp_thenExactHealthHandoff(
-                uint128(1000e6 + i),
-                uint128(1e9 + i),
-                uint128(i + 1),
-                seeds[i]
-            );
-            assertTrue(
-                vm.revertToState(checkpoint),
-                "Restore position between independent health seeds"
-            );
-        }
+    function test_givenDebt_whenCollateralAndDebtBoundarySeedsUsed() public {
+        uint256 checkpoint = vm.snapshotState();
+        test_givenVariableDebtAndCollateral_whenToppedUp(1000e6, 1, 1);
+        vm.clearMockedCalls();
+        assertTrue(vm.revertToState(checkpoint), "Restore position before maximum top-up seed");
+        test_givenVariableDebtAndCollateral_whenToppedUp(
+            10_000e6,
+            100e9,
+            type(uint128).max - 10_000e6
+        );
     }
 
     // Scenarios: BLCOL-DEPOSIT-N02, BLCOL-DEPOSIT-P02.
@@ -1166,7 +1163,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
             amount_,
             _borrower
         );
-        (uint128 credit, uint128 total, uint256 health) = _collateral.depositCollateral(
+        (uint128 credit, uint128 total) = _collateral.depositCollateral(
             address(_asset),
             amount_,
             _borrower
@@ -1176,7 +1173,6 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         assertEq(total, uint256(prior_) + amount_, "Existing collateral plus actual credit");
         assertEq(quotedCredit, credit, "Top-up credit quote");
         assertEq(quotedTotal, total, "Top-up total quote");
-        assertEq(health, type(uint256).max, "Debt-free health");
         assertEq(
             _depositManager.getOperatorLiabilities(IERC20(address(_asset)), address(_core)),
             total,
@@ -1412,11 +1408,10 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     }
 
     // Scenarios: BLCOL-DEPOSIT-P03, BLCOL-DEPOSIT-P04, BLCOL-DEPOSIT-P05.
-    function test_givenVariableDebtAndCollateral_whenToppedUp_thenExactHealthHandoff(
+    function test_givenVariableDebtAndCollateral_whenToppedUp(
         uint128 prior_,
         uint128 debt_,
-        uint128 amount_,
-        uint256 health_
+        uint128 amount_
     ) public {
         prior_ = uint128(bound(prior_, 1000e6, 10_000e6));
         debt_ = uint128(bound(debt_, 1, 100e9));
@@ -1424,55 +1419,12 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         _depositAsset(_asset, prior_, _borrower);
         vm.prank(_borrower);
         _debt.borrow(address(_asset), debt_, _borrower, _borrower, type(uint256).max, address(0));
-        _asset.mint(_borrower, amount_);
-        IBurnerLoansRisk.PriceSnapshot memory snapshot = _risk.snapshot(address(_asset));
-        vm.mockCall(
-            address(_risk),
-            abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
-            abi.encode(health_)
-        );
-        vm.expectCall(
-            address(_risk),
-            abi.encodeCall(
-                IBurnerLoansRisk.health,
-                (
-                    snapshot,
-                    _core.marketId(address(_asset)),
-                    uint256(prior_) + amount_,
-                    uint256(debt_)
-                )
-            ),
-            uint64(1)
-        );
-        bytes32 beforeQuote = _accountingDigest(address(_asset));
-        vm.prank(_borrower);
-        (uint256 q, uint256 c) = _collateral.previewDepositCollateral(
-            address(_asset),
-            amount_,
-            _borrower
-        );
-        assertEq(q, amount_, "Independent direct credit");
-        assertEq(c, uint256(prior_) + amount_, "Independent projected collateral");
-        assertEq(
-            _accountingDigest(address(_asset)),
-            beforeQuote,
-            "Debt-bearing preview makes no changes"
-        );
-        vm.prank(_borrower);
-        (uint128 actualCredit, uint128 actualCollateral, uint256 actualHealth) = _collateral
-            .depositCollateral(address(_asset), amount_, _borrower);
-        assertEq(actualCredit, amount_, "Actual direct credit");
-        assertEq(actualCollateral, c, "Actual post-settlement collateral");
-        assertEq(
-            actualHealth,
-            health_,
-            "Configured Risk health returned unchanged, including unhealthy values"
-        );
-        _assertDirectCollateral(actualCollateral);
+        _blockPricing();
+        _assertDirectDeposit(_borrower, amount_, prior_);
         assertEq(
             _lens.getPosition(address(_asset), _borrower).debtOhm,
             debt_,
-            "Top-up preserves arbitrary principal"
+            "Top-up preserves principal across the compatible range"
         );
     }
 
@@ -1644,28 +1596,14 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     }
 
     // Scenarios: BLCOL-DEPOSIT-D05, BLCOL-DEPOSIT-P23.
-    function test_givenDebtAndBackingPaused_whenCollateralChanged_revertsWithoutSettlement()
+    function test_givenDebtAndBackingPaused_whenToppedUpBeforeWithdrawal()
         public
+        givenDebtBearingPosition
     {
-        _depositAsset(_asset, 2000e6, _borrower);
-        _asset.mint(_borrower, 100e6);
-        vm.prank(_borrower);
-        _debt.borrow(address(_asset), 100e9, _borrower, _borrower, type(uint256).max, address(0));
         address oracle = _risk.backingOracle();
         MockBackingOracle(oracle).setEnabled(false);
-        bytes32 beforeState = _accountingDigest(address(_asset));
-        (uint256 quote, uint256 quotedTotal) = _collateral.previewDepositCollateral(
-            address(_asset),
-            1e6,
-            _borrower
-        );
-        assertEq(quote, 1e6, "Paused backing oracle does not affect quote");
-        assertEq(quotedTotal, 2001e6, "Paused backing quote uses canonical collateral");
-        vm.expectRevert(
-            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
-        );
-        vm.prank(_borrower);
-        _collateral.depositCollateral(address(_asset), 1e6, _borrower);
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+        bytes32 afterDeposit = _accountingDigest(address(_asset));
         vm.expectRevert(
             abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
         );
@@ -1677,41 +1615,196 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         _collateral.withdrawCollateral(address(_asset), 1e6, _borrower, _recipient);
         assertEq(
             _accountingDigest(address(_asset)),
-            beforeState,
-            "backing outage leaves collateral and custody unchanged"
+            afterDeposit,
+            "Withdrawal failure preserves the completed protective deposit"
         );
     }
 
     // Scenarios: BLCOL-DEPOSIT-D06.
-    function test_givenDebtFreeAndBackingPaused_whenCollateralChanged()
+    function test_givenDebtFreeAndBackingPaused_whenDeposited() public givenDebtFreeCollateral {
+        MockBackingOracle(_risk.backingOracle()).setEnabled(false);
+        _assertDirectDeposit(_borrower, 1e6, 100e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P23.
+    function test_givenDebtAndRiskPointerUnavailable_whenDeposited()
         public
-        givenDebtFreeCollateral
+        givenDebtBearingPosition
+    {
+        vm.mockCallRevert(
+            address(_core),
+            abi.encodeWithSelector(IBurnerLoansCore.risk.selector),
+            abi.encodeWithSelector(UnexpectedPricingCall.selector)
+        );
+        vm.expectCall(
+            address(_core),
+            abi.encodeWithSelector(IBurnerLoansCore.risk.selector),
+            uint64(0)
+        );
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P23.
+    function test_givenDebtAndRiskDisabled_whenDeposited() public givenDebtBearingPosition {
+        _risk.disable("");
+        vm.expectCall(address(_risk), bytes(""), uint64(0));
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P23.
+    function test_givenDebtAndRiskInactive_whenDeposited() public givenDebtBearingPosition {
+        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        vm.expectCall(address(_risk), bytes(""), uint64(0));
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D07.
+    function test_givenDebtAndBackingInactive_whenDeposited() public givenDebtBearingPosition {
+        address oracle = _risk.backingOracle();
+        _kernel.executeAction(Actions.DeactivatePolicy, oracle);
+        vm.expectCall(oracle, bytes(""), uint64(0));
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D08.
+    function test_givenDebtAndBackingReverting_whenDeposited() public givenDebtBearingPosition {
+        address oracle = _risk.backingOracle();
+        vm.mockCallRevert(
+            oracle,
+            abi.encodeWithSignature("backing()"),
+            abi.encodeWithSelector(UnexpectedPricingCall.selector)
+        );
+        vm.expectCall(oracle, bytes(""), uint64(0));
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D09.
+    function test_givenDebtAndZeroBacking_whenDeposited() public givenDebtBearingPosition {
+        address oracle = _risk.backingOracle();
+        MockBackingOracle(oracle).setBacking(0);
+        vm.expectCall(oracle, bytes(""), uint64(0));
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D10.
+    function test_givenDebtAndBothOraclesUnavailable_whenDeposited(
+        bool delegated_,
+        bool originationsDisabled_,
+        bool backingReverts_
+    ) public givenDebtBearingPosition {
+        address oracle = _risk.backingOracle();
+        if (backingReverts_)
+            vm.mockCallRevert(
+                oracle,
+                abi.encodeWithSignature("backing()"),
+                abi.encodeWithSelector(UnexpectedPricingCall.selector)
+            );
+        else MockBackingOracle(oracle).setEnabled(false);
+        if (originationsDisabled_) _config.setAssetOriginationsEnabled(address(_asset), false);
+        if (delegated_) _grantOperator(type(uint48).max);
+        _blockPricing();
+        _assertDirectDeposit(delegated_ ? _recipient : _borrower, 1e6, 2000e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D11.
+    function test_givenOracleOutage_whenUnauthorizedCallerDeposits_reverts(
+        address caller_
+    ) public givenDebtBearingPosition {
+        vm.assume(caller_ != address(0) && caller_ != _borrower && caller_ != _recipient);
+        _grantOperator(type(uint48).max);
+        MockBackingOracle(_risk.backingOracle()).setEnabled(false);
+        _blockPricing();
+        _assertExistingTopUpQuote(1e6);
+        _expectDepositExecutionRevert(
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidContext.selector),
+            caller_,
+            1e6
+        );
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P24.
+    function test_givenDebtAndSnapshotUnavailable_whenHealthQueriedAfterDeposit_reverts()
+        public
+        givenDebtBearingPosition
+    {
+        bytes memory failure = abi.encodeWithSelector(UnexpectedPricingCall.selector);
+        vm.mockCallRevert(
+            address(_risk),
+            abi.encodeWithSelector(IBurnerLoansRisk.snapshot.selector),
+            failure
+        );
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+        bytes32 afterDeposit = _accountingDigest(address(_asset));
+        vm.expectRevert(failure);
+        _lens.positionHealthFactor(address(_asset), 2001e6, 100e9);
+        assertEq(
+            _accountingDigest(address(_asset)),
+            afterDeposit,
+            "Independent failing health read preserves the completed deposit"
+        );
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D10.
+    function test_givenOracleOutageBoundarySeeds_whenDeposited() public {
+        for (uint8 flags; flags < 8; ++flags) {
+            uint256 checkpoint = vm.snapshotState();
+            test_givenDebtAndBothOraclesUnavailable_whenDeposited(
+                flags & 1 != 0,
+                flags & 2 != 0,
+                flags & 4 != 0
+            );
+            vm.clearMockedCalls();
+            assertTrue(vm.revertToState(checkpoint), "Restore state between direct outage seeds");
+        }
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D12.
+    function test_givenOracleOutage_whenZeroCallerDeposits_reverts()
+        public
+        givenDebtBearingPosition
     {
         MockBackingOracle(_risk.backingOracle()).setEnabled(false);
-        (uint256 quote, uint256 quotedTotal) = _collateral.previewDepositCollateral(
-            address(_asset),
-            1e6,
-            _borrower
+        _blockPricing();
+        _assertExistingTopUpQuote(1e6);
+        _expectDepositExecutionRevert(
+            abi.encodeWithSelector(IOperatorAuth.OperatorAuth_InvalidIdentity.selector),
+            address(0),
+            1e6
         );
-        assertEq(quote, 1e6, "Debt-free quote retains credit during backing outage");
-        assertEq(quotedTotal, 101e6, "Debt-free quote retains total during backing outage");
-        _asset.mint(_borrower, 1e6);
-        vm.prank(_borrower);
-        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
-            address(_asset),
-            1e6,
-            _borrower
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P24.
+    function test_givenBackingOutage_whenHealthQueriedAfterDeposit_reverts()
+        public
+        givenDebtBearingPosition
+    {
+        address oracle = _risk.backingOracle();
+        MockBackingOracle(oracle).setEnabled(false);
+        _assertHealthReadRevertsAfterDeposit(
+            abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
         );
-        assertEq(credit, 1e6, "debt-free deposit retains exact credit during backing outage");
-        assertEq(collateral, 101e6, "debt-free deposit adds collateral during backing outage");
-        assertEq(health, type(uint256).max, "debt-free health requires no backing");
-        IBurnerLoansCollateral.WithdrawPreview memory quoteWithdrawal = _collateral
-            .previewWithdrawCollateral(address(_asset), 1e6, _borrower, _recipient);
-        _assertWithdrawal(quoteWithdrawal, address(_asset), 1e6, 100e6, type(uint256).max);
-        vm.prank(_borrower);
-        IBurnerLoansCollateral.WithdrawPreview memory actualWithdrawal = _collateral
-            .withdrawCollateral(address(_asset), 1e6, _borrower, _recipient);
-        _assertWithdrawal(actualWithdrawal, address(_asset), 1e6, 100e6, type(uint256).max);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P24.
+    function test_givenPriceOutage_whenHealthQueriedAfterDeposit_reverts()
+        public
+        givenDebtBearingPosition
+    {
+        bytes memory failure = abi.encodeWithSelector(UnexpectedPricingCall.selector);
+        vm.mockCallRevert(address(_price), bytes(""), failure);
+        _assertHealthReadRevertsAfterDeposit(failure);
+    }
+
+    function _assertHealthReadRevertsAfterDeposit(bytes memory failure_) internal {
+        _assertDirectDeposit(_borrower, 1e6, 2000e6);
+        bytes32 afterDeposit = _accountingDigest(address(_asset));
+        vm.expectRevert(failure_);
+        _lens.positionHealthFactor(address(_asset), 2001e6, 100e9);
+        assertEq(
+            _accountingDigest(address(_asset)),
+            afterDeposit,
+            "Separate failing health query leaves protective collateral intact"
+        );
     }
 }
 

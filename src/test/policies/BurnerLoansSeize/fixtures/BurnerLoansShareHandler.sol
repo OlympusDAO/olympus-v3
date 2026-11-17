@@ -123,7 +123,7 @@ contract BurnerLoansShareHandler is Test {
         );
         assertEq(quotedCollateral, collateral[actor] + quotedCredit, "Quote adds estimated credit");
         vm.prank(actor);
-        (uint128 credit, uint128 total, uint256 health) = _services.collateral.depositCollateral(
+        (uint128 credit, uint128 total) = _services.collateral.depositCollateral(
             address(_ASSET),
             amount,
             actor
@@ -137,9 +137,6 @@ contract BurnerLoansShareHandler is Test {
             "Exact shares deposited"
         );
         assertEq(_ASSET.balanceOf(actor), walletBefore - amount, "Actor funds the deposit");
-        if (principal[actor] == 0) {
-            assertEq(health, type(uint256).max, "Debt-free deposit health");
-        }
     }
 
     // forge-lint: disable-end(reentrancy-no-eth, unsafe-typecast)

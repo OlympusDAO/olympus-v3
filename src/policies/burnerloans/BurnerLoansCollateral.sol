@@ -38,6 +38,8 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
     ) BaseBurnerLoansAction(kernel_, core_, BL_COLLATERAL_POLICY_ROLE) {}
 
     /// @inheritdoc IBurnerLoansCollateral
+    /// @dev Does not read prices, backing or position health: adding collateral cannot increase debt.
+    ///      Health can be queried separately through BurnerLoansLens and may remain below one.
     /// @dev Reverts if:
     ///      - The action or Core is inactive or disabled.
     ///      - The borrower is zero, or the actual caller lacks a current borrower/operator authorization.
@@ -51,20 +53,12 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
         address asset_,
         uint128 amount_,
         address borrower_
-    )
-        external
-        override
-        onlyOperational
-        returns (uint128 credit, uint128 collateral, uint256 resultingHealthFactor)
-    {
+    ) external override onlyOperational returns (uint128 credit, uint128 collateral) {
         IBurnerLoansCore.AuthorizationContext memory authContext = _captureBorrower(
             borrower_,
             BL_ACTION_DEPOSIT
         );
-        IFLOANv1.Position memory beforePosition = _validateDeposit(asset_, amount_, borrower_);
-        IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansRisk.PriceSnapshot memory snapshot;
-        if (beforePosition.principalDue != 0) snapshot = evaluator.refreshSnapshot(asset_);
+        _validateDeposit(asset_, amount_, borrower_);
         (credit, collateral) = _CORE.settleDeposit(
             IBurnerLoansCore.DepositRequest({
                 asset: asset_,
@@ -75,13 +69,6 @@ contract BurnerLoansCollateral is BaseBurnerLoansAction, IBurnerLoansCollateral 
             msg.sender,
             authContext
         );
-        (, , IFLOANv1.Position memory afterPosition) = LoanPositions.forCore(
-            _CORE,
-            asset_,
-            borrower_
-        );
-        // Helpful deposits may leave health below one. Report actual credit without imposing a cure threshold.
-        resultingHealthFactor = LoanPositions.health(evaluator, snapshot, afterPosition);
         emit IBurnerLoansCollateral.CollateralDeposited(
             msg.sender,
             asset_,

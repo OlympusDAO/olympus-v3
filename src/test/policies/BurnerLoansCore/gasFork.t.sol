@@ -139,15 +139,16 @@ contract BurnerLoansLivePriceForkGasTest is Test {
     function test_gasSnapshot_depositCollateral_newPosition() public {
         vm.startPrank(_carol);
         vm.startSnapshotGas(_snapshotName("depositCollateral.newPosition"));
-        (uint256 depositedAmount, uint256 resultingCollateral, uint256 healthFactor) = _collateral
-            .depositCollateral(_USDS, _NEW_POSITION_COLLATERAL, _carol);
+        (uint256 depositedAmount, uint256 resultingCollateral) = _collateral.depositCollateral(
+            _USDS,
+            _NEW_POSITION_COLLATERAL,
+            _carol
+        );
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
         assertEq(depositedAmount, _NEW_POSITION_COLLATERAL, "deposited amount");
         assertEq(resultingCollateral, _NEW_POSITION_COLLATERAL, "resulting collateral");
-        // Resulting debt is zero, so health is defined as max uint256 without a PRICE read.
-        assertEq(healthFactor, type(uint256).max, "debt-free health factor");
         assertEq(
             _carolUsdsBalanceBeforeTest - _usds.balanceOf(_carol),
             _NEW_POSITION_COLLATERAL,
@@ -169,8 +170,11 @@ contract BurnerLoansLivePriceForkGasTest is Test {
     function test_gasSnapshot_depositCollateral_existingDebtPosition() public {
         vm.startPrank(_alice);
         vm.startSnapshotGas(_snapshotName("depositCollateral.existingDebtPosition"));
-        (uint256 depositedAmount, uint256 resultingCollateral, uint256 healthFactor) = _collateral
-            .depositCollateral(_USDS, _COLLATERAL_CHANGE, _alice);
+        (uint256 depositedAmount, uint256 resultingCollateral) = _collateral.depositCollateral(
+            _USDS,
+            _COLLATERAL_CHANGE,
+            _alice
+        );
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
@@ -187,7 +191,11 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         // requiredCollateralUsd = max(marketRequirementUsd, backingRequirementUsd)
         // health = floor(collateralValueUsd * 1e18 / requiredCollateralUsd)
         //        = 1_902_912_740_462_711_134
-        assertEq(healthFactor, _HEALTH_AFTER_EXISTING_DEPOSIT, "resulting health factor");
+        assertEq(
+            _lens.positionHealthFactor(_USDS, resultingCollateral, _DEBT),
+            _HEALTH_AFTER_EXISTING_DEPOSIT,
+            "Independent post-deposit health query"
+        );
         assertEq(
             _aliceUsdsBalanceBeforeTest - _usds.balanceOf(_alice),
             _COLLATERAL_CHANGE,
@@ -566,11 +574,13 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
     function _deposit(address account_, uint128 amount_) internal {
         vm.prank(account_);
-        (uint256 depositedAmount, uint256 resultingCollateral, uint256 healthFactor) = _collateral
-            .depositCollateral(_USDS, amount_, account_);
+        (uint256 depositedAmount, uint256 resultingCollateral) = _collateral.depositCollateral(
+            _USDS,
+            amount_,
+            account_
+        );
         assertEq(depositedAmount, amount_, "setup deposited amount");
         assertEq(resultingCollateral, amount_, "setup resulting collateral");
-        assertEq(healthFactor, type(uint256).max, "setup debt-free health factor");
     }
 
     function _borrow(address account_, uint128 amount_) internal returns (uint48 maturity) {

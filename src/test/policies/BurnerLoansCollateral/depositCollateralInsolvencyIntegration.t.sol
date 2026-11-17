@@ -104,7 +104,7 @@ contract BurnerLoansCollateralDepositCollateralInsolvencyIntegrationTest is
     }
 
     // Scenarios: BLCOL-DEPOSIT-T13.
-    function test_givenDebtAndVaultLoss_whenTopUpRefreshesCache_reverts() public {
+    function test_givenDebtAndVaultLoss_whenPricingUnavailable_reverts() public {
         (MockERC20 token, MockERC4626 vault) = _seedLossVault(0);
         vm.prank(_borrower);
         _debt.borrow(address(token), 40e9, _borrower, _borrower, 0, address(0));
@@ -129,13 +129,24 @@ contract BurnerLoansCollateralDepositCollateralInsolvencyIntegrationTest is
                 cache.cachePriceIfNecessary,
                 (address(_ohm), address(token), uint48(60))
             ),
-            uint64(1)
+            uint64(0)
+        );
+        vm.mockCallRevert(
+            address(_risk),
+            bytes(""),
+            abi.encodeWithSelector(IDepositManager.DepositManager_Insolvent.selector)
+        );
+        vm.mockCallRevert(
+            address(_price),
+            bytes(""),
+            abi.encodeWithSelector(IDepositManager.DepositManager_Insolvent.selector)
         );
         _expectLossDeposit(token, vault, _borrower, _borrower, 8, 108, 88);
+        vm.clearMockedCalls();
         assertEq(
             keccak256(abi.encode(cache.getCachedPrice(address(_ohm), address(token)))),
             beforeCache,
-            "Final solvency failure rolls back the real cache refresh"
+            "Final solvency failure never invokes price refresh"
         );
         assertEq(
             _lens.getPosition(address(token), _borrower).debtOhm,
@@ -418,14 +429,13 @@ contract BurnerLoansCollateralDepositCollateralInsolvencyIntegrationTest is
         uint128 collateral_
     ) internal {
         vm.prank(_borrower);
-        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
+        (uint128 credit, uint128 collateral) = _collateral.depositCollateral(
             address(token_),
             amount_,
             _borrower
         );
         assertEq(credit, credit_, "Real top-up credits independent expected amount");
         assertEq(collateral, collateral_, "Real top-up records expected total collateral");
-        assertEq(health, type(uint256).max, "Debt-free top-up retains execution health");
         _assertLossLiability(token_, collateral_);
         assertEq(
             _lens.getPosition(address(token_), _borrower).depositedCollateral,

@@ -5,12 +5,13 @@ pragma solidity >=0.8.24;
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoansAuth} from "src/policies/interfaces/burnerloans/IBurnerLoansAuth.sol";
+import {IBurnerLoansCollateral} from "src/policies/interfaces/burnerloans/IBurnerLoansCollateral.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
@@ -19,6 +20,7 @@ import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 // Contracts
 import {BurnerLoansCollateralVaultTest} from "./fixtures/BurnerLoansCollateralVaultTest.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
+import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
@@ -42,15 +44,13 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         cache.disable("");
         _assertExistingDebtQuoteWithoutPricing();
         vm.prank(_borrower);
-        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
+        (uint128 credit, uint128 collateral) = _collateral.depositCollateral(
             address(_asset),
             1,
             _borrower
         );
         assertEq(credit, 1, "Paused optional cache preserves real deposit credit");
         assertEq(collateral, 2000e6 + 1, "Paused optional cache preserves canonical collateral");
-        // CURRENT PRICE fallback: 2000.000001 assets /125 required assets, scaled to WAD.
-        assertEq(health, 16_000_000_008_000_000_000, "Execution retains PRICE fallback health");
         // PriceCache's getter is enabled-only; restore access before inspecting the unchanged round.
         cache.enable("");
         assertEq(
@@ -98,13 +98,13 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         assertEq(vault.balanceOf(address(_depositManager)), 100, "Custody shares restored");
     }
 
-    // Scenarios: BLCOL-DEPOSIT-P08.
+    // Scenarios: BLCOL-DEPOSIT-P03, BLCOL-DEPOSIT-P08.
     function test_givenRoundedVaultCredit_whenHealthyTopUp_thenRealHealthUsesActualCredit() public {
         // Actual collateral=2002 whole assets at $1; required backing=$125. H=2002/125=16.016 WAD.
         _assertVaultTopUpHealth(1e18, 16_016_000_000_000_000_000, 100e9);
     }
 
-    // Scenarios: BLCOL-DEPOSIT-P08.
+    // Scenarios: BLCOL-DEPOSIT-P05, BLCOL-DEPOSIT-P08.
     function test_givenRoundedVaultCredit_whenPartialTopUp_thenRealHealthUsesActualCredit() public {
         // At $1/32 per asset, H=(2002/32)/125=0.5005 WAD; a helpful partial top-up succeeds.
         _assertVaultTopUpHealth(31_250_000_000_000_000, 500_500_000_000_000_000, 100e9);
@@ -200,7 +200,7 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         );
     }
 
-    // Scenarios: BLCOL-DEPOSIT-P08.
+    // Scenarios: BLCOL-DEPOSIT-P04, BLCOL-DEPOSIT-P08.
     function test_givenRoundedVaultCredit_whenHealthExactlyOne_thenAccepted() public {
         // Final C=2002 whole assets at $0.05 = $100.10.
         // Debt=80.08 OHM at $1, backing=125% -> $100.10 required. H=1 WAD.
@@ -224,90 +224,53 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
     }
 
     // Scenarios: BLCOL-DEPOSIT-P09.
-    function test_givenRealStaleCache_whenToppedUp_thenRefreshAndCanonicalHealthAgree()
-        public
-        givenDebtBearingPosition
-    {
+    function test_givenPriceCacheState_whenDeposited(uint8 state_) public givenDebtBearingPosition {
+        state_ = uint8(bound(state_, 0, 3));
         PriceCache cache = _configureCache();
-        IPriceCache.CachedPrice memory old = cache.getCachedPrice(address(_ohm), address(_asset));
-        vm.warp(vm.getBlockTimestamp() + 61);
-        _price.setPrice(address(_asset), 2e18);
-        _price.setTimestamp(uint48(vm.getBlockTimestamp()));
-        vm.prank(_borrower);
-        (uint256 quotedCredit, uint256 quotedCollateral) = _collateral.previewDepositCollateral(
-            address(_asset),
-            1e6,
-            _borrower
+        bytes32 beforeCache = keccak256(
+            abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))
         );
+        if (state_ == 0) vm.warp(vm.getBlockTimestamp() + 60);
+        if (state_ == 1) vm.warp(vm.getBlockTimestamp() + 61);
+        if (state_ == 2) _risk.setPriceCache(address(0));
+        if (state_ == 3) cache.disable("");
+        vm.mockCallRevert(
+            address(_risk),
+            bytes(""),
+            abi.encodeWithSelector(HealthReportFailed.selector)
+        );
+        vm.mockCallRevert(
+            address(_price),
+            bytes(""),
+            abi.encodeWithSelector(HealthReportFailed.selector)
+        );
+        _assertDirectDeposit(_borrower, 1, 2000e6);
+        vm.clearMockedCalls();
+        if (state_ == 3) cache.enable("");
         assertEq(
-            cache.getCachedPrice(address(_ohm), address(_asset)).updatedAt,
-            old.updatedAt,
-            "Preview does not refresh stale cache"
+            keccak256(abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))),
+            beforeCache,
+            "Deposit preserves cache price and timestamp in every cache state"
         );
-        uint256 beforeBalance = _asset.balanceOf(_borrower);
-        vm.prank(_borrower);
-        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
-            address(_asset),
-            1e6,
-            _borrower
-        );
-        // Collateral is now 2001 assets at $2; backing requirement is $100*1.25=$125.
-        // H=4002/125=32.016 WAD. These constants do not call the Risk implementation.
-        assertEq(credit, 1e6, "Direct actual credit");
-        assertEq(collateral, 2001e6, "Canonical post-deposit collateral");
-        assertEq(health, 32016e15, "Independent refreshed health");
-        assertEq(quotedCredit, credit, "Stable conversion credit agrees");
-        assertEq(quotedCollateral, collateral, "Preview collateral agrees");
-        IPriceCache.CachedPrice memory current = cache.getCachedPrice(
-            address(_ohm),
-            address(_asset)
-        );
-        assertEq(current.updatedAt, vm.getBlockTimestamp(), "Real cache records fresh observation");
-        assertEq(current.assetPriceUsd, 1e18, "OHM leg unchanged");
-        assertEq(current.quotePriceUsd, 2e18, "Collateral leg refreshed");
-        assertEq(_asset.balanceOf(_borrower), beforeBalance - 1e6, "Actual payer debit");
-        assertEq(_asset.balanceOf(address(_depositManager)), 2001e6, "Real custody credit");
     }
 
     // Scenarios: BLCOL-DEPOSIT-P10.
-    function test_givenRealStalePrice_whenDepositExecuted_reverts()
-        public
-        givenDebtBearingPosition
-    {
+    function test_givenStalePrice_whenDeposited(bool ohm_) public givenDebtBearingPosition {
         vm.warp(vm.getBlockTimestamp() + 8 hours + 1);
-        uint256 balance = _asset.balanceOf(_borrower);
-        bytes32 rollbackState = _accountingDigest(address(_asset));
-        vm.prank(_borrower);
-        (uint256 quote, uint256 quotedTotal) = _collateral.previewDepositCollateral(
-            address(_asset),
-            1,
-            _borrower
+        _price.setTimestamp(uint48(vm.getBlockTimestamp()));
+        address staleAsset = ohm_ ? address(_ohm) : address(_asset);
+        bytes memory read = abi.encodeWithSignature(
+            "getPrice(address,uint8)",
+            staleAsset,
+            IPRICEv2.Variant.CURRENT
         );
-        assertEq(quote, 1, "Stale prices do not affect deposit quote");
-        assertEq(quotedTotal, 2000e6 + 1, "Stale-price quote adds collateral only");
-        vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
-        vm.prank(_borrower);
-        _collateral.depositCollateral(address(_asset), 1, _borrower);
-        assertEq(_asset.balanceOf(_borrower), balance, "No payer transfer on price failure");
-        assertEq(_asset.balanceOf(_recipient), 0, "No output on price failure");
-        assertEq(
-            _lens.getPosition(address(_asset), _borrower).depositedCollateral,
-            2000e6,
-            "Canonical collateral unchanged"
-        );
-        assertEq(_inventory.activePrincipalOhm(), 100e9, "Debt ledger unchanged");
-        assertEq(
-            _accountingDigest(address(_asset)),
-            rollbackState,
-            "Rejected action restores complete accounting"
-        );
+        vm.mockCall(address(_price), read, abi.encode(uint256(1e18), uint48(1)));
+        vm.expectCall(address(_price), read, uint64(0));
+        _assertDirectDeposit(_borrower, 1, 2000e6);
     }
 
     // Scenarios: BLCOL-DEPOSIT-P05, BLCOL-DEPOSIT-P19.
-    function test_givenUnhealthyDebt_whenPartialTopUpIsDeposited_thenUnhealthyHealthIsReturned()
-        public
-        givenDebtBearingPosition
-    {
+    function test_givenUnhealthyDebt_whenPartialTopUpIsDeposited() public givenDebtBearingPosition {
         _price.setPrice(address(_asset), 1e15);
         (uint256 quotedCredit, uint256 quotedCollateral) = _collateral.previewDepositCollateral(
             address(_asset),
@@ -315,7 +278,7 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
             _borrower
         );
         vm.prank(_borrower);
-        (uint128 credit, uint128 collateral, uint256 health) = _collateral.depositCollateral(
+        (uint128 credit, uint128 collateral) = _collateral.depositCollateral(
             address(_asset),
             1e6,
             _borrower
@@ -331,11 +294,10 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         );
         _assertDirectCollateral(collateral);
         // $0.001 * 2001 assets / ($100 * 1.25) = 0.016008 WAD.
-        assertEq(health, 16_008_000_000_000_000, "Independent real unhealthy health");
         assertEq(
-            health,
             _lens.positionHealthFactor(address(_asset), collateral, 100e9),
-            "Returned health agrees with canonical position"
+            16_008_000_000_000_000,
+            "Independent real unhealthy health queried after deposit"
         );
     }
 
@@ -360,7 +322,7 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         (MockERC20 token, MockERC4626 vault) = _seedRoundedVault(6);
         _grantRoundedDeposit(token, 1999);
         vm.prank(_recipient);
-        (uint128 credit, uint128 total, ) = _collateral.depositCollateral(
+        (uint128 credit, uint128 total) = _collateral.depositCollateral(
             address(token),
             2000,
             _borrower
@@ -478,28 +440,25 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
     }
 
     // Scenarios: BLCOL-DEPOSIT-P10.
-    function test_givenStaleRealCache_whenPriceFeedFails_reverts() public givenDebtBearingPosition {
+    function test_givenStaleRealCacheAndZeroPrice_whenDeposited(
+        bool ohm_
+    ) public givenDebtBearingPosition {
         PriceCache cache = _configureCache();
         bytes32 beforeCache = keccak256(
             abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))
         );
         vm.warp(vm.getBlockTimestamp() + 61);
-        _price.setPrice(address(_asset), 0);
-        _assertExistingDebtQuoteWithoutPricing();
-        _expectDepositExecutionRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(_asset)),
-            _borrower,
-            1
-        );
+        _price.setPrice(ohm_ ? address(_ohm) : address(_asset), 0);
+        _assertDirectDeposit(_borrower, 1, 2000e6);
         assertEq(
             keccak256(abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))),
             beforeCache,
-            "Failed real refresh preserves cached round, timestamp and prices"
+            "Zero feed price does not trigger cache refresh"
         );
     }
 
     // Scenarios: BLCOL-DEPOSIT-P07.
-    function test_givenRealCacheRefresh_whenFinalHealthReportFails_thenCacheAndSettlementRollBack()
+    function test_givenStaleCacheAndHealthUnavailable_whenDeposited()
         public
         givenDebtBearingPosition
     {
@@ -508,8 +467,6 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
             abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))
         );
         vm.warp(vm.getBlockTimestamp() + 61);
-        _price.setTimestamp(uint48(vm.getBlockTimestamp()));
-        _price.setPrice(address(_asset), 2e18);
         vm.mockCallRevert(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.health.selector),
@@ -521,18 +478,13 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
                 cache.cachePriceIfNecessary,
                 (address(_ohm), address(_asset), uint48(60))
             ),
-            uint64(1)
+            uint64(0)
         );
-        _assertExistingDebtQuoteWithoutPricing();
-        _expectDepositExecutionRevert(
-            abi.encodeWithSelector(HealthReportFailed.selector),
-            _borrower,
-            1
-        );
+        _assertDirectDeposit(_borrower, 1, 2000e6);
         assertEq(
             keccak256(abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))),
             beforeCache,
-            "Late health error restores the real refreshed cache round, prices and timestamp"
+            "Successful deposit neither refreshes cache nor reports health"
         );
     }
 
@@ -544,6 +496,138 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         );
         assertEq(credit, 1, "Price service failure does not affect credit quote");
         assertEq(collateral, 2000e6 + 1, "Price service failure does not affect collateral quote");
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P10.
+    function test_givenPriceFeedReverts_whenDeposited(bool ohm_) public givenDebtBearingPosition {
+        bytes memory read = abi.encodeWithSignature(
+            "getPrice(address,uint8)",
+            ohm_ ? address(_ohm) : address(_asset),
+            IPRICEv2.Variant.CURRENT
+        );
+        vm.mockCallRevert(
+            address(_price),
+            read,
+            abi.encodeWithSelector(HealthReportFailed.selector)
+        );
+        vm.expectCall(address(_price), read, uint64(0));
+        _assertDirectDeposit(_borrower, 1, 2000e6);
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-P09.
+    function test_givenPriceCacheStateBoundarySeeds_whenDeposited() public {
+        for (uint8 state; state < 4; ++state) {
+            uint256 checkpoint = vm.snapshotState();
+            test_givenPriceCacheState_whenDeposited(state);
+            vm.clearMockedCalls();
+            assertTrue(vm.revertToState(checkpoint), "Restore state between cache seeds");
+        }
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D10.
+    function test_givenVaultDebtAndBothOraclesUnavailable_whenDeposited(
+        bool delegated_,
+        bool originationsDisabled_,
+        bool backingReverts_
+    ) public {
+        MockERC20 token = new MockERC20("Whole Unit Asset", "WUA", 0);
+        MockERC4626 vault = new MockERC4626(OZERC20(address(token)), "Vault", "V");
+        token.mint(address(this), 6);
+        token.approve(address(vault), 2);
+        vault.deposit(2, address(this));
+        assertTrue(token.transfer(address(vault), 4), "Seed vault exchange rate");
+        _admitVault(token, address(vault), false);
+        _deposit(token, 2000);
+        vm.prank(_borrower);
+        _debt.borrow(address(token), 100e9, _borrower, _borrower, 0, address(0));
+        address caller = delegated_ ? _recipient : _borrower;
+        if (delegated_)
+            _approveOperatorForAsset(_borrower, caller, type(uint48).max, address(token));
+        if (originationsDisabled_) _config.setAssetOriginationsEnabled(address(token), false);
+        address oracle = _risk.backingOracle();
+        if (backingReverts_)
+            vm.mockCallRevert(
+                oracle,
+                abi.encodeWithSignature("backing()"),
+                abi.encodeWithSelector(HealthReportFailed.selector)
+            );
+        else MockBackingOracle(oracle).setEnabled(false);
+        vm.mockCallRevert(
+            address(_risk),
+            bytes(""),
+            abi.encodeWithSelector(HealthReportFailed.selector)
+        );
+        vm.mockCallRevert(
+            address(_price),
+            bytes(""),
+            abi.encodeWithSelector(HealthReportFailed.selector)
+        );
+        token.mint(caller, 5);
+        vm.prank(caller);
+        token.approve(address(_core), 5);
+        uint48 maturity = _lens.getPosition(address(token), _borrower).maturity;
+        (uint256 quotedCredit, uint256 quotedTotal) = _collateral.previewDepositCollateral(
+            address(token),
+            5,
+            _borrower
+        );
+        vm.expectEmit(address(_collateral));
+        emit IBurnerLoansCollateral.CollateralDeposited(caller, address(token), _borrower, 5, 3);
+        vm.prank(caller);
+        (uint128 credit, uint128 total) = _collateral.depositCollateral(
+            address(token),
+            5,
+            _borrower
+        );
+        // Before top-up: 666 of 668 shares represent 1999 assets. Five assets mint
+        // floor(5*668/2006)=1 share; Q=floor(2011/669)=3, so total=1999+3=2002.
+        assertEq(credit, 3, "Actual rounded credit survives both oracle failures");
+        assertEq(total, 2002, "Actual credit adds once to the borrower");
+        assertEq(quotedCredit, credit, "Stable conversion quote agrees");
+        assertEq(quotedTotal, total, "Collateral quote agrees");
+        assertEq(token.balanceOf(caller), 0, "Actual caller funds nominal input");
+        assertEq(token.balanceOf(address(_core)), 0, "Core retains no transient assets");
+        assertEq(vault.balanceOf(address(_depositManager)), 667, "One new share enters custody");
+        assertEq(
+            _depositManager.getOperatorLiabilities(IERC20(address(token)), address(_core)),
+            total,
+            "Actual credit determines liabilities"
+        );
+        uint256 id = _depositManager.getReceiptTokenId(IERC20(address(token)), 1, address(_core));
+        assertEq(
+            _depositManager.getReceiptTokenManager().balanceOf(address(_core), id),
+            total,
+            "Receipts match actual liabilities"
+        );
+        assertEq(
+            _floan.getMarketCollateral(_core.marketId(address(token))),
+            total,
+            "Aggregate collateral matches position"
+        );
+        assertEq(
+            _lens.getPosition(address(token), _borrower).debtOhm,
+            100e9,
+            "Principal unchanged"
+        );
+        assertEq(
+            _lens.getPosition(address(token), _borrower).maturity,
+            maturity,
+            "Maturity unchanged"
+        );
+    }
+
+    // Scenarios: BLCOL-DEPOSIT-D10.
+    function test_givenVaultOracleOutageBoundarySeeds_whenDeposited() public {
+        for (uint8 flags; flags < 8; ++flags) {
+            uint256 checkpoint = vm.snapshotState();
+            test_givenVaultDebtAndBothOraclesUnavailable_whenDeposited(
+                flags & 1 != 0,
+                flags & 2 != 0,
+                flags & 4 != 0
+            );
+            vm.clearMockedCalls();
+            assertTrue(vm.revertToState(checkpoint), "Restore state between vault outage seeds");
+        }
     }
 }
 

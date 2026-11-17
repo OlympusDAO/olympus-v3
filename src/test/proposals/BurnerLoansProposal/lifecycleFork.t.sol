@@ -316,7 +316,7 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
         address borrower_
     ) private returns (uint128 credit) {
         uint256 custodySharesBefore = IERC20(vault_).balanceOf(_graph.depositManager);
-        // This assertion checks vault credit and collateral; debt-free health is asserted separately.
+        // This assertion checks actual vault credit and collateral.
         // forge-lint: disable-next-item(unused-return)
         (uint256 quotedCredit, uint256 quotedCollateral) = _collateral.previewDepositCollateral(
             asset_,
@@ -325,11 +325,9 @@ contract BurnerLoansLifecycleForkTest is BurnerLoansForkTest {
         );
         vm.prank(borrower_);
         uint128 collateral;
-        uint256 health;
-        (credit, collateral, health) = _collateral.depositCollateral(asset_, 4_000e18, borrower_);
+        (credit, collateral) = _collateral.depositCollateral(asset_, 4_000e18, borrower_);
         assertEq(credit, quotedCredit, "Actual vault-backed credit agrees with deposit preview");
         assertEq(collateral, quotedCollateral, "Deposit preview agrees with collateral position");
-        assertEq(health, type(uint256).max, "Debt-free position has unlimited health");
         assertEq(
             IERC20(asset_).balanceOf(borrower_),
             6_000e18,

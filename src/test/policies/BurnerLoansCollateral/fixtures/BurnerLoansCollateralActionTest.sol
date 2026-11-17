@@ -184,14 +184,13 @@ abstract contract BurnerLoansCollateralActionTest is BurnerLoansModularTest {
             amount_
         );
         vm.prank(caller_);
-        (uint128 credit, uint128 total, uint256 health) = _collateral.depositCollateral(
+        (uint128 credit, uint128 total) = _collateral.depositCollateral(
             address(_asset),
             amount_,
             _borrower
         );
         assertEq(credit, amount_, "Exact direct credit");
         assertEq(total, c, "Returned total agrees with independently checked quote");
-        assertEq(health, type(uint256).max, "Debt-free returned health");
         assertEq(
             _asset.balanceOf(caller_),
             beforeWallet - amount_,
