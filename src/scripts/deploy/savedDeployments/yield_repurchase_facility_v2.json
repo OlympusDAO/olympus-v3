@@ -1,0 +1,24 @@
+{
+    "sequence": [
+        {
+            "name": "YieldRepurchaseFacilityV2Config",
+            "args": {}
+        },
+        {
+            "name": "YieldRepurchaseFacilityV2ConfigTimelock",
+            "args": {}
+        },
+        {
+            "name": "YieldRepurchaseFacilityV2",
+            "args": {}
+        },
+        {
+            "name": "YieldRepurchaseFacilityV2Lens",
+            "args": {}
+        },
+        {
+            "name": "YieldRepurchaseFacilityV2Activator",
+            "args": {}
+        }
+    ]
+}

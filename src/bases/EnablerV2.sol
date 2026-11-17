@@ -6,7 +6,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 
 // Contracts
-import {ERC165, IERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
+import {ERC165, IERC165} from "@openzeppelin-5.7.0/utils/introspection/ERC165.sol";
 
 /// @title EnablerV2
 /// @notice An abstract base contract that implements `IEnablerV2` and exposes

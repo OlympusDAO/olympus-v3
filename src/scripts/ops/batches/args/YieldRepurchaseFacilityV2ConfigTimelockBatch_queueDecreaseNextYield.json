@@ -1,0 +1,12 @@
+{
+    "functions": [
+        {
+            "args": {
+                "asset": "sUSDS",
+                "expectedNextYield": "2500000000000000000000",
+                "newNextYield": "2000000000000000000000"
+            },
+            "name": "queueDecreaseNextYield"
+        }
+    ]
+}

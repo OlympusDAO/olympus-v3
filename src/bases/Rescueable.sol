@@ -12,7 +12,7 @@ import {ERC7528Constants} from "src/libraries/ERC7528Constants.sol";
 import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
-import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
+import {ERC165} from "@openzeppelin-5.7.0/utils/introspection/ERC165.sol";
 
 /// @title Rescueable
 /// @notice An abstract base for contracts that expose a privileged `rescue()` to sweep
@@ -37,6 +37,8 @@ abstract contract Rescueable is IRescueable, ERC165 {
         if (to_ == address(0)) revert Errors.InvalidRecipient();
 
         if (token_ == ERC7528Constants.NATIVE_ASSET) {
+            // _authorizeRescue() restricts the caller before this transfer.
+            // forge-lint: disable-next-line(arbitrary-send-eth)
             Address.sendValue(to_, address(this).balance);
         } else {
             SafeERC20.safeTransfer(IERC20(token_), to_, IERC20(token_).balanceOf(address(this)));

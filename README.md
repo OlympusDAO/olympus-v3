@@ -6,7 +6,7 @@ The development tools are listed in `mise.toml`:
 
 - Node.js 24.22.1
 - pnpm 11.28.10
-- Foundry 1.8.1 (`forge`, `cast`, and `anvil`)
+- Foundry 1.9.0 (`forge`, `cast`, and `anvil`)
 - jq 1.8.2 for shell scripts and permission generation
 - Python 3.13.18 for the bridge supply helper
 - shfmt 3.14.1 for shell formatting

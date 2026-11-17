@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.15;
 
+// Interfaces
+import {Actions, Keycode} from "src/interfaces/IKernel.sol";
+
 //     ███████    █████       █████ █████ ██████   ██████ ███████████  █████  █████  █████████
 //   ███░░░░░███ ░░███       ░░███ ░░███ ░░██████ ██████ ░░███░░░░░███░░███  ░░███  ███░░░░░███
 //  ███     ░░███ ░███        ░░███ ███   ░███░█████░███  ░███    ░███ ░███   ░███ ░███    ░░░
@@ -14,16 +17,6 @@ pragma solidity ^0.8.15;
 //                                        GLOBAL TYPES                                        //
 //============================================================================================//
 
-/// @notice Actions to trigger state changes in the kernel. Passed by the executor
-enum Actions {
-    InstallModule,
-    UpgradeModule,
-    ActivatePolicy,
-    DeactivatePolicy,
-    ChangeExecutor,
-    MigrateKernel
-}
-
 /// @notice Used by executor to select an action and a target contract for a kernel action
 struct Instruction {
     Actions action;
@@ -35,8 +28,6 @@ struct Permissions {
     Keycode keycode;
     bytes4 funcSelector;
 }
-
-type Keycode is bytes5;
 
 //============================================================================================//
 //                                       UTIL FUNCTIONS                                       //
@@ -57,6 +48,8 @@ function fromKeycode(Keycode keycode_) pure returns (bytes5) {
 
 // solhint-disable-next-line func-visibility
 function ensureContract(address target_) view {
+    // Every selected target must be a contract, including when validation runs in a batch.
+    // forge-lint: disable-next-line(require-revert-in-loop)
     if (target_.code.length == 0) revert TargetNotAContract(target_);
 }
 
@@ -65,6 +58,8 @@ function ensureValidKeycode(Keycode keycode_) pure {
     bytes5 unwrapped = Keycode.unwrap(keycode_);
     for (uint256 i = 0; i < 5; ) {
         bytes1 char = unwrapped[i];
+        // Each of the five keycode bytes must be validated before installation.
+        // forge-lint: disable-next-line(require-revert-in-loop)
         if (char < 0x41 || char > 0x5A) revert InvalidKeycode(keycode_); // A-Z only
         unchecked {
             i++;
@@ -94,6 +89,8 @@ abstract contract KernelAdapter {
 
     /// @notice Function used by kernel when migrating to a new kernel.
     function changeKernel(Kernel newKernel_) external onlyKernel {
+        // The calling Kernel records migration through ActionExecuted(MigrateKernel, newKernel_).
+        // forge-lint: disable-next-line(missing-events-access-control)
         kernel = newKernel_;
     }
 }
@@ -234,6 +231,8 @@ contract Kernel {
     }
 
     /// @notice Main kernel function. Initiates state changes to kernel depending on Action passed in.
+    // Preserve deployed executor semantics, including relinquishing execution to the zero address.
+    // forge-lint: disable-next-line(missing-zero-check)
     function executeAction(Actions action_, address target_) external onlyExecutor {
         if (action_ == Actions.InstallModule) {
             ensureContract(target_);
@@ -250,6 +249,8 @@ contract Kernel {
             ensureContract(target_);
             _deactivatePolicy(Policy(target_));
         } else if (action_ == Actions.ChangeExecutor) {
+            // ActionExecuted(ChangeExecutor, target_) is emitted after the action completes.
+            // forge-lint: disable-next-line(missing-events-access-control)
             executor = target_;
         } else if (action_ == Actions.MigrateKernel) {
             ensureContract(target_);
@@ -342,6 +343,8 @@ contract Kernel {
         uint256 keycodeLen = allKeycodes.length;
         for (uint256 i; i < keycodeLen; ) {
             Module module = Module(getModuleForKeycode[allKeycodes[i]]);
+            // Migration must update every installed module atomically.
+            // forge-lint: disable-next-line(calls-loop)
             module.changeKernel(newKernel_);
             unchecked {
                 ++i;
@@ -353,6 +356,8 @@ contract Kernel {
             Policy policy = activePolicies[j];
 
             // Deactivate before changing kernel
+            // Migration must update every active policy atomically.
+            // forge-lint: disable-next-line(calls-loop)
             policy.changeKernel(newKernel_);
             unchecked {
                 ++j;
@@ -365,6 +370,8 @@ contract Kernel {
         uint256 depLength = dependents.length;
 
         for (uint256 i; i < depLength; ) {
+            // Reconfigure every dependent for its side effects; retain existing dependency bookkeeping.
+            // forge-lint: disable-next-line(calls-loop,unused-return)
             dependents[i].configureDependencies();
 
             unchecked {

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.15;
 
+import {IKernel, Keycode as InterfaceKeycode} from "src/interfaces/IKernel.sol";
+
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
@@ -46,6 +48,44 @@ contract KernelTest is Test {
     }
 
     // ==========  KERNEL FUNCTIONS  ========== //
+
+    function test_whenUsedThroughInterface_thenRegistryAndPermissionsAgree() public {
+        IKernel registry = IKernel(address(kernel));
+        InterfaceKeycode keycode = InterfaceKeycode.wrap("MOCKY");
+        assertEq(registry.executor(), deployer, "Interface exposes executor");
+        assertFalse(registry.isPolicyActive(address(policy)), "Policy initially inactive");
+
+        vm.startPrank(deployer);
+        registry.executeAction(Actions.InstallModule, address(MOCKY));
+        registry.executeAction(Actions.ActivatePolicy, address(policy));
+        vm.stopPrank();
+
+        assertEq(Keycode.unwrap(registry.allKeycodes(0)), "MOCKY", "Interface enumerates modules");
+        assertEq(registry.getModuleForKeycode(keycode), address(MOCKY), "Module lookup agrees");
+        assertEq(
+            address(kernel.getModuleForKeycode(keycode)),
+            address(MOCKY),
+            "Interface-created keycode works with concrete Kernel"
+        );
+        assertEq(
+            Keycode.unwrap(registry.getKeycodeForModule(address(MOCKY))),
+            "MOCKY",
+            "Reverse module lookup agrees"
+        );
+        assertEq(registry.moduleDependents(keycode, 0), address(policy), "Dependent lookup agrees");
+        assertEq(registry.getDependentIndex(keycode, address(policy)), 0, "Dependent index agrees");
+        assertTrue(
+            registry.modulePermissions(keycode, address(policy), MOCKY.permissionedCall.selector),
+            "Permission lookup agrees"
+        );
+        assertEq(
+            registry.activePolicies(0),
+            address(policy),
+            "Interface enumerates active policies"
+        );
+        assertEq(registry.getPolicyIndex(address(policy)), 0, "Policy index agrees");
+        assertTrue(registry.isPolicyActive(address(policy)), "Interface observes activation");
+    }
 
     function testCorrectness_InitializeKernel() public {
         Keycode keycode = Keycode.wrap(0);
