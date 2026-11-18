@@ -402,13 +402,19 @@ It hashes the supplied bytes without admission, permission, expiry, epoch or con
 It remains available when consumer admission rejects creation or use. A returned digest does not prove that acceptance will succeed.
 The digest uses the current chain ID and the address of the Auth that receives the call.
 
-This viem example assumes a prepared `grant`, hex-encoded `signatureData`, and `authAddress` on the current chain.
+This viem example assumes `preparedGrant`, hex-encoded `signatureData`, and `authAddress` on the current chain.
 `operatorAuthAbi` is the compiled `IOperatorAuth` ABI. All clients use that same chain.
 `accountWalletClient` controls the EOA named in `grant.account`. `operatorWalletClient` controls `grant.operator`.
+Both wallet clients use JSON-RPC accounts managed by their providers, because the example passes account addresses.
+For local accounts, pass the matching local Account object in each `account` argument instead.
+
+The standalone acceptance transaction below uses a reusable grant (`multiple: true`).
+For temporary authority, the operator must accept the grant and perform the authorized action in the same transaction.
 
 ```typescript
 import {hashTypedData, keccak256} from "viem";
 
+const grant = {...preparedGrant, multiple: true};
 const domain = {
     chainId: await publicClient.getChainId(),
     verifyingContract: authAddress,
@@ -690,15 +696,10 @@ when retiring it. Approval of A→O and O→X does not authorize X for A.
 Clients that call these protected methods must update their Core ABI. Repayment and seizure do not
 receive a grant envelope.
 
-## Gas and validation
-
-Canonical 320-byte approval execution gas in the focused fixture: 108,758 temporary, 339,385 reusable,
-and 350,650 for EOA signed acceptance. These exclude transaction intrinsic/calldata gas and vary with
-warm storage, selected actions and wallet behavior. The ERC-1271 mutation-probe mock cost 401,349;
-that is not a Safe estimate.
+## Validation
 
 Temporary grants use OpenZeppelin transient-slot helpers and native ABI encoding without custom
-assembly. This adds 15,216 gas to the measured temporary approval compared with the previous codec.
+assembly.
 
 Scoped Astra adversarial review found no confirmed exploit; the separate Ponytail simplicity review
 accepted the responsibility split. Neither is a production audit. Focused tests cover canonical
@@ -732,20 +733,6 @@ Additional regressions cover genuine owner/operator stamps presented by unadmitt
 callers, cross-account and cross-operator stamp substitution, non-transitive delegation and malformed
 EOA/ERC-1271 replacements. Rejected replacements preserve the complete existing grant and both
 epochs. These checks complement the public action's unrelated-caller and callback tests.
-
-Historical fixed-fixture gas comparison before and after the request refactor, before the
-trusted-Kernel follow-up:
-
-| Fixture | Before | After | Change |
-| --- | ---: | ---: | ---: |
-| First collateral deposit | 770,107 | 727,976 | -42,131 |
-| First borrow | 1,765,468 | 1,578,361 | -187,107 |
-| Partial collateral withdrawal | 1,046,526 | 1,002,034 | -44,492 |
-| One-term extension | 2,432,271 | 2,140,282 | -291,989 |
-
-These are complete test-fixture measurements, including fixture calls. The gas test and shared
-modular fixture sources were identical between that archived baseline and request-refactor run. These values
-are not transaction estimates or isolated action-call costs.
 
 ### Cancellation input validation and compiler compatibility
 

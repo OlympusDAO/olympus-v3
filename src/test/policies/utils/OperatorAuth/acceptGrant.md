@@ -29,7 +29,7 @@ or callback scenario applies. Existing acceptance tests retain their authorizati
 | OASIGN-V01 | Fuzz any view caller, complete Grant and signature data, without acceptance constraints | Digest equals independent manual EIP-712 encoding | No writes or epoch consumption | Covered: [test][test_whenDigestRequestedByAnyCaller] |
 | OASIGN-V02 | Zero caller and zero fields; all numeric fields equal one or their type maximum; both modes | Exact manual digest, including invalid identities and actions | No acceptance validation | Covered: [zero][test_whenDigestFieldsAreZero], [one][test_whenDigestNumericFieldsAreOne], [maximum][test_whenDigestNumericFieldsAreMaximum] |
 | OASIGN-V03 | Permission and signature-data lengths at empty, single-byte, word and consumer-cap boundaries | Exact manual digest for every byte array | No consumer length/schema validation | Covered: [test][test_whenDigestBytesHaveBoundaryLengths] |
-| OASIGN-V04 | Creation/use admission disabled, then restored; nonempty unsupported signature data | Same manual digest in both states | No admission hooks | Covered: [test][test_givenAdmissionDisabledAndRestored_whenDigestRequested] |
+| OASIGN-V04 | Creation/use admission enabled, disabled, then restored; nonempty unsupported signature data | Same manual digest in all three states | No admission hooks | Covered: [test][test_givenAdmissionDisabledAndRestored_whenDigestRequested] |
 | OASIGN-V05 | Same supplied grant after acceptance and account-wide cancellation | Same manual digest despite stale epochs | Existing state cannot replace supplied payload fields | Covered: [test][test_givenAcceptedAndCancelledGrant_whenDigestRequested] |
 | OASIGN-V06 | Fuzz the chain ID over 0..MAX64 (Foundry limit), seed 0/1/MAX64, or change the receiving Auth address | Digest equals manual encoding and differs from the original domain | No writes by hashing | Covered: [chain][test_whenDigestChainChanges], [seeds][test_whenDigestChainHasBoundaryValues], [Auth][test_whenDigestAuthChanges] |
 | OASIGN-V07 | O accepts A's signature over the helper digest with supported nonempty signature data | Manual equality, exact GrantAccepted event and complete live grant | One pair epoch consumed | Covered: [test][test_whenHelperDigestIsSigned] |
@@ -124,9 +124,9 @@ when the first complete ABI word is the canonical magic value.
 [test_whenDigestNumericFieldsAreMaximum]: ./acceptGrant.t.sol#L561
 [test_whenDigestBytesHaveBoundaryLengths]: ./acceptGrant.t.sol#L581
 [test_givenAdmissionDisabledAndRestored_whenDigestRequested]: ./acceptGrant.t.sol#L596
-[test_givenAcceptedAndCancelledGrant_whenDigestRequested]: ./acceptGrant.t.sol#L616
-[test_whenDigestChainChanges]: ./acceptGrant.t.sol#L635
-[test_whenDigestAuthChanges]: ./acceptGrant.t.sol#L654
-[test_whenHelperDigestIsSigned]: ./acceptGrant.t.sol#L664
+[test_givenAcceptedAndCancelledGrant_whenDigestRequested]: ./acceptGrant.t.sol#L621
+[test_whenDigestChainChanges]: ./acceptGrant.t.sol#L640
+[test_whenDigestAuthChanges]: ./acceptGrant.t.sol#L659
+[test_whenHelperDigestIsSigned]: ./acceptGrant.t.sol#L669
 
-[test_whenDigestChainHasBoundaryValues]: ./acceptGrant.t.sol#L646
+[test_whenDigestChainHasBoundaryValues]: ./acceptGrant.t.sol#L651

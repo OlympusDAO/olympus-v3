@@ -596,6 +596,11 @@ contract OperatorAuthAcceptGrantTest is OperatorAuthTest {
     function test_givenAdmissionDisabledAndRestored_whenDigestRequested() public {
         IOperatorAuth.Grant memory grant = _grant(true);
         bytes32 expected = _digest(grant, hex"01");
+        assertEq(
+            _auth.grantDigest(grant, hex"01"),
+            expected,
+            "Digest matches the reference with admission initially enabled"
+        );
         _auth.setCreationAllowed(false);
         _auth.setUseAllowed(false);
         assertEq(
@@ -677,5 +682,10 @@ contract OperatorAuthAcceptGrantTest is OperatorAuthTest {
             "Signature over helper digest installs the exact grant"
         );
         assertEq(_auth.pairEpochs(_account, _operator), 1, "Acceptance consumes one pair epoch");
+        assertNotEq(
+            _auth.captureAuthorization(_account, _operator, 1),
+            bytes32(0),
+            "Grant signed with the helper authorizes the operator"
+        );
     }
 }
