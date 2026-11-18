@@ -365,11 +365,114 @@ Signing clients must construct the hashed fields explicitly rather than sign the
 unchanged. The complete byte contents are authenticated, including nonempty signature-only data.
 No name or version field is added to this domain.
 
+### EIP-712 encoding requirements
+
+[EIP-712](https://eips.ethereum.org/EIPS/eip-712#definition-of-encodedata) encodes each message
+field as one 32-byte value. Dynamic `bytes` and `string` fields use the hash of their contents.
+Nested structs use their own typed struct hash.
+
+OperatorAuth declares one flat signing type, with explicit `bytes32` fields for both byte hashes.
+The signing type differs from the calldata `Grant`, which retains raw permission bytes.
+`abi.encode(typeHash, grant, signatureData)` includes dynamic ABI offsets, lengths and contents,
+so it does not produce this EIP-712 encoding. A nested signing type requires a different type
+declaration and recursive struct hashing. It also produces different signatures.
+
 The struct hash is `keccak256(abi.encode(typeHash, account, operator, accountEpoch, pairEpoch,
 deadline, multiple, actions, context, permissionsHash, signatureDataHash))`. The final digest is
 `keccak256(abi.encodePacked(hex"1901", DOMAIN_SEPARATOR(), structHash))`. The packed digest contains
 only a fixed two-byte prefix and two fixed 32-byte hashes; dynamic permission/extension encoding
 must not be replaced with ambiguous packed data.
+
+The two-byte prefix `hex"1901"`, also written `"\x19\x01"`, is required by
+[EIP-712](https://eips.ethereum.org/EIPS/eip-712#specification).
+`0x19` is the ERC-191 marker, and version `0x01` identifies structured data.
+
+### Prepare and sign a grant
+
+1. Read the selected Auth address and the current chain ID.
+2. Read `accountEpochs(account)`, `pairEpochs(account, operator)` and
+   `authorizationContext(account, operator)` from that Auth.
+3. Build the grant with those values, an inclusive deadline, action bits and canonical permission bytes.
+4. Prepare the consumer's acceptance-only `signatureData`. For BurnerLoansAuth, use empty bytes (`0x`).
+5. Compute the digest with `auth.grantDigest(grant, signatureData)`, or reproduce the EIP-712 encoding below.
+6. Have the account sign the typed message. Then have the designated operator submit the unchanged payload to `acceptGrant`.
+
+`grantDigest` returns the final digest, including the domain and prefix. It does not create a signature.
+It hashes the supplied bytes without admission, permission, expiry, epoch or context validation.
+It remains available when consumer admission rejects creation or use. A returned digest does not prove that acceptance will succeed.
+The digest uses the current chain ID and the address of the Auth that receives the call.
+
+This viem example assumes a prepared `grant`, hex-encoded `signatureData`, and `authAddress` on the current chain.
+`operatorAuthAbi` is the compiled `IOperatorAuth` ABI. All clients use that same chain.
+`accountWalletClient` controls the EOA named in `grant.account`. `operatorWalletClient` controls `grant.operator`.
+
+```typescript
+import {hashTypedData, keccak256} from "viem";
+
+const domain = {
+    chainId: await publicClient.getChainId(),
+    verifyingContract: authAddress,
+};
+const types = {
+    Grant: [
+        {name: "account", type: "address"},
+        {name: "operator", type: "address"},
+        {name: "accountEpoch", type: "uint256"},
+        {name: "pairEpoch", type: "uint256"},
+        {name: "deadline", type: "uint48"},
+        {name: "multiple", type: "bool"},
+        {name: "actions", type: "uint8"},
+        {name: "context", type: "bytes32"},
+        {name: "permissionsHash", type: "bytes32"},
+        {name: "signatureDataHash", type: "bytes32"},
+    ],
+} as const;
+const message = {
+    account: grant.account,
+    operator: grant.operator,
+    accountEpoch: grant.accountEpoch,
+    pairEpoch: grant.pairEpoch,
+    deadline: grant.deadline,
+    multiple: grant.multiple,
+    actions: grant.actions,
+    context: grant.context,
+    permissionsHash: keccak256(grant.permissions),
+    signatureDataHash: keccak256(signatureData),
+};
+
+const typedData = {domain, types, primaryType: "Grant" as const, message};
+const digest = hashTypedData(typedData);
+const onchainDigest = await publicClient.readContract({
+    address: authAddress,
+    abi: operatorAuthAbi,
+    functionName: "grantDigest",
+    args: [grant, signatureData],
+});
+if (digest !== onchainDigest) {
+    throw new Error("Grant digest differs from Auth");
+}
+const signature = await accountWalletClient.signTypedData({
+    ...typedData,
+    account: grant.account,
+});
+await operatorWalletClient.writeContract({
+    address: authAddress,
+    abi: operatorAuthAbi,
+    functionName: "acceptGrant",
+    args: [grant, signatureData, signature],
+    account: grant.operator,
+});
+```
+
+[`hashTypedData`](https://viem.sh/docs/utilities/hashTypedData)
+computes the digest independently.
+[`signTypedData`](https://viem.sh/docs/actions/wallet/signTypedData)
+applies the domain and EIP-712 prefix automatically. Do not add another prefix or use `signMessage`/`personal_sign` for this digest.
+Those methods apply the personal-message prefix and produce a different signed digest.
+For an EOA signer that supports raw digest signing, sign the exact 32-byte `grantDigest` result once.
+
+For a contract account, obtain a signature that its ERC-1271 implementation accepts for this same digest.
+The signature format follows the account's wallet policy. The EOA example does not collect Safe owner approvals.
 
 EOA validation checks the signature against the account. ERC-1271 calls the account statically,
 before grant installation and pair-epoch consumption. Signature bytes are not stored. Later uses

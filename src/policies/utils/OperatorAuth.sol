@@ -59,6 +59,36 @@ abstract contract OperatorAuth is IOperatorAuth, IERC165 {
         return keccak256(abi.encode(_DOMAIN_TYPEHASH, block.chainid, address(this)));
     }
 
+    /// @inheritdoc IOperatorAuth
+    /// @dev EIP-712 encodes each message field as one 32-byte word. Dynamic bytes use keccak256
+    ///      of their contents; nested structs would use their own typed struct hash. GRANT_TYPEHASH
+    ///      declares a flat message with explicit permissionsHash and signatureDataHash fields,
+    ///      so abi.encode(GRANT_TYPEHASH, grant_, signatureData_) is not its EIP-712 encoding.
+    ///      See https://eips.ethereum.org/EIPS/eip-712#definition-of-encodedata.
+    function grantDigest(
+        Grant calldata grant_,
+        bytes calldata signatureData_
+    ) public view override returns (bytes32 digest) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                GRANT_TYPEHASH,
+                grant_.account,
+                grant_.operator,
+                grant_.accountEpoch,
+                grant_.pairEpoch,
+                grant_.deadline,
+                grant_.multiple,
+                grant_.actions,
+                grant_.context,
+                keccak256(grant_.permissions),
+                keccak256(signatureData_)
+            )
+        );
+        // EIP-712 requires ERC-191 marker 0x19 and structured-data version 0x01, followed by
+        // the 32-byte domain separator and struct hash. All packed components have fixed lengths.
+        return keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
+    }
+
     /// @inheritdoc IERC165
     function supportsInterface(bytes4 id_) public view virtual returns (bool) {
         return id_ == type(IOperatorAuth).interfaceId || id_ == type(IERC165).interfaceId;
@@ -96,22 +126,7 @@ abstract contract OperatorAuth is IOperatorAuth, IERC165 {
         if (msg.sender != grant_.operator) revert OperatorAuth_InvalidIdentity();
         _validateGrant(grant_);
         _validateSignatureData(grant_, signatureData_);
-        bytes32 structHash = keccak256(
-            abi.encode(
-                GRANT_TYPEHASH,
-                grant_.account,
-                grant_.operator,
-                grant_.accountEpoch,
-                grant_.pairEpoch,
-                grant_.deadline,
-                grant_.multiple,
-                grant_.actions,
-                grant_.context,
-                keccak256(grant_.permissions),
-                keccak256(signatureData_)
-            )
-        );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
+        bytes32 digest = grantDigest(grant_, signatureData_);
         if (!SignatureChecker.isValidSignatureNow(grant_.account, digest, signature_))
             revert OperatorAuth_InvalidSignature();
         _install(grant_);

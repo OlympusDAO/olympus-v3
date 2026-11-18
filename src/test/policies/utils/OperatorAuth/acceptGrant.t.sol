@@ -191,7 +191,13 @@ contract OperatorAuthAcceptGrantTest is OperatorAuthTest {
             keccak256(
                 abi.encodePacked(
                     "\x19\x01",
-                    _auth.DOMAIN_SEPARATOR(),
+                    keccak256(
+                        abi.encode(
+                            keccak256("EIP712Domain(uint256 chainId,address verifyingContract)"),
+                            vm.getChainId(),
+                            address(_auth)
+                        )
+                    ),
                     keccak256(
                         abi.encode(
                             _TYPEHASH,
@@ -506,5 +512,170 @@ contract OperatorAuthAcceptGrantTest is OperatorAuthTest {
             1,
             "Generic signed acceptance has no target dependency"
         );
+    }
+
+    // Scenarios: OASIGN-V01.
+    function test_whenDigestRequestedByAnyCaller(
+        address caller_,
+        IOperatorAuth.Grant memory grant_,
+        bytes memory signatureData_
+    ) public {
+        bytes32 expected = _digest(grant_, signatureData_);
+        vm.prank(caller_);
+        assertEq(
+            _auth.grantDigest(grant_, signatureData_),
+            expected,
+            "Digest matches manual encoding for arbitrary callers and payloads"
+        );
+    }
+
+    // Scenarios: OASIGN-V02.
+    function test_whenDigestFieldsAreZero() public {
+        IOperatorAuth.Grant memory grant;
+        vm.prank(address(0));
+        bytes32 digest = _auth.grantDigest(grant, "");
+        assertEq(digest, _digest(grant, ""), "Zero fields and empty bytes are hashable");
+    }
+
+    // Scenarios: OASIGN-V02.
+    function test_whenDigestNumericFieldsAreOne() public view {
+        IOperatorAuth.Grant memory grant = IOperatorAuth.Grant(
+            address(1),
+            address(1),
+            1,
+            1,
+            1,
+            true,
+            1,
+            bytes32(uint256(1)),
+            hex"01"
+        );
+        assertEq(
+            _auth.grantDigest(grant, hex"01"),
+            _digest(grant, hex"01"),
+            "One-valued fields and self-grants are hashable"
+        );
+    }
+
+    // Scenarios: OASIGN-V02.
+    function test_whenDigestNumericFieldsAreMaximum() public view {
+        IOperatorAuth.Grant memory grant = IOperatorAuth.Grant(
+            address(type(uint160).max),
+            address(type(uint160).max),
+            type(uint256).max,
+            type(uint256).max,
+            type(uint48).max,
+            true,
+            type(uint8).max,
+            bytes32(type(uint256).max),
+            hex"ff"
+        );
+        assertEq(
+            _auth.grantDigest(grant, hex"ff"),
+            _digest(grant, hex"ff"),
+            "Maximum fields are hashable without acceptance validation"
+        );
+    }
+
+    // Scenarios: OASIGN-V03.
+    function test_whenDigestBytesHaveBoundaryLengths() public view {
+        IOperatorAuth.Grant memory grant = _grant(true);
+        uint256[7] memory lengths = [uint256(0), 1, 31, 32, 33, 320, 321];
+        for (uint256 i; i < lengths.length; ++i) {
+            grant.permissions = new bytes(lengths[i]);
+            bytes memory data = new bytes(lengths[lengths.length - 1 - i]);
+            assertEq(
+                _auth.grantDigest(grant, data),
+                _digest(grant, data),
+                "Byte lengths do not impose consumer validation on hashing"
+            );
+        }
+    }
+
+    // Scenarios: OASIGN-V04.
+    function test_givenAdmissionDisabledAndRestored_whenDigestRequested() public {
+        IOperatorAuth.Grant memory grant = _grant(true);
+        bytes32 expected = _digest(grant, hex"01");
+        _auth.setCreationAllowed(false);
+        _auth.setUseAllowed(false);
+        assertEq(
+            _auth.grantDigest(grant, hex"01"),
+            expected,
+            "Digest ignores disabled admission and unsupported signature data"
+        );
+        _auth.setCreationAllowed(true);
+        _auth.setUseAllowed(true);
+        assertEq(
+            _auth.grantDigest(grant, hex"01"),
+            expected,
+            "Restoring admission preserves the digest"
+        );
+    }
+
+    // Scenarios: OASIGN-V05.
+    function test_givenAcceptedAndCancelledGrant_whenDigestRequested() public {
+        IOperatorAuth.Grant memory grant = _grant(true);
+        bytes32 expected = _digest(grant, "");
+        _approve(grant);
+        assertEq(
+            _auth.grantDigest(grant, ""),
+            expected,
+            "Acceptance does not substitute current epochs in the supplied payload"
+        );
+        vm.prank(_account);
+        _auth.cancelAllGrants();
+        assertEq(
+            _auth.grantDigest(grant, ""),
+            expected,
+            "Cancellation does not prevent hashing stale grants"
+        );
+    }
+
+    // Scenarios: OASIGN-V06.
+    function test_whenDigestChainChanges(uint64 chainId_) public {
+        vm.assume(chainId_ != vm.getChainId());
+        IOperatorAuth.Grant memory grant = _grant(true);
+        bytes32 original = _auth.grantDigest(grant, "");
+        vm.chainId(chainId_);
+        bytes32 digest = _auth.grantDigest(grant, "");
+        assertEq(digest, _digest(grant, ""), "Digest uses the current chain ID");
+        assertNotEq(digest, original, "Different chains have different digests");
+    }
+
+    // Scenarios: OASIGN-V06.
+    function test_whenDigestChainHasBoundaryValues() public {
+        vm.chainId(31337);
+        test_whenDigestChainChanges(0);
+        test_whenDigestChainChanges(1);
+        test_whenDigestChainChanges(type(uint64).max);
+    }
+
+    // Scenarios: OASIGN-V06.
+    function test_whenDigestAuthChanges() public {
+        IOperatorAuth.Grant memory grant = _grant(true);
+        bytes32 original = _auth.grantDigest(grant, "");
+        _auth = new OperatorAuthHarness();
+        bytes32 digest = _auth.grantDigest(grant, "");
+        assertEq(digest, _digest(grant, ""), "Digest uses the receiving Auth address");
+        assertNotEq(digest, original, "Different Auth instances have different digests");
+    }
+
+    // Scenarios: OASIGN-V07.
+    function test_whenHelperDigestIsSigned() public {
+        _auth.enableSignatureData();
+        IOperatorAuth.Grant memory grant = _grant(true);
+        bytes memory data = abi.encode(uint256(123));
+        bytes32 digest = _auth.grantDigest(grant, data);
+        assertEq(digest, _digest(grant, data), "Signing uses the manual reference digest");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_ACCOUNT_KEY, digest);
+        _expectGrantAccepted(_operator, grant);
+        vm.prank(_operator);
+        _auth.acceptGrant(grant, data, abi.encodePacked(r, s, v));
+        assertEq(
+            abi.encode(_auth.getGrant(_account, _operator)),
+            abi.encode(grant),
+            "Signature over helper digest installs the exact grant"
+        );
+        assertEq(_auth.pairEpochs(_account, _operator), 1, "Acceptance consumes one pair epoch");
     }
 }

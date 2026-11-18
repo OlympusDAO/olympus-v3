@@ -162,4 +162,16 @@ interface IOperatorAuth {
     /// @notice Returns this Auth instance's current-chain EIP-712 domain separator.
     /// @return Domain separator committing to the chain ID and this Auth address.
     function DOMAIN_SEPARATOR() external view returns (bytes32);
+
+    /// @notice Returns the final EIP-712 digest for an account-signed grant.
+    /// @dev Hashes the supplied payload without validating admission, identities, epochs, expiry,
+    ///      context, permissions or signature data. The digest includes the current-chain domain
+    ///      and ERC-191 0x1901 prefix; a wallet must sign it without another message prefix.
+    /// @param grant Complete grant payload to authenticate.
+    /// @param signatureData Consumer-defined acceptance-only bytes to authenticate.
+    /// @return digest Digest bound to the supplied payload, current chain ID and this Auth instance.
+    function grantDigest(
+        Grant calldata grant,
+        bytes calldata signatureData
+    ) external view returns (bytes32 digest);
 }
