@@ -736,7 +736,8 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.expectCall(address(_task), abi.encodeCall(_task.selfExecuteTask, ()), uint64(0));
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
-        _task.execute{gas: 50_000}();
+        // Cover cold admission and cleanup; expectCall proves the body reserve still prevents entry.
+        _task.execute{gas: 60_000}();
         assertEq(_task.nextAssetIndex(), 1, "Cleanup rotates without entering the task body");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),

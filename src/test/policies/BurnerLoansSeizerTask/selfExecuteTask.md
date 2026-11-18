@@ -161,7 +161,7 @@ The limits bound inspected entries per lane and selected results independently; 
 [test_givenEmptyExpiryPage_givenPricedFailure_whenExecuted_thenProvenCursorIsStored]: ./execute.t.sol#L604
 [test_givenEmptyRegistry_whenSelfCalls_thenNoWork]: ./selfExecuteTask.t.sol#L71
 [test_givenExpiredScan_givenHelperExhaustsGas_whenExecuted_thenLaterHeartTaskExecutes]: ./execute.t.sol#L234
-[test_givenExpiryBatchAtPopulationEnd_whenExecuted_thenCursorRemainsZero]: ./execute.t.sol#L857
+[test_givenExpiryBatchAtPopulationEnd_whenExecuted_thenCursorRemainsZero]: ./execute.t.sol#L858
 [test_givenExpiryCandidates_whenExecuted_thenOnlyExpiryBatchSettles]: ./execute.t.sol#L476
 [test_givenExpiryNextEqualsBatchLength_whenExecuted_thenCursorIsZero]: ./execute.t.sol#L509
 [test_givenInactive_givenRolesBroken_whenCallerIsNotSelf_reverts]: ./selfExecuteTask.t.sol#L58
@@ -174,22 +174,22 @@ The limits bound inspected entries per lane and selected results independently; 
 [test_givenValidCursor_givenExpiryScanFails_whenExecuted_thenCursorIsRetained]: ./execute.t.sol#L572
 [test_givenZeroCursor_givenCountReadBroken_whenExecuted_thenDiscoveryStillRuns]: ./execute.t.sol#L631
 [test_givenAssetRemoved_whenSelfCalls_thenSurvivorIsVisited]: ./selfExecuteTask.t.sol#L110
-[test_givenLensExhaustsGas_givenCatchGasSufficient_whenHeartRunsTasks]: ./execute.t.sol#L1482
+[test_givenLensExhaustsGas_givenCatchGasSufficient_whenHeartRunsTasks]: ./execute.t.sol#L1483
 [test_givenMaximumDefensiveAssetIndex_whenSelfCalls_thenIndexNormalizes]: ./selfExecuteTask.t.sol#L144
 [test_givenTwoAssets_whenPendingIndexSelected]: ./selfExecuteTask.t.sol#L86
 
-[test_givenIndependentCursors_whenPagesEmpty_thenEachLaneAdvancesItsOwnPage]: execute.t.sol#L886
-[test_givenIndependentCursors_whenUnhealthyScanFails_thenItsRetryOffsetIsRetained]: execute.t.sol#L910
-[test_givenExpiredBatch_givenValidUnhealthyCursor_whenExecuted]: execute.t.sol#L934
-[test_givenExpiredEndBatch_givenValidUnhealthyCursor_whenExecuted]: execute.t.sol#L952
-[test_givenEqualCursors_whenExpiryBatchCompacts_thenOtherLaneRevisitsStart]: execute.t.sol#L1119
-[test_givenUnhealthyBatch_whenExpiryCursorIsEarlier_thenItIsPreserved]: execute.t.sol#L974
-[test_givenUnhealthyBatch_givenValidExpiredCursor_whenExecuted]: execute.t.sol#L996
-[test_givenOnlyUnhealthyCursorStale_whenExecuted_thenExpiryOffsetIsPreserved]: execute.t.sol#L1029
-[test_givenOnlyExpiryCursorStale_whenExecuted_thenUnhealthyOffsetIsPreserved]: execute.t.sol#L1078
+[test_givenIndependentCursors_whenPagesEmpty_thenEachLaneAdvancesItsOwnPage]: execute.t.sol#L887
+[test_givenIndependentCursors_whenUnhealthyScanFails_thenItsRetryOffsetIsRetained]: execute.t.sol#L911
+[test_givenExpiredBatch_givenValidUnhealthyCursor_whenExecuted]: execute.t.sol#L935
+[test_givenExpiredEndBatch_givenValidUnhealthyCursor_whenExecuted]: execute.t.sol#L953
+[test_givenEqualCursors_whenExpiryBatchCompacts_thenOtherLaneRevisitsStart]: execute.t.sol#L1120
+[test_givenUnhealthyBatch_whenExpiryCursorIsEarlier_thenItIsPreserved]: execute.t.sol#L975
+[test_givenUnhealthyBatch_givenValidExpiredCursor_whenExecuted]: execute.t.sol#L997
+[test_givenOnlyUnhealthyCursorStale_whenExecuted_thenExpiryOffsetIsPreserved]: execute.t.sol#L1030
+[test_givenOnlyExpiryCursorStale_whenExecuted_thenUnhealthyOffsetIsPreserved]: execute.t.sol#L1079
 
-[test_givenExpiredBatch_whenExecuted_thenEventIdentifiesItsLane]: ./execute.t.sol#L1138
-[test_givenUnhealthyBatch_whenExecuted_thenEventIdentifiesItsLane]: ./execute.t.sol#L1151
+[test_givenExpiredBatch_whenExecuted_thenEventIdentifiesItsLane]: ./execute.t.sol#L1139
+[test_givenUnhealthyBatch_whenExecuted_thenEventIdentifiesItsLane]: ./execute.t.sol#L1152
 
 [invariant_mixedBacklogRemainsReachable]: integration/progressMixedMaturity.invariant.t.sol#L50
-[test_givenExpiredBatch_givenOtherCursorBecomesStale_whenExecuted]: ./execute.t.sol#L1438
+[test_givenExpiredBatch_givenOtherCursorBecomesStale_whenExecuted]: ./execute.t.sol#L1439
