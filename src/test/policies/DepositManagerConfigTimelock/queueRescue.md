@@ -192,15 +192,15 @@ queue rollback. Do not create a second token-library return-shape matrix here.
 
 ## Cancellation, independence and stateful properties
 
-Existing cancellation requires TL active and the EMERGENCY role, permits TL local disablement and
-does not inspect DM readiness or selected operator. ADMIN-only and M-only do not acquire cancellation
-authority. Use [cancelQueuedAction](./cancelQueuedAction.md) for shared state/error precedence.
+Cancellation requires TL active and accepts the recorded proposer or a current EMERGENCY holder.
+It permits local disablement and makes no DM readiness or operator checks.
+Use [cancelQueuedAction](./cancelQueuedAction.md) for shared state and error precedence.
 
 | ID | Caller | Operation / transition | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
 | DMCT-RESCUE-P12 | Fuzz EMERGENCY holder | Cancel pending rescue before maturity, during window, and after expiry; seed each; TL enabled/disabled | Success | No transfer; cancellation metadata retained; T key/guards/payload released | Covered: [test][test_givenPendingRescue_whenEmergencyHolderCancels], [test][test_whenRescueCancelledBeforeMaturity], [test][test_whenRescueCancelledDuringWindowWhilePaused], [test][test_whenRescueCancelledAfterExpiry], [test][test_whenRescueCancelledBeforeMaturityWhilePaused], [test][test_whenRescueCancelledDuringWindowWhileEnabled], [test][test_whenRescueCancelledAfterExpiryWhilePaused] |
 | DMCT-RESCUE-P13 | EMERGENCY holder | DM inactive/paused or controller rotated; TL active | Cancellation succeeds | Broken target/controller cannot trap rescue key | Covered: [test][test_givenManagerReadinessChanged_whenRescueCancelled], [test][test_givenManagerInactivePausedAndControllerRotated_whenRescueCancelled] |
-| DMCT-RESCUE-A07 | Fuzz outside EMERGENCY holders | Cancel pending rescue; seed ADMIN-only and M-only | ROLES_RequireRole(EMERGENCY_ROLE) | Pending operation/key unchanged | Covered: [test][test_whenRescueCancelledByUnauthorizedCaller_reverts], [test][test_whenRescueCancelledByAdminOnly_reverts], [test][test_whenRescueCancelledByManagerOnly_reverts] |
+| DMCT-RESCUE-A07 | Fuzz outside the recorded proposer and EMERGENCY holders | Cancel another account's pending rescue; seed ADMIN-only and M-only | `NotAuthorised()` | Pending operation/key unchanged | Covered: [test][test_whenRescueCancelledByUnauthorizedCaller_reverts], [test][test_whenRescueCancelledByAdminOnly_reverts], [test][test_whenRescueCancelledByManagerOnly_reverts] |
 | DMCT-RESCUE-P14 | Fuzz A or M | T rescue executed or cancelled, then propose T again | Return new ID | Old terminal metadata remains; new notice/key reservation | Covered: [test][test_givenRescueExecuted_whenSameTokenRequeued], [test][test_givenRescueCancelled_whenSameTokenRequeued] |
 | DMCT-RESCUE-I11 | Fuzz any executor | Re-execute executed or cancelled rescue; seed each | ActionAlreadyExecuted(id) or ActionCancelled(id), respectively | No second transfer/key mutation | Covered: [test][test_givenRescueExecuted_whenExecutedAgain_reverts], [test][test_givenRescueCancelled_whenExecuted_reverts] |
 | DMCT-RESCUE-P15 | Fuzz any executor | Older T rescue expired/stale; unrelated mature U rescue valid | U executes | No global queue-order blockage; T key/action untouched | Covered: [test][test_givenOlderRescueExpired_whenUnrelatedRescueExecuted], [test][test_givenOlderRescueStale_whenUnrelatedRescueExecuted] |

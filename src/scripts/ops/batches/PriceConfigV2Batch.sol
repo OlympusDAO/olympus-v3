@@ -103,4 +103,15 @@ contract PriceConfigV2Batch is TimelockBatchScript {
     function _timelockKey() internal pure override returns (string memory) {
         return "olympus.policies.OlympusPriceConfigV2";
     }
+
+    /// @notice Cancel a PriceConfigV2 action through the Emergency multisig.
+    /// @dev PriceConfigV2 requires EMERGENCY to cancel, including for actions the DAO proposed.
+    ///      Keep the original entry point and args key on the Emergency Safe.
+    function cancelQueuedAction(
+        bool useDaoMS_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_
+    ) external override setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        _cancelQueuedAction("cancelQueuedAction");
+    }
 }

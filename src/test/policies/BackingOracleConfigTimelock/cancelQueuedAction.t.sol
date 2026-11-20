@@ -2,11 +2,8 @@
 pragma solidity ^0.8.24;
 
 // Contracts
-import {BackingOracleConfigTimelockTest, ITimelockBatchQueue, ROLESv1, IPolicyAdmin} from "./fixtures/BackingOracleConfigTimelockTest.sol";
+import {BackingOracleConfigTimelockTest, ITimelockBatchQueue, IPolicyAdmin} from "./fixtures/BackingOracleConfigTimelockTest.sol";
 import {Actions} from "src/Kernel.sol";
-
-// Constants
-import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 contract BackingOracleCancelQueuedActionTest is BackingOracleConfigTimelockTest {
     function _rejectMissing(uint64 id_) private {
@@ -70,29 +67,58 @@ contract BackingOracleCancelQueuedActionTest is BackingOracleConfigTimelockTest 
 
     // Scenarios: BO-CANCELQUEUEDACTION-02.
     function test_whenUnauthorized_reverts(address caller_) public givenEnabled {
-        vm.assume(caller_ != _EMERGENCY);
+        vm.assume(caller_ != _EMERGENCY && caller_ != _PROPOSER);
         uint64 id = _queue(110e18);
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE));
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _timelock.cancelQueuedAction(id);
         assertFalse(_timelock.getQueuedAction(id).cancelled, "unauthorized preserves intent");
     }
 
     // Scenarios: BO-CANCELQUEUEDACTION-03.
-    function test_givenInactive_whenCancel_reverts(bool disabled_) public givenEnabled {
+    function test_givenInactive_whenCancel_reverts(
+        bool disabled_,
+        bool useProposer_
+    ) public givenEnabled {
         uint64 id = _queue(110e18);
+        address canceller = useProposer_ ? _PROPOSER : _EMERGENCY;
         if (disabled_) {
             vm.prank(_ADMIN);
             _timelock.disable("");
         }
         _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
         _expectTimelockInactive();
-        vm.prank(_EMERGENCY);
+        vm.prank(canceller);
         _timelock.cancelQueuedAction(id);
+        assertEq(_timelock.pendingActionId(_backingKey()), id, "inactive queue retains key");
         _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
-        vm.prank(_EMERGENCY);
+        vm.prank(canceller);
         _timelock.cancelQueuedAction(id);
         assertTrue(_timelock.getQueuedAction(id).cancelled, "cancellation after reactivation");
+    }
+
+    // Scenarios: BO-CANCELQUEUEDACTION-06.
+    function test_givenRevokedProposer_givenPaused_whenProposerCancels() public givenEnabled {
+        uint64 id = _queue(110e18);
+        _rolesAdmin.revokeRole(_BACKING_ADMIN, _PROPOSER);
+        vm.prank(_ADMIN);
+        _timelock.disable("");
+        vm.mockCallRevert(
+            address(_oracle),
+            bytes(""),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+        );
+
+        vm.expectEmit(address(_timelock));
+        emit ITimelockBatchQueue.TimelockActionCancelled(id, _PROPOSER);
+        vm.prank(_PROPOSER);
+        _timelock.cancelQueuedAction(id);
+
+        assertTrue(
+            _timelock.getQueuedAction(id).cancelled,
+            "revoked proposer cancels while paused"
+        );
+        assertEq(_timelock.pendingActionId(_backingKey()), 0, "cancellation releases backing key");
     }
 
     // Scenarios: BO-CANCELQUEUEDACTION-04.

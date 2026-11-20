@@ -24,7 +24,7 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
 // Constants
-import {BACKING_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BACKING_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Backing Oracle Configuration Timelock
 /// @notice	Replaceable delayed governance for one immutable backing oracle.
@@ -223,14 +223,14 @@ contract BackingOracleConfigTimelock is
     /// @dev	Cancellation remains available while paused and never reads the target.
     /// @dev	Reverts if:
     ///      - This queue is not active in its Kernel.
-    ///      - The caller does not hold EMERGENCY.
+    ///      - The caller is neither the recorded proposer nor a current EMERGENCY holder.
     function _validateCancellation(
         address caller_,
         uint64,
-        ITimelockBatchQueue.QueuedAction storage
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
         _requireOwnActive();
-        _requireRole(caller_, EMERGENCY_ROLE);
+        _requireAuthorized(caller_ != action_.proposer && !_isEmergency(caller_));
     }
 
     /// @notice	Require active/enabled target and current selection at runtime.

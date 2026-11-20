@@ -8,7 +8,7 @@ Scope: the shared admin-or-deposit_manager_admin authorization check, reached by
 
 - DMCT = DepositManagerConfigTimelock; DM = its bound DepositManager. Default: both enabled and Kernel-active; DMCT selected as DM's configOperator; configured asset and a valid one-action deposit-cap batch.
 - Admin and Deposit Manager Admin are authorized caller classes, tested separately. Fuzz unauthorized callers excluding exactly those two fixture accounts; guarantee zero, emergency-only, deposit-operator-only and the previous config operator.
-- Authorization rejection is IPolicyAdmin.NotAuthorised(), matching DMCT's existing combined-role reEnable check. Single-role cancellation retains ROLES_RequireRole(EMERGENCY_ROLE).
+- Authorization rejection is `IPolicyAdmin.NotAuthorised()`, matching the reEnable and cancellation checks.
 - Unchanged: nextActionId, pending action length/config guards, target deposit cap and operator unchanged; no committed events. The caller error wins over an invalid one-action payload. Own activity, local enablement and proposer authorization run before batch-size validation, including an empty batch.
 
 | ID | Caller | State / request | Queue outcome / effects | Test |

@@ -214,7 +214,9 @@ repay, withdraw, seize, provider funding and automation under the unmodified lau
 
 Use the [operations index](../src/scripts/ops/README.md#burner-loans-and-shared-services) for the
 standalone batches. Create args files when needed. Queuing and execution are separate runs;
-`executeQueuedAction` and `cancelQueuedAction` take the actual `actionId`. Backing updates have
+Use the actual `actionId` with `executeQueuedAction`, `cancelQueuedAction` from the DAO Safe
+that queued the batch, or `cancelQueuedActionEmergency` from the Emergency MS. Pass
+`--multisig true` for either Safe. Backing updates have
 one-day notice and a seven-day execution window; lending/distributor/custody queues use one and three days.
 Use `EnablerBatch.disable` and `EnablerBatch.reEnable` for reviewed target lists. For all fourteen
 Burner Loans contracts, use these orders (names below omit the `BurnerLoans` prefix):
@@ -233,4 +235,5 @@ For a delayed custody-cap change, use `DepositManagerConfigTimelockBatch.queueSe
 with `asset` and `cap` in its matching args entry. The DAO proposes using `deposit_manager_admin`;
 any caller executes the actual queued ID after the one-day delay. Generic `queueBatch` supports
 the existing admitted cap/minimum/share/period/rescue settings; it cannot replace the controller.
-Emergency can cancel while the queue and manager are paused or the controller has been replaced.
+The recorded proposer or Emergency can cancel while the queue and manager are paused or the
+controller has been replaced. The queue must still be Kernel-active.

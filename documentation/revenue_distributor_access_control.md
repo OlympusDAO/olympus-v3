@@ -38,12 +38,14 @@ requires the distributor Kernel-active but permits its local disablement.
 | `queueRescue`, `queueRescuePendingPayout` | Admin or revenue distributor admin | Validates the rescue preview and starts the delay. |
 | `queueBatch` | Admin or revenue distributor admin | Applies the same gates and each action's checks; acquires nonconflicting keys. |
 | `executeQueuedAction` | Anyone | Ready, unexpired action; rechecks current state and executes atomically. |
-| `cancelQueuedAction` | Emergency | Unfinished action; this timelock Kernel-active, including while locally disabled. No target/operator reads. |
+| `cancelQueuedAction` | Recorded proposer or current `emergency` holder | Unfinished action; this timelock Kernel-active, including while locally disabled. The proposer retains cancellation authority after losing its queueing role. No target/operator reads. |
 
 The shared queue and Revenue Distributor validation support delays from 1–30 days. The current
 `RevenueDistributorConfigTimelock` constructor selects one day and exposes no public delay setter;
 a future implementation may expose the inherited internal setter within the same bounds. The delay
-is followed by a three-day execution window. Local disablement blocks queueing and execution but permits emergency cancellation. Kernel deactivation blocks all three. Existing actions remain queued and time continues to pass;
+is followed by a three-day execution window. During a local pause, the recorded proposer and
+`emergency` can still cancel. Kernel deactivation blocks queueing, execution, and cancellation.
+Existing actions remain queued and time continues to pass;
 restoration allows retry only within the original execution window.
 
 Route changes, retirement, and rescues conflict on the same asset key. Global yield-recipient

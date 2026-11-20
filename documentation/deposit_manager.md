@@ -326,7 +326,7 @@ V1.1 preserves every V1 function selector and adds:
 - Recipient validation and transaction-scoped reentrancy protection on the affected entrypoints.
 - `PolicyEnablerV2` bounded `reEnable` support and configurable grace period.
 - A single-step config operator and separate DepositManagerConfigTimelock for delayed cap, minimum,
-    route enablement, route disablement, and route-creation changes. Timelocked route creation starts the route enabled after the notice period. Anyone can execute a valid action after its delay. Conflict and stale-state checks still apply. Emergency can cancel queued creations or disable routes. It cannot create, queue or enable them.
+    route enablement, route disablement, and route-creation changes. Timelocked route creation starts the route enabled after the notice period. Anyone can execute a valid action after its delay. Conflict and stale-state checks still apply. The recorded proposer can cancel its own queued creations. Emergency can cancel any queued creation or disable routes.
 - `deposit_manager_admin` and `emergency` authority separation: direct asset onboarding, operator
     registration (`setOperatorName`), and role management remain admin-only. Admin or the current config operator can create routes directly for a registered operator with `deposit_operator`. Neither `deposit_manager_admin` nor an operator role alone grants direct route-creation authority.
 - Kernel-activity checks on DepositManagerConfigTimelock queue and execution paths.

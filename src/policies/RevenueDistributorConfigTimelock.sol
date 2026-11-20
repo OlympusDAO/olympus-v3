@@ -23,7 +23,7 @@ import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ConfigTimelockBatchQueue} from "src/policies/utils/ConfigTimelockBatchQueue.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
-import {ADMIN_ROLE, EMERGENCY_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, REVENUE_DISTRIBUTOR_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Revenue Distributor Config Timelock
 /// @notice Bounded, state-checked delayed configuration and rescue authority.
@@ -377,16 +377,16 @@ contract RevenueDistributorConfigTimelock is
 
     /// @dev Reverts if:
     ///      - This timelock is Kernel-inactive.
-    ///      - The caller lacks the emergency role.
+    ///      - The caller is neither the recorded proposer nor a current EMERGENCY holder.
     ///
     /// @dev Target lifecycle and operator selection do not gate cancellation.
     function _validateCancellation(
         address caller_,
         uint64,
-        ITimelockBatchQueue.QueuedAction storage
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
         _requireOwnPolicyActive();
-        _requireRole(caller_, EMERGENCY_ROLE);
+        _requireAuthorized(caller_ != action_.proposer && !_isEmergency(caller_));
     }
 
     /// @dev Reverts if:

@@ -106,7 +106,7 @@ For the following integration regression, BLCT and Config are active/enabled, Co
 
 ## Shared assertions
 
-Port real-setter rollback test, not only a mock target. Test risk+fee disjoint order both ways, multipleassets and rescue/config batches. A later registry getter failure also rolls entire batch back. Failed/exhausted execution cannot release expired keys; Emergency cancellation recovers them.
+Port real-setter rollback test, not only a mock target. Test risk+fee disjoint order both ways, multipleassets and rescue/config batches. A later registry getter failure also rolls entire batch back. Failed or expired execution retains the keys. See [cancelQueuedAction](./cancelQueuedAction.md) for cancellation and key release.
 
 - [x] Review these expectations.
 - [x] Implement named Foundry tests and boundary seed drivers.

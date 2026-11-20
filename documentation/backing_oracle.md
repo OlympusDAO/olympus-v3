@@ -19,7 +19,7 @@ convert currencies or derive reserve values.
 | Select, rotate or revoke config operator | ADMIN | Oracle active; may be paused |
 | Queue backing update | backing_admin or ADMIN | Both policies active/enabled; queue selected |
 | Execute queued update | Anyone | Both policies active/enabled; queue selected |
-| Cancel queued update | EMERGENCY | Queue active; may be paused; no oracle reads |
+| Cancel queued update | Recorded proposer or current EMERGENCY holder | Queue active; may be paused; no oracle reads |
 | Enable queue | ADMIN | Queue active/disabled; compatible same-Kernel active oracle and selected queue; oracle may be paused |
 | Re-enable either policy | ADMIN or backing_admin | Previously initialized, own policy active/disabled, within grace; queue revalidates target identity/activity/selection |
 | Set re-enable grace | ADMIN | Own policy active and enabled; nonzero period |
@@ -94,12 +94,13 @@ proposal checks current backing bounds before acquiring it. Execution verifies
 current lifecycle, selected operator, recorded destination and committed pre-state
 before dispatch. The oracle then enforces live authority and numeric bounds.
 Failure reverts the entire execution, preserving the action, payload and key.
-Success or EMERGENCY cancellation releases the key.
+Execution or cancellation releases the key. The recorded proposer can still cancel after losing
+its queueing role.
 
 | Change during notice | Result |
 | --- | --- |
 | ADMIN changes backing | State commitment mismatch; pending intent retained |
-| ADMIN replaces/revokes operator | Old queue cannot execute; EMERGENCY can still cancel |
+| ADMIN replaces/revokes operator | Old queue cannot execute; the recorded proposer or EMERGENCY can still cancel |
 | Oracle or queue paused/inactive | Ordinary execution blocked; restore readiness within original window to retry |
 | Backing/operator changes away and back | Current-state commitment may match again; no historical epoch invalidation |
 | Action expires | Execution rejected; cancellation releases the reservation |
@@ -128,7 +129,7 @@ To replace a queue, deploy and activate a replacement for the same oracle, then
 ADMIN selects it and enables it. Rotation is immediate and is available while the
 oracle is paused. Zero revokes delegation. Re-selecting the current address reverts
 after authorization. Selection does not query the candidate queue's readiness.
-Cancel old pending intents with EMERGENCY when the old queue is active; its local
+Cancel old pending intents as their recorded proposer or with EMERGENCY when the old queue is active; its local
 pause or broken target metadata does not prevent cancellation. No backing is moved
 or copied during replacement.
 

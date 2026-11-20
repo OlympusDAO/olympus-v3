@@ -11,7 +11,7 @@ import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
-/// @notice Common execution and emergency cancellation for single-action and batch configuration timelocks.
+/// @notice Common execution and cancellation for single-action and batch configuration timelocks.
 abstract contract TimelockBatchScript is BatchScriptV2 {
     /// @dev Each concrete script selects its queue from the chain environment.
     function _timelockKey() internal pure virtual returns (string memory);
@@ -32,14 +32,27 @@ abstract contract TimelockBatchScript is BatchScriptV2 {
         proposeBatch();
     }
 
-    /// @notice Cancel an existing action through the Emergency multisig, including while paused.
+    /// @notice Cancel using the same caller setup as queueing.
     function cancelQueuedAction(
         bool useDaoMS_,
         string calldata argsFile_,
         string calldata ledgerDerivationPath_
+    ) external virtual setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        _cancelQueuedAction("cancelQueuedAction");
+    }
+
+    /// @notice Cancel through the Emergency multisig, including while the queue is paused.
+    function cancelQueuedActionEmergency(
+        bool useDaoMS_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_
     ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
+        _cancelQueuedAction("cancelQueuedActionEmergency");
+    }
+
+    function _cancelQueuedAction(string memory functionName_) internal {
         address queue = _envAddressNotZero(_timelockKey());
-        uint64 actionId = SafeCast.toUint64(_readBatchArgUint256("cancelQueuedAction", "actionId"));
+        uint64 actionId = SafeCast.toUint64(_readBatchArgUint256(functionName_, "actionId"));
         console2.log("Cancelling queued action", actionId);
         console2.log("Timelock", queue);
         addToBatch(queue, abi.encodeCall(ITimelockQueue.cancelQueuedAction, (actionId)));

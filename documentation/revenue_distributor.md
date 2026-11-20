@@ -141,8 +141,9 @@ must be Kernel-active; only rescues allow it to be locally disabled. Anyone can 
 three-day window after the configured delay. The shared queue and Revenue Distributor validation
 support delays from 1–30 days. The current `RevenueDistributorConfigTimelock` constructor selects
 one day and exposes no public delay setter; a future implementation may expose the inherited
-internal setter within the same bounds. Emergency can cancel unfinished actions while the timelock
-is Kernel-active, including while locally disabled, without distributor or operator reads.
+internal setter within the same bounds. The recorded proposer or a current `emergency` holder can
+cancel unfinished actions while the timelock is Kernel-active, including while locally disabled.
+Cancellation makes no distributor or operator reads.
 
 Route changes, retirement, and both rescues share one key per asset. The queue has no global
 recipient setter or key. Conflicting actions cannot be queued together. Route actions bind the current

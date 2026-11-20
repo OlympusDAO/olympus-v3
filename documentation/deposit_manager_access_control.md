@@ -11,6 +11,7 @@
 | `admin`                 | DepositManagerConfigTimelock queue functions                                                                                                   | Can also propose delayed configuration, although governance already has a timelock and can use the direct path                                                                   |
 | `deposit_manager_admin` | `reEnable`                                                                                                                                     | Immediate bounded recovery during the re-enable grace period                                                                                                                     |
 | `deposit_manager_admin` | DepositManagerConfigTimelock queue functions                                                                                                   | Proposes delayed mutable configuration and delayed route creation; cannot perform direct structural registration or onboarding                                                   |
+| Recorded proposer       | `cancelQueuedAction` | Cancels its own pending batch, including after losing its queueing role |
 | Config operator         | `addAssetPeriod`, `setAssetDepositCap`, `setAssetMinimumDeposit`, `setAssetShareWithdrawalRequired`, `enableAssetPeriod`, `disableAssetPeriod` | Normally the DepositManagerConfigTimelock; route creation through the timelock starts the route enabled after the delay; authority is revoked by setting another address or zero |
 | Config operator         | `rescue` | Normally DepositManagerConfigTimelock; delayed recovery permits local disablement and sends only unmanaged tokens to current TRSRY |
 | `emergency`             | `disable`, `disableAssetPeriod`, timelock cancellation                                                                                         | Immediate one-way shutdown and queued-action cancellation; cannot enable a period, create a route queue, change limits, or queue any configuration                               |
@@ -44,8 +45,10 @@ DepositManager has three distinct lifecycle layers:
 The DepositManagerConfigTimelock requires both policies Kernel-active and requires itself locally enabled.
 Ordinary configuration also requires DepositManager enabled. Rescue-only queues and executions permit
 a disabled DepositManager; mixed batches retain every configuration action's enabled requirement.
-The timelock must remain the selected config operator. Execution is permissionless after the delay. Emergency cancellation requires the
-timelock active, permits its local disablement, and does not inspect DepositManager's lifecycle.
+The timelock must remain the selected config operator for queueing or execution. Execution is
+permissionless after the delay. The recorded proposer or a current `emergency` holder can cancel a
+pending batch while the timelock is Kernel-active, including during local disablement or when
+DepositManager is unavailable.
 
 Timelock enable/reEnable require compatible consumed interfaces, the same Kernel, active DepositManager membership and selection as its config operator. They do not read or require DepositManager enablement. This allows repairing the queue during a target pause without enabling ordinary configuration actions, which still require the target operational. Operator installation follows DepositManager's own setter prerequisites.
 

@@ -22,7 +22,7 @@ import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {SafeCallDecoder} from "src/libraries/SafeCallDecoder.sol";
 import {LoanParameters} from "src/policies/burnerloans/libraries/LoanParameters.sol";
-import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -463,14 +463,14 @@ contract BurnerLoansConfigTimelock is
     /// @dev Local pause, target state and operator selection do not gate cancellation.
     /// @dev Reverts if:
     ///      - This timelock is Kernel-inactive.
-    ///      - The caller lacks EMERGENCY.
+    ///      - The caller is neither the recorded proposer nor a current EMERGENCY holder.
     function _validateCancellation(
         address caller_,
         uint64,
-        ITimelockBatchQueue.QueuedAction storage
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
         _requireOwnPolicyActive();
-        _requireRole(caller_, EMERGENCY_ROLE);
+        _requireAuthorized(caller_ != action_.proposer && !_isEmergency(caller_));
     }
 
     /// @notice Authorizes a re-enable transition during the grace period.

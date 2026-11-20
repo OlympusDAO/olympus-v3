@@ -21,9 +21,9 @@ import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, EMERGENCY_ROLE} from "src/polici
 
 // Contracts
 import {DepositManagerConfigTimelockRescueTest} from "./fixtures/DepositManagerConfigTimelockRescueTest.sol";
+
 import {Vm} from "@forge-std-1.16.2/Vm.sol";
 import {Actions, Kernel, Policy, toKeycode} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {DepositManagerConfigTimelock} from "src/policies/deposits/DepositManagerConfigTimelock.sol";
@@ -1504,18 +1504,18 @@ contract DepositManagerConfigTimelockQueueRescueTest is DepositManagerConfigTime
 
     // Scenarios: DMCT-RESCUE-A07.
     function test_whenRescueCancelledByUnauthorizedCaller_reverts(address caller_) public {
-        vm.assume(!roles.hasRole(caller_, EMERGENCY_ROLE));
-        _assertCancellationUnauthorized(caller_);
+        vm.assume(caller_ != ADMIN && !roles.hasRole(caller_, EMERGENCY_ROLE));
+        _assertCancellationUnauthorized(ADMIN, caller_);
     }
 
     // Scenarios: DMCT-RESCUE-A07.
     function test_whenRescueCancelledByAdminOnly_reverts() public {
-        _assertCancellationUnauthorized(ADMIN);
+        _assertCancellationUnauthorized(DEPOSIT_MANAGER_ADMIN, ADMIN);
     }
 
     // Scenarios: DMCT-RESCUE-A07.
     function test_whenRescueCancelledByManagerOnly_reverts() public {
-        _assertCancellationUnauthorized(DEPOSIT_MANAGER_ADMIN);
+        _assertCancellationUnauthorized(ADMIN, DEPOSIT_MANAGER_ADMIN);
     }
 
     // Scenarios: DMCT-RESCUE-P14.
@@ -1783,11 +1783,11 @@ contract DepositManagerConfigTimelockQueueRescueTest is DepositManagerConfigTime
         assertEq(_rescueToken.balanceOf(address(trsry)), treasury, "cancel pays no Treasury funds");
     }
 
-    function _assertCancellationUnauthorized(address caller_) private {
-        uint64 id = _queueRescue(ADMIN, address(_rescueToken));
+    function _assertCancellationUnauthorized(address proposer_, address caller_) private {
+        uint64 id = _queueRescue(proposer_, address(_rescueToken));
         bytes32 beforeAction = keccak256(abi.encode(_configTimelock.getQueuedAction(id)));
         bytes32 beforeState = _targetState();
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE));
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _configTimelock.cancelQueuedAction(id);
         _assertPending(id);

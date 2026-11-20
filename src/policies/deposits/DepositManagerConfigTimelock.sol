@@ -18,7 +18,7 @@ import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Check
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 import {SafeCallDecoder} from "src/libraries/SafeCallDecoder.sol";
-import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, DEPOSIT_OPERATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -36,7 +36,7 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///      call the configuration functions accepted by its action validator. Queue and execution
 ///      require both policies active in their shared Kernel and this timelock enabled. Rescue
 ///      permits a locally disabled manager; ordinary configuration requires it enabled.
-///      Emergency cancellation requires this timelock active but ignores manager readiness.
+///      The recorded proposer or a current EMERGENCY holder can cancel while this timelock is active.
 contract DepositManagerConfigTimelock is
     Policy,
     ReEnablerGracePeriod,
@@ -640,14 +640,14 @@ contract DepositManagerConfigTimelock is
     /// @dev Local pause and target/operator state do not gate cancellation.
     /// @dev Reverts if:
     ///      - This timelock is Kernel-inactive.
-    ///      - The caller lacks EMERGENCY.
+    ///      - The caller is neither the recorded proposer nor a current EMERGENCY holder.
     function _validateCancellation(
         address caller_,
         uint64,
-        ITimelockBatchQueue.QueuedAction storage
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
         _requireOwnPolicyActive();
-        _requireRole(caller_, EMERGENCY_ROLE);
+        _requireAuthorized(caller_ != action_.proposer && !_isEmergency(caller_));
     }
 
     /// @notice Authorizes bounded re-enablement by governance or `deposit_manager_admin`.

@@ -10,15 +10,15 @@ pragma solidity >=0.8.24;
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
-import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansInventoryConfigTimelockTest} from "./BurnerLoansInventoryConfigTimelockTest.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     BurnerLoansInventoryConfigTimelockTest
@@ -53,11 +53,8 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
 
     // Scenarios: BLINCT-CANCEL-A02.
     function test_whenCallerLacksEmergency_reverts(address caller_) public givenPendingRecovery {
-        vm.assume(!_roles.hasRole(caller_, EMERGENCY_ROLE));
-        _expectCancelRejected(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE),
-            caller_
-        );
+        vm.assume(caller_ != address(this) && !_roles.hasRole(caller_, EMERGENCY_ROLE));
+        _expectCancelRejected(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector), caller_);
     }
 
     // Scenarios: BLINCT-CANCEL-L01.
@@ -104,13 +101,13 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
         );
     }
 
-    // Scenarios: BLINCT-CANCEL-P01.
+    // Scenarios: BLINCT-CANCEL-A03, BLINCT-CANCEL-P01.
     function test_givenCancelledAction_whenRecoveryRequeued_thenFreshIdOwnsKey()
         public
         givenPendingRecovery
     {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(this));
         _timelock.cancelQueuedAction(_pendingId);
+        _assertCleared(_pendingId);
         uint64 id = _timelock.queueBurnSurplus();
         assertEq(id, uint256(_pendingId) + 1, "Fresh ID after cancellation");
         _assertQueued(id, IBurnerLoansInventory.burnSurplus.selector, address(this));
@@ -286,7 +283,9 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     // Scenarios: BLINCT-CANCEL-A02.
     function test_givenOtherAdministrativeRoles_whenCancelled_reverts() public {
         uint256 checkpoint = vm.snapshotState();
-        test_whenCallerLacksEmergency_reverts(address(this));
+        address otherAdmin = makeAddr("otherAdmin");
+        _rolesAdmin.grantRole(ADMIN_ROLE, otherAdmin);
+        test_whenCallerLacksEmergency_reverts(otherAdmin);
         _restore(checkpoint);
         test_whenCallerLacksEmergency_reverts(_recipient);
     }

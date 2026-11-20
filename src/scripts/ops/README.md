@@ -60,13 +60,13 @@ Authorization, lifecycle, queue admission and execution checks are enforced by t
 | `PriceConfigV2Batch` | `addAsset`, `queueUpdateAsset`, `queueRemoveAsset`, execute/cancel | `price_admin` or ADMIN; anyone/Emergency for execute/cancel |
 | `EnablerBatch` | `enable`, `disable`, `reEnable` for supplied targets | Target-specific authority; Emergency for disable |
 | `BurnerLoansInventoryBatch` | `supply`, `withdraw`; `syncMintApproval` | `burner_loans_inventory_provider`; `burner_loans_admin` |
-| Four `BurnerLoans*TimelockBatch` scripts | Typed `queue*`, admitted `queueBatch` where supported; `executeQueuedAction`, `cancelQueuedAction` | ADMIN/`burner_loans_admin`; anyone, Emergency |
+| Four `BurnerLoans*TimelockBatch` scripts | Typed `queue*`, admitted `queueBatch` where supported; execute/cancel | ADMIN/`burner_loans_admin`; execute by anyone; cancel by recorded proposer or Emergency |
 | `BurnerLoansSeizerTaskBatch` | `setScanLimits`, `setExecutionGasLimit`, `setNextAssetIndex`, `setExpiredAssetCursor`, `setUnhealthyAssetCursor` | ADMIN/`burner_loans_admin` |
 | `BurnerLoansYieldClaimerTaskBatch` | `setExecutionGasLimit`, `setMinimumGasToAttempt`, `setGasReserve`, `setNextAssetIndex` | ADMIN/`burner_loans_admin` |
 | `RevenueDistributorBatch` | `distribute`, `transferPendingPayout` | Anyone |
-| `RevenueDistributorConfigTimelockBatch` | Asset routes, rescue, pending rescue, admitted `queueBatch`; execute/cancel | ADMIN/`revenue_distributor_admin`; anyone/Emergency |
-| `DepositManagerConfigTimelockBatch` | `queueSetAssetDepositCap`, admitted `queueBatch`; execute/cancel | ADMIN/`deposit_manager_admin`; anyone/Emergency |
-| `BackingOracleConfigTimelockBatch` | `queueSetBacking`; execute/cancel | ADMIN/`backing_admin`; anyone/Emergency |
+| `RevenueDistributorConfigTimelockBatch` | Asset routes, rescue, pending rescue, admitted `queueBatch`; execute/cancel | ADMIN/`revenue_distributor_admin`; execute by anyone; cancel by recorded proposer or Emergency |
+| `DepositManagerConfigTimelockBatch` | `queueSetAssetDepositCap`, admitted `queueBatch`; execute/cancel | ADMIN/`deposit_manager_admin`; execute by anyone; cancel by recorded proposer or Emergency |
+| `BackingOracleConfigTimelockBatch` | `queueSetBacking`; execute/cancel | ADMIN/`backing_admin`; execute by anyone; cancel by recorded proposer or Emergency |
 
 Use `setExpiredAssetCursor` or `setUnhealthyAssetCursor` with `asset` and `index` to recover one
 discovery lane. The other lane is unchanged; nonzero bounds validation does not read prices.
@@ -97,7 +97,7 @@ Shared services have separate lifecycles and can be included in a reviewed targe
 
 Create task/timelock args files when needed. Use a `functions` array with a matching entry-point
 `name` and an `args` object. Field names are read by each script's `_readBatchArg*` calls.
-The seven batch configuration-timelock scripts and PriceConfigV2Batch inherit execution and emergency cancellation from
+The seven batch configuration-timelock scripts and PriceConfigV2Batch inherit execution and cancellation from
 `TimelockBatchScript`; each binds its queue environment key. Terminal operations use `actionId` with the actual queue ID. `queueBatch` takes ABI-encoded `(address,bytes4,bytes)[]` in `encodedActions`. Distributor routes
 use ABI-encoded `(address,uint16)[]` in `encodedRoutes`. Supply reads `amount` in OHM base units; withdrawal also reads
 `recipient`. The provider Safe supplies and withdraws its own OHM claim.
@@ -106,9 +106,26 @@ Queueing, execution and cancellation are separate runs. Burner Loans and distrib
 one-day notice and a three-day execution window. The backing queue has one-day notice and a
 seven-day window. Read IDs and timestamps from queue events or `getQueuedAction`.
 
+For the seven configuration-timelock scripts, `cancelQueuedAction` uses the same setup as queueing.
+Pass `--multisig true` to use the DAO Safe as the recorded proposer. To cancel from Emergency,
+use `cancelQueuedActionEmergency` with `--multisig true`. Both Safe paths support a named signer
+account or Ledger. Use the matching args entry and replace `1` with the recorded ID.
+`PriceConfigV2Batch.cancelQueuedAction` keeps its existing Emergency Safe behavior and args key.
+
+```json
+{
+    "functions": [
+        {"name": "cancelQueuedAction", "args": {"actionId": 1}},
+        {"name": "cancelQueuedActionEmergency", "args": {"actionId": 1}}
+    ]
+}
+```
+
 ```bash
 ./shell/safeBatchV2.sh --contract BurnerLoansConfigTimelockBatch --function queueSetAssetDebtCap --chain mainnet --multisig true --ledger 5 --args path/to/reviewed-queue.json
 ./shell/safeBatchV2.sh --contract BurnerLoansConfigTimelockBatch --function executeQueuedAction --chain mainnet --multisig true --ledger 5 --args path/to/reviewed-actions.json
+./shell/safeBatchV2.sh --contract BurnerLoansConfigTimelockBatch --function cancelQueuedAction --chain mainnet --multisig true --account dao-signer --broadcast false --args path/to/cancel.json
+./shell/safeBatchV2.sh --contract BurnerLoansConfigTimelockBatch --function cancelQueuedActionEmergency --chain mainnet --multisig true --account emergency-signer --broadcast false --args path/to/cancel.json
 ```
 
 The proposal grants DAO `backing_admin`. Provider whitelist changes still use the governance

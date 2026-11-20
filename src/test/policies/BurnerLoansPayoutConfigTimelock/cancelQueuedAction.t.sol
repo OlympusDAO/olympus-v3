@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
@@ -10,7 +11,6 @@ import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/
 
 // Contracts
 import {BurnerLoansPayoutConfigTimelockTest} from "./BurnerLoansPayoutConfigTimelockTest.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     BurnerLoansPayoutConfigTimelockTest
@@ -70,10 +70,10 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     function test_givenNoEmergencyRole_whenCancelled_reverts(
         address caller_
     ) public givenPendingRecovery {
-        vm.assume(!_roles.hasRole(caller_, EMERGENCY_ROLE));
+        vm.assume(caller_ != address(this) && !_roles.hasRole(caller_, EMERGENCY_ROLE));
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.cancelQueuedAction, (_pendingId)),
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE),
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
             caller_
         );
     }
@@ -202,22 +202,27 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
         _restore(checkpoint);
         test_givenEmergencyCaller_whenCancelled_thenExactCleanup(address(0x113), false, 4 days + 2);
         _restore(checkpoint);
-        test_givenNoEmergencyRole_whenCancelled_reverts(address(this));
-        _restore(checkpoint);
         test_givenNoEmergencyRole_whenCancelled_reverts(_recipient);
         _restore(checkpoint);
         test_givenNoEmergencyRole_whenCancelled_reverts(_borrower);
-        _restore(checkpoint);
+    }
 
+    // Scenarios: BLCUCT-CANCEL-A03.
+    function test_givenRevokedProposer_whenProposerCancels() public {
         vm.prank(_recipient);
         _pendingId = _payoutTimelock.queueRescue(address(_asset), _borrower);
         _rolesAdmin.revokeRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
-        _expectLocalRejected(
-            abi.encodeCall(_payoutTimelock.cancelQueuedAction, (_pendingId)),
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE),
-            _recipient
+
+        vm.expectEmit(address(_payoutTimelock));
+        emit ITimelockBatchQueue.TimelockActionCancelled(_pendingId, _recipient);
+        vm.prank(_recipient);
+        _payoutTimelock.cancelQueuedAction(_pendingId);
+
+        assertTrue(
+            _payoutTimelock.getQueuedAction(_pendingId).cancelled,
+            "revoked proposer cancellation recorded"
         );
-        _restore(checkpoint);
+        _assertCleared(_pendingId, _single(_rescueAction()));
     }
 
     // Scenarios: BLCUCT-CANCEL-A01, BLCUCT-CANCEL-D01, BLCUCT-CANCEL-L01.

@@ -4,11 +4,12 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Contracts
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
-import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTimelockTest {
     // Scenarios: BLCT-CANCEL-L01.
@@ -390,5 +391,48 @@ contract BurnerLoansConfigTimelockCancelQueuedActionTest is BurnerLoansConfigTim
     // Scenarios: BLCT-CANCEL-A01.
     function test_givenExistingEmergency_whenReadyActionCancelled_thenComplete() public {
         test_givenReadyAction_whenCancel_thenComplete(address(this));
+    }
+
+    // Scenarios: BLCT-CANCEL-A02.
+    function test_givenPending_whenProposerCancelsAtTimeBoundaries() public {
+        address proposer = makeAddr("proposer");
+        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, proposer);
+        ITimelockBatchQueue.BatchAction[] memory actions = _pair(
+            _capAction(address(_asset), 200000e9),
+            _feeAction(address(_asset), _fees())
+        );
+        vm.prank(proposer);
+        uint64 id = _timelock.queueBatch(actions);
+        ITimelockBatchQueue.QueuedAction memory queued = _timelock.getQueuedAction(id);
+        uint256 checkpoint = vm.snapshotState();
+
+        vm.warp(queued.executableAt - 1);
+        _cancelAndAssert(id, proposer);
+        _restore(checkpoint);
+
+        vm.warp(queued.executableAt);
+        _cancelAndAssert(id, proposer);
+        _restore(checkpoint);
+
+        vm.warp(queued.expiresAt);
+        _cancelAndAssert(id, proposer);
+        _restore(checkpoint);
+
+        vm.warp(uint256(queued.expiresAt) + 1);
+        _cancelAndAssert(id, proposer);
+    }
+
+    // Scenarios: BLCT-CANCEL-A03.
+    function test_givenExpiredBatch_whenAnotherProposerCancels_reverts() public {
+        address otherProposer = makeAddr("otherProposer");
+        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, otherProposer);
+        uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
+        vm.warp(uint256(_timelock.getQueuedAction(id).expiresAt) + 1);
+
+        _cancelReverts(
+            id,
+            otherProposer,
+            abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
+        );
     }
 }

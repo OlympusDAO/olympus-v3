@@ -86,7 +86,11 @@ Core needs the Kernel-granted FLOAN permission to hand off market managers as th
 
 ## Config timelock matrix
 
-All four Burner Loans queues accept proposals from ADMIN or `burner_loans_admin`. Anyone can execute a valid queued action during its inclusive execution window. Only `emergency` can cancel through these queues. Cancellation requires the queue active and does not depend on its target remaining usable. All four permit cancellation while locally paused; own Kernel inactivity still blocks it.
+All four Burner Loans queues accept proposals from ADMIN or `burner_loans_admin`. Anyone can
+execute a valid queued action during its inclusive execution window. The recorded proposer can
+cancel its own pending batch even after losing its queueing role. A current `emergency` holder can
+cancel any pending batch. Cancellation requires the queue to be Kernel-active, works during a local
+pause, and makes no calls to the target.
 
 | Queue/action | Target and authority | Queue and execution gates |
 | --- | --- | --- |
@@ -97,11 +101,11 @@ All four Burner Loans queues accept proposals from ADMIN or `burner_loans_admin`
 
 All four queues use the same enable/reEnable prerequisites: compatible consumed target interfaces, matching Kernel, active target Policy membership and current operator selection. Target local enablement is not required or read during activation. This permits queue repair while its target is paused; the operation-specific gates in the table still apply when queueing or executing.
 
-The separate [BackingOracleConfigTimelock](backing_oracle.md) accepts ADMIN or `backing_admin` proposals, uses a fixed one-day notice and a seven-day inclusive execution window, and has EMERGENCY-only cancellation. Its enable/reEnable checks require the oracle active with matching Kernel, compatible interfaces and current operator selection, but permit the oracle to remain paused. Queueing and execution require both policies active/enabled. Its recovery role is `backing_admin`, not `burner_loans_admin`.
+The separate [BackingOracleConfigTimelock](backing_oracle.md) accepts ADMIN or `backing_admin` proposals, uses a fixed one-day notice and a seven-day inclusive execution window, and allows cancellation by the recorded proposer or a current EMERGENCY holder. Its enable/reEnable checks require the oracle active with matching Kernel, compatible interfaces and current operator selection, but permit the oracle to remain paused. Queueing and execution require both policies active/enabled. Its recovery role is `backing_admin`, not `burner_loans_admin`.
 
 RiskConfigTimelock dispatches directly to Risk. Selecting Config as Risk's operator enables Config's direct cache-age forwarding but does not authorize RiskConfigTimelock's actions. Select the intended route explicitly. Direct ADMIN access on Risk remains available regardless of that selection.
 
-Pausing Config does not stop RiskConfigTimelock. Pause this queue or Risk, revoke Risk's delegation, or cancel the action to stop that route. Pausing the queue still permits emergency cancellation.
+Pausing Config does not stop RiskConfigTimelock. Pause this queue or Risk, revoke Risk's delegation, or cancel the action to stop that route. Pausing the queue still permits cancellation by the recorded proposer or EMERGENCY.
 
 RiskConfigTimelock binds one immutable Risk destination. Core selecting another Risk cannot redirect queued actions. Cache age, referral percentage and each referrer's membership have independent keys and commitments to their current value plus selected operator. They can coexist and execute in any order. Direct changes to a committed value make that action stale until the original state is restored. A failed attempt preserves the action and reservations within its original window; expiry alone does not release keys.
 

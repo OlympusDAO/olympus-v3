@@ -225,7 +225,13 @@ releases every key and removes every guard record.
 
 Expiry is a timestamp condition, not a state transition. An expired action keeps its keys until an
 authorized caller cancels it. Cancellation can occur after expiry, subject to the product's lifecycle
-gates. Product configuration timelocks require themselves Kernel-active and the caller to hold EMERGENCY, but permit local disablement. Target state and operator selection do not gate cancellation, and cancellation makes no target/operator calls. A paused queue or broken target must not strand reservations; Kernel deactivation still blocks cancellation until governance restores membership.
+gates. BackingOracle, the four Burner Loans configuration timelocks, DepositManager, and
+RevenueDistributor accept cancellation from the recorded proposer or a current `EMERGENCY` holder.
+Other callers receive `NotAuthorised()`.
+The proposer can cancel its own batch after losing its queueing role. Cancellation is available
+before readiness, during the execution window, and after expiry. The timelock must be Kernel-active
+and can be locally paused. Cancellation makes no calls to the target and does not check operator
+selection. Kernel deactivation blocks cancellation until governance restores membership.
 
 `CCIPTokenPoolConfigTimelock` is an exception: cancellation does not require local enablement or Kernel activity. ADMIN, EMERGENCY, or the proposer can cancel through the expiry timestamp; anyone can cancel after expiry. See [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for its cancellation authority.
 
@@ -524,7 +530,9 @@ Include that dependency in the canonical hash or give it another owned key.
 
 Expired actions keep their keys. If no authorized cancellation path remains, those keys stay locked.
 
-Allow cancellation after expiry while the timelock is Kernel-active, including while locally paused. Require the cancellation role, without target/operator readiness calls. An inactive queue must regain Kernel membership before cancellation; local re-enablement must not be needed to release keys.
+Allow cancellation after expiry while the timelock is Kernel-active, including while locally paused.
+Check the product's cancellation authority without calling the target or checking operator selection.
+An inactive queue must regain Kernel membership before cancellation.
 
 ### Separate batches depend on execution order
 

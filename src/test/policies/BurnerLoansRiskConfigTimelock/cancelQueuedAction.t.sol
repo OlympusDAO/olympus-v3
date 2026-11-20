@@ -3,14 +3,14 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansRiskConfigTimelockTest} from "./BurnerLoansRiskConfigTimelockTest.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskConfigTimelockTest {
     // Scenarios: BLRCT-CANCEL-A01, BLRCT-CANCEL-P01.
@@ -40,7 +40,7 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         bytes32 queued = _queueDigest(id);
         if (!enabled_) _timelock.disable("");
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE));
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _timelock.cancelQueuedAction(id);
         assertEq(_queueDigest(id), queued, "failed cancellation keeps complete intent");
@@ -62,6 +62,34 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
             id,
             "failed cancellation retains key"
         );
+    }
+
+    // Scenarios: BLRCT-CANCEL-A03.
+    function test_givenPending_whenProposerCancels() public {
+        _assertProposerCancellation(false);
+    }
+
+    // Scenarios: BLRCT-CANCEL-A04.
+    function test_givenRevokedProposer_whenProposerCancels() public {
+        _assertProposerCancellation(true);
+    }
+
+    function _assertProposerCancellation(bool revokeRole_) private {
+        address proposer = makeAddr("proposer");
+        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, proposer);
+        ITimelockBatchQueue.BatchAction[] memory actions = _threeActions();
+        vm.prank(proposer);
+        uint64 id = _timelock.queueBatch(actions);
+        if (revokeRole_) _rolesAdmin.revokeRole(BURNER_LOANS_ADMIN_ROLE, proposer);
+
+        vm.expectEmit(address(_timelock));
+        emit ITimelockBatchQueue.TimelockActionCancelled(id, proposer);
+        vm.prank(proposer);
+        _timelock.cancelQueuedAction(id);
+
+        assertTrue(_timelock.getQueuedAction(id).cancelled, "proposer cancellation recorded");
+        _assertCleared(id, actions);
+        assertEq(_risk.referralFeeBps(), 0, "cancellation preserves referral fee");
     }
 
     // Scenarios: BLRCT-CANCEL-I01.

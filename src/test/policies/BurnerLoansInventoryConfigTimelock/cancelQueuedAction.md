@@ -1,6 +1,6 @@
 # BurnerLoansInventoryConfigTimelock.cancelQueuedAction coverage plan
 
-Shared action existence and terminal-status checks precede the concrete hook. The hook requires own Kernel activity, then EMERGENCY authorization; local pause is permitted. Cancellation does not probe target readiness or operator selection.
+Shared action existence and terminal-status checks precede the concrete hook. The hook requires own Kernel activity, then the recorded proposer or a current EMERGENCY holder; local pause is permitted. A proposer retains cancellation authority after losing its queueing role. Cancellation does not probe target readiness or operator selection.
 
 Source: [cancelQueuedAction](../../../policies/utils/TimelockBatchQueue.sol#L167). Concrete behavior: [_validateCancellation](../../../policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol#L260).
 
@@ -19,7 +19,8 @@ Pending action; TL active/enabled; T=executableAt and E=expiresAt. Cancellation 
 | ID | Caller | Authority | Execution | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLINCT-CANCEL-A01 | EMERGENCY_ROLE holder | Accepted role | Success | cancelled=true; payload/guards cleared; key released; exact event | Covered: [test][test_givenPendingAction_whenEmergencyCancels_thenExactCleanup]; [test][test_givenNoticePeriod_whenCancelled_thenExactCleanup]; [test][test_givenExpiredWindow_whenCancelled_thenExactCleanup]; [test][test_givenCancellationTimeEndpointSeeds_whenCancelled_thenExactCleanup] |
-| BLINCT-CANCEL-A02 | Fuzz outside EMERGENCY_ROLE holders | Seed ADMIN-only and BL-admin-only | ROLES_RequireRole(EMERGENCY_ROLE) | Unchanged | Covered: [test][test_whenCallerLacksEmergency_reverts]; [test][test_givenOtherAdministrativeRoles_whenCancelled_reverts] |
+| BLINCT-CANCEL-A02 | Fuzz outside the recorded proposer and EMERGENCY_ROLE holders | Seed ADMIN-only and BL-admin-only | `NotAuthorised()` | Unchanged | Covered: [test][test_whenCallerLacksEmergency_reverts]; [test][test_givenOtherAdministrativeRoles_whenCancelled_reverts] |
+| BLINCT-CANCEL-A03 | Recorded proposer | ADMIN only | Success | Key released and can be acquired by a replacement | Covered: [test][test_givenCancelledAction_whenRecoveryRequeued_thenFreshIdOwnsKey] |
 
 ## Lifecycle
 
@@ -63,7 +64,7 @@ A pending action is cancellable without waiting for notice or meeting the execut
 | BLINCT-CANCEL-N01 | EMERGENCY | Fuzz queuedAt..T-1; seed both ends | Success | cancelled=true; metadata retained; payload, destination, state records and key cleared; TimelockActionCancelled(id,caller) | Covered: [test][test_givenPendingAction_whenEmergencyCancels_thenExactCleanup]; [test][test_givenNoticePeriod_whenCancelled_thenExactCleanup]; [test][test_givenCancellationTimeEndpointSeeds_whenCancelled_thenExactCleanup] |
 | BLINCT-CANCEL-N02 | EMERGENCY | now=E | Success | Same exact cleanup/event; no Inventory payout | Covered: [test][test_givenPendingAction_whenEmergencyCancels_thenExactCleanup]; [test][test_givenCancellationTimeEndpointSeeds_whenCancelled_thenExactCleanup] |
 | BLINCT-CANCEL-N03 | EMERGENCY | Fuzz E+1..MAX48; seed E+1,MAX48 | Success | Same cleanup; expired action cannot strand key | Covered: [test][test_givenPendingAction_whenEmergencyCancels_thenExactCleanup]; [test][test_givenExpiredWindow_whenCancelled_thenExactCleanup]; [test][test_givenCancellationTimeEndpointSeeds_whenCancelled_thenExactCleanup] |
-| BLINCT-CANCEL-P01 | EMERGENCY then ADMIN proposer | Cancel old action, queue another recovery | New ID accepted | Released key assigned to new ID; old metadata stays cancelled | Covered: [test][test_givenCancelledAction_whenRecoveryRequeued_thenFreshIdOwnsKey] |
+| BLINCT-CANCEL-P01 | Recorded proposer with ADMIN only | Cancel old action, queue another recovery | New ID accepted | Released key assigned to new ID; old metadata stays cancelled | Covered: [test][test_givenCancelledAction_whenRecoveryRequeued_thenFreshIdOwnsKey] |
 
 - [x] Review these expectations.
 - [x] Complete passing test mappings.
@@ -73,20 +74,20 @@ A pending action is cancellable without waiting for notice or meeting the execut
 EMERGENCY cancellation requires this timelock Kernel-active, regardless of local enablement. Target activity, enablement, Kernel/status metadata and operator selection are not read. The notice period and expiry do not block cancellation of a still-pending action. Successful cancellation clears all payloads, commitments and reservations without target calls or custody/accounting changes; own Policy inactivity still rejects before role checks.
 
 [test_givenPendingAction_whenEmergencyCancels_thenExactCleanup]: ./cancelQueuedAction.t.sol#L27
-[test_givenNoticePeriod_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L228
-[test_givenExpiredWindow_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L239
-[test_givenCancellationTimeEndpointSeeds_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L250
+[test_givenNoticePeriod_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L225
+[test_givenExpiredWindow_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L236
+[test_givenCancellationTimeEndpointSeeds_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L247
 [test_whenCallerLacksEmergency_reverts]: ./cancelQueuedAction.t.sol#L55
-[test_givenOtherAdministrativeRoles_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L287
-[test_givenActiveDisabledTimelock_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L64
-[test_givenInactiveTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L95
-[test_givenInactiveInventory_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L133
-[test_givenPausedInventory_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L142
-[test_givenInventoryKernelMismatch_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L151
-[test_givenControllerReplaced_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L160
-[test_whenActionUnknown_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L169
-[test_whenUnknownIdAtTypeBounds_reverts]: ./cancelQueuedAction.t.sol#L279
-[test_givenExecutedAction_whenCalled_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L190
-[test_givenCancelledAction_whenCalled_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L209
-[test_givenCancelledAction_whenRecoveryRequeued_thenFreshIdOwnsKey]: ./cancelQueuedAction.t.sol#L108
-[test_givenInactiveDisabledTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L79
+[test_givenOtherAdministrativeRoles_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L284
+[test_givenActiveDisabledTimelock_whenCancelled_thenExactCleanup]: ./cancelQueuedAction.t.sol#L61
+[test_givenInactiveTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L92
+[test_givenInactiveInventory_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L130
+[test_givenPausedInventory_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L139
+[test_givenInventoryKernelMismatch_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L148
+[test_givenControllerReplaced_whenCancelled_thenNoReadinessCalls]: ./cancelQueuedAction.t.sol#L157
+[test_whenActionUnknown_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L166
+[test_whenUnknownIdAtTypeBounds_reverts]: ./cancelQueuedAction.t.sol#L276
+[test_givenExecutedAction_whenCalled_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L187
+[test_givenCancelledAction_whenCalled_revertsBeforeAuthorization]: ./cancelQueuedAction.t.sol#L206
+[test_givenCancelledAction_whenRecoveryRequeued_thenFreshIdOwnsKey]: ./cancelQueuedAction.t.sol#L105
+[test_givenInactiveDisabledTimelock_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L76

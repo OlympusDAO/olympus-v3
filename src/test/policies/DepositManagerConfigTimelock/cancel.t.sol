@@ -4,15 +4,15 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/IDepositManagerConfigTimelock.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {ADMIN_ROLE, EMERGENCY_ROLE, EMERGENCY_ROLE as CANCEL_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, EMERGENCY_ROLE as CANCEL_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 import {Actions} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
@@ -39,13 +39,23 @@ contract DepositManagerConfigTimelockCancelTest is DepositManagerConfigTimelockT
 
     // Scenarios: DMCT-CANCEL-A02.
     function test_givenCallerIsNotEmergency_reverts(address caller_, bool paused_) public {
-        vm.assume(caller_ != EMERGENCY);
+        vm.assume(caller_ != EMERGENCY && caller_ != DEPOSIT_MANAGER_ADMIN);
         uint64 actionId = _queueDepositCap(iAsset, 100e18);
         if (paused_) _pausePolicy(address(_configTimelock));
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE));
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _configTimelock.cancelQueuedAction(actionId);
+    }
+
+    // Scenarios: DMCT-CANCEL-A04.
+    function test_whenProposerCancels() public {
+        _cancelSucceeds(DEPOSIT_MANAGER_ADMIN);
+    }
+
+    // Scenarios: DMCT-CANCEL-A02.
+    function test_whenAdminCancelsAnotherProposersBatch_reverts() public {
+        test_givenCallerIsNotEmergency_reverts(ADMIN, false);
     }
 
     // Scenarios: DMCT-CANCEL-P02.
@@ -295,7 +305,7 @@ contract DepositManagerConfigTimelockCancelTest is DepositManagerConfigTimelockT
         uint64 id = _queueDepositCap(iAsset, 1);
         vm.prank(ADMIN);
         rolesAdmin.revokeRole(CANCEL_ROLE, EMERGENCY);
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, CANCEL_ROLE));
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(EMERGENCY);
         _configTimelock.cancelQueuedAction(id);
         _assertPending(id);

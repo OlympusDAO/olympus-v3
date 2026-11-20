@@ -4,13 +4,13 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {RevenueDistributorConfigTimelockTest} from "src/test/policies/RevenueDistributorConfigTimelock/RevenueDistributorConfigTimelockTest.sol";
 
@@ -25,7 +25,7 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
         bool rotateOperator_,
         bool paused_
     ) public {
-        vm.assume(caller_ != emergency);
+        vm.assume(caller_ != emergency && caller_ != admin);
         _permittedProposer(true);
         uint64 actionId = _queueRoute(address(token));
         bytes32 key = _queuedKey(actionId, 0);
@@ -35,7 +35,7 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
             distributor.setConfigOperator(bob);
         }
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE));
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         configTimelock.cancelQueuedAction(actionId);
 
@@ -46,8 +46,10 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
     // Scenarios: CAN-A01.
     function test_whenKnownNonEmergencyRolesCancel_reverts() public {
         address proposer = _permittedProposer(true);
+        vm.prank(admin);
+        rolesAdmin.grantRole(ADMIN_ROLE, bob);
         address[] memory callers = new address[](4);
-        callers[0] = admin;
+        callers[0] = bob;
         callers[1] = proposer;
         callers[2] = address(configTimelock);
         callers[3] = address(distributor);
@@ -57,9 +59,7 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
             uint64 actionId = _queueRoute(address(token));
             bytes32 key = _queuedKey(actionId, 0);
 
-            vm.expectRevert(
-                abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE)
-            );
+            vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
             vm.prank(callers[i]);
             configTimelock.cancelQueuedAction(actionId);
 
@@ -118,12 +118,16 @@ contract RevenueDistributorConfigTimelockCancelQueuedActionTest is
         configTimelock.cancelQueuedAction(actionId);
     }
 
-    // Scenarios: CAN-P01.
+    // Scenarios: CAN-A02, CAN-P01.
     function test_whenCancelled_releasesKeyForReplacement() public {
         uint64 actionId = _queueRoute(address(token));
         bytes32 key = _queuedKey(actionId, 0);
-        vm.prank(emergency);
+        vm.expectEmit(address(configTimelock));
+        emit ITimelockBatchQueue.TimelockActionCancelled(actionId, admin);
+        vm.prank(admin);
         configTimelock.cancelQueuedAction(actionId);
+        assertTrue(configTimelock.getQueuedAction(actionId).cancelled, "own batch cancelled");
+        assertEq(configTimelock.pendingActionId(key), 0, "cancellation releases the key");
 
         uint64 replacementId = _queueRoute(address(token));
 

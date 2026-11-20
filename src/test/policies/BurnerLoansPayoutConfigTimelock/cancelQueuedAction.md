@@ -1,6 +1,6 @@
 # BurnerLoansPayoutConfigTimelock.cancelQueuedAction coverage plan
 
-Shared action existence and terminal-status checks precede the concrete hook. The hook requires own Kernel activity, then EMERGENCY authorization; local pause is permitted. Cancellation does not probe target readiness or operator selection.
+Shared action existence and terminal-status checks precede the concrete hook. The hook requires own Kernel activity, then the recorded proposer or a current EMERGENCY holder; local pause is permitted. Cancellation does not probe target readiness or operator selection.
 
 Coverage records implemented domains and assertions independently of pass/fail status.
 
@@ -8,7 +8,7 @@ Source: [cancelQueuedAction](../../../policies/burnerloans/BurnerLoansPayoutConf
 
 ## Domains and notation
 
-Scenario scope: `BLCUCT-CANCEL`. Valid default: real same-Kernel Payout, stored controller=this timelock, cached ROLES initialized, Local active=true and Local enabled=true. Payout has IEnabler, but recovery ignores its paused state; Core lifecycle and selection do not block recovery from an active Payout; its local pause is allowed. Recovery previews reject an inactive Payout. Core must be idle for target mutations. Proposers fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap; distributor replacement is direct ADMIN-only and is not admitted by this queue or batches. Only EMERGENCY_ROLE cancels. Target/controller/Core health must not prevent cancellation. Standard action-state checks precede local/role checks.
+Scenario scope: `BLCUCT-CANCEL`. Valid default: real same-Kernel Payout, stored controller=this timelock, cached ROLES initialized, Local active=true and Local enabled=true. Payout has IEnabler, but recovery ignores its paused state; Core lifecycle and selection do not block recovery from an active Payout; its local pause is allowed. Recovery previews reject an inactive Payout. Core must be idle for target mutations. Proposers fuzz ADMIN-only, BURNER_LOANS_ADMIN-only and overlap; distributor replacement is direct ADMIN-only and is not admitted by this queue or batches. The recorded proposer can cancel after losing its queueing role. Target/controller/Core health must not prevent cancellation. Standard action-state checks precede local/role checks.
 
 Unchanged means authoritative state, balances, allowances and committed logs applicable to this function remain unchanged. Faults are isolated with all other prerequisites satisfied. Use [shared scenario guidance](../../../../.agents/skills/solidity-test-scenarios/SKILL.md); preserve independent lifecycle columns and guaranteed numeric boundary seeds.
 
@@ -19,7 +19,8 @@ After a successful cancellation, assert getQueuedAction retains its original pro
 | ID | Caller | Authority | Expected result | Effects | Test |
 | --- | --- | --- | --- | --- | --- |
 | BLCUCT-CANCEL-A01 | Fuzz EMERGENCY holder | Exclusive EMERGENCY; seed overlap with ADMIN | Success | Cancel flag; payload/guards deleted; owned keys released; ActionCancelled | Covered: [test][test_givenEmergencyCaller_whenCancelled_thenExactCleanup], [test][test_whenCancellationBoundarySeedsUsed], [test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup][test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup] |
-| BLCUCT-CANCEL-A02 | Fuzz outside every EMERGENCY holder | Seed ADMIN-only, BL admin-only, proposer-only and unrelated | ROLES_RequireRole(EMERGENCY_ROLE) | No cancellation/keys/events | Covered: [test][test_givenNoEmergencyRole_whenCancelled_reverts], [test][test_whenCancellationBoundarySeedsUsed] |
+| BLCUCT-CANCEL-A02 | Fuzz outside the recorded proposer and EMERGENCY holders | Seed another BL admin and an unrelated caller | `NotAuthorised()` | No cancellation/keys/events | Covered: [test][test_givenNoEmergencyRole_whenCancelled_reverts], [test][test_whenCancellationBoundarySeedsUsed] |
+| BLCUCT-CANCEL-A03 | Recorded proposer | Queueing role revoked | Success | Cancel flag; payload and guards cleared; owned keys released | Covered: [test][test_givenRevokedProposer_whenProposerCancels] |
 
 ## Lifecycle
 
@@ -67,4 +68,5 @@ EMERGENCY cancellation requires this timelock Kernel-active, regardless of local
 [test_whenUnknownIdCancelled_reverts]: ./cancelQueuedAction.t.sol#L132
 [test_givenInactiveDisabled_whenCancelled_reverts]: ./cancelQueuedAction.t.sol#L102
 
-[test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup]: cancelQueuedAction.t.sol#L224
+[test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup]: cancelQueuedAction.t.sol#L229
+[test_givenRevokedProposer_whenProposerCancels]: ./cancelQueuedAction.t.sol#L211
