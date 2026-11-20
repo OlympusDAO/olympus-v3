@@ -1,0 +1,10 @@
+{
+    "BurnerLoans.livePrice.borrow.first": "1572774",
+    "BurnerLoans.livePrice.depositCollateral.existingDebtPosition": "337362",
+    "BurnerLoans.livePrice.depositCollateral.newPosition": "562171",
+    "BurnerLoans.livePrice.extend.oneTerm": "1338388",
+    "BurnerLoans.livePrice.repay.partial": "232993",
+    "BurnerLoans.livePrice.seize.single": "1438040",
+    "BurnerLoans.livePrice.withdrawCollateral.allWithoutDebt": "286180",
+    "BurnerLoans.livePrice.withdrawCollateral.partialWithDebt": "1322361"
+}

@@ -6,7 +6,7 @@ The development tools are listed in `mise.toml`:
 
 - Node.js 24.22.1
 - pnpm 11.28.10
-- Foundry 1.8.1 (`forge`, `cast`, and `anvil`)
+- Foundry 1.9.0 (`forge`, `cast`, and `anvil`)
 - jq 1.8.2 for shell scripts and permission generation
 - Python 3.13.18 for the bridge supply helper
 - shfmt 3.14.1 for shell formatting
@@ -14,6 +14,10 @@ The development tools are listed in `mise.toml`:
 
 With [mise](https://mise.jdx.dev/), run `mise trust` and `mise install` from the repository root.
 Use `mise exec --` before a command when your shell does not activate mise.
+
+Run `pnpm skill:validate <skill-directory>` to validate a skill's frontmatter and scaffold
+placeholders. Run `pnpm test:skills` to test the Node.js validator. Its YAML parser is a pinned
+development dependency, so skill validation does not require Python packages.
 
 Run `pnpm install` to install all dependencies.
 Run `pnpm build` or `forge build` to run a build.

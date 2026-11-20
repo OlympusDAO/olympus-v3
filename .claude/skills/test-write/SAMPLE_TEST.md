@@ -2,10 +2,13 @@
 
 This is a reference example demonstrating the Olympus V3 testing standards.
 
+Under [licensing](../../../.agents/skills/licensing/SKILL.md), test contracts use `Unlicense`.
+Keep test interfaces in separate MIT-licensed files.
+
 ## Parent Test Contract: `SimpleVaultTest.sol`
 
 ```solidity
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
@@ -136,7 +139,7 @@ abstract contract SimpleVaultTest is Test {
 ## Function-Specific Test File: `deposit.t.sol`
 
 ```solidity
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.20;
 
 import {SimpleVaultTest} from "./SimpleVaultTest.sol";
@@ -304,6 +307,7 @@ contract DepositTest is SimpleVaultTest {
 
 | Standard | Example |
 |----------|---------|
+| Licensing | `Unlicense` for test contracts; `MIT` for separate interfaces |
 | One function per file | `deposit.t.sol` only tests `deposit()` |
 | Parent contract structure | `SimpleVaultTest` with sections for state, setup, helpers, assertions, modifiers |
 | `given*` modifiers | `givenVaultPaused`, `givenUserHasDeposit` |

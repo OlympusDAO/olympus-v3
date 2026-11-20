@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity >=0.8.24;
 
 /// @title Config Operator
 /// @notice Shared surface for contracts that delegate configuration changes to one operator.

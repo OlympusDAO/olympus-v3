@@ -1,0 +1,630 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.8.24;
+
+// Interfaces
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
+import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBackingOracleConfigTimelock} from "src/policies/interfaces/IBackingOracleConfigTimelock.sol";
+import {IOperator} from "src/policies/interfaces/IOperator.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
+import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
+import {IRevenueDistributorConfigTimelock} from "src/policies/interfaces/IRevenueDistributorConfigTimelock.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansConfigTimelock.sol";
+import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
+import {IBurnerLoansCoreBound} from "src/policies/interfaces/burnerloans/IBurnerLoansCoreBound.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
+import {IBurnerLoansInventoryConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansInventoryConfigTimelock.sol";
+import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
+import {IBurnerLoansPayoutConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansPayoutConfigTimelock.sol";
+import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
+import {IBurnerLoansRiskConfigTimelock} from "src/policies/interfaces/burnerloans/IBurnerLoansRiskConfigTimelock.sol";
+import {IBurnerLoansSeizerTask} from "src/policies/interfaces/burnerloans/IBurnerLoansSeizerTask.sol";
+import {IBurnerLoansYieldClaimerTask} from "src/policies/interfaces/burnerloans/IBurnerLoansYieldClaimerTask.sol";
+import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/IDepositManagerConfigTimelock.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+
+// Libraries
+import {toSubKeycode} from "src/Submodules.sol";
+import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
+import {ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, DEPOSIT_OPERATOR_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Contracts
+import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {RevenueDistributorTask} from "src/policies/RevenueDistributorTask.sol";
+import {Kernel, Module, Policy, toKeycode} from "src/Kernel.sol";
+import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerTask.sol";
+
+/// @notice Executes the reviewed Burner Loans launch using temporary governance authority.
+/// @dev Deployment, module installation and policy activation precede this contract's one-use launch.
+///      Governance populates the separately deployed backing oracle and admits missing USDe
+///      PRICE support before activation; existing OHM and USDS price configurations are retained.
+contract BurnerLoansActivator is IBurnerLoansActivator, IERC165 {
+    /// @dev OHM principal uses 9 decimals; both collateral assets and vault accounting use 18.
+    uint128 internal constant ASSET_DEBT_CAP = 50_000e9; // 50,000 OHM per market.
+    uint128 internal constant GLOBAL_DEBT_CAP = 100_000e9; // 100,000 OHM across all markets.
+    uint256 internal constant DEPOSIT_CAP = 10_000_000e18; // 10 million collateral tokens.
+    uint256 internal constant MINIMUM_DEPOSIT = 1e18; // One collateral token.
+    uint8 internal constant DEPOSIT_PERIOD = 1; // One month.
+    string internal constant OPERATOR_NAME = "brn";
+
+    uint48 internal constant PRICE_CACHE_MAX_AGE = 300; // 300 seconds (five minutes).
+    uint16 internal constant MAX_LTV_BPS = 8500; // 85% maximum loan-to-value.
+    uint16 internal constant BACKING_MULTIPLIER_BPS = 12500; // 125% of OHM backing.
+    uint16 internal constant KEEPER_REWARD_BPS = 100; // 1% of seized collateral.
+    uint16 internal constant FEE_KINK_BPS = 8000; // 80% utilization.
+    uint48 internal constant TERM_LENGTH = 30 days;
+    uint48 internal constant MATURITY_HORIZON = 90 days;
+    uint128 internal constant MAX_KEEPER_REWARD = 100e18; // 100 collateral tokens.
+    uint16 internal constant SEIZER_CHECK_LIMIT = 100; // Check at most 100 borrowers per run.
+    uint8 internal constant SEIZER_SEIZE_LIMIT = 25; // Seize at most 25 borrowers per run.
+    uint32 internal constant SEIZER_GAS_LIMIT = 10_000_000; // Ten million execution gas.
+    uint32 internal constant TASK_GAS_LIMIT = 1_000_000; // One million execution gas per task.
+    uint32 internal constant TASK_MINIMUM_GAS = 250_000; // Minimum gas before attempting a task.
+    uint32 internal constant TASK_GAS_RESERVE = 100_000; // Gas retained by each task wrapper.
+    uint256 internal constant SEIZER_TASK_INDEX = 3; // After custody and reserve preparation.
+    uint256 internal constant YIELD_TASK_INDEX = 4; // Collect yield after seizure.
+    uint256 internal constant DISTRIBUTOR_TASK_INDEX = 5; // Distribute revenue before Operator.
+    address internal constant USDE_USD_FEED = 0xa569d910839Ae8865Da8F8e70FfFb0cBA869F961;
+    address internal constant USDE_REDSTONE_FEED = 0xbC5FBcf58CeAEa19D523aBc76515b9AEFb5cfd58;
+    address internal constant USDE_API3_FEED = 0x22a35f4BDD167EAF7Cbf0C0Dc0C2001071714cc6;
+    uint48 internal constant USDE_API3_MAX_AGE = 25 hours; // 24-hour heartbeat plus one-hour grace.
+    uint48 internal constant USDE_FEED_MAX_AGE = 1 days; // 86,400 seconds.
+    uint256 internal constant USDE_EXPECTED_PRICE = 1e18; // $1 in 18-decimal PRICE units.
+    uint16 internal constant USDE_PRICE_TOLERANCE_BPS = 100; // 1% admission tolerance.
+    uint16 internal constant USDE_PRICE_DEVIATION_BPS = 100; // Exclude feeds more than 1% from the benchmark.
+    uint256 internal constant INITIAL_BACKING = 1199e16; // $11.99 per OHM, 18 decimals.
+
+    /// @inheritdoc IBurnerLoansActivator
+    address public immutable override timelock;
+    /// @inheritdoc IBurnerLoansActivator
+    bool public override isActivated;
+    address internal immutable _kernel;
+    address internal immutable _ohm;
+    address internal immutable _floan;
+    address internal immutable _depositManager;
+    address internal immutable _depositManagerTimelock;
+    address internal immutable _core;
+    address internal immutable _auth;
+    address internal immutable _config;
+    address internal immutable _inventory;
+    address internal immutable _payout;
+    address internal immutable _risk;
+    address internal immutable _collateral;
+    address internal immutable _debt;
+    address internal immutable _seize;
+    address internal immutable _lens;
+    address internal immutable _seizerTask;
+    address internal immutable _yieldClaimerTask;
+    address internal immutable _configTimelock;
+    address internal immutable _riskTimelock;
+    address internal immutable _payoutTimelock;
+    address internal immutable _inventoryTimelock;
+    address internal immutable _priceConfig;
+    address internal immutable _priceCache;
+    address internal immutable _revenueDistributor;
+    address internal immutable _revenueDistributorTimelock;
+    address internal immutable _revenueDistributorTask;
+    address internal immutable _heart;
+    bytes32 internal immutable _heartTasksHash;
+    address internal immutable _usds;
+    address internal immutable _usde;
+    address internal immutable _susds;
+    address internal immutable _susde;
+    address internal immutable _backingOracle;
+    address internal immutable _backingOracleTimelock;
+
+    /// @notice Binds the already-deployed graph without requiring it to be installed or active yet.
+    /// @dev Reverts for a zero timelock, missing code, inconsistent Kernel/Core identities or invalid vault bindings.
+    /// @param timelock_ Sole governance executor allowed to launch.
+    /// @param deployment_ Reviewed deployment graph and external asset/oracle dependencies.
+    constructor(address timelock_, Deployment memory deployment_) {
+        if (timelock_ == address(0)) revert BurnerLoansActivator_InvalidDeployment(timelock_);
+        timelock = timelock_;
+        _kernel = deployment_.kernel;
+        _ohm = deployment_.ohm;
+        _floan = deployment_.floan;
+        _depositManager = deployment_.depositManager;
+        _depositManagerTimelock = deployment_.depositManagerTimelock;
+        _core = deployment_.core;
+        _auth = deployment_.auth;
+        _config = deployment_.config;
+        _inventory = deployment_.inventory;
+        _payout = deployment_.payout;
+        _risk = deployment_.risk;
+        _collateral = deployment_.collateral;
+        _debt = deployment_.debt;
+        _seize = deployment_.seize;
+        _lens = deployment_.lens;
+        _seizerTask = deployment_.seizerTask;
+        _yieldClaimerTask = deployment_.yieldClaimerTask;
+        _configTimelock = deployment_.configTimelock;
+        _riskTimelock = deployment_.riskTimelock;
+        _payoutTimelock = deployment_.payoutTimelock;
+        _inventoryTimelock = deployment_.inventoryTimelock;
+        _priceConfig = deployment_.priceConfig;
+        _priceCache = deployment_.priceCache;
+        _revenueDistributor = deployment_.revenueDistributor;
+        _revenueDistributorTimelock = deployment_.revenueDistributorTimelock;
+        _revenueDistributorTask = deployment_.revenueDistributorTask;
+        _heart = deployment_.heart;
+        _usds = deployment_.usds;
+        _usde = deployment_.usde;
+        _susds = deployment_.susds;
+        _susde = deployment_.susde;
+        _backingOracle = deployment_.backingOracle;
+        _backingOracleTimelock = deployment_.backingOracleTimelock;
+        _validateBindings();
+        // Reviewed mainnet baseline at block 25,973,712. Zero selects execute().
+        address[] memory tasks = new address[](6);
+        tasks[0] = 0xEBDe552D851DD6Dfd3D360C596D3F4aF6e5F9678; // ConvertibleDepositFacility
+        tasks[1] = 0x986b99579BEc7B990331474b66CcDB94Fa2419F5; // ReserveMigrator
+        tasks[2] = 0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9; // ReserveWrapper
+        tasks[3] = 0x6417F206a0a6628Da136C0Faa39026d0134D2b52; // Operator
+        tasks[4] = 0x271e35a8555a62F6bA76508E85dfD76D580B0692; // YieldRepurchaseFacility
+        tasks[5] = 0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff; // EmissionManager
+        bytes4[] memory selectors = new bytes4[](6);
+        selectors[1] = IReserveMigrator.migrate.selector;
+        selectors[3] = IOperator.operate.selector;
+        selectors[4] = IYieldRepo.endEpoch.selector;
+        _heartTasksHash = keccak256(abi.encode(tasks, selectors));
+    }
+
+    /// @dev Enumerates policies used by on-chain launch checks.
+    function _policies() internal view returns (address[] memory targets) {
+        targets = new address[](22);
+        targets[0] = _depositManager;
+        targets[1] = _core;
+        targets[2] = _config;
+        targets[3] = _inventory;
+        targets[4] = _payout;
+        targets[5] = _risk;
+        targets[6] = _collateral;
+        targets[7] = _debt;
+        targets[8] = _seize;
+        targets[9] = _seizerTask;
+        targets[10] = _yieldClaimerTask;
+        targets[11] = _configTimelock;
+        targets[12] = _riskTimelock;
+        targets[13] = _payoutTimelock;
+        targets[14] = _inventoryTimelock;
+        targets[15] = _priceCache;
+        targets[16] = _revenueDistributor;
+        targets[17] = _revenueDistributorTask;
+        targets[18] = _revenueDistributorTimelock;
+        targets[19] = _backingOracle;
+        targets[20] = _backingOracleTimelock;
+        targets[21] = _depositManagerTimelock;
+    }
+
+    // Kernel activation alone does not initialize a policy. Require a fresh, disabled graph
+    // so this fixed launch cannot overwrite configuration from an earlier enablement.
+    // forge-lint: disable-next-item(calls-loop,require-revert-in-loop)
+    function _validatePrerequisites() private view {
+        // Recheck deployment identities at execution: the proposal may wait in governance.
+        _validateBindings();
+        Kernel installedKernel = Kernel(_kernel);
+        address[] memory targets = _policies();
+        // Every launch policy, including cache, distributor and tasks, must be Kernel-active
+        // but never enabled. This prevents overwriting an already initialized configuration.
+        for (uint256 i; i < targets.length; ++i) {
+            if (
+                !installedKernel.isPolicyActive(Policy(targets[i])) ||
+                IEnabler(targets[i]).isEnabled() ||
+                IEnablerV2(targets[i]).lastTransitionAt() != 0
+            ) revert BurnerLoansActivator_InvalidPrerequisite(targets[i]);
+        }
+        // Heart must already be operational so the launch can extend its existing task list.
+        address heart = _heart;
+        if (!installedKernel.isPolicyActive(Policy(heart)) || !IEnabler(heart).isEnabled())
+            revert BurnerLoansActivator_InvalidPrerequisite(heart);
+        // Require the complete reviewed task list before any launch mutation or insertion.
+        (bool success, bytes memory tasks) = heart.staticcall(
+            abi.encodeCall(IPeriodicTaskManager.getPeriodicTasks, ())
+        );
+        if (!success || keccak256(tasks) != _heartTasksHash)
+            revert BurnerLoansActivator_InvalidPrerequisite(heart);
+        // PRICE admission needs the existing configuration policy active and enabled even
+        // when USDe is already registered and no addAsset call would otherwise exercise it.
+        if (
+            !installedKernel.isPolicyActive(Policy(_priceConfig)) ||
+            !IEnabler(_priceConfig).isEnabled()
+        ) revert BurnerLoansActivator_InvalidPrerequisite(_priceConfig);
+        // The installed loan ledger must be the exact module fixed in Core's deployment.
+        if (
+            address(installedKernel.getModuleForKeycode(toKeycode("FLOAN"))) != _floan ||
+            IBurnerLoansCore(_core).floan() != _floan
+        ) revert BurnerLoansActivator_InvalidPrerequisite(_floan);
+        // Only an empty market/custody deployment is eligible for these fixed launch settings.
+        if (
+            IBurnerLoansCore(_core).getAssetCount() != 0 ||
+            IDepositManager(_depositManager).getConfiguredAssets().length != 0
+        ) revert BurnerLoansActivator_InvalidPrerequisite(_core);
+        // OHM and USDS retain their reviewed PRICE configurations; launch adds only missing USDe.
+        IPRICEv2 price = IPRICEv2(address(installedKernel.getModuleForKeycode(toKeycode("PRICE"))));
+        if (!price.isAssetApproved(_ohm) || !price.isAssetApproved(_usds))
+            revert BurnerLoansActivator_InvalidPrerequisite(address(price));
+    }
+
+    /// @inheritdoc IBurnerLoansActivator
+    /// @dev Reverts for any caller other than the bound timelock, replay or failed prerequisite/target call.
+    ///      The one-use flag and every target mutation roll back if any later launch operation fails.
+    function activate() external {
+        if (msg.sender != timelock) revert BurnerLoansActivator_NotTimelock(msg.sender);
+        if (isActivated) revert BurnerLoansActivator_AlreadyActivated();
+        // Set the replay guard before any external call. A later failure reverts this flag
+        // together with all configuration; the proposal then also rolls back the ADMIN grant.
+        isActivated = true;
+        _validatePrerequisites();
+        _validateRoles();
+        // PRICE admission precedes custody and market registration, which consume its support.
+        _addUsdeToPrice();
+        _enableAndBind();
+        // USDS supports synchronous underlying withdrawals; USDe must exit as sUSDe shares.
+        // Custody and lending use the same output mode for each market.
+        _configureAsset(_usds, _susds, false);
+        _configureAsset(_usde, _susde, true);
+        IBurnerLoansInventory(_inventory).setGlobalDebtCap(GLOBAL_DEBT_CAP);
+        // Add automation only after both markets and their funding capacity are ready.
+        _configureTasks();
+        // The OCG proposal revokes our temporary ADMIN after this call returns. No operational
+        // role is granted to this helper, and isActivated prevents it from launching again.
+        emit Activated(msg.sender);
+    }
+
+    // All settlement, custody and automation authority must be installed before any launch mutation.
+    // forge-lint: disable-next-item(calls-loop,require-revert-in-loop)
+    function _validateRoles() private view {
+        ROLESv1 roles = ROLESv1(address(Kernel(_kernel).getModuleForKeycode(toKeycode("ROLES"))));
+        address[8] memory holders = [
+            address(this),
+            _core,
+            _collateral,
+            _debt,
+            _seize,
+            _yieldClaimerTask,
+            _seizerTask,
+            _heart
+        ];
+        bytes32[8] memory required = [
+            ADMIN_ROLE,
+            DEPOSIT_OPERATOR_ROLE,
+            BL_COLLATERAL_POLICY_ROLE,
+            BL_DEBT_POLICY_ROLE,
+            BL_LIQUIDATION_POLICY_ROLE,
+            BL_YIELD_CLAIMER_ROLE,
+            BURNER_LOANS_SEIZER_ROLE,
+            HEART_ROLE
+        ];
+        for (uint256 i; i < holders.length; ++i) {
+            if (!roles.hasRole(holders[i], required[i]))
+                revert BurnerLoansActivator_InvalidPrerequisite(holders[i]);
+        }
+    }
+
+    function _addUsdeToPrice() private {
+        IPRICEv2 price = IPRICEv2(address(Kernel(_kernel).getModuleForKeycode(toKeycode("PRICE"))));
+        // Preserve a prior admission. Adding a new feed validates its live answer; neither
+        // path warms PriceCache, whose pairs refresh when lending operations need them.
+        if (price.isAssetApproved(_usde)) return;
+        address[3] memory sources = [USDE_USD_FEED, USDE_REDSTONE_FEED, USDE_API3_FEED];
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](3);
+        for (uint256 i; i < sources.length; ++i) {
+            feeds[i] = IPRICEv2.Component(
+                toSubKeycode("PRICE.CHAINLINK"), // All three providers expose the Chainlink ABI.
+                ChainlinkPriceFeeds.getOneFeedPrice.selector,
+                abi.encode(
+                    ChainlinkPriceFeeds.OneFeedParams(
+                        AggregatorV2V3Interface(sources[i]),
+                        i == 2 ? USDE_API3_MAX_AGE : USDE_FEED_MAX_AGE
+                    )
+                )
+            );
+            expectations[i] = IPriceConfigv2.PriceFeedExpectation(
+                USDE_EXPECTED_PRICE,
+                USDE_PRICE_TOLERANCE_BPS
+            );
+        }
+        // Match USDS: discard failed/outlying sources, then average at least two valid prices.
+        // Prices use 18 decimals; the deviation parameter is 100 basis points (1%).
+        IPRICEv2.Component memory strategy = IPRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
+            abi.encode(USDE_PRICE_DEVIATION_BPS, true)
+        );
+        IPriceConfigv2(_priceConfig).addAsset(
+            _usde, // Underlying collateral asset to price.
+            false, // Do not store a moving average.
+            false, // Do not use a moving average in price resolution.
+            0, // Moving-average duration: unused, in seconds.
+            0, // Last observation timestamp: no observation history is seeded.
+            new uint256[](0), // No historical observations.
+            strategy, // Strict average after excluding 1% deviations.
+            feeds, // Independent Chainlink, RedStone and API3 USDe/USD feeds.
+            expectations // Admission-time expected price and tolerance for that feed.
+        );
+    }
+
+    function _enableAndBind() private {
+        // Only governance ADMIN can choose the backing controller and initialize backing.
+        // Risk must see a populated, enabled oracle before any lending service is enabled.
+        IConfigOperator(_backingOracle).setConfigOperator(_backingOracleTimelock);
+        IEnabler(_backingOracle).enable(abi.encode(INITIAL_BACKING));
+        IEnabler(_backingOracleTimelock).enable("");
+        // Bind operational services and their independent delayed configuration authorities.
+        // Auth has no independent lifecycle or roles; selecting it installs Core authorization.
+        IBurnerLoansCore(_core).setAuth(_auth);
+        IConfigOperator(_core).setConfigOperator(_config);
+        IConfigOperator(_risk).setConfigOperator(_riskTimelock);
+        IConfigOperator(_inventory).setConfigOperator(_inventoryTimelock);
+        IConfigOperator(_payout).setConfigOperator(_payoutTimelock);
+        // Enable shared pricing and revenue routing before the lending services.
+        IEnabler(_priceCache).enable("");
+        IEnabler(_revenueDistributor).enable("");
+        IConfigOperator(_revenueDistributor).setConfigOperator(_revenueDistributorTimelock);
+        // Empty recipient routes and zero repurchase share allocate all receipts to Treasury.
+        IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
+        IRevenueDistributor(_revenueDistributor).setAssetRoutes(_usds, 0, routes);
+        IRevenueDistributor(_revenueDistributor).setAssetRoutes(_susds, 0, routes);
+        IRevenueDistributor(_revenueDistributor).setAssetRoutes(_usde, 0, routes);
+        IRevenueDistributor(_revenueDistributor).setAssetRoutes(_susde, 0, routes);
+        // Enable custody and services before Core, then its action policies.
+        IEnabler(_depositManager).enable("");
+        IConfigOperator(_depositManager).setConfigOperator(_depositManagerTimelock);
+        IEnabler(_inventory).enable("");
+        IEnabler(_payout).enable("");
+        IEnabler(_risk).enable("");
+        IBurnerLoansRisk(_risk).setPriceCache(_priceCache);
+        IBurnerLoansRisk(_risk).setPriceCacheMaxAge(PRICE_CACHE_MAX_AGE);
+        IBurnerLoansPayout(_payout).setRevenueDistributor(_revenueDistributor);
+        IBurnerLoansPayout(_payout).setSendFeesToDistributor(true);
+        IBurnerLoansPayout(_payout).setSendYieldToDistributor(true);
+        IBurnerLoansCore(_core).setInventory(_inventory);
+        IBurnerLoansCore(_core).setPayout(_payout);
+        IBurnerLoansCore(_core).setRisk(_risk);
+        // Core's enable hook checks its selected services; actions can be enabled afterwards.
+        IEnabler(_core).enable("");
+        IEnabler(_config).enable("");
+        IConfigOperator(_config).setConfigOperator(_configTimelock);
+        IEnabler(_collateral).enable("");
+        IEnabler(_debt).enable("");
+        IEnabler(_seize).enable("");
+        IDepositManager(_depositManager).setOperatorName(_core, OPERATOR_NAME);
+    }
+
+    // The receipt token ID returned by addAssetPeriod is not needed by the launch.
+    // forge-lint: disable-next-item(unused-return)
+    function _configureAsset(address asset_, address vault_, bool shares_) private {
+        // Register shared custody first, then its Core-specific receipt period, then the
+        // lending market. Config verifies this custody route when admitting the market
+        // and stores originationsEnabled = true for the newly registered asset.
+        IDepositManagerV1_1(_depositManager).addAsset(
+            IERC20(asset_), // Underlying token held on behalf of deposit operators.
+            IERC4626(vault_), // Vault that receives the underlying deposits.
+            DEPOSIT_CAP, // Aggregate credited-principal cap, in 18-decimal asset units.
+            MINIMUM_DEPOSIT, // Minimum deposit, in 18-decimal asset units.
+            shares_ // Require share withdrawals for sUSDe; allow underlying for sUSDS.
+        );
+        // Config admission below validates this registered period.
+        IDepositManager(_depositManager).addAssetPeriod(
+            IERC20(asset_), // Collateral asset for the receipt-token route.
+            DEPOSIT_PERIOD, // Deposit period, in months.
+            _core // Operator whose deposits and liabilities use this route.
+        );
+        IBurnerLoansConfig(_config).addAsset(
+            asset_, // Underlying collateral token for this lending market.
+            ASSET_DEBT_CAP, // Maximum market principal, in 9-decimal OHM units.
+            _riskConfig(), // LTV, backing, term and keeper-reward limits.
+            _feeConfig(), // Zero-fee utilization curve at launch.
+            shares_ // Match the withdrawal mode configured in custody above.
+        );
+    }
+
+    function _configureTasks() private {
+        // Arm each selected configuration timelock after its target has been enabled.
+        IEnabler(_depositManagerTimelock).enable("");
+        IEnabler(_configTimelock).enable("");
+        IEnabler(_riskTimelock).enable("");
+        IEnabler(_payoutTimelock).enable("");
+        IEnabler(_inventoryTimelock).enable("");
+        IEnabler(_revenueDistributorTimelock).enable("");
+        // Limit the keeper's scan to the two admitted markets and apply explicit gas budgets.
+        IBurnerLoansSeizerTask(_seizerTask).addAsset(_usds);
+        IBurnerLoansSeizerTask(_seizerTask).addAsset(_usde);
+        IBurnerLoansSeizerTask(_seizerTask).setScanLimits(SEIZER_CHECK_LIMIT, SEIZER_SEIZE_LIMIT);
+        IBurnerLoansSeizerTask(_seizerTask).setExecutionGasLimit(SEIZER_GAS_LIMIT);
+        IBurnerLoansYieldClaimerTask(_yieldClaimerTask).setExecutionGasLimit(TASK_GAS_LIMIT);
+        IBurnerLoansYieldClaimerTask(_yieldClaimerTask).setMinimumGasToAttempt(TASK_MINIMUM_GAS);
+        IBurnerLoansYieldClaimerTask(_yieldClaimerTask).setGasReserve(TASK_GAS_RESERVE);
+        IEnabler(_seizerTask).enable("");
+        IEnabler(_yieldClaimerTask).enable("");
+        RevenueDistributorTask(_revenueDistributorTask).setExecutionGasLimit(TASK_GAS_LIMIT);
+        RevenueDistributorTask(_revenueDistributorTask).setMinimumGasToAttempt(TASK_MINIMUM_GAS);
+        RevenueDistributorTask(_revenueDistributorTask).setGasReserve(TASK_GAS_RESERVE);
+        IEnabler(_revenueDistributorTask).enable("");
+        // New indexes 3/4/5: finish custody/reserve preparation, then seize defaults,
+        // collect yield and distribute revenue immediately before Operator operates.
+        // Mainnet baseline at block 25,973,712; existing selectors remain unchanged:
+        // Task                            Existing index -> Revised index
+        // ConvertibleDepositFacility                 0   -> 0
+        // ReserveMigrator                            1   -> 1
+        // ReserveWrapper                             2   -> 2
+        // BurnerLoansSeizerTask                     new  -> 3
+        // BurnerLoansYieldClaimerTask               new  -> 4
+        // RevenueDistributorTask                   new  -> 5
+        // Operator                                   3   -> 6
+        // YieldRepurchaseFacility                    4   -> 7
+        // EmissionManager                            5   -> 8
+        IPeriodicTaskManager(_heart).addPeriodicTaskAtIndex(
+            _seizerTask, // Task to insert into Heart.
+            bytes4(0), // Use its default execute() selector.
+            SEIZER_TASK_INDEX // Insert here, shifting subsequent tasks one position right.
+        );
+        IPeriodicTaskManager(_heart).addPeriodicTaskAtIndex(
+            _yieldClaimerTask, // Task to insert into Heart.
+            bytes4(0), // Use its default execute() selector.
+            YIELD_TASK_INDEX // Insert here, shifting subsequent tasks one position right.
+        );
+        IPeriodicTaskManager(_heart).addPeriodicTaskAtIndex(
+            _revenueDistributorTask, // Task to insert into Heart.
+            bytes4(0), // Use its default execute() selector.
+            DISTRIBUTOR_TASK_INDEX // Insert here, shifting subsequent tasks one position right.
+        );
+    }
+
+    // The fixed launch graph requires each policy to report the bound Kernel.
+    // forge-lint: disable-next-item(calls-loop)
+    function _validateBindings() private view {
+        _deployed(_kernel);
+        _deployed(_ohm);
+        _deployed(_floan);
+        _deployed(_lens);
+        _deployed(_auth);
+        _deployed(_heart);
+        _deployed(_usds);
+        _deployed(_usde);
+        _deployed(_susds);
+        _deployed(_susde);
+        _deployed(_priceConfig);
+        _bound(address(Policy(_priceConfig).kernel()) == _kernel, _priceConfig);
+        address[] memory targets = _policies();
+        for (uint256 i; i < targets.length; ++i) {
+            _deployed(targets[i]);
+            _bound(address(Policy(targets[i]).kernel()) == _kernel, targets[i]);
+        }
+        _bound(
+            address(IBackingOracleConfigTimelock(_backingOracleTimelock).backingOracle()) ==
+                _backingOracle,
+            _backingOracleTimelock
+        );
+        _bound(
+            address(IDepositManagerConfigTimelock(_depositManagerTimelock).depositManager()) ==
+                _depositManager,
+            _depositManagerTimelock
+        );
+        _bound(address(Policy(_heart).kernel()) == _kernel, _heart);
+        _bound(
+            RevenueDistributorTask(_revenueDistributorTask).distributor() == _revenueDistributor,
+            _revenueDistributorTask
+        );
+        _bound(
+            address(IRevenueDistributorConfigTimelock(_revenueDistributorTimelock).distributor()) ==
+                _revenueDistributor,
+            _revenueDistributorTimelock
+        );
+        _bound(address(Module(_floan).kernel()) == _kernel, _floan);
+        _bound(
+            IBurnerLoansCore(_core).ohm() == _ohm &&
+                IBurnerLoansCore(_core).depositManager() == _depositManager,
+            _core
+        );
+        _bound(IBurnerLoansInventory(_inventory).ohm() == _ohm, _inventory);
+        _bound(
+            IBurnerLoansRisk(_risk).ohm() == _ohm &&
+                IBurnerLoansRisk(_risk).backingOracle() == _backingOracle,
+            _risk
+        );
+        address[10] memory coreBound = [
+            _auth,
+            _config,
+            _inventory,
+            _payout,
+            _risk,
+            _collateral,
+            _debt,
+            _seize,
+            _lens,
+            _yieldClaimerTask
+        ];
+        for (uint256 i; i < coreBound.length; ++i) {
+            _bound(IBurnerLoansCoreBound(coreBound[i]).core() == _core, coreBound[i]);
+        }
+        _bound(
+            address(IBurnerLoansConfigTimelock(_configTimelock).burnerLoans()) == _config,
+            _configTimelock
+        );
+        _bound(
+            address(IBurnerLoansRiskConfigTimelock(_riskTimelock).risk()) == _risk,
+            _riskTimelock
+        );
+        _bound(
+            address(IBurnerLoansPayoutConfigTimelock(_payoutTimelock).payout()) == _payout,
+            _payoutTimelock
+        );
+        _bound(
+            address(IBurnerLoansInventoryConfigTimelock(_inventoryTimelock).inventory()) ==
+                _inventory,
+            _inventoryTimelock
+        );
+        _bound(address(IBurnerLoansSeizerTask(_seizerTask).seize()) == _seize, _seizerTask);
+        _bound(BurnerLoansSeizerTask(_seizerTask).lens() == _lens, _seizerTask);
+        _bound(
+            IERC4626(_susds).asset() == _usds &&
+                IERC4626(_susde).asset() == _usde &&
+                _usds != _usde,
+            _depositManager
+        );
+        _bound(
+            IERC20(_ohm).decimals() == 9 &&
+                IERC20(_usds).decimals() == 18 &&
+                IERC20(_usde).decimals() == 18,
+            _core
+        );
+    }
+
+    function _riskConfig() private pure returns (IBurnerLoansRisk.AssetRiskConfigInput memory) {
+        return
+            IBurnerLoansRisk.AssetRiskConfigInput(
+                MAX_LTV_BPS, // Maximum loan-to-value ratio, in basis points.
+                BACKING_MULTIPLIER_BPS, // Backing valuation multiplier, in basis points.
+                KEEPER_REWARD_BPS, // Seizure reward rate, in basis points.
+                TERM_LENGTH, // Initial loan term, in seconds.
+                MATURITY_HORIZON, // Maximum maturity horizon, in seconds.
+                MAX_KEEPER_REWARD // Reward cap, in 18-decimal collateral units.
+            );
+    }
+
+    function _feeConfig() private pure returns (IBurnerLoansRisk.AssetFeeConfig memory) {
+        return
+            IBurnerLoansRisk.AssetFeeConfig(
+                0, // Base fee at zero utilization, in basis points.
+                FEE_KINK_BPS, // Utilization kink, in basis points.
+                0, // Fee slope below the kink, in basis points.
+                0 // Fee slope above the kink, in basis points.
+            );
+    }
+
+    // Every address in the fixed policy graph must have code before its metadata is read.
+    // forge-lint: disable-next-item(require-revert-in-loop)
+    function _deployed(address target_) private view {
+        if (target_.code.length == 0) revert BurnerLoansActivator_InvalidDeployment(target_);
+    }
+
+    // A failed binding must abort validation, including checks of the fixed policy list.
+    // forge-lint: disable-next-item(require-revert-in-loop)
+    function _bound(bool valid_, address target_) private pure {
+        if (!valid_) revert BurnerLoansActivator_InvalidDeployment(target_);
+    }
+
+    /// @inheritdoc IERC165
+    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+        return
+            interfaceId_ == type(IBurnerLoansActivator).interfaceId ||
+            interfaceId_ == type(IERC165).interfaceId;
+    }
+}

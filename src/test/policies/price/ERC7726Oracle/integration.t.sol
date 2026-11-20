@@ -2,23 +2,27 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
 pragma solidity ^0.8.15;
 
-import {Test} from "@forge-std-1.16.2/Test.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
-
-import {Actions, Kernel} from "src/Kernel.sol";
+// Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
+import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
+
+// Libraries
 import {toSubKeycode} from "src/Submodules.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Contracts
+import {Test} from "@forge-std-1.16.2/Test.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
-import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 
 contract ERC7726OracleIntegrationTest is Test {
     uint8 internal constant PRICE_DECIMALS = 18;

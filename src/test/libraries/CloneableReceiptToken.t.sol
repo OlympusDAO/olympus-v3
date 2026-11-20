@@ -2,6 +2,7 @@
 /// forge-lint: disable-start(erc20-unchecked-transfer, unwrapped-modifier-logic)
 pragma solidity ^0.8.15;
 
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
@@ -494,6 +495,10 @@ contract CloneableReceiptTokenTest is Test {
             token.supportsInterface(type(IERC6909Wrappable).interfaceId),
             false,
             "IERC6909Wrappable mismatch"
+        );
+        assertFalse(
+            token.supportsInterface(type(IVersioned).interfaceId),
+            "Receipt token does not require version discovery"
         );
     }
 }

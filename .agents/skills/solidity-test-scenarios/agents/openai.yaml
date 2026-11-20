@@ -1,0 +1,4 @@
+interface:
+    display_name: "Solidity Test Scenarios"
+    short_description: "Plan function scenarios, tests, and coverage mappings"
+    default_prompt: "Use $solidity-test-scenarios for the requested planning, test implementation or coverage-review phase. Preserve approved expectations and update only artifacts in scope."

@@ -30,12 +30,13 @@ abstract contract PolicyAdminOptimized is IPolicyAdmin, RolesConsumer {
     }
 
     // Retained as a reusable role guard for inheriting policies.
-    // forge-lint: disable-next-item(modifier-used-only-once)
+    // forge-lint: disable-start(modifier-used-only-once)
     /// @notice Reverts if the caller does not have the admin role.
     modifier onlyAdminRole() {
         _requireRole(msg.sender, ADMIN_ROLE);
         _;
     }
+    // forge-lint: disable-end(modifier-used-only-once)
 
     // Retained as a reusable role guard for inheriting policies.
     // forge-lint: disable-start(modifier-used-only-once)

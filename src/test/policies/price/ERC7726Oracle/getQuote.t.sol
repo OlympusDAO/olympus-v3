@@ -3,12 +3,15 @@
 pragma solidity ^0.8.15;
 
 // Test
-import {Actions} from "src/Kernel.sol";
-import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+// Interfaces
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
+
+// Contracts
+import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
+import {Actions} from "src/Kernel.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 
 contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     // ========== TESTS ========== //
@@ -410,7 +413,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
     function test_givenCloneablePricesAreStale_reverts() public givenOracleIsEnabled {
         priceCache.cachePrice(address(collateralToken), address(loanToken));
-        vm.warp(block.timestamp + 1 hours + 1);
+        vm.warp(vm.getBlockTimestamp() + 1 hours + 1);
         uint256 latestPermissibleTimestamp = block.timestamp - uint256(1 hours);
 
         vm.expectRevert(

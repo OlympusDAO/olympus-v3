@@ -13,6 +13,10 @@ concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Match the profile used by the shared Foundry build cache.
+env:
+    FOUNDRY_PROFILE: deploy
+
 jobs:
     lint:
         runs-on: ubuntu-latest
