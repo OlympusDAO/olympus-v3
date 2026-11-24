@@ -297,13 +297,13 @@ contract BurnerLoansSeizerTask is
         // Keep lane fairness even if the entire body exhausts gas. Each asset needs its own turn:
         // a single global toggle would pin every asset to one lane when the asset count is even.
         uint256 scheduledAssets = _assets.length();
-        address scheduledAsset;
+        address scheduledAsset = address(0);
         if (scheduledAssets != 0) {
             scheduledAsset = _assets.at(nextAssetIndex % scheduledAssets);
         }
 
-        bool success;
-        bytes memory reason;
+        bool success = false;
+        bytes memory reason = new bytes(0);
         // Keep failure reporting outside the metered self-call. An out-of-gas scan or seizure rolls
         // back that inner call without consuming the reserve needed to rotate assets and return to Heart.
         uint256 availableGas = gasleft();

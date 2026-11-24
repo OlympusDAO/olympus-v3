@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// The domain helpers stay together even when they have a single caller.
+// forge-lint: disable-start(internal-function-used-once)
+
 pragma solidity >=0.8.24;
 
 // Interfaces

@@ -84,6 +84,8 @@ abstract contract BurnerLoansActivatorTest is Test {
         );
         vm.allowCheatcodes(deployerAddress);
         _deployer = BurnerLoansDeployHarness(deployerAddress);
+        // Load the checked-in deployment sequence used by this fixture.
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         string memory sequence = vm.readFile(
             "src/scripts/deploy/savedDeployments/burner_loans.json"
         );
@@ -183,6 +185,8 @@ abstract contract BurnerLoansActivatorTest is Test {
             "revenue_distributor.json"
         ];
         for (uint256 i; i < files.length; ++i) {
+            // Load the checked-in deployment sequence used by this fixture.
+            // forge-lint: disable-next-line(unsafe-cheatcode)
             string memory sequence = vm.readFile(
                 string.concat("src/scripts/deploy/savedDeployments/", files[i])
             );

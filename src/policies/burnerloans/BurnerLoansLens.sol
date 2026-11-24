@@ -66,7 +66,12 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
     ) external view override returns (IBurnerLoansCore.Position memory) {
         (, , IFLOANv1.Position memory p) = LoanPositions.forCore(_CORE, asset_, borrower_);
         return
-            IBurnerLoansCore.Position(p.collateral, p.principalDue, p.maturity, p.lastBorrowBlock);
+            IBurnerLoansCore.Position({
+                depositedCollateral: p.collateral,
+                debtOhm: p.principalDue,
+                maturity: p.maturity,
+                lastBorrowBlock: p.lastBorrowBlock
+            });
     }
 
     /// @inheritdoc IBurnerLoansLens
@@ -272,8 +277,12 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         // Clamp before allocating or adding: even uint256.max requests stay within this suffix.
         uint256 remaining = population - start_;
         if (count_ > remaining) count_ = remaining;
-        IBurnerLoansRisk evaluator;
-        IBurnerLoansRisk.PriceSnapshot memory snapshot;
+        IBurnerLoansRisk evaluator = IBurnerLoansRisk(address(0));
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot({
+            ohmUsdPrice: 0,
+            collateralUsdPrice: 0,
+            backingPerOhmUsd: 0
+        });
         if (selection_ != Selection.Expired) {
             evaluator = _risk();
             snapshot = evaluator.snapshot(asset_);
@@ -281,20 +290,11 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
         // count_ bounds inspected positions, while maxResults_ bounds selected borrowers. Healthy
         // positions still consume scan work and advance the cursor, but do not contribute to the reward.
         address[] memory candidates = new address[](count_ < maxResults_ ? count_ : maxResults_);
-        uint256 returned;
+        uint256 returned = 0;
         for (uint256 checked; checked < count_ && returned < maxResults_; ++checked) {
             address borrower = floan.getActiveBorrowerAt(market, scan.cursor++);
             IFLOANv1.Position memory p = LoanPositions.getOrEmpty(floan, market, borrower);
-            if (selection_ == Selection.Expired) {
-                // Maturity equality qualifies independently of health. Unexpired debt is unclassified.
-                // forge-lint: disable-next-line(block-timestamp)
-                if (p.principalDue == 0 || block.timestamp < p.maturity) continue;
-            } else {
-                // Maturity equality belongs exclusively to expiry discovery in the disjoint lanes.
-                // forge-lint: disable-next-line(block-timestamp)
-                if (selection_ == Selection.Unhealthy && block.timestamp >= p.maturity) continue;
-                if (!LoanPositions.isSeizable(evaluator, snapshot, market, p)) continue;
-            }
+            if (!_matchesSelection(selection_, evaluator, snapshot, market, p)) continue;
             candidates[returned++] = borrower;
             scan.debt += p.principalDue;
             scan.collateral += p.collateral;
@@ -307,6 +307,21 @@ contract BurnerLoansLens is ERC165, IBurnerLoansLens, IVersioned, IBurnerLoansCo
     }
 
     // forge-lint: disable-end(calls-loop)
+
+    /// @dev Maturity equality belongs to expiry discovery in the disjoint lanes.
+    function _matchesSelection(
+        Selection selection_,
+        IBurnerLoansRisk evaluator_,
+        IBurnerLoansRisk.PriceSnapshot memory prices_,
+        uint32 market_,
+        IFLOANv1.Position memory position_
+    ) private view returns (bool) {
+        // forge-lint: disable-next-line(block-timestamp)
+        bool expired = block.timestamp >= position_.maturity;
+        if (selection_ == Selection.Expired) return expired && position_.principalDue != 0;
+        if (selection_ == Selection.Unhealthy && expired) return false;
+        return LoanPositions.isSeizable(evaluator_, prices_, market_, position_);
+    }
 
     /// @inheritdoc ERC165
     function supportsInterface(bytes4 interfaceId_) public view override returns (bool) {

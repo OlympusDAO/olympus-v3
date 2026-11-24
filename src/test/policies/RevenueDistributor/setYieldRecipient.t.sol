@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
+import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
@@ -471,6 +472,46 @@ contract RevenueDistributorSetYieldRecipientTest is RevenueDistributorTest {
         vm.stopPrank();
 
         assertEq(distributor.yieldRecipient(), address(current), "underlying recipient changes");
+    }
+
+    // Scenarios: SYR-P12.
+    function test_givenSeparateShareRoute_whenCompatibleRecipientReturnsLargeVaultList() public {
+        MockYieldRepurchaseRecipient former = _newYieldRecipient();
+        former.setVaultConfig(address(token), address(token), true);
+        vm.startPrank(admin);
+        distributor.setYieldRecipient(address(former));
+        distributor.setAssetRoutes(address(token), 2_000, new IRevenueDistributor.AssetRoute[](0));
+        vm.stopPrank();
+
+        MockYieldRepurchaseRecipient candidate = _newYieldRecipient();
+        address vault = makeAddr("separate share vault");
+        // The offset and length use two 32-byte words. 2,046 addresses bring the payload to 65,536 bytes.
+        address[] memory vaults = new address[](2_046);
+        vaults[0] = vault;
+        for (uint256 i = 1; i < vaults.length; ++i) vaults[i] = address(uint160(i));
+        vm.mockCall(
+            address(candidate),
+            abi.encodeCall(IYieldRepurchaseRecipient.getVaults, ()),
+            abi.encode(vaults)
+        );
+        vm.mockCall(
+            address(candidate),
+            abi.encodeCall(IYieldRepurchaseRecipient.getVaultConfig, (vault)),
+            abi.encode(
+                IYieldRepurchaseRecipient.VaultConfig({
+                    vault: vault,
+                    shareToken: address(token),
+                    asset: makeAddr("underlying asset"),
+                    enabled: true
+                })
+            )
+        );
+
+        vm.expectEmit(address(distributor));
+        emit IRevenueDistributor.YieldRecipientSet(address(candidate));
+        vm.prank(admin);
+        distributor.setYieldRecipient(address(candidate));
+        assertEq(distributor.yieldRecipient(), address(candidate), "selects compatible recipient");
     }
 
     // given ordinary recipient

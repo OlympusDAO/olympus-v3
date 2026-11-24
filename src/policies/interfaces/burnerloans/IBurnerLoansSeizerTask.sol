@@ -138,10 +138,10 @@ interface IBurnerLoansSeizerTask {
     /// @notice Sets the maximum borrowers scanned and seized in one execution.
     /// @dev ADMIN or burner_loans_admin may configure either limit. Both must be nonzero,
     ///      and the seizure limit must not exceed the scan limit. The input types define their maxima.
-    /// @param maxBorrowersToCheck Maximum borrowers inspected by each discovery lane per execution.
+    /// @param checkLimit Maximum borrowers inspected by each discovery lane per execution.
     ///      An expiry-empty page permits a separate bounded unhealthy scan, possibly at another offset.
-    /// @param maxBorrowersToSeize Maximum seizable borrowers settled per execution.
-    function setScanLimits(uint16 maxBorrowersToCheck, uint8 maxBorrowersToSeize) external;
+    /// @param seizeLimit Maximum seizable borrowers settled per execution.
+    function setScanLimits(uint16 checkLimit, uint8 seizeLimit) external;
 
     /// @notice Sets the maximum gas forwarded to one complete task execution.
     ///

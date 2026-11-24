@@ -14,6 +14,7 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
+import {Address} from "@openzeppelin-5.7.0/utils/Address.sol";
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
@@ -493,9 +494,8 @@ contract DepositManagerConfigTimelock is
                         )
                     )
                 ) return keccak256(abi.encode(false, configOperator));
-                assembly ("memory-safe") {
-                    revert(add(reason, 32), mload(reason))
-                }
+                // Bubble nonempty errors and report FailedCall when the target returns no reason.
+                Address.verifyCallResult(false, reason);
             }
         }
         if (action_.selector == IDepositManager.addAssetPeriod.selector) {
@@ -625,7 +625,7 @@ contract DepositManagerConfigTimelock is
         _requireEnabled();
         _requirePoliciesActive();
         uint256 count = action_.actions.length;
-        bool requiresEnabled;
+        bool requiresEnabled = false;
         for (uint256 i; i < count; ++i) {
             if (action_.actions[i].selector != IDepositManagerV1_1.rescue.selector) {
                 requiresEnabled = true;

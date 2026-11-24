@@ -55,6 +55,9 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 ///      Core owns exact incoming receipt checks, transfers and canonical FLOAN settlement.
 ///      One guard covers settlement/configuration/token-moving paths. Local action pauses and
 ///      immutable Core binding are enforced by the action contracts, not queried again at settlement.
+// IBurnerLoansAuthTarget.kernel() returns address in Solidity. Policy's public Kernel state
+// variable supplies the same ABI but its typed getter cannot override the interface getter.
+// forge-lint: disable-next-line(missing-inheritance)
 contract BurnerLoansCore is
     Policy,
     ReEnablerGracePeriod,
@@ -170,14 +173,20 @@ contract BurnerLoansCore is
     function requestPermissions() external pure override returns (Permissions[] memory requests) {
         Keycode loan = toKeycode("FLOAN");
         requests = new Permissions[](8);
-        requests[0] = Permissions(loan, IFLOANv1.addCollateral.selector);
-        requests[1] = Permissions(loan, IFLOANv1.removeCollateral.selector);
-        requests[2] = Permissions(loan, IFLOANv1.increaseDebt.selector);
-        requests[3] = Permissions(loan, IFLOANv1.createPosition.selector);
-        requests[4] = Permissions(loan, IFLOANv1.decreaseDebt.selector);
-        requests[5] = Permissions(loan, IFLOANv1.extendMaturity.selector);
-        requests[6] = Permissions(loan, IFLOANv1.defaultPosition.selector);
-        requests[7] = Permissions(loan, IFLOANv1.setMarketManager.selector);
+        requests[0] = Permissions({keycode: loan, funcSelector: IFLOANv1.addCollateral.selector});
+        requests[1] = Permissions({
+            keycode: loan,
+            funcSelector: IFLOANv1.removeCollateral.selector
+        });
+        requests[2] = Permissions({keycode: loan, funcSelector: IFLOANv1.increaseDebt.selector});
+        requests[3] = Permissions({keycode: loan, funcSelector: IFLOANv1.createPosition.selector});
+        requests[4] = Permissions({keycode: loan, funcSelector: IFLOANv1.decreaseDebt.selector});
+        requests[5] = Permissions({keycode: loan, funcSelector: IFLOANv1.extendMaturity.selector});
+        requests[6] = Permissions({keycode: loan, funcSelector: IFLOANv1.defaultPosition.selector});
+        requests[7] = Permissions({
+            keycode: loan,
+            funcSelector: IFLOANv1.setMarketManager.selector
+        });
     }
 
     /// @notice Restricts the caller before executing the guarded operation.
@@ -186,25 +195,13 @@ contract BurnerLoansCore is
     ///      - The caller lacks this operation’s settlement role.
     /// @param role_ Governance role required for this operation.
     modifier onlyAction(bytes32 role_) {
+        _requireAction(role_);
+        _;
+    }
+
+    function _requireAction(bytes32 role_) private view {
         _requireOperational();
         _requireRole(msg.sender, role_);
-        _;
-    }
-
-    /// @notice Restricts the caller before executing the guarded operation.
-    /// @dev Reverts if:
-    ///      - The caller is not Core’s selected Config.
-    modifier onlyConfigurator() {
-        if (!_isConfigOperator(msg.sender)) revert ConfigOperator_Unauthorized(msg.sender);
-        _;
-    }
-
-    /// @notice Restricts the caller before executing the guarded operation.
-    /// @dev Reverts if:
-    ///      - The caller is neither selected Config nor ADMIN.
-    modifier onlyConfiguratorOrAdmin() {
-        if (!_isConfigOperator(msg.sender)) _onlyAdmin();
-        _;
     }
 
     /// @notice Requires governance ADMIN authority.
@@ -333,13 +330,13 @@ contract BurnerLoansCore is
         // This multiline operation needs a range; the suppression ends immediately after it.
         // forge-lint: disable-start(unused-return)
         (, uint256 raw) = _DEPOSIT_MANAGER.deposit(
-            IDepositManager.DepositParams(
-                IERC20(request_.asset),
-                LoanParameters._DEPOSIT_PERIOD,
-                address(this),
-                request_.amount,
-                false
-            )
+            IDepositManager.DepositParams({
+                asset: IERC20(request_.asset),
+                depositPeriod: LoanParameters._DEPOSIT_PERIOD,
+                depositor: address(this),
+                amount: request_.amount,
+                shouldWrap: false
+            })
         );
         // forge-lint: disable-end(unused-return)
         credit = SafeCast.toUint128(raw);
@@ -672,19 +669,18 @@ contract BurnerLoansCore is
             )
         );
         if (amount_ == 0) return (token, 0);
-        uint256 balance;
-        if (recipient_ == address(_PAYOUT)) balance = ERC20(token).balanceOf(address(_PAYOUT));
+        uint256 balance = recipient_ == address(_PAYOUT) ? ERC20(token).balanceOf(recipient_) : 0;
         (IERC20 returnedToken, uint256 returnedAmount) = IDepositManagerV1_1(
             address(_DEPOSIT_MANAGER)
         ).withdraw(
-                IDepositManager.WithdrawParams(
-                    IERC20(asset_),
-                    LoanParameters._DEPOSIT_PERIOD,
-                    address(this),
-                    recipient_,
-                    amount_,
-                    false
-                ),
+                IDepositManager.WithdrawParams({
+                    asset: IERC20(asset_),
+                    depositPeriod: LoanParameters._DEPOSIT_PERIOD,
+                    depositor: address(this),
+                    recipient: recipient_,
+                    amount: amount_,
+                    isWrapped: false
+                }),
                 shares_
             );
         if (address(returnedToken) != token) revert BurnerLoansCore_InvalidSettlement();
@@ -936,7 +932,8 @@ contract BurnerLoansCore is
         address asset_,
         uint32 market_,
         bool shares_
-    ) external override nonReentrant onlyActive givenEnabled onlyConfigurator {
+    ) external override nonReentrant onlyActive givenEnabled {
+        if (!_isConfigOperator(msg.sender)) revert ConfigOperator_Unauthorized(msg.sender);
         // Config creates/updates the market first. Its manager and Core facility identities are fixed there.
         // Registry entries are never removed: task cursors keep a stable index as new assets are added.
         if (!_MARKETS[asset_].registered) {
@@ -947,7 +944,7 @@ contract BurnerLoansCore is
                 revert BurnerLoansCore_MarketMismatch(asset_, _MARKETS[asset_].id, market_);
             if (_MARKETS[asset_].withdrawAsShares == shares_) return;
         }
-        _MARKETS[asset_] = MarketRecord(market_, shares_, true);
+        _MARKETS[asset_] = MarketRecord({id: market_, withdrawAsShares: shares_, registered: true});
     }
 
     /// @inheritdoc IBurnerLoansCore
@@ -1247,7 +1244,8 @@ contract BurnerLoansCore is
     function rescue(
         address token_,
         address destination_
-    ) external override nonReentrant onlyActive onlyConfiguratorOrAdmin {
+    ) external override nonReentrant onlyActive {
+        if (!_isConfigOperator(msg.sender)) _onlyAdmin();
         uint256 surplus = _rescueAmount(token_, destination_);
         if (surplus != 0) {
             ERC20(token_).safeTransfer(destination_, surplus);

@@ -172,8 +172,18 @@ abstract contract OperatorAuth is IOperatorAuth, IERC165 {
         // Grant deadlines use block time and include the exact deadline.
         // forge-lint: disable-next-line(block-timestamp)
         if (!_hasCurrentEpochs(grant) || block.timestamp > grant.deadline) {
-            Grant memory empty;
-            return empty;
+            return
+                Grant({
+                    account: address(0),
+                    operator: address(0),
+                    accountEpoch: 0,
+                    pairEpoch: 0,
+                    deadline: 0,
+                    multiple: false,
+                    actions: 0,
+                    context: bytes32(0),
+                    permissions: new bytes(0)
+                });
         }
     }
 
@@ -257,14 +267,14 @@ abstract contract OperatorAuth is IOperatorAuth, IERC165 {
     function _install(Grant calldata grant_) private {
         // Reuse authenticated context verbatim; no mutable hook or fresh context read follows.
         bytes32 key = _recordKey(grant_.account, grant_.operator, grant_.context);
-        StoredGrant memory record = StoredGrant(
-            grant_.accountEpoch,
-            grant_.pairEpoch,
-            grant_.deadline,
-            grant_.multiple,
-            grant_.actions,
-            grant_.permissions
-        );
+        StoredGrant memory record = StoredGrant({
+            accountEpoch: grant_.accountEpoch,
+            pairEpoch: grant_.pairEpoch,
+            deadline: grant_.deadline,
+            multiple: grant_.multiple,
+            actions: grant_.actions,
+            permissions: grant_.permissions
+        });
         pairEpochs[grant_.account][grant_.operator] = grant_.pairEpoch + 1;
         if (grant_.multiple) _grants[key] = record;
         else {
@@ -298,7 +308,14 @@ abstract contract OperatorAuth is IOperatorAuth, IERC165 {
         bytes32 context_
     ) private view returns (Grant memory grant) {
         bytes32 key = _recordKey(account_, operator_, context_);
-        StoredGrant memory record;
+        StoredGrant memory record = StoredGrant({
+            accountEpoch: 0,
+            pairEpoch: 0,
+            deadline: 0,
+            multiple: false,
+            actions: 0,
+            permissions: new bytes(0)
+        });
         bytes32 slot = keccak256(abi.encode(_TRANSIENT_NAMESPACE, key));
         uint256 length = slot.asUint256().tload();
         if (length != 0) {
@@ -316,17 +333,17 @@ abstract contract OperatorAuth is IOperatorAuth, IERC165 {
             record.pairEpoch == type(uint256).max ||
             record.pairEpoch + 1 != pairEpochs[account_][operator_]
         ) record = _grants[key];
-        grant = Grant(
-            account_,
-            operator_,
-            record.accountEpoch,
-            record.pairEpoch,
-            record.deadline,
-            record.multiple,
-            record.actions,
-            context_,
-            record.permissions
-        );
+        grant = Grant({
+            account: account_,
+            operator: operator_,
+            accountEpoch: record.accountEpoch,
+            pairEpoch: record.pairEpoch,
+            deadline: record.deadline,
+            multiple: record.multiple,
+            actions: record.actions,
+            context: context_,
+            permissions: record.permissions
+        });
     }
 
     function _recordKey(

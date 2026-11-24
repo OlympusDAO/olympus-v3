@@ -422,12 +422,12 @@ interface IBurnerLoansCore {
 
     /// @notice OCG ADMIN installs an operational Risk with matching OHM, Kernel and immutable Core binding.
     /// @dev Installation preserves the replacement's configuration authority and existing positions.
-    /// @param risk Replacement economic and pricing contract bound to this Core.
-    function setRisk(address risk) external;
+    /// @param newRisk Replacement economic and pricing contract bound to this Core.
+    function setRisk(address newRisk) external;
 
     /// @notice OCG ADMIN binds operational Inventory with matching canonical debt and migrated aggregate claims.
-    /// @param inventory Replacement funding contract bound to this Core and its OHM token.
-    function setInventory(address inventory) external;
+    /// @param newInventory Replacement funding contract bound to this Core and its OHM token.
+    function setInventory(address newInventory) external;
 
     /// @notice Config registers a created market or updates its custody output mode.
     /// @param asset Underlying collateral token for the canonical market.
@@ -448,12 +448,12 @@ interface IBurnerLoansCore {
     ) external returns (address token, uint256 output);
 
     /// @notice Selected Payout receiving new fees and seizure proceeds directly.
-    /// @return payout Custodian receiving new fees and liquidation proceeds.
-    function payout() external view returns (address payout);
+    /// @return custodian Custodian receiving new fees and liquidation proceeds.
+    function payout() external view returns (address custodian);
 
     /// @notice OCG ADMIN selects a Core-bound Payout; existing obligations remain on their old Payout.
-    /// @param payout Replacement payout custodian bound to this Core.
-    function setPayout(address payout) external;
+    /// @param newPayout Replacement payout custodian bound to this Core.
+    function setPayout(address newPayout) external;
 
     /// @notice Requires Core's reentrancy guard to be idle before an external component mutates shared custody.
     function requireNotReentrant() external view;

@@ -86,8 +86,12 @@ contract BurnerLoansConfig is
     ///
     /// @dev The Core settlement guard is checked before local lifecycle and authorization.
     modifier whenCoreNotSettling() {
-        _CORE.requireNotReentrant();
+        _requireCoreNotSettling();
         _;
+    }
+
+    function _requireCoreNotSettling() private view {
+        _CORE.requireNotReentrant();
     }
 
     /// @inheritdoc Policy
@@ -117,12 +121,27 @@ contract BurnerLoansConfig is
     function requestPermissions() external pure override returns (Permissions[] memory requests) {
         Keycode loan = toKeycode("FLOAN");
         requests = new Permissions[](6);
-        requests[0] = Permissions(loan, IFLOANv1.createMarket.selector);
-        requests[1] = Permissions(loan, IFLOANv1.setMarketOriginationsEnabled.selector);
-        requests[2] = Permissions(loan, IFLOANv1.setMarketPrincipalCap.selector);
-        requests[3] = Permissions(loan, IFLOANv1.setMarketRiskConfig.selector);
-        requests[4] = Permissions(loan, IFLOANv1.setMarketBaseFee.selector);
-        requests[5] = Permissions(loan, IFLOANv1.setMarketConfigData.selector);
+        requests[0] = Permissions({keycode: loan, funcSelector: IFLOANv1.createMarket.selector});
+        requests[1] = Permissions({
+            keycode: loan,
+            funcSelector: IFLOANv1.setMarketOriginationsEnabled.selector
+        });
+        requests[2] = Permissions({
+            keycode: loan,
+            funcSelector: IFLOANv1.setMarketPrincipalCap.selector
+        });
+        requests[3] = Permissions({
+            keycode: loan,
+            funcSelector: IFLOANv1.setMarketRiskConfig.selector
+        });
+        requests[4] = Permissions({
+            keycode: loan,
+            funcSelector: IFLOANv1.setMarketBaseFee.selector
+        });
+        requests[5] = Permissions({
+            keycode: loan,
+            funcSelector: IFLOANv1.setMarketConfigData.selector
+        });
     }
 
     // ========== VIEW FUNCTIONS ========== //
@@ -569,28 +588,28 @@ contract BurnerLoansConfig is
     ) private {
         // Standard risk/fee fields live in FLOAN's Market; Burner-specific fields use the tagged
         // data payload. Readers reconstruct one configuration through LoanMarket rather than a cache.
-        LoanMarket.Data memory data = LoanMarket.Data(
-            cfg_.withdrawAsShares,
-            cfg_.maxKeeperReward,
-            cfg_.backingMultiplierBps,
-            cfg_.keeperRewardBps,
-            fee_.kinkBps,
-            fee_.preKinkSlopeBps,
-            fee_.postKinkSlopeBps
-        );
+        LoanMarket.Data memory data = LoanMarket.Data({
+            withdrawAsShares: cfg_.withdrawAsShares,
+            maxKeeperReward: cfg_.maxKeeperReward,
+            backingMultiplierBps: cfg_.backingMultiplierBps,
+            keeperRewardBps: cfg_.keeperRewardBps,
+            kinkBps: fee_.kinkBps,
+            preKinkSlopeBps: fee_.preKinkSlopeBps,
+            postKinkSlopeBps: fee_.postKinkSlopeBps
+        });
         uint32 id = _FLOAN.createMarket(
-            IFLOANv1.MarketInput(
-                asset_,
-                address(_OHM),
-                address(this),
-                address(_CORE),
-                LoanMarket.CONFIG_ID,
-                cfg_.debtCap,
-                cfg_.termLength,
-                cfg_.maxMaturityHorizon,
-                cfg_.maxLtvBps,
-                fee_.baseFeeBps
-            ),
+            IFLOANv1.MarketInput({
+                collateralToken: asset_,
+                debtToken: address(_OHM),
+                manager: address(this),
+                facility: address(_CORE),
+                configId: LoanMarket.CONFIG_ID,
+                principalCap: cfg_.debtCap,
+                termLength: cfg_.termLength,
+                maxMaturityHorizon: cfg_.maxMaturityHorizon,
+                maxLtvBps: cfg_.maxLtvBps,
+                baseFeeBps: fee_.baseFeeBps
+            }),
             abi.encode(data)
         );
         // Registration makes the new market discoverable to actions and tasks. If Core rejects it,

@@ -149,6 +149,8 @@ abstract contract BurnerLoansForkTest is ProposalTest {
         );
         vm.allowCheatcodes(dispatcher);
         _deployer = BurnerLoansDeployHarness(dispatcher);
+        // Load the checked-in deployment sequence used by this fixture.
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         string memory sequence = vm.readFile(
             "src/scripts/deploy/savedDeployments/burner_loans.json"
         );
@@ -156,6 +158,8 @@ abstract contract BurnerLoansForkTest is ProposalTest {
         _deployer.setDependency("olympus.Kernel", address(_kernel));
         _deployer.setDependency("olympus.legacy.OHM", addresses.getAddress("olympus-legacy-ohm"));
         // Deploy and prepare the shared oracle through its separate production sequence.
+        // Load the checked-in deployment sequence used by this fixture.
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         string memory oracleSequence = vm.readFile(
             "src/scripts/deploy/savedDeployments/backing_oracle.json"
         );
@@ -223,6 +227,8 @@ abstract contract BurnerLoansForkTest is ProposalTest {
             "revenue_distributor.json"
         ];
         for (uint256 i; i < files.length; ++i) {
+            // Load the checked-in deployment sequence used by this fixture.
+            // forge-lint: disable-next-line(unsafe-cheatcode)
             string memory sequence = vm.readFile(
                 string.concat("src/scripts/deploy/savedDeployments/", files[i])
             );

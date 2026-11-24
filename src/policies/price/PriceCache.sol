@@ -11,6 +11,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {PRICE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Policy, Keycode, toKeycode, Permissions, Module} from "src/Kernel.sol";
@@ -30,9 +31,6 @@ contract PriceCache is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IPriceCach
 
     /// @notice Keycode used to resolve the authorization module from the Kernel.
     bytes5 internal constant _ROLES_KEYCODE = "ROLES";
-
-    /// @notice Role permitted to manage non-contract asset metadata alongside admin.
-    bytes32 internal constant _PRICE_ADMIN_ROLE = "price_admin";
 
     /// @notice Maximum asset-symbol length in bytes.
     uint256 internal constant _MAX_SYMBOL_LENGTH = 32;
@@ -151,7 +149,7 @@ contract PriceCache is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IPriceCach
     /// @dev Reverts if:
     ///      - The caller lacks both roles (NotAuthorised).
     function _onlyPriceOrAdminRole() internal view {
-        if (!ROLES.hasRole(msg.sender, _PRICE_ADMIN_ROLE) && !_isAdmin(msg.sender)) {
+        if (!ROLES.hasRole(msg.sender, PRICE_ADMIN_ROLE) && !_isAdmin(msg.sender)) {
             revert NotAuthorised();
         }
     }

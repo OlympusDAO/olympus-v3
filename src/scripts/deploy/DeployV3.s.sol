@@ -2034,8 +2034,6 @@ contract DeployV3 is WithEnvironment {
         return (address(burnerLoansAuth), "olympus.periphery");
     }
 
-    // TODO: Add the replacement Burner Loans bundler.
-
     /// @notice Deploys the one-use launch helper after every immutable dependency exists.
     function deployBurnerLoansActivator() public returns (address, string memory) {
         // Dependencies

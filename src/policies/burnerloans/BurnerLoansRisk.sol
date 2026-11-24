@@ -210,7 +210,7 @@ contract BurnerLoansRisk is
     ) private view returns (IBurnerLoansRisk.PriceSnapshot memory prices) {
         IPRICEv2 price = _PRICE;
         address cache = priceCache;
-        bool cached;
+        bool cached = false;
         if (_cacheOperational(cache)) {
             IPriceCache.CachedPrice memory pair = IPriceCache(cache).getCachedPrice(_OHM, asset_);
             if (
@@ -239,7 +239,7 @@ contract BurnerLoansRisk is
     /// @dev Shares the timestamp behavior and PRICE configuration requirements documented in snapshot().
     function refreshSnapshot(
         address asset_
-    ) external onlyOperational returns (IBurnerLoansRisk.PriceSnapshot memory snapshot) {
+    ) external onlyOperational returns (IBurnerLoansRisk.PriceSnapshot memory prices) {
         IPRICEv2 price = _PRICE;
         address cache = priceCache;
         // Execution may refresh the shared pair; snapshot() is the read-only alternative. Both paths
@@ -250,12 +250,12 @@ contract BurnerLoansRisk is
                 asset_,
                 priceCacheMaxAge
             );
-            (snapshot.ohmUsdPrice, snapshot.collateralUsdPrice) = _cachedPrices(pair);
+            (prices.ohmUsdPrice, prices.collateralUsdPrice) = _cachedPrices(pair);
         } else {
-            snapshot.ohmUsdPrice = _freshPrice(price, _OHM);
-            snapshot.collateralUsdPrice = _freshPrice(price, asset_);
+            prices.ohmUsdPrice = _freshPrice(price, _OHM);
+            prices.collateralUsdPrice = _freshPrice(price, asset_);
         }
-        return _completeSnapshot(price, snapshot);
+        return _completeSnapshot(price, prices);
     }
 
     /// @notice Adds a scaled canonical backing value to the captured price pair.

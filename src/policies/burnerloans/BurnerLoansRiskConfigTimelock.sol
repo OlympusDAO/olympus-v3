@@ -41,6 +41,8 @@ contract BurnerLoansRiskConfigTimelock is
 {
     using SafeCall for address;
 
+    uint16 private constant _MAX_REVERT_DATA_BYTES = 256;
+
     /// @notice Length of one ABI-encoded address, boolean or integer, in bytes.
     uint256 private constant _ABI_WORD_BYTES = 32;
     /// @notice Copies one word plus one byte to reject oversized status responses.
@@ -318,11 +320,11 @@ contract BurnerLoansRiskConfigTimelock is
         (bool ok, bytes memory data) = action_.target.safeCall(
             gasleft(),
             0,
-            256,
+            _MAX_REVERT_DATA_BYTES,
             abi.encodePacked(action_.selector, action_.payload)
         );
         if (!ok) {
-            if (data.length == 0 || data.length == 256)
+            if (data.length == 0 || data.length == _MAX_REVERT_DATA_BYTES)
                 revert BurnerLoansRiskTimelock_SubActionCallFailed(action_.selector);
             Address.verifyCallResult(ok, data);
         }

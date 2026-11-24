@@ -56,7 +56,11 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
         _requirePayoutOperational();
         bool allExpired = _validateBorrowersAndDebt(asset_, borrowers_);
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansRisk.PriceSnapshot memory snapshot;
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot({
+            ohmUsdPrice: 0,
+            collateralUsdPrice: 0,
+            backingPerOhmUsd: 0
+        });
         if (_requiresSnapshot(msg.sender, allExpired)) {
             try evaluator.refreshSnapshot(asset_) returns (
                 IBurnerLoansRisk.PriceSnapshot memory fresh
@@ -164,7 +168,11 @@ contract BurnerLoansSeize is BaseBurnerLoansAction, IBurnerLoansSeize {
         );
         bool allExpired = _validateBorrowersAndDebt(asset_, borrowers_);
         IBurnerLoansRisk evaluator = IBurnerLoansRisk(_CORE.risk());
-        IBurnerLoansRisk.PriceSnapshot memory snapshot;
+        IBurnerLoansRisk.PriceSnapshot memory snapshot = IBurnerLoansRisk.PriceSnapshot({
+            ohmUsdPrice: 0,
+            collateralUsdPrice: 0,
+            backingPerOhmUsd: 0
+        });
         if (_requiresSnapshot(actor_, allExpired)) snapshot = evaluator.snapshot(asset_);
         IFLOANv1 floan = IFLOANv1(_CORE.floan());
         uint32 market = _CORE.marketId(asset_);

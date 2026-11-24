@@ -561,7 +561,7 @@ contract BurnerLoansPayout is
         ];
         // Allocate an upper bound, then copy only populated entries into the returned array.
         address[] memory recipients = new address[](keepers.length + referrers.length + 2);
-        uint256 length;
+        uint256 length = 0;
 
         // Keeper membership is already unique within its own set.
         for (uint256 i; i < keepers.length; ++i) recipients[length++] = keepers[i];

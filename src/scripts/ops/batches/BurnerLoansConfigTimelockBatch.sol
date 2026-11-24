@@ -91,14 +91,20 @@ contract BurnerLoansConfigTimelockBatch is TimelockBatchScript {
                 IBurnerLoansConfigTimelock.queueSetAssetFeeConfig,
                 (
                     _readBatchArgAddress("queueSetAssetFeeConfig", "asset"),
-                    IBurnerLoansRisk.AssetFeeConfig(
-                        _readBatchArgUint256("queueSetAssetFeeConfig", "baseFeeBps").toUint16(),
-                        _readBatchArgUint256("queueSetAssetFeeConfig", "kinkBps").toUint16(),
-                        _readBatchArgUint256("queueSetAssetFeeConfig", "preKinkSlopeBps")
+                    IBurnerLoansRisk.AssetFeeConfig({
+                        baseFeeBps: _readBatchArgUint256("queueSetAssetFeeConfig", "baseFeeBps")
                             .toUint16(),
-                        _readBatchArgUint256("queueSetAssetFeeConfig", "postKinkSlopeBps")
-                            .toUint16()
-                    )
+                        kinkBps: _readBatchArgUint256("queueSetAssetFeeConfig", "kinkBps")
+                            .toUint16(),
+                        preKinkSlopeBps: _readBatchArgUint256(
+                            "queueSetAssetFeeConfig",
+                            "preKinkSlopeBps"
+                        ).toUint16(),
+                        postKinkSlopeBps: _readBatchArgUint256(
+                            "queueSetAssetFeeConfig",
+                            "postKinkSlopeBps"
+                        ).toUint16()
+                    })
                 )
             )
         );
@@ -118,18 +124,28 @@ contract BurnerLoansConfigTimelockBatch is TimelockBatchScript {
                 IBurnerLoansConfigTimelock.queueSetAssetRiskConfig,
                 (
                     _readBatchArgAddress("queueSetAssetRiskConfig", "asset"),
-                    IBurnerLoansRisk.AssetRiskConfigInput(
-                        _readBatchArgUint256("queueSetAssetRiskConfig", "maxLtvBps").toUint16(),
-                        _readBatchArgUint256("queueSetAssetRiskConfig", "backingMultiplierBps")
+                    IBurnerLoansRisk.AssetRiskConfigInput({
+                        maxLtvBps: _readBatchArgUint256("queueSetAssetRiskConfig", "maxLtvBps")
                             .toUint16(),
-                        _readBatchArgUint256("queueSetAssetRiskConfig", "keeperRewardBps")
-                            .toUint16(),
-                        _readBatchArgUint256("queueSetAssetRiskConfig", "termLength").toUint48(),
-                        _readBatchArgUint256("queueSetAssetRiskConfig", "maxMaturityHorizon")
+                        backingMultiplierBps: _readBatchArgUint256(
+                            "queueSetAssetRiskConfig",
+                            "backingMultiplierBps"
+                        ).toUint16(),
+                        keeperRewardBps: _readBatchArgUint256(
+                            "queueSetAssetRiskConfig",
+                            "keeperRewardBps"
+                        ).toUint16(),
+                        termLength: _readBatchArgUint256("queueSetAssetRiskConfig", "termLength")
                             .toUint48(),
-                        _readBatchArgUint256("queueSetAssetRiskConfig", "maxKeeperReward")
-                            .toUint128()
-                    )
+                        maxMaturityHorizon: _readBatchArgUint256(
+                            "queueSetAssetRiskConfig",
+                            "maxMaturityHorizon"
+                        ).toUint48(),
+                        maxKeeperReward: _readBatchArgUint256(
+                            "queueSetAssetRiskConfig",
+                            "maxKeeperReward"
+                        ).toUint128()
+                    })
                 )
             )
         );

@@ -159,6 +159,8 @@ abstract contract Policy is KernelAdapter {
 /// @notice Main contract that acts as a central component registry for the protocol.
 /// @dev    The kernel manages modules and policies. The kernel is mutated via predefined Actions,
 /// @dev    which are input from any address assigned as the executor. The executor can be changed as needed.
+// IKernel exposes the same ABI using addresses. Keep the deployed Kernel's typed implementation.
+// forge-lint: disable-next-line(missing-inheritance)
 contract Kernel {
     // =========  EVENTS ========= //
 

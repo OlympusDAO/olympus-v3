@@ -51,6 +51,8 @@ contract RevenueDistributor is
 
     /// @dev Basis-point denominator for each distribution route.
     uint256 internal constant _BPS = 10_000;
+    uint256 private constant _ABI_WORD_BYTES = 32;
+    uint256 private constant _VAULT_LIST_HEADER_BYTES = 2 * _ABI_WORD_BYTES;
     /// @dev VaultConfig returns four ABI words: vault, share token, underlying asset, and enabled.
     uint16 internal constant _VAULT_CONFIG_RETURN_SIZE = 128;
     /// @dev Copy one extra byte so oversized responses fail the exact-length check.
@@ -267,8 +269,21 @@ contract RevenueDistributor is
             revert RevenueDistributor_InvalidYieldRecipient(recipient_);
         }
         if (recipient_ != address(0)) _requireYieldRecipientPolicy(recipient_);
-        // Future repurchase shares must be deliverable under every active route. A nonzero
-        // recipient also cannot overlap a configured recipient on any active route.
+        _validateYieldRecipientForActiveRoutes(recipient_);
+        // Retired routes are gone, but their unpaid repurchase shares follow the current yield
+        // recipient. Validate those assets before redirecting an existing obligation.
+        if (recipient_ == address(0)) return;
+        uint256 pendingCount = _pendingAssets.length();
+        for (uint256 i; i < pendingCount; ++i) {
+            address asset_ = _pendingAssets.at(i);
+            if (_pendingYieldRecipient[asset_] != 0) {
+                _requireYieldRecipientForAsset(recipient_, asset_);
+            }
+        }
+    }
+
+    /// @dev Future repurchase shares need a valid destination distinct from configured recipients.
+    function _validateYieldRecipientForActiveRoutes(address recipient_) private view {
         uint256 count = _activeAssets.length();
         for (uint256 i; i < count; ++i) {
             address asset_ = _activeAssets.at(i);
@@ -284,17 +299,6 @@ contract RevenueDistributor is
                         // forge-lint: disable-next-line(require-revert-in-loop)
                         revert RevenueDistributor_DuplicateRecipient(recipient_);
                     }
-                }
-            }
-        }
-        // Retired routes are gone, but their unpaid repurchase shares follow the current yield
-        // recipient. Validate those assets before redirecting an existing obligation.
-        if (recipient_ != address(0)) {
-            uint256 pendingCount = _pendingAssets.length();
-            for (uint256 i; i < pendingCount; ++i) {
-                address asset_ = _pendingAssets.at(i);
-                if (_pendingYieldRecipient[asset_] != 0) {
-                    _requireYieldRecipientForAsset(recipient_, asset_);
                 }
             }
         }
@@ -324,7 +328,7 @@ contract RevenueDistributor is
 
         StoredRoute storage route = _routes[asset_];
         if (newReceipts != 0) {
-            uint256 newAllocated;
+            uint256 newAllocated = 0;
             // Reserve every share before attempting transfers. A failed recipient therefore stays
             // owed, and later distribute calls cannot allocate its tokens a second time.
             if (route.repurchaseBps != 0) {
@@ -403,7 +407,7 @@ contract RevenueDistributor is
         // Yield and Treasury destinations can change without touching those liabilities, so add
         // them at read time only when owed and absent from the stored set.
         address[] memory found = new address[](configured.length + 2);
-        uint256 length;
+        uint256 length = 0;
         for (uint256 i; i < configured.length; ++i) {
             found[length++] = configured[i];
         }
@@ -482,7 +486,7 @@ contract RevenueDistributor is
         // Validates that amount_ is positive and fits the recipient's combined pending payout.
         _previewRescuePendingPayout(asset_, recipient_, destination_, amount_);
         uint256 assetRoute = Math.min(amount_, _pendingConfiguredDistributions[asset_][recipient_]);
-        uint256 repurchase;
+        uint256 repurchase = 0;
         if (recipient_ == _yieldPayoutRecipient()) {
             repurchase = Math.min(amount_ - assetRoute, _pendingYieldRecipient[asset_]);
         }
@@ -654,13 +658,20 @@ contract RevenueDistributor is
         // asset. Try the direct share match first, then inspect registered vaults for an
         // enabled share or underlying match. A failed or malformed lookup cannot establish compatibility.
         if (_yieldVaultMatches(recipient_, asset_, asset_)) return;
-        // Decode words first: typed try/catch does not catch malformed return-data decoding.
+        // The recipient interface permits any registry size. Read the complete list and validate
+        // the ABI before decoding it because Solidity's typed try/catch cannot catch decode errors.
+        // forge-lint: disable-start(low-level-calls)
         (bool success, bytes memory data) = recipient_.staticcall(
             abi.encodeCall(IYieldRepurchaseRecipient.getVaults, ())
         );
-        if (success && data.length >= 64) {
+        // forge-lint: disable-end(low-level-calls)
+        if (success && data.length >= _VAULT_LIST_HEADER_BYTES) {
             (uint256 offset, uint256 length) = abi.decode(data, (uint256, uint256));
-            if (offset == 32 && length == (data.length - 64) / 32 && data.length % 32 == 0) {
+            if (
+                offset == _ABI_WORD_BYTES &&
+                length == (data.length - _VAULT_LIST_HEADER_BYTES) / _ABI_WORD_BYTES &&
+                data.length % _ABI_WORD_BYTES == 0
+            ) {
                 uint256[] memory vaults = abi.decode(data, (uint256[]));
                 for (uint256 i; i < vaults.length; ++i) {
                     if (vaults[i] > type(uint160).max) {

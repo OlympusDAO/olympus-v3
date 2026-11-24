@@ -133,33 +133,33 @@ interface IBurnerLoansRisk {
 
     /// @notice Policies refresh prices before reading positions and validating settlement; permissionless cache maintenance.
     /// @param asset Configured underlying collateral token to price against OHM.
-    /// @return snapshot Captured pair prices and protocol backing for one operation.
-    function refreshSnapshot(address asset) external returns (PriceSnapshot memory snapshot);
+    /// @return prices Captured pair prices and protocol backing for one operation.
+    function refreshSnapshot(address asset) external returns (PriceSnapshot memory prices);
 
     /// @notice WAD-scaled health; zero principal returns the maximum uint256.
     /// @dev Snapshot USD values share the current PRICE decimal scale, which need not be 18.
     ///      That scale cancels in the value/requirement ratio; health always uses 18 decimals.
-    /// @param snapshot Operation-local prices and backing; this function does not reread either.
+    /// @param prices Operation-local prices and backing; this function does not reread either.
     /// @param marketId Canonical FLOAN market selected by the caller; must use this Risk's OHM.
     /// @param collateral Position collateral credit in underlying token units.
     /// @param debt Position principal in OHM units.
     /// @return healthFactor Health scaled by 1e18, or uint256.max when debt is zero.
     function health(
-        PriceSnapshot calldata snapshot,
+        PriceSnapshot calldata prices,
         uint32 marketId,
         uint256 collateral,
         uint256 debt
     ) external view returns (uint256 healthFactor);
 
     /// @notice Validates current or final position health against the WAD threshold.
-    /// @param snapshot Operation-local prices and backing, obtained from this Risk implementation.
+    /// @param prices Operation-local prices and backing, obtained from this Risk implementation.
     /// @param marketId Canonical FLOAN market selected by the caller; must use this Risk's OHM.
     /// @param collateral Proposed collateral credit in underlying token units.
     /// @param debt Proposed principal in OHM units.
     /// @param finalPosition Whether this validates a proposed final position (borrow or withdrawal) rather than the current position.
     /// @return healthFactor Accepted position health scaled by 1e18.
     function validateHealth(
-        PriceSnapshot calldata snapshot,
+        PriceSnapshot calldata prices,
         uint32 marketId,
         uint256 collateral,
         uint256 debt,
@@ -167,7 +167,7 @@ interface IBurnerLoansRisk {
     ) external view returns (uint256 healthFactor);
 
     /// @notice Fee in collateral units, rounded up per term; utilization uses pre-settlement market debt.
-    /// @param snapshot Operation-local prices and backing.
+    /// @param prices Operation-local prices and backing.
     /// @param marketId Canonical FLOAN market selected by the caller; must use this Risk's OHM.
     /// @param principal Principal being charged, in OHM units.
     /// @param terms Number of configured terms charged.
@@ -175,7 +175,7 @@ interface IBurnerLoansRisk {
     /// @return protocolFee Protocol remainder of the upfront fee, in underlying collateral units.
     /// @return referralFee Referral share rounded down, in underlying collateral units.
     function fee(
-        PriceSnapshot calldata snapshot,
+        PriceSnapshot calldata prices,
         uint32 marketId,
         uint256 principal,
         uint16 terms,

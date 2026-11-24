@@ -17,8 +17,8 @@ type Keycode is bytes5;
 /// @notice Public Kernel API, with module and Policy references expressed as addresses.
 interface IKernel {
     /// @notice Returns the authority that executes Kernel actions.
-    /// @return executor Address holding execution authority.
-    function executor() external view returns (address executor);
+    /// @return authority Address holding execution authority.
+    function executor() external view returns (address authority);
 
     /// @notice Returns an installed module's keycode by index.
     /// @param index Index in the installed-keycode list.

@@ -19,6 +19,8 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ProposalScript} from "src/proposals/ProposalScript.sol";
 
 /// @notice Launches the deployed and Kernel-prepared Burner Loans stack.
+// The deployment script below is the entry point for this specific proposal.
+// forge-lint: disable-next-line(multi-contract-file)
 contract BurnerLoansProposal is GovernorBravoProposal {
     Kernel internal _kernel;
 
@@ -206,6 +208,8 @@ contract BurnerLoansProposal is GovernorBravoProposal {
     }
 }
 
+// Keep the script entry point in the existing proposal file.
+// forge-lint: disable-next-line(multi-contract-file)
 contract BurnerLoansProposalScript is ProposalScript {
     constructor() ProposalScript(IProposal(address(new BurnerLoansProposal()))) {}
 }

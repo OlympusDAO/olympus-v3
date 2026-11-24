@@ -137,11 +137,8 @@ contract DepositManagerConfigTimelockHandler {
 
         ITimelockBatchQueue.QueuedAction memory action = _CONFIG_TIMELOCK.getQueuedAction(actionId);
         if (action.executed || action.cancelled) return;
-        // The invariant handler controls simulated time with vm.warp; validator influence is absent.
-        // forge-lint: disable-next-line(block-timestamp)
-        if (block.timestamp < action.executableAt) _VM.warp(action.executableAt);
-        // forge-lint: disable-next-line(block-timestamp)
-        if (block.timestamp > action.expiresAt) {
+        if (_VM.getBlockTimestamp() < action.executableAt) _VM.warp(action.executableAt);
+        if (_VM.getBlockTimestamp() > action.expiresAt) {
             _CONFIG_TIMELOCK.cancelQueuedAction(actionId);
             return;
         }

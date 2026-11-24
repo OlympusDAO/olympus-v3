@@ -41,12 +41,16 @@ contract BurnerLoansPayoutConfigTimelock is
 {
     using SafeCall for address;
 
+    uint16 private constant _MAX_REVERT_DATA_BYTES = 256;
+
     /// @notice Length of one ABI-encoded address, boolean or integer, in bytes.
     uint256 private constant _ABI_WORD_BYTES = 32;
     /// @notice Payload length of rescue(address,address), in bytes.
     uint256 private constant _RESCUE_PAYLOAD_BYTES = 2 * _ABI_WORD_BYTES;
+    uint256 private constant _RESCUE_PENDING_PAYOUT_WORDS = 4;
     /// @notice Payload length of rescuePendingPayout(address,address,address,uint256), in bytes.
-    uint256 private constant _RESCUE_PENDING_PAYOUT_PAYLOAD_BYTES = 4 * _ABI_WORD_BYTES;
+    uint256 private constant _RESCUE_PENDING_PAYOUT_PAYLOAD_BYTES =
+        _RESCUE_PENDING_PAYOUT_WORDS * _ABI_WORD_BYTES;
 
     /// @notice Fixed notice before execution, in seconds.
     uint48 public constant MIN_TIMELOCK_DELAY = 1 days;
@@ -246,7 +250,10 @@ contract BurnerLoansPayoutConfigTimelock is
         }
         if (selector == IBurnerLoansPayout.rescuePendingPayout.selector) {
             _requireLength(action_, _RESCUE_PENDING_PAYOUT_PAYLOAD_BYTES);
-            uint256[4] memory words = abi.decode(action_.payload, (uint256[4]));
+            uint256[_RESCUE_PENDING_PAYOUT_WORDS] memory words = abi.decode(
+                action_.payload,
+                (uint256[4])
+            );
             if (
                 words[0] > type(uint160).max ||
                 words[1] > type(uint160).max ||
@@ -347,11 +354,11 @@ contract BurnerLoansPayoutConfigTimelock is
         (bool ok, bytes memory data) = action_.target.safeCall(
             gasleft(),
             0,
-            256,
+            _MAX_REVERT_DATA_BYTES,
             abi.encodePacked(action_.selector, action_.payload)
         );
         if (!ok) {
-            if (data.length == 0 || data.length == 256)
+            if (data.length == 0 || data.length == _MAX_REVERT_DATA_BYTES)
                 revert BurnerLoansPayoutTimelock_SubActionCallFailed(action_.selector);
             Address.verifyCallResult(ok, data);
         }

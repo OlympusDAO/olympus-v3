@@ -33,23 +33,27 @@ contract PriceConfigV2Batch is TimelockBatchScript {
         );
         address asset = _readBatchArgAddress("addAsset", "asset");
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
-        feeds[0] = IPRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"),
-            ChainlinkPriceFeeds.getOneFeedPrice.selector,
-            abi.encode(
-                ChainlinkPriceFeeds.OneFeedParams(
-                    AggregatorV2V3Interface(_readBatchArgAddress("addAsset", "feed")),
-                    _readBatchArgUint256("addAsset", "maximumAge").toUint48()
-                )
+        feeds[0] = IPRICEv2.Component({
+            target: toSubKeycode("PRICE.CHAINLINK"),
+            selector: ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            params: abi.encode(
+                ChainlinkPriceFeeds.OneFeedParams({
+                    feed: AggregatorV2V3Interface(_readBatchArgAddress("addAsset", "feed")),
+                    updateThreshold: _readBatchArgUint256("addAsset", "maximumAge").toUint48()
+                })
             )
-        );
-        IPRICEv2.Component memory strategy;
+        });
+        IPRICEv2.Component memory strategy = IPRICEv2.Component({
+            target: toSubKeycode(bytes20(0)),
+            selector: bytes4(0),
+            params: new bytes(0)
+        });
         IPriceConfigv2.PriceFeedExpectation[]
             memory expectations = new IPriceConfigv2.PriceFeedExpectation[](1);
-        expectations[0] = IPriceConfigv2.PriceFeedExpectation(
-            _readBatchArgUint256("addAsset", "expectedPrice"),
-            _readBatchArgUint256("addAsset", "toleranceBps").toUint16()
-        );
+        expectations[0] = IPriceConfigv2.PriceFeedExpectation({
+            expectedPrice: _readBatchArgUint256("addAsset", "expectedPrice"),
+            toleranceBps: _readBatchArgUint256("addAsset", "toleranceBps").toUint16()
+        });
         addToBatch(
             address(config),
             abi.encodeCall(

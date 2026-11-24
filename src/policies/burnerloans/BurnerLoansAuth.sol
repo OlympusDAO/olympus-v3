@@ -23,6 +23,8 @@ import {OperatorAuth} from "src/policies/utils/OperatorAuth.sol";
 ///      Counters belong to this Auth instance. Core rotation invalidates old key namespaces; account
 ///      cancellation here deliberately does not cancel signatures targeting another Auth instance.
 contract BurnerLoansAuth is OperatorAuth, IBurnerLoansAuth {
+    uint256 private constant _PERMISSION_WORDS = 10;
+    uint256 private constant _PERMISSION_BYTES = _PERMISSION_WORDS * 32;
     /// @notice Trusted Kernel used to verify Core's binding and authoritative Policy readiness.
     address internal immutable _KERNEL;
     /// @notice Permanent Core whose selected verifier and installation epoch define grant validity.
@@ -143,8 +145,10 @@ contract BurnerLoansAuth is OperatorAuth, IBurnerLoansAuth {
     /// @dev Reverts for noncanonical size/padding or an unconfigured selected collateral asset.
     ///      Unselected records impose no constraint; their numeric padding must still be canonical.
     function _validatePermissions(Grant calldata grant_) internal view override {
-        if (grant_.permissions.length != 320) revert BurnerLoansAuth_InvalidPermissions();
-        uint256[10] memory words = abi.decode(grant_.permissions, (uint256[10]));
+        if (grant_.permissions.length != _PERMISSION_BYTES)
+            revert BurnerLoansAuth_InvalidPermissions();
+        // abi.decode requires a literal array length. The assignment checks it against _PERMISSION_WORDS.
+        uint256[_PERMISSION_WORDS] memory words = abi.decode(grant_.permissions, (uint256[10]));
         if (
             words[0] > type(uint160).max ||
             words[1] > type(uint128).max ||

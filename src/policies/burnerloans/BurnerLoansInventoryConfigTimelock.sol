@@ -40,6 +40,8 @@ contract BurnerLoansInventoryConfigTimelock is
 {
     using SafeCall for address;
 
+    uint16 private constant _MAX_REVERT_DATA_BYTES = 256;
+
     /// @notice Fixed notice before execution, in seconds.
     uint48 public constant MIN_TIMELOCK_DELAY = 1 days;
     /// @notice Maximum supported notice, in seconds.
@@ -226,11 +228,11 @@ contract BurnerLoansInventoryConfigTimelock is
         (bool ok, bytes memory data) = action_.target.safeCall(
             gasleft(),
             0,
-            256,
+            _MAX_REVERT_DATA_BYTES,
             abi.encodePacked(action_.selector, action_.payload)
         );
         if (!ok) {
-            if (data.length == 0 || data.length == 256)
+            if (data.length == 0 || data.length == _MAX_REVERT_DATA_BYTES)
                 revert BurnerLoansInventoryTimelock_SubActionCallFailed(action_.selector);
             Address.verifyCallResult(ok, data);
         }

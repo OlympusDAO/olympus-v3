@@ -55,6 +55,9 @@ contract BurnerLoansConfigTimelock is
     // ========== CONSTANTS ========== //
 
     uint16 internal constant _MAX_REVERT_DATA_BYTES = 256;
+    uint256 private constant _ABI_WORD_BYTES = 32;
+    uint256 private constant _FEE_CONFIG_WORDS = 5;
+    uint256 private constant _RISK_CONFIG_WORDS = 7;
 
     /// @inheritdoc IBurnerLoansConfigTimelock
     uint48 public constant override MIN_TIMELOCK_DELAY = 1 days;
@@ -72,14 +75,16 @@ contract BurnerLoansConfigTimelock is
     ///      - The next action ID exceeds uint64.
     ///      - The queue timestamp, executable timestamp or expiry exceeds uint48.
     modifier withinQueueBounds() {
-        // Each conversion intentionally validates the bound; the base stores the same values.
+        _requireQueueBounds();
+        _;
+    }
 
+    function _requireQueueBounds() private view {
+        // Each conversion intentionally validates the bound. The base stores the same values.
         SafeCast.toUint64(uint256(nextActionId) + 1);
         uint48 queuedAt = SafeCast.toUint48(block.timestamp);
         uint48 executableAt = SafeCast.toUint48(uint256(queuedAt) + timelockDelay);
         SafeCast.toUint48(uint256(executableAt) + EXECUTION_WINDOW);
-
-        _;
     }
 
     /// @notice Burner Loans Config policy for which this contract may act as config operator.
@@ -612,39 +617,11 @@ contract BurnerLoansConfigTimelock is
         if (action_.target != address(_BURNER_LOANS_CONFIG))
             revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
         if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
-            _requirePayloadLength(action_, 160);
-            uint256[5] memory feeWords = abi.decode(action_.payload, (uint256[5]));
-            if (
-                feeWords[0] > type(uint160).max ||
-                feeWords[1] > type(uint16).max ||
-                feeWords[2] > type(uint16).max ||
-                feeWords[3] > type(uint16).max ||
-                feeWords[4] > type(uint16).max
-            ) revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
-            (address asset, IBurnerLoansRisk.AssetFeeConfig memory config) = abi.decode(
-                action_.payload,
-                (address, IBurnerLoansRisk.AssetFeeConfig)
-            );
-            _BURNER_LOANS_CONFIG.validateFeeConfig(asset, config);
+            _validateQueuedFeeConfig(action_);
             return;
         }
         if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
-            _requirePayloadLength(action_, 224);
-            uint256[7] memory riskWords = abi.decode(action_.payload, (uint256[7]));
-            if (
-                riskWords[0] > type(uint160).max ||
-                riskWords[1] > type(uint16).max ||
-                riskWords[2] > type(uint16).max ||
-                riskWords[3] > type(uint16).max ||
-                riskWords[4] > type(uint48).max ||
-                riskWords[5] > type(uint48).max ||
-                riskWords[6] > type(uint128).max
-            ) revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
-            (address asset, IBurnerLoansRisk.AssetRiskConfigInput memory config) = abi.decode(
-                action_.payload,
-                (address, IBurnerLoansRisk.AssetRiskConfigInput)
-            );
-            _BURNER_LOANS_CONFIG.validateAssetRiskConfig(asset, config);
+            _validateQueuedRiskConfig(action_);
             return;
         }
         _requirePayloadLength(action_, 64);
@@ -671,18 +648,63 @@ contract BurnerLoansConfigTimelock is
             selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector ||
             selector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector
         ) {
-            if (words[1] > 1) revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
-            (address asset, bool enabled) = abi.decode(action_.payload, (address, bool));
-            // This validates admission; the result does not commit a balance or replace execution-time checks.
-            // forge-lint: disable-next-line(unused-return)
-            _BURNER_LOANS_CONFIG.getAssetConfig(asset);
-            if (selector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector)
-                IAssetManagerV1_1(
-                    IBurnerLoansCore(_BURNER_LOANS_CONFIG.facility()).depositManager()
-                ).validateAssetWithdrawAsShares(IERC20(asset), enabled);
+            _validateQueuedAssetToggle(action_, words[1]);
             return;
         }
         revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
+    }
+
+    function _validateQueuedAssetToggle(
+        ITimelockBatchQueue.BatchAction memory action_,
+        uint256 flagWord_
+    ) private view {
+        bytes4 selector = action_.selector;
+        if (flagWord_ > 1) revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
+        (address asset, bool enabled) = abi.decode(action_.payload, (address, bool));
+        // This validates admission; the result does not commit a balance or replace execution-time checks.
+        // forge-lint: disable-next-line(unused-return)
+        _BURNER_LOANS_CONFIG.getAssetConfig(asset);
+        if (selector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector)
+            IAssetManagerV1_1(IBurnerLoansCore(_BURNER_LOANS_CONFIG.facility()).depositManager())
+                .validateAssetWithdrawAsShares(IERC20(asset), enabled);
+    }
+
+    function _validateQueuedFeeConfig(ITimelockBatchQueue.BatchAction memory action_) private view {
+        _requirePayloadLength(action_, _FEE_CONFIG_WORDS * _ABI_WORD_BYTES);
+        uint256[_FEE_CONFIG_WORDS] memory feeWords = abi.decode(action_.payload, (uint256[5]));
+        if (
+            feeWords[0] > type(uint160).max ||
+            feeWords[1] > type(uint16).max ||
+            feeWords[2] > type(uint16).max ||
+            feeWords[3] > type(uint16).max ||
+            feeWords[4] > type(uint16).max
+        ) revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
+        (address asset, IBurnerLoansRisk.AssetFeeConfig memory config) = abi.decode(
+            action_.payload,
+            (address, IBurnerLoansRisk.AssetFeeConfig)
+        );
+        _BURNER_LOANS_CONFIG.validateFeeConfig(asset, config);
+    }
+
+    function _validateQueuedRiskConfig(
+        ITimelockBatchQueue.BatchAction memory action_
+    ) private view {
+        _requirePayloadLength(action_, _RISK_CONFIG_WORDS * _ABI_WORD_BYTES);
+        uint256[_RISK_CONFIG_WORDS] memory riskWords = abi.decode(action_.payload, (uint256[7]));
+        if (
+            riskWords[0] > type(uint160).max ||
+            riskWords[1] > type(uint16).max ||
+            riskWords[2] > type(uint16).max ||
+            riskWords[3] > type(uint16).max ||
+            riskWords[4] > type(uint48).max ||
+            riskWords[5] > type(uint48).max ||
+            riskWords[6] > type(uint128).max
+        ) revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
+        (address asset, IBurnerLoansRisk.AssetRiskConfigInput memory config) = abi.decode(
+            action_.payload,
+            (address, IBurnerLoansRisk.AssetRiskConfigInput)
+        );
+        _BURNER_LOANS_CONFIG.validateAssetRiskConfig(asset, config);
     }
 
     /// @dev Reverts if:

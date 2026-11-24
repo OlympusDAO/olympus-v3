@@ -107,8 +107,12 @@ contract BurnerLoansInventory is
     ///
     /// @dev The Core settlement guard is checked before local lifecycle and authorization.
     modifier whenCoreNotSettling() {
-        IBurnerLoansCore(_CORE).requireNotReentrant();
+        _requireCoreNotSettling();
         _;
+    }
+
+    function _requireCoreNotSettling() private view {
+        IBurnerLoansCore(_CORE).requireNotReentrant();
     }
 
     /// @inheritdoc Policy
@@ -334,7 +338,7 @@ contract BurnerLoansInventory is
         uint128 retained = amount_ < deficit ? amount_ : deficit;
         _suppliedIdleOhm += retained;
         uint128 burnAmount = amount_ - retained;
-        uint128 burned;
+        uint128 burned = 0;
         if (burnAmount != 0) {
             try _MINTR.burnOhm(address(this), burnAmount) {
                 burned = burnAmount;
