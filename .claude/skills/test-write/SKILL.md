@@ -746,6 +746,12 @@ Do not use zero-argument `vm.expectRevert()` by default. It accepts any revert a
 call fails for the wrong reason. Use it only when an opaque external dependency provides no stable
 revert data, and document why a stronger match is impossible.
 
+Ask whether the test would still pass if the guard it targets were removed. Make the rest of the
+fixture valid so another guard cannot produce the same error. For a malformed address word, keep
+the correct address in the low 160 bits and set a high bit. Truncation would then accept the address,
+so the revert proves the encoding check. For a test of guard precedence, keep the competing faults
+and verify that the expected failure distinguishes their order.
+
 **GOOD - Error selector:**
 
 ```solidity
@@ -888,6 +894,11 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
         enabled-state properties
 - [ ] Revert tests match specific error data; any empty `vm.expectRevert()` documents why stronger
       matching is impossible
+- [ ] Each revert test would fail if the guard it targets were removed
 - [ ] All assertions have descriptive messages
 - [ ] Mathematical reasoning documented in comments
 - [ ] Tests cover applicable state and input edge cases
+
+Review the feature diff for overlapping tests and duplicated checks. Use CE Simplify Code when available.
+Before removing a test, confirm that the retained tests cover the same conditions and assertions.
+`pnpm run lint:fixture-counters` reports fixture counters that have writes and no apparent reader.

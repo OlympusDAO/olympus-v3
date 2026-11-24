@@ -22,7 +22,6 @@ contract BurnerLoansActionHandler is Test {
     uint256 public borrows;
     uint256 public repayments;
     uint256 public withdrawals;
-    uint256 public defaults;
 
     constructor(
         BurnerLoansCollateral collateral_,
@@ -100,6 +99,5 @@ contract BurnerLoansActionHandler is Test {
         _seize.seize(address(_asset), borrowers);
         collateral = 0;
         principal = 0;
-        ++defaults;
     }
 }

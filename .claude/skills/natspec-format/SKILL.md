@@ -38,9 +38,9 @@ and layout improvements to the appropriate versioned extension instead.
 
 ## Spacing Between Definitions
 
-Leave one actual empty source line between definitions, including errors, events, enums, structs and
-functions. NatSpec does not replace that separator: put the empty line before the next declaration's
-NatSpec block, and keep that block directly attached to its declaration.
+Leave one empty source line between definitions, including consecutive events. Put the empty line
+after the previous definition's last line and before the next definition's NatSpec.
+Keep each NatSpec block directly attached to its definition.
 
 ```solidity
 /// @notice Emitted when the first action completes.
@@ -50,19 +50,33 @@ event EventA();
 event EventB();
 ```
 
+## Revert Conditions
+
+List distinct revert conditions in the concrete implementation's `@dev` documentation.
+Use `Reverts if:` followed by one bullet per condition in guard order where that order matters.
+Apply this to constructors and functions. Keep interface NatSpec focused on the external contract.
+
+```solidity
+/// @dev Reverts if:
+///      - The owner is the zero address.
+///      - The dependency lacks the required interface.
+```
+
 ## NatSpec Format Standards
 
 ### Core Formatting Rules
 
 1. **Blank line separator** - A `///` line between `@notice`/`@dev` and `@param`/`@return` tags
-2. **Tab after tag** - The tag name (`@notice`, `@dev`, `@param`, `@return`) is followed by a tab
+2. **Tag spacing** - Use a single space in `@dev Reverts if:`. Follow other `@notice`, `@dev`,
+   `@param`, and `@return` tags with a tab.
 3. **Tab-aligned descriptions** - Align descriptions at the first tab stop after the longest parameter name in the list
 4. **Tab-aligned returns** - For `@return`: `@return<TAB>name-or-type<TAB>description`
     - If the Solidity return value is named, use that return name.
     - If the Solidity return value is unnamed, use the return type.
 5. **Named interface returns** - Interface functions should name every return value. The interface NatSpec should document each return by name. Implementation contracts may omit return names when appropriate.
 6. **All parameters documented** - Every parameter must have a `@param` entry
-7. **Multi-line `@dev`** - Continue multi-line `@dev` comments on separate `/// @dev` lines
+7. **Multi-line `@dev`** - Continue prose on separate `/// @dev` lines. In a revert list, indent
+   the bullets under the initial `@dev` line as shown above.
 8. **Trailing underscore** - Parameters with trailing underscore (e.g., `params_`)
 
 ### Target Format Example
@@ -422,7 +436,8 @@ struct DeviationConfig {
 When writing NatSpec documentation:
 
 - [ ] Interface sections follow events, errors, enums, structs, functions; empty sections are omitted
-- [ ] An empty source line separates definitions, before the next attached NatSpec block
+- [ ] An empty source line separates definitions, including consecutive events
+- [ ] Concrete implementations list distinct revert conditions in `@dev`
 - [ ] `@notice` tag present with clear user-facing description
 - [ ] `@dev` tags for implementation details (if needed)
 - [ ] Blank `///` line before `@param`/`@return` tags
