@@ -58,7 +58,7 @@ The task must neither require IVersioned support nor call the cache VERSION gett
 
 | ID | Caller | Local active | Local enabled | Input or dependency condition | Execution / effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| PCACHER-SET-CACHE-P01 | ADMIN | true | true | Compatible active/enabled replacement | Exact PriceCacheSet event/getter; subsequent execute uses new cache only | Covered: [test][test_givenEnabled_whenAdminRotatesPriceCache], [test][test_whenAdminAndCollectionVary_thenExactRotation] |
+| PCACHER-SET-CACHE-P01 | ADMIN | true | true | Compatible active/enabled replacement | Exact PriceCacheSet event/getter; subsequent execute uses new cache only | Covered: [test][test_givenEnabled_whenAdminRotatesPriceCache] |
 | PCACHER-SET-CACHE-P02 | Fuzz all callers | Fuzz true/false | Fuzz true/false | Any getter caller; all local lifecycle states | Return currently selected cache without writes | Covered: [test][test_whenAnyCallerReadsCache] |
 
 - [x] Derive scenarios from concrete entry points and inherited guards.
@@ -78,7 +78,7 @@ The task must neither require IVersioned support nor call the cache VERSION gett
 
 | ID | Caller | Local active | Local enabled | Input or dependency condition | Execution / effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| PCACHER-SET-CACHE-A02 | Fuzz every ADMIN holder | true | true | Compatible replacement; zero/one/larger pair sets | Exact event and pointer; preserve pair order and lifecycle; only replacement receives subsequent work | Covered: [test][test_whenAdminAndCollectionVary_thenExactRotation] |
+| PCACHER-SET-CACHE-A02 | Fuzz every ADMIN holder | true | true | Compatible replacement; zero/one/larger pair sets | Exact event and pointer; preserve pair order and lifecycle; task body forwards every pair to the replacement | Covered: [test][test_whenAdminAndCollectionVary_thenExactRotation] |
 | PCACHER-SET-CACHE-D13 | ADMIN | true | true | ERC165 probe reverts | PriceCacherTask_InvalidPriceCache(candidate); unchanged | Covered: [test][test_givenInterfaceProbeReverts_whenSelected_reverts] |
 | PCACHER-SET-CACHE-D14 | ADMIN | true | true | ERC165 probe returns malformed bool ABI | PriceCacherTask_InvalidPriceCache(candidate); unchanged | Covered: [test][test_givenInterfaceProbeMalformed_whenSelected_reverts] |
 
@@ -90,30 +90,30 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | PCACHER-SET-CACHE-L03 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; Candidate=`address(0)` | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
 
-[test_givenCacheInterfaceMissing_whenSelected_reverts]: setPriceCache.t.sol#L207
+[test_givenCacheInterfaceMissing_whenSelected_reverts]: setPriceCache.t.sol#L209
 [test_givenDisabled_whenAdminRotatesPriceCache]: setPriceCache.t.sol#L53
 [test_givenEnabled_whenAdminRotatesPriceCache]: setPriceCache.t.sol#L32
-[test_givenEnablerInterfaceMissing_whenSelected_reverts]: setPriceCache.t.sol#L212
-[test_givenInactive_whenCacheSelected_reverts]: setPriceCache.t.sol#L154
-[test_givenInterfaceProbeMalformed_whenSelected_reverts]: setPriceCache.t.sol#L306
-[test_givenInterfaceProbeReverts_whenSelected_reverts]: setPriceCache.t.sol#L295
-[test_givenKernelGetterReverts_whenSelected_reverts]: setPriceCache.t.sol#L217
-[test_givenLaterPairRejected_whenSelected_thenAtomicRollback]: setPriceCache.t.sol#L317
-[test_givenMalformedKernel_whenSelected_reverts]: setPriceCache.t.sol#L230
-[test_givenNoVersionInterface_whenSelected_thenAccepted]: setPriceCache.t.sol#L352
-[test_givenNoncanonicalKernel_whenSelected_reverts]: setPriceCache.t.sol#L236
-[test_givenUnreadyCandidate_whenSelected_thenActivationRejects]: setPriceCache.t.sol#L186
-[test_givenVersionGetterReverts_whenSelected_thenIgnored]: setPriceCache.t.sol#L360
+[test_givenEnablerInterfaceMissing_whenSelected_reverts]: setPriceCache.t.sol#L214
+[test_givenInactive_whenCacheSelected_reverts]: setPriceCache.t.sol#L156
+[test_givenInterfaceProbeMalformed_whenSelected_reverts]: setPriceCache.t.sol#L308
+[test_givenInterfaceProbeReverts_whenSelected_reverts]: setPriceCache.t.sol#L297
+[test_givenKernelGetterReverts_whenSelected_reverts]: setPriceCache.t.sol#L219
+[test_givenLaterPairRejected_whenSelected_thenAtomicRollback]: setPriceCache.t.sol#L319
+[test_givenMalformedKernel_whenSelected_reverts]: setPriceCache.t.sol#L232
+[test_givenNoVersionInterface_whenSelected_thenAccepted]: setPriceCache.t.sol#L354
+[test_givenNoncanonicalKernel_whenSelected_reverts]: setPriceCache.t.sol#L238
+[test_givenUnreadyCandidate_whenSelected_thenActivationRejects]: setPriceCache.t.sol#L188
+[test_givenVersionGetterReverts_whenSelected_thenIgnored]: setPriceCache.t.sol#L362
 [test_whenAdminAndCollectionVary_thenExactRotation]: setPriceCache.t.sol#L117
-[test_whenAnyCallerReadsCache]: setPriceCache.t.sol#L242
+[test_whenAnyCallerReadsCache]: setPriceCache.t.sol#L244
 [test_whenCallerIsNotAdmin_reverts]: setPriceCache.t.sol#L21
 [test_whenCandidateDoesNotSupportAnExistingPair_revertsAndPreservesCache]: setPriceCache.t.sol#L96
-[test_whenCandidateHasNoCode_reverts]: setPriceCache.t.sol#L180
+[test_whenCandidateHasNoCode_reverts]: setPriceCache.t.sol#L182
 [test_whenCandidateIsZero_revertsAndPreservesCache]: setPriceCache.t.sol#L64
 [test_whenCandidateUsesDifferentKernel_revertsAndPreservesCache]: setPriceCache.t.sol#L75
-[test_whenLargerSet_whenRotationSucceeds]: setPriceCache.t.sol#L149
-[test_whenMetadataBoundarySeedsUsed_reverts]: setPriceCache.t.sol#L342
-[test_whenNoPairs_whenRotationSucceeds]: setPriceCache.t.sol#L139
-[test_whenSinglePair_whenRotationSucceeds]: setPriceCache.t.sol#L144
-[test_whenUnchangedCacheSelected_revertsBeforeProbes]: setPriceCache.t.sol#L168
-[test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst]: ./setPriceCache.t.sol#L367
+[test_whenLargerSet_whenRotationSucceeds]: setPriceCache.t.sol#L151
+[test_whenMetadataBoundarySeedsUsed_reverts]: setPriceCache.t.sol#L344
+[test_whenNoPairs_whenRotationSucceeds]: setPriceCache.t.sol#L141
+[test_whenSinglePair_whenRotationSucceeds]: setPriceCache.t.sol#L146
+[test_whenUnchangedCacheSelected_revertsBeforeProbes]: setPriceCache.t.sol#L170
+[test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst]: ./setPriceCache.t.sol#L369

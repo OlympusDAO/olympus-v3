@@ -9,6 +9,8 @@ bytes32 constant ADMIN_ROLE = "admin";
 bytes32 constant MANAGER_ROLE = "manager";
 /// @dev Heart role, e.g. performing periodic tasks.
 bytes32 constant HEART_ROLE = "heart";
+/// @dev Delegated administration of price policies and recurring price-cache work.
+bytes32 constant PRICE_ADMIN_ROLE = "price_admin";
 
 /// @dev LZ bridge configurator role. Gates the privileged configuration mutators on
 ///      LZBridgeGateway and LZEndpointDelegate. Expected to be granted exclusively to the

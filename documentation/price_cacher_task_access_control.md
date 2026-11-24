@@ -14,8 +14,8 @@ See [Price Cache](./price_cache.md) for snapshot, freshness, and pair-support be
 
 | Authority   | Expected assignment  | Scope                                    |
 | ----------- | -------------------- | ---------------------------------------- |
-| `admin`     | OCG Timelock         | Cache reference, pair set, and lifecycle |
-| `price_admin` | Delegated price administrator | Add/remove cached pairs and re-enable within grace |
+| `admin`     | OCG Timelock         | Cache reference, gas limits, pair set, and lifecycle |
+| `price_admin` | Delegated price administrator | Add/remove cached pairs, set gas limits, and re-enable within grace |
 | `emergency` | Emergency Multisig   | Immediate disable                        |
 | `heart`     | Olympus Heart policy | Periodic execution                       |
 | Contract    | `PriceCacherTask` itself | Isolated task-body execution             |
@@ -25,7 +25,8 @@ Timelock holding `admin`.
 
 ## Configuration
 
-Only `admin` can change the cache reference. Either `price_admin` or `admin` can add and remove pairs.
+Only `admin` can change the cache reference. Either `price_admin` or `admin` can change gas limits
+and add or remove pairs.
 These functions remain callable while
 `PriceCacherTask` is enabled or disabled so governance can repair configuration without first changing
 the task lifecycle.
@@ -35,14 +36,16 @@ Pair management is privileged because it changes recurring Heart work and the in
 | Function          | Authorized caller | Main requirements                                                       |
 | ----------------- | ----------------- | ----------------------------------------------------------------------- |
 | `setPriceCache`   | `admin`           | Different address, required interfaces, same Kernel, and all pairs supported |
+| `setGasLimits`   | `price_admin` or `admin` | Nonzero pair limit; task limit higher than the pair limit plus the cleanup reserve |
 | `addAssetPair`    | `price_admin` or `admin` | Valid, unique pair supported by the current `PriceCache`          |
 | `removeAssetPair` | `price_admin` or `admin` | Pair exists in either orientation                                 |
 
-All three setters require the task to remain Kernel-active. Cache compatibility requires
+All configuration setters require the task to remain Kernel-active. Cache compatibility requires
 `IPriceCache` and `IEnabler`; it does not require `IVersioned` or query `VERSION()`.
 Cache selection permits an inactive or disabled replacement. Readiness is checked on activation.
 
-New deployments start with an empty pair set. After Kernel activation gives `PriceCacherTask` access to
+The deployer supplies the initial limits for the task body and each pair call. New deployments start
+with an empty pair set. After Kernel activation gives `PriceCacherTask` access to
 `ROLES`, OCG admin adds the intended pairs before enabling the task. Each addition validates support
 through `PriceCache.validateAssetPair`, and cache rotation validates every configured pair. Removal
 intentionally does not revalidate support, so governance can remove a pair after `PRICE` support or
@@ -74,9 +77,12 @@ cache produces `PolicyDependency_NotActive`.
 `execute` catches it, emits `ExecutionFailed`, and returns without work. It resumes after the
 cache becomes operational.
 
-Each pair is attempted with `maxAge = 0`. Ordinary per-pair failures emit `PairCacheFailed` and do
-not prevent later pairs from being attempted. This includes a pair that was supported when added
-but later becomes unsupported by `PRICE`. The outer self-call also contains ordinary aggregate
-failures. The task has no configurable gas limit; pathological gas consumption by one attempt can
-still prevent later pairs, later Heart tasks, or Heart finalization. Governance must therefore keep
-the configured pair set and its external pricing costs operationally bounded.
+Each run starts at the first pair and uses `maxAge = 0` for each refresh. A failed pair emits
+`PairCacheFailed` and execution continues while the remaining budget allows another attempt.
+Both kinds of external calls retain at most four bytes of revert data. An empty failure, including
+an out-of-gas failure, produces a zero selector in the failure event.
+
+If the task runs low on gas, `ExecutionDeferred` identifies the first skipped index. Later pairs
+can remain stale across beats if the budget is too low to reach them. Before scheduling the task,
+measure the intended pair list with its actual price sources and check that Heart can finish the
+full beat within the available transaction gas.

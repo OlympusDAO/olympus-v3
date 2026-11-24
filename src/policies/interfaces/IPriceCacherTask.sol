@@ -10,15 +10,24 @@ interface IPriceCacherTask {
     /// @param priceCache New PriceCache address.
     event PriceCacheSet(address indexed priceCache);
 
+    /// @notice Emitted when the gas limits change.
+    /// @param executionGasLimit Maximum gas forwarded to the task body.
+    /// @param pairGasLimit Maximum gas forwarded to one pair refresh.
+    event GasLimitsSet(uint32 executionGasLimit, uint32 pairGasLimit);
+
     /// @notice Emitted when the aggregate self-call fails.
-    /// @param reason First four bytes of the revert data.
+    /// @param reason First four bytes of the revert data, or zero if the call failed without data.
     event ExecutionFailed(bytes4 reason);
+
+    /// @notice Emitted when the remaining gas budget is too small to continue refreshing pairs.
+    /// @param firstSkippedPairIndex First skipped pair index, or zero if the task body could not start.
+    event ExecutionDeferred(uint256 firstSkippedPairIndex);
 
     /// @notice Emitted when one configured pair cannot be refreshed.
     /// @param priceCache PriceCache used for the attempt.
     /// @param asset Asset in the failed pair.
     /// @param quote Quote in the failed pair.
-    /// @param reason First four bytes of the revert data.
+    /// @param reason First four bytes of the revert data, or zero if the call failed without data.
     event PairCacheFailed(
         address indexed priceCache,
         address indexed asset,
@@ -40,6 +49,9 @@ interface IPriceCacherTask {
 
     /// @notice Lifecycle payloads must be empty.
     error PriceCacherTask_InvalidData();
+
+    /// @notice The pair gas limit is zero or the execution limit leaves insufficient reserve gas.
+    error PriceCacherTask_InvalidGasLimits();
 
     /// @notice Thrown when a required address is zero.
     error PriceCacherTask_ZeroAddress();
@@ -87,7 +99,20 @@ interface IPriceCacherTask {
     /// @notice Sets the PriceCache used by the task.
     /// @dev Callable only by OCG admin. The candidate must implement the required interfaces,
     ///      belong to the same Kernel, and support every configured asset pair.
-    function setPriceCache(address priceCache) external;
+    function setPriceCache(address cache) external;
+
+    /// @notice Updates the gas limits for the task body and each pair refresh.
+    /// @dev Callable by price_admin or admin while the task is enabled or disabled.
+    ///      An unchanged setting is a no-op.
+    /// @param executionGasLimit_ Maximum gas forwarded to the task body.
+    /// @param pairGasLimit_ Maximum gas forwarded to one pair refresh.
+    function setGasLimits(uint32 executionGasLimit_, uint32 pairGasLimit_) external;
+
+    /// @notice Returns the maximum gas forwarded to the task body.
+    function executionGasLimit() external view returns (uint32);
+
+    /// @notice Returns the maximum gas forwarded to one pair refresh.
+    function pairGasLimit() external view returns (uint32);
 
     /// @notice Adds an asset/quote pair to the periodic cache set.
     /// @dev Callable by price_admin or OCG admin while the task is enabled or disabled.

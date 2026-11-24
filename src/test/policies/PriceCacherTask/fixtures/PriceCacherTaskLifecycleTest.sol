@@ -22,7 +22,12 @@ abstract contract PriceCacherTaskLifecycleTest is PriceCacherTaskTest, PolicyLif
     }
 
     function _freshSubject(bool activate_) internal {
-        cacher = new PriceCacherTask(kernel, priceCache);
+        cacher = new PriceCacherTask(
+            kernel,
+            priceCache,
+            _TEST_EXECUTION_GAS_LIMIT,
+            _TEST_PAIR_GAS_LIMIT
+        );
         _lifecycleTarget = address(cacher);
         if (activate_) _setMembership(true);
     }
@@ -36,6 +41,8 @@ abstract contract PriceCacherTaskLifecycleTest is PriceCacherTaskTest, PolicyLif
                     cacher.priceCache(),
                     cacher.getAssetPairs(),
                     cacher.gracePeriod(),
+                    cacher.executionGasLimit(),
+                    cacher.pairGasLimit(),
                     priceCache.callCount(),
                     priceCache.lastAsset(),
                     priceCache.lastQuote(),

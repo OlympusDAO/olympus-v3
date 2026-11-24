@@ -18,6 +18,8 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 abstract contract PriceCacherTaskTest is Test {
     /// @notice Delegated role permitted to manage the task's pair set.
     bytes32 internal constant PRICE_ADMIN_ROLE = "price_admin";
+    uint32 internal constant _TEST_EXECUTION_GAS_LIMIT = 1_000_000;
+    uint32 internal constant _TEST_PAIR_GAS_LIMIT = 400_000;
 
     address internal admin;
     address internal emergency;
@@ -47,7 +49,12 @@ abstract contract PriceCacherTaskTest is Test {
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
         priceCache = new MockPriceCacherTaskCache(kernel);
-        cacher = new PriceCacherTask(kernel, priceCache);
+        cacher = new PriceCacherTask(
+            kernel,
+            priceCache,
+            _TEST_EXECUTION_GAS_LIMIT,
+            _TEST_PAIR_GAS_LIMIT
+        );
 
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
@@ -146,6 +153,8 @@ abstract contract PriceCacherTaskTest is Test {
                     cacher.isEnabled(),
                     cacher.lastTransitionAt(),
                     cacher.gracePeriod(),
+                    cacher.executionGasLimit(),
+                    cacher.pairGasLimit(),
                     priceCache.callCount()
                 )
             );

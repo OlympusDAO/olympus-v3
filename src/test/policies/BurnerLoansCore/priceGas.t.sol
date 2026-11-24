@@ -209,7 +209,8 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
             5,
             10_000_000
         );
-        cacher = new PriceCacherTask(_kernel, cache);
+        // Leave headroom for both multi-feed refreshes in the unoptimized test profile.
+        cacher = new PriceCacherTask(_kernel, cache, 2_000_000, 800_000);
         directPriceBeat = new MockPeriodicTaskManager(_kernel);
         cachedPriceBeat = new MockPeriodicTaskManager(_kernel);
         _kernel.executeAction(Actions.ActivatePolicy, address(seizer));

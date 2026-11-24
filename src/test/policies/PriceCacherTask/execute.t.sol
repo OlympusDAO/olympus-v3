@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {Vm} from "@forge-std-1.16.2/Vm.sol";
 import {IPriceCacherTask} from "src/policies/interfaces/IPriceCacherTask.sol";
 
 // Libraries
@@ -90,6 +91,14 @@ contract PriceCacherTaskExecuteTest is PriceCacherTaskTest {
     //   then it attempts configured pairs in order
     // Scenarios: PCACHER-EXECUTE-P01.
     function test_givenOperationalPriceCache_attemptsConfiguredPairsInOrder() public {
+        vm.expectCall(address(cacher), 0, 1_000_000, abi.encodeCall(cacher.selfExecuteTask, ()), 1);
+        vm.expectCall(
+            address(priceCache),
+            0,
+            400_000,
+            abi.encodeCall(priceCache.cachePriceIfNecessary, (ohm, usds, uint48(0))),
+            1
+        );
         vm.prank(heart);
         cacher.execute();
 
@@ -171,7 +180,7 @@ contract PriceCacherTaskExecuteTest is PriceCacherTaskTest {
         uint8 count_
     ) public {
         _grantTestRole(HEART_ROLE, caller_);
-        _seedPairs(bound(count_, 0, 32));
+        _seedPairs(bound(count_, 0, 4));
         _executeSucceeds(caller_);
     }
 
@@ -185,9 +194,125 @@ contract PriceCacherTaskExecuteTest is PriceCacherTaskTest {
         test_whenHeartAndCollectionVary_thenExactAttempts(heart, 1);
     }
 
-    // Scenarios: PCACHER-EXECUTE-N01.
-    function test_whenLargerPairSet_thenAllCacheCalls() public {
-        test_whenHeartAndCollectionVary_thenExactAttempts(heart, 32);
+    // Scenarios: PCACHER-EXECUTE-N02.
+    function test_givenLargePairSet_whenExecuted_thenReportsDeferredWork() public {
+        _seedPairs(32);
+        IPriceCacherTask.AssetPair[] memory pairs = cacher.getAssetPairs();
+
+        vm.recordLogs();
+        vm.prank(heart);
+        cacher.execute();
+
+        uint256 refreshed = priceCache.callCount();
+        assertGt(refreshed, 0, "refreshes some pairs within the task cap");
+        assertLt(refreshed, pairs.length, "defers the remaining pairs");
+        for (uint256 i; i < refreshed; ++i) {
+            (address asset, address quote, ) = priceCache.recordedCalls(i);
+            assertEq(asset, pairs[i].asset, "refreshes prefix assets in stored order");
+            assertEq(quote, pairs[i].quote, "refreshes prefix quotes in stored order");
+        }
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertEq(logs.length, 1, "emits one deferral event");
+        assertEq(logs[0].emitter, address(cacher), "task emits the deferral");
+        assertEq(logs[0].topics[0], IPriceCacherTask.ExecutionDeferred.selector, "deferral event");
+        assertEq(abi.decode(logs[0].data, (uint256)), refreshed, "index of first skipped pair");
+    }
+
+    // Scenarios: PCACHER-EXECUTE-N03.
+    function test_whenGasAllowsOnePair_thenEachExecutionStartsAtFirstPair() public {
+        vm.expectEmit(address(cacher));
+        emit IPriceCacherTask.ExecutionDeferred(1);
+        vm.prank(heart);
+        cacher.execute{gas: 550_000}();
+
+        assertEq(priceCache.pairCallCount(_pairKey(ohm, usds)), 1, "first pair refreshed");
+        assertEq(priceCache.pairCallCount(_pairKey(ohm, usde)), 0, "second pair deferred");
+
+        vm.expectEmit(address(cacher));
+        emit IPriceCacherTask.ExecutionDeferred(1);
+        vm.prank(heart);
+        cacher.execute{gas: 550_000}();
+
+        assertEq(priceCache.pairCallCount(_pairKey(ohm, usds)), 2, "refreshes first pair again");
+        assertEq(priceCache.pairCallCount(_pairKey(ohm, usde)), 0, "second pair still skipped");
+    }
+
+    // Scenarios: PCACHER-EXECUTE-N04.
+    function test_whenGasCannotFundAPair_thenReportsDeferral() public {
+        vm.expectEmit(address(cacher));
+        emit IPriceCacherTask.ExecutionDeferred(0);
+        vm.prank(heart);
+        cacher.execute{gas: 250_000}();
+
+        assertEq(priceCache.callCount(), 0, "no pair attempted below the gas threshold");
+    }
+
+    // Scenarios: PCACHER-EXECUTE-N06.
+    function test_whenGasCannotFundSelfCall_thenReportsDeferralWithoutCalling() public {
+        vm.expectCall(address(cacher), abi.encodeCall(cacher.selfExecuteTask, ()), uint64(0));
+        vm.expectEmit(address(cacher));
+        emit IPriceCacherTask.ExecutionDeferred(0);
+        vm.prank(heart);
+        cacher.execute{gas: 35_000}();
+    }
+
+    // Scenarios: PCACHER-EXECUTE-N05.
+    function test_givenPairRemovedAfterDeferral_whenExecuted_thenStartsAtRemainingPair() public {
+        vm.prank(heart);
+        cacher.execute{gas: 550_000}();
+        assertEq(priceCache.callCount(), 1, "first run deferred the second pair");
+        vm.prank(admin);
+        cacher.removeAssetPair(ohm, usds);
+
+        vm.prank(heart);
+        cacher.execute();
+
+        assertEq(priceCache.pairCallCount(_pairKey(ohm, usde)), 1, "refreshes the remaining pair");
+    }
+
+    // Scenarios: PCACHER-EXECUTE-N07.
+    function test_givenThreePairs_whenExecutionLimitIsRaised_thenAllPairsRefresh() public {
+        address quote = makeAddr("third quote");
+        vm.startPrank(admin);
+        cacher.addAssetPair(ohm, quote);
+        // This budget covers two mock refreshes before reaching the pair limit plus reserve.
+        cacher.setGasLimits(660_000, 400_000);
+        vm.stopPrank();
+
+        vm.expectEmit(address(cacher));
+        emit IPriceCacherTask.ExecutionDeferred(2);
+        vm.prank(heart);
+        cacher.execute();
+        assertEq(priceCache.callCount(), 2, "refreshes two pairs at the lower cap");
+        assertEq(priceCache.pairCallCount(_pairKey(ohm, quote)), 0, "third pair skipped");
+
+        vm.prank(admin);
+        cacher.setGasLimits(1_000_000, 400_000);
+        vm.prank(heart);
+        cacher.execute();
+        assertEq(priceCache.callCount(), 5, "refreshes all three from the start");
+        assertEq(priceCache.pairCallCount(_pairKey(ohm, quote)), 1, "reaches third pair");
+    }
+
+    // Scenarios: PCACHER-EXECUTE-N08.
+    function test_whenPairGasLimitIsExhausted_thenReportsEachFailure() public {
+        vm.prank(admin);
+        cacher.setGasLimits(1_000_000, 1);
+
+        vm.expectEmit(address(cacher));
+        emit IPriceCacherTask.PairCacheFailed(address(priceCache), ohm, usds, bytes4(0));
+        vm.expectEmit(address(cacher));
+        emit IPriceCacherTask.PairCacheFailed(address(priceCache), ohm, usde, bytes4(0));
+        vm.prank(heart);
+        cacher.execute();
+        assertEq(priceCache.callCount(), 0, "neither gas-limited cache write succeeds");
+
+        vm.prank(admin);
+        cacher.setGasLimits(1_000_000, 400_000);
+        vm.prank(heart);
+        cacher.execute();
+        assertEq(priceCache.callCount(), 2, "higher pair limit allows both cache writes");
     }
 
     // Scenarios: PCACHER-EXECUTE-L02, PCACHER-EXECUTE-L03.

@@ -113,7 +113,7 @@ contract PriceCacherTaskSetPriceCacheTest is PriceCacherTaskTest {
         cache_.enable("");
     }
 
-    // Scenarios: PCACHER-SET-CACHE-A02, PCACHER-SET-CACHE-N01, PCACHER-SET-CACHE-P01.
+    // Scenarios: PCACHER-SET-CACHE-A02, PCACHER-SET-CACHE-N01.
     function test_whenAdminAndCollectionVary_thenExactRotation(
         address caller_,
         uint8 count_
@@ -129,8 +129,10 @@ contract PriceCacherTaskSetPriceCacheTest is PriceCacherTaskTest {
                 uint64(1)
             );
         _rotationSucceeds(replacement, caller_);
-        vm.prank(heart);
-        cacher.execute();
+        // Give the task body enough gas to verify every pair in the rotation fixture.
+        // The execute suite covers deferral across gas-budgeted runs.
+        vm.prank(address(cacher));
+        cacher.selfExecuteTask();
         _assertAttempts(replacement, pairs);
         assertEq(priceCache.callCount(), 0, "retired cache never called");
     }

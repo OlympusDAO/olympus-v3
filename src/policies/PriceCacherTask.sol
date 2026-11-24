@@ -12,7 +12,8 @@ import {IPriceCacherTask} from "src/policies/interfaces/IPriceCacherTask.sol";
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
-import {ADMIN_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
+import {ADMIN_ROLE, HEART_ROLE, PRICE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -24,8 +25,6 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 /// @title Price Cacher Task
 /// @notice Heart task that refreshes an admin-configured set of PriceCache pairs.
 /// @dev Pair configuration is independent from every cache consumer.
-///      Calls are not gas bounded. A cache call that consumes nearly all available gas can prevent
-///      later pairs, later Heart tasks, or Heart finalization despite ordinary revert isolation.
 contract PriceCacherTask is
     Policy,
     ReEnablerGracePeriod,
@@ -37,8 +36,9 @@ contract PriceCacherTask is
     /// @notice Initial window, in seconds, for re-enablement after a lifecycle transition.
     uint32 internal constant _INITIAL_REENABLE_GRACE_PERIOD = 7 days;
 
-    /// @notice Delegated role permitted to manage the configured pair set alongside admin.
-    bytes32 internal constant _PRICE_ADMIN_ROLE = "price_admin";
+    // Covers call overhead and failure or deferral reporting.
+    uint256 internal constant _GAS_RESERVE = 40_000;
+    uint16 internal constant _MAX_RETURN_DATA_BYTES = 4;
 
     /// @notice PriceCache used to validate configured pairs and refresh their cached prices.
     IPriceCache internal _PRICE_CACHE;
@@ -46,22 +46,34 @@ contract PriceCacherTask is
     /// @notice Configured pairs in traversal order; removal may reorder the remaining pairs.
     AssetPair[] internal _assetPairs;
 
+    /// @inheritdoc IPriceCacherTask
+    uint32 public override executionGasLimit;
+
+    /// @inheritdoc IPriceCacherTask
+    uint32 public override pairGasLimit;
+
     /// @notice Binds a compatible cache without requiring it to be operational during deployment.
     /// @dev Reverts if:
     ///      - The cache is zero (PriceCacherTask_ZeroAddress).
     ///      - The cache lacks IPriceCache or IEnabler (PriceCacherTask_InvalidPriceCache).
     ///      - The cache's Kernel getter fails or returns malformed data (PolicyDependency_InvalidDependency).
     ///      - The cache reports another Kernel (PolicyDependency_KernelMismatch).
+    ///      - The gas limits cannot fund a pair attempt plus the cleanup reserve (PriceCacherTask_InvalidGasLimits).
     ///
     /// @param kernel_ Kernel supplying this task's roles.
     /// @param priceCache_ Initial pair cache, which may be inactive or disabled until activation.
+    /// @param executionGasLimit_ Initial gas limit for the task body.
+    /// @param pairGasLimit_ Initial gas limit for one pair refresh.
     constructor(
         Kernel kernel_,
-        IPriceCache priceCache_
+        IPriceCache priceCache_,
+        uint32 executionGasLimit_,
+        uint32 pairGasLimit_
     ) Policy(kernel_) ReEnablerGracePeriod(_INITIAL_REENABLE_GRACE_PERIOD) {
         _requireCacheInterfaces(address(priceCache_));
         PolicyDependency.requireSameKernel(address(priceCache_), address(kernel_));
         _PRICE_CACHE = priceCache_;
+        _setGasLimits(executionGasLimit_, pairGasLimit_);
     }
 
     /// @inheritdoc Policy
@@ -99,29 +111,42 @@ contract PriceCacherTask is
 
     /// @inheritdoc IPeriodicTask
     /// @dev Authorization and Kernel activity are checked before the disabled no-op.
-    ///      Self-call failures emit ExecutionFailed; calls are not gas bounded.
+    ///      The bounded self-call reports terminal failures through ExecutionFailed.
     ///      Reverts if:
     ///      - The caller lacks HEART_ROLE (ROLES_RequireRole).
     ///      - This task is Kernel-inactive (PriceCacherTask_PolicyInactive).
-    ///      - The unbounded self-call or revert-data handling leaves insufficient gas to finish.
     function execute() external override {
         _requireOwnPolicyActive();
         _requireRole(msg.sender, HEART_ROLE);
         if (!isEnabled) return;
 
-        try this.selfExecuteTask() {} catch (bytes memory reason) {
+        uint256 gasLimit = executionGasLimit;
+        uint256 availableGas = gasleft();
+        if (availableGas <= _GAS_RESERVE) {
+            emit ExecutionDeferred(0);
+            return;
+        }
+        uint256 bodyGas = availableGas - _GAS_RESERVE;
+        if (bodyGas > gasLimit) bodyGas = gasLimit;
+        (bool success, bytes memory reason) = SafeCall.safeCall(
+            address(this),
+            bodyGas,
+            0,
+            _MAX_RETURN_DATA_BYTES,
+            abi.encodeCall(this.selfExecuteTask, ())
+        );
+        if (!success) {
             // forge-lint: disable-next-line(unsafe-typecast)
             emit ExecutionFailed(bytes4(reason));
         }
     }
 
-    /// @notice Runs cache maintenance through an external self-call.
+    /// @notice Refreshes pairs in stored order, starting from the first pair each time.
     /// @dev Reverts if:
     ///      - The caller is not this contract (PriceCacherTask_OnlySelf).
     ///      - The cache is Kernel-inactive or disabled (PolicyDependency_NotActive).
     ///      - The active cache's enabled-state getter reverts or returns malformed data.
-    ///      - Unbounded cache calls or failure reporting exhaust the available gas.
-    ///      execute catches and reports these failures to Heart; pair failures are caught separately.
+    ///      execute reports self-call failures to Heart. Pair failures are reported independently.
     function selfExecuteTask() external {
         if (msg.sender != address(this)) revert PriceCacherTask_OnlySelf();
 
@@ -130,9 +155,24 @@ contract PriceCacherTask is
             revert PolicyDependency.PolicyDependency_NotActive(priceCache_);
 
         uint256 length = _assetPairs.length;
+        uint256 gasLimit = pairGasLimit;
         for (uint256 i; i < length; ++i) {
-            _cachePair(priceCache_, _assetPairs[i]);
+            if (gasleft() <= gasLimit + _GAS_RESERVE) {
+                emit ExecutionDeferred(i);
+                return;
+            }
+            _cachePair(priceCache_, _assetPairs[i], gasLimit);
         }
+    }
+
+    /// @inheritdoc IPriceCacherTask
+    /// @dev Reverts if the policy is Kernel-inactive, the caller holds neither price_admin nor admin,
+    ///      the pair limit is zero, or the execution limit does not exceed the pair limit plus
+    ///      the cleanup reserve. Allow additional execution gas for dependency checks and iteration.
+    function setGasLimits(uint32 executionGasLimit_, uint32 pairGasLimit_) external override {
+        _requireOwnPolicyActive();
+        _requirePriceOrAdminRole();
+        _setGasLimits(executionGasLimit_, pairGasLimit_);
     }
 
     /// @inheritdoc IPriceCacherTask
@@ -256,7 +296,7 @@ contract PriceCacherTask is
     /// @dev Reverts if:
     ///      - The caller holds neither price_admin nor admin (NotAuthorised).
     function _requirePriceOrAdminRole() private view {
-        if (!ROLES.hasRole(msg.sender, _PRICE_ADMIN_ROLE) && !_isAdmin(msg.sender))
+        if (!ROLES.hasRole(msg.sender, PRICE_ADMIN_ROLE) && !_isAdmin(msg.sender))
             revert NotAuthorised();
     }
 
@@ -310,22 +350,34 @@ contract PriceCacherTask is
     }
 
     /// @notice Attempts one pair refresh and reports failure while allowing later pairs to run.
-    /// @dev Letting a pair failure reach execute's self-call catch would roll back earlier pairs
-    ///      and skip the rest of the batch. This catch emits PairCacheFailed without rethrowing.
-    ///      Reverts if:
-    ///      - The unbounded cache call or revert-data handling leaves insufficient gas to report failure.
+    /// @dev A capped call isolates pair failures from earlier refreshes and later attempts.
     ///
     /// @param priceCache_ Cache used for this execution.
     /// @param pair_ Configured pair to refresh.
-    function _cachePair(address priceCache_, AssetPair memory pair_) private {
-        // External calls are the purpose of this governance-configured pair iteration.
-        // forge-lint: disable-next-line(calls-loop)
-        try IPriceCache(priceCache_).cachePriceIfNecessary(pair_.asset, pair_.quote, 0) returns (
-            IPriceCache.CachedPrice memory
-        ) {} catch (bytes memory reason) {
+    /// @param gasLimit_ Maximum gas forwarded to the pair refresh.
+    function _cachePair(address priceCache_, AssetPair memory pair_, uint256 gasLimit_) private {
+        // The task only needs the cache write. Copy at most a selector for failure reporting.
+        (bool success, bytes memory reason) = SafeCall.safeCall(
+            priceCache_,
+            gasLimit_,
+            0,
+            _MAX_RETURN_DATA_BYTES,
+            abi.encodeCall(IPriceCache.cachePriceIfNecessary, (pair_.asset, pair_.quote, 0))
+        );
+        if (!success) {
             // forge-lint: disable-next-line(unsafe-typecast)
             emit PairCacheFailed(priceCache_, pair_.asset, pair_.quote, bytes4(reason));
         }
+    }
+
+    function _setGasLimits(uint32 executionGasLimit_, uint32 pairGasLimit_) private {
+        if (pairGasLimit_ == 0 || executionGasLimit_ <= uint256(pairGasLimit_) + _GAS_RESERVE)
+            revert PriceCacherTask_InvalidGasLimits();
+        if (executionGasLimit_ == executionGasLimit && pairGasLimit_ == pairGasLimit) return;
+
+        executionGasLimit = executionGasLimit_;
+        pairGasLimit = pairGasLimit_;
+        emit GasLimitsSet(executionGasLimit_, pairGasLimit_);
     }
 
     /// @notice Requires this task to remain installed in its Kernel.

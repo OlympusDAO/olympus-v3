@@ -4,11 +4,14 @@ Coverage records implemented domains and assertions independently of test pass/f
 
 Source: [PriceCacherTask](../../../policies/PriceCacherTask.sol). Scope: `PCACHER-EXECUTE`.
 
-HEART_ROLE is the complete external caller set. The outer scheduler returns while
-disabled, invokes selfExecuteTask through an external self-call, and catches ordinary
-aggregate failures as ExecutionFailed(first4bytes). Own Kernel activity is required before
-HEART authorization and the disabled no-op. Per-pair calls use maxAge=0 and
-are unbounded in gas; this plan does not promise gas-exhaustion isolation.
+HEART_ROLE is the complete external caller set. Own Kernel activity is required before
+HEART authorization and the disabled no-op. When enabled, the task budgets gas for
+its self-call and each pair, reserves cleanup gas, and copies up to four return bytes per
+call. Failed calls emit `ExecutionFailed` or `PairCacheFailed` with the first four revert
+bytes, or zero for an empty failure such as a callee running out of gas. Each pair uses
+`maxAge=0`. Each execution starts with the first pair in stored order. If the remaining
+gas is too low, `ExecutionDeferred` identifies the first skipped index. Later pairs can
+remain stale if the configured limits cannot cover the full list.
 
 Unchanged means relevant bindings, lifecycle, configuration and authoritative state are
 preserved; rejected transactions commit no logs. These actions transfer no tokens. A Partial
@@ -42,13 +45,20 @@ are recorded explicitly and are not converted into passing expectations.
 
 | ID | Caller | Local active | Local enabled | Input or dependency condition | Execution / effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| PCACHER-EXECUTE-N01 | HEART | true | true | Empty and single pair sets; larger fixture set | Zero work for empty; one attempt per entry; no array mutation | Covered: [test][test_whenHeartAndCollectionVary_thenExactAttempts], [test][test_whenEmptyPairSet_thenNoCacheCalls], [test][test_whenSinglePair_thenOneCacheCall], [test][test_whenLargerPairSet_thenAllCacheCalls] |
+| PCACHER-EXECUTE-N01 | HEART | true | true | Zero to four fixture pairs fit the task budget | Zero work for empty; one attempt per entry; no array mutation | Covered: [test][test_whenHeartAndCollectionVary_thenExactAttempts], [test][test_whenEmptyPairSet_thenNoCacheCalls], [test][test_whenSinglePair_thenOneCacheCall] |
+| PCACHER-EXECUTE-N02 | HEART | true | true | 32 fixture pairs exceed the task budget | Refresh a nonempty prefix in stored order and emit ExecutionDeferred with the first skipped pair index | Covered: [test][test_givenLargePairSet_whenExecuted_thenReportsDeferredWork] |
+| PCACHER-EXECUTE-N03 | HEART | true | true | Available gas allows one of two fixture pairs to finish | On both executions, refresh the first pair and emit ExecutionDeferred(1) | Covered: [test][test_whenGasAllowsOnePair_thenEachExecutionStartsAtFirstPair] |
+| PCACHER-EXECUTE-N04 | HEART | true | true | Available gas cannot fund one pair attempt | Emit ExecutionDeferred(0) and return without a pair call | Covered: [test][test_whenGasCannotFundAPair_thenReportsDeferral] |
+| PCACHER-EXECUTE-N05 | HEART | true | true | First pair is removed after index 1 is skipped | Start at index zero in the updated list and refresh the remaining pair | Covered: [test][test_givenPairRemovedAfterDeferral_whenExecuted_thenStartsAtRemainingPair] |
+| PCACHER-EXECUTE-N06 | HEART | true | true | Only cleanup gas is available | Emit ExecutionDeferred(0) and return without starting the self-call | Covered: [test][test_whenGasCannotFundSelfCall_thenReportsDeferralWithoutCalling] |
+| PCACHER-EXECUTE-N07 | HEART | true | true | Three pairs, aggregate limit initially covers two | Emit ExecutionDeferred(2). After the limit is raised, refresh all three starting from index zero | Covered: [test][test_givenThreePairs_whenExecutionLimitIsRaised_thenAllPairsRefresh] |
+| PCACHER-EXECUTE-N08 | HEART | true | true | Pair limit of one gas, then a sufficient limit | Report both failed calls with a zero selector. With enough gas, refresh both pairs | Covered: [test][test_whenPairGasLimitIsExhausted_thenReportsEachFailure] |
 
 ## Successful effects and read consistency
 
 | ID | Caller | Local active | Local enabled | Input or dependency condition | Execution / effects | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| PCACHER-EXECUTE-P01 | HEART | true | true | Two operational configured pairs | Attempt in stored order; each once; exact identities; maxAge=0 | Covered: [test][test_givenOperationalPriceCache_attemptsConfiguredPairsInOrder] |
+| PCACHER-EXECUTE-P01 | HEART | true | true | Two operational configured pairs | Attempt in stored order with exact identities, maxAge=0, and the defined call gas limits | Covered: [test][test_givenOperationalPriceCache_attemptsConfiguredPairsInOrder] |
 | PCACHER-EXECUTE-P02 | HEART | true | true | After local reEnable or Kernel reactivation | Normal work resumes; preserve configuration | Covered: [test][test_givenReEnabled_whenExecuted_thenNormalWork], [test][test_givenReactivated_whenExecuted_thenNormalWork] |
 
 ## External failures
@@ -83,28 +93,34 @@ The following row maps the narrow competing-fault regression; it does not expand
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | PCACHER-EXECUTE-L04 | Any address, fuzz, without authorization exclusions | false | false | Task paused, then Kernel-deactivated; existing cache/pair fixture retained; No arguments; activity precedes Heart-role check and disabled no-op | `PriceCacherTask_PolicyInactive(task)` before caller, input and dependency checks | Revert; no effects of the attempted action commit. | Covered: [test][test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst] |
 
-[test_givenCacheInactiveDisabled_whenExecuted_thenFailureAndNoCalls]: execute.t.sol#L208
-[test_givenConfiguredPairBecomesUnsupported_attemptsNextPairWithoutReverting]: execute.t.sol#L130
-[test_givenDisabled_isNoOp]: execute.t.sol#L32
-[test_givenDisabled_whenUnauthorizedCallerExecutes_reverts]: execute.t.sol#L237
-[test_givenEmptyPairError_whenExecuted_thenNextPairSucceeds]: execute.t.sol#L266
-[test_givenEmptyStatusError_whenExecuted_thenZeroSelector]: execute.t.sol#L249
-[test_givenFirstPairReverts_attemptsSecondPair]: execute.t.sol#L109
-[test_givenInactive_whenExecuted_reverts]: execute.t.sol#L194
-[test_givenLargePairError_whenExecuted_thenNextPairSucceeds]: execute.t.sol#L276
-[test_givenLargeStatusError_whenExecuted_thenPrefixOnly]: execute.t.sol#L261
-[test_givenOperationalPriceCache_attemptsConfiguredPairsInOrder]: execute.t.sol#L92
-[test_givenPriceCacheEnabledQueryReverts_emitsFailureAndReturns]: execute.t.sol#L77
-[test_givenPriceCacheIsDisabled_reportsFailure]: execute.t.sol#L62
-[test_givenPriceCacheIsInactive_reportsFailure]: execute.t.sol#L46
-[test_givenReEnabled_whenExecuted_thenNormalWork]: execute.t.sol#L219
-[test_givenReactivated_whenExecuted_thenNormalWork]: execute.t.sol#L228
-[test_givenSecondPairReverts_preservesFirstPair]: execute.t.sol#L151
-[test_givenShortPairError_whenExecuted_thenNextPairSucceeds]: execute.t.sol#L271
-[test_givenShortStatusErrors_whenExecuted_thenPaddedSelectors]: execute.t.sol#L254
-[test_whenCallerDoesNotHaveHeartRole_reverts]: execute.t.sol#L21
-[test_whenEmptyPairSet_thenNoCacheCalls]: execute.t.sol#L179
-[test_whenHeartAndCollectionVary_thenExactAttempts]: execute.t.sol#L169
-[test_whenLargerPairSet_thenAllCacheCalls]: execute.t.sol#L189
-[test_whenSinglePair_thenOneCacheCall]: execute.t.sol#L184
-[test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst]: ./execute.t.sol#L321
+[test_givenCacheInactiveDisabled_whenExecuted_thenFailureAndNoCalls]: execute.t.sol#L333
+[test_givenConfiguredPairBecomesUnsupported_attemptsNextPairWithoutReverting]: execute.t.sol#L139
+[test_givenDisabled_isNoOp]: execute.t.sol#L33
+[test_givenDisabled_whenUnauthorizedCallerExecutes_reverts]: execute.t.sol#L362
+[test_givenEmptyPairError_whenExecuted_thenNextPairSucceeds]: execute.t.sol#L391
+[test_givenEmptyStatusError_whenExecuted_thenZeroSelector]: execute.t.sol#L374
+[test_givenFirstPairReverts_attemptsSecondPair]: execute.t.sol#L118
+[test_givenInactive_whenExecuted_reverts]: execute.t.sol#L319
+[test_givenLargePairError_whenExecuted_thenNextPairSucceeds]: execute.t.sol#L401
+[test_givenLargeStatusError_whenExecuted_thenPrefixOnly]: execute.t.sol#L386
+[test_givenOperationalPriceCache_attemptsConfiguredPairsInOrder]: execute.t.sol#L93
+[test_givenPriceCacheEnabledQueryReverts_emitsFailureAndReturns]: execute.t.sol#L78
+[test_givenPriceCacheIsDisabled_reportsFailure]: execute.t.sol#L63
+[test_givenPriceCacheIsInactive_reportsFailure]: execute.t.sol#L47
+[test_givenReEnabled_whenExecuted_thenNormalWork]: execute.t.sol#L344
+[test_givenReactivated_whenExecuted_thenNormalWork]: execute.t.sol#L353
+[test_givenSecondPairReverts_preservesFirstPair]: execute.t.sol#L160
+[test_givenShortPairError_whenExecuted_thenNextPairSucceeds]: execute.t.sol#L396
+[test_givenShortStatusErrors_whenExecuted_thenPaddedSelectors]: execute.t.sol#L379
+[test_whenCallerDoesNotHaveHeartRole_reverts]: execute.t.sol#L22
+[test_whenEmptyPairSet_thenNoCacheCalls]: execute.t.sol#L188
+[test_whenHeartAndCollectionVary_thenExactAttempts]: execute.t.sol#L178
+[test_givenLargePairSet_whenExecuted_thenReportsDeferredWork]: execute.t.sol#L198
+[test_whenGasAllowsOnePair_thenEachExecutionStartsAtFirstPair]: execute.t.sol#L223
+[test_whenGasCannotFundAPair_thenReportsDeferral]: execute.t.sol#L242
+[test_whenGasCannotFundSelfCall_thenReportsDeferralWithoutCalling]: execute.t.sol#L252
+[test_givenPairRemovedAfterDeferral_whenExecuted_thenStartsAtRemainingPair]: execute.t.sol#L261
+[test_givenThreePairs_whenExecutionLimitIsRaised_thenAllPairsRefresh]: execute.t.sol#L275
+[test_whenPairGasLimitIsExhausted_thenReportsEachFailure]: execute.t.sol#L299
+[test_whenSinglePair_thenOneCacheCall]: execute.t.sol#L193
+[test_givenInactiveAndDisabled_whenUnauthorizedCaller_revertsActivityFirst]: ./execute.t.sol#L446

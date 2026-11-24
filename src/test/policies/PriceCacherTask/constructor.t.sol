@@ -20,7 +20,78 @@ contract PriceCacherTaskConstructorTest is PriceCacherTaskTest {
     // Scenarios: PCACHER-CONSTRUCTOR-I01.
     function test_whenPriceCacheIsZero_reverts() public {
         vm.expectRevert(IPriceCacherTask.PriceCacherTask_ZeroAddress.selector);
-        new PriceCacherTask(kernel, IPriceCache(address(0)));
+        _deployWithTestLimits(IPriceCache(address(0)));
+    }
+
+    // Scenarios: PCACHER-CONSTRUCTOR-I03.
+    function test_whenPairGasLimitIsZero_reverts(uint32 executionGas_) public {
+        _expectInvalidGasLimits(executionGas_, 0);
+    }
+
+    // Scenarios: PCACHER-CONSTRUCTOR-I04.
+    function test_whenExecutionGasEqualsPairGasPlusReserve_reverts() public {
+        _expectInvalidGasLimits(440_000, 400_000);
+    }
+
+    // Scenarios: PCACHER-CONSTRUCTOR-I05.
+    function test_whenGasLimitsAreInvalid_revertsAtBoundaries() public {
+        _expectInvalidGasLimits(type(uint32).max, 0);
+        _expectInvalidGasLimits(0, 1);
+        _expectInvalidGasLimits(1, 1);
+        _expectInvalidGasLimits(40_000, 1);
+        _expectInvalidGasLimits(40_001, 1);
+        _expectInvalidGasLimits(type(uint32).max, type(uint32).max - 40_000);
+        _expectInvalidGasLimits(type(uint32).max, type(uint32).max);
+    }
+
+    // Scenarios: PCACHER-CONSTRUCTOR-I06.
+    function test_whenExecutionGasLeavesInsufficientGasForAPair_reverts(
+        uint32 executionGas_,
+        uint32 pairGas_
+    ) public {
+        pairGas_ = uint32(bound(pairGas_, 1, type(uint32).max));
+        uint256 highestInvalidExecutionGas = uint256(pairGas_) + 40_000;
+        if (highestInvalidExecutionGas > type(uint32).max)
+            highestInvalidExecutionGas = type(uint32).max;
+        executionGas_ = uint32(bound(executionGas_, 0, highestInvalidExecutionGas));
+
+        _expectInvalidGasLimits(executionGas_, pairGas_);
+    }
+
+    // Scenarios: PCACHER-CONSTRUCTOR-P02.
+    function test_whenGasLimitsAreValid_storesBoundaryValues() public {
+        _assertDeployedGasLimits(40_002, 1);
+        _assertDeployedGasLimits(40_003, 2);
+        _assertDeployedGasLimits(440_001, 400_000);
+        _assertDeployedGasLimits(type(uint32).max, type(uint32).max - 40_001);
+    }
+
+    // Scenarios: PCACHER-CONSTRUCTOR-P03.
+    function test_whenGasLimitsAreValid_storesBoth(uint32 executionGas_, uint32 pairGas_) public {
+        executionGas_ = uint32(bound(executionGas_, 40_002, type(uint32).max));
+        pairGas_ = uint32(bound(pairGas_, 1, executionGas_ - 40_001));
+
+        _assertDeployedGasLimits(executionGas_, pairGas_);
+    }
+
+    function _expectInvalidGasLimits(uint32 executionGas_, uint32 pairGas_) private {
+        vm.expectRevert(IPriceCacherTask.PriceCacherTask_InvalidGasLimits.selector);
+        new PriceCacherTask(kernel, priceCache, executionGas_, pairGas_);
+    }
+
+    function _assertDeployedGasLimits(uint32 executionGas_, uint32 pairGas_) private {
+        PriceCacherTask candidate = new PriceCacherTask(
+            kernel,
+            priceCache,
+            executionGas_,
+            pairGas_
+        );
+        assertEq(candidate.executionGasLimit(), executionGas_, "configured execution gas");
+        assertEq(candidate.pairGasLimit(), pairGas_, "configured pair gas");
+    }
+
+    function _deployWithTestLimits(IPriceCache cache_) private {
+        new PriceCacherTask(kernel, cache_, _TEST_EXECUTION_GAS_LIMIT, _TEST_PAIR_GAS_LIMIT);
     }
 
     // when PriceCache is not a contract
@@ -34,7 +105,7 @@ contract PriceCacherTaskConstructorTest is PriceCacherTaskTest {
                 candidate
             )
         );
-        new PriceCacherTask(kernel, IPriceCache(candidate));
+        _deployWithTestLimits(IPriceCache(candidate));
     }
 
     // when PriceCache does not support required interface
@@ -50,7 +121,7 @@ contract PriceCacherTaskConstructorTest is PriceCacherTaskTest {
                 address(candidate)
             )
         );
-        new PriceCacherTask(kernel, candidate);
+        _deployWithTestLimits(candidate);
     }
 
     // when PriceCache belongs to a different Kernel
@@ -68,7 +139,7 @@ contract PriceCacherTaskConstructorTest is PriceCacherTaskTest {
                 address(otherKernel)
             )
         );
-        new PriceCacherTask(kernel, candidate);
+        _deployWithTestLimits(candidate);
     }
 
     // when the configuration is valid
@@ -76,9 +147,11 @@ contract PriceCacherTaskConstructorTest is PriceCacherTaskTest {
     // Scenarios: PCACHER-CONSTRUCTOR-P01.
     function test_whenConfigurationIsValid_startsWithNoAssetPairs(address deployer_) public {
         vm.prank(deployer_);
-        PriceCacherTask candidate = new PriceCacherTask(kernel, priceCache);
+        PriceCacherTask candidate = new PriceCacherTask(kernel, priceCache, 620_000, 300_000);
 
         assertEq(candidate.priceCache(), address(priceCache), "price cache");
+        assertEq(candidate.executionGasLimit(), 620_000, "configured execution gas");
+        assertEq(candidate.pairGasLimit(), 300_000, "configured pair gas");
         assertEq(candidate.getAssetPairs().length, 0, "pair count");
         assertEq(address(candidate.kernel()), address(kernel), "constructor Kernel binding");
         assertFalse(candidate.isEnabled(), "initially disabled");
@@ -145,7 +218,7 @@ contract PriceCacherTaskConstructorTest is PriceCacherTaskTest {
 
     function _expectInvalidCache() internal {
         vm.expectRevert(_invalidCache(address(priceCache)));
-        new PriceCacherTask(kernel, priceCache);
+        _deployWithTestLimits(priceCache);
     }
 
     function _expectInvalidMetadata() internal {
@@ -155,7 +228,7 @@ contract PriceCacherTaskConstructorTest is PriceCacherTaskTest {
                 address(priceCache)
             )
         );
-        new PriceCacherTask(kernel, priceCache);
+        _deployWithTestLimits(priceCache);
     }
 
     // Scenarios: PCACHER-CONSTRUCTOR-D11.

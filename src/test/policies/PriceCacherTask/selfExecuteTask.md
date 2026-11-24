@@ -5,8 +5,10 @@ Coverage records implemented domains and assertions independently of test pass/f
 Source: [PriceCacherTask](../../../policies/PriceCacherTask.sol). Scope: `PCACHER-SELF-EXECUTE`.
 
 The sole direct caller is address(this); external HEART authority alone is insufficient.
-The outer execute entry owns scheduler authorization and local pause handling. This body
-checks current cache readiness and catches ordinary pair failures independently.
+The outer execute entry owns scheduler authorization, local pause handling and the self-call
+gas cap. This body checks cache readiness and isolates each pair with a gas and return-data cap.
+Each run starts at the first pair. If gas is too low, `ExecutionDeferred` reports the first skipped index.
+The scheduler tests exercise that boundary through the metered entry point.
 
 Unchanged means relevant bindings, lifecycle, configuration and authoritative state are
 preserved; rejected transactions commit no logs. These actions transfer no tokens. A Partial

@@ -74,7 +74,11 @@ Grants select deposit, borrow, withdraw, and extend actions with independent ass
 
 The proposal grants permanent custody, action, automation, and DAO operational roles. It then grants the constructor-bound activator temporary ADMIN, calls its one-use launch, and revokes ADMIN in the same governance execution. The activator checks the immutable deployment graph, Kernel membership, fresh disabled state, backing, and required roles. It admits USDe to PRICE if absent and configures custody, Auth/services, markets, independent queues, revenue routes, and Heart tasks.
 
-The launch prepends SeizerTask, YieldClaimerTask, and RevenueDistributorTask in that order, preserving the order of existing tasks. PriceCacherTask remains in review scope as a generic optional warmer, but this proposal does not install it in Heart. Price-dependent lending actions refresh the configured cache themselves.
+The launch inserts SeizerTask, YieldClaimerTask, and RevenueDistributorTask in that order immediately before Operator, preserving the relative order of the existing tasks.
+
+The launch deployment sequence, OCG proposal, and Heart schedule omit `PriceCacherTask`. The task remains in audit scope as an optional cache warmer. Burner Loans already refreshes stale pairs on demand. Its five-minute cache window covers roughly 1% of the configured eight-hour Heart interval. In the [mainnet fork test](../../src/test/proposals/BurnerLoansProposal/lifecycleFork.md), the initial OHM/USDS and OHM/USDe refreshes consumed about 1.53 million gas combined. Scheduling would make that work recur even when no operation needs a fresh price. Before adding the task, compare a full Heart beat with and without it using the intended pair list and expected lending activity.
+
+Core rotates its Config operator and every registered FLOAN market manager in one transaction. Gas grows with the number of registered markets. Before a major market expansion, measure the full handoff at the planned market count against the governance execution gas budget.
 
 ## Scope
 
