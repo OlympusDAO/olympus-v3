@@ -32,6 +32,9 @@ Biome and Taplo are installed through pnpm. CI installs the pinned shfmt executa
 Prettier still formats Solidity and any HTML files outside the generated report exclusions.
 The existing `pnpm prettier` commands remain aliases for the formatting commands.
 
+`pnpm lint` and `pnpm lint:check` run Forge lint at all levels, including informational,
+gas, and code-size notes. Forge lint diagnostics are nonblocking.
+
 Configure foundry settings in foundry.toml.
 
 ## SRC Directory Structure

@@ -117,6 +117,7 @@ runs = 256
 workers = 4
 
 [lint]
+severity = ["high", "medium", "low", "info", "gas", "code-size"]
 exclude_lints = [
     # Prefer auditable Solidity hashing; use assembly only when profiling justifies it.
     "asm-keccak256",
