@@ -72,7 +72,7 @@ abstract contract BurnerLoansModularTest is Test {
     // forge-lint: disable-start(reentrancy-no-eth)
     function setUp() public virtual {
         _kernel = new Kernel();
-        _ohm = new MockERC20("OHM", "OHM", 9);
+        _ohm = _fixtureOhm();
         _asset = new MockERC20("USDS", "USDS", 6);
         _floan = new OlympusFixedTermLoan(_kernel);
         _roles = new OlympusRoles(_kernel);
@@ -149,6 +149,11 @@ abstract contract BurnerLoansModularTest is Test {
     }
 
     // forge-lint: disable-end(reentrancy-no-eth)
+
+    /// @dev Fork fixtures may bind deployed OHM and supply Inventory with provider liquidity.
+    function _fixtureOhm() internal virtual returns (MockERC20) {
+        return new MockERC20("OHM", "OHM", 9);
+    }
 
     /// @dev Fresh permission data uses the fixture's current asset, including callback-token markets.
     function _operatorGrant(
