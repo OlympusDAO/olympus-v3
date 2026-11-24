@@ -26,6 +26,7 @@ import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
 import {RevenueDistributorConfigTimelock} from "src/policies/RevenueDistributorConfigTimelock.sol";
 import {RevenueDistributorTask} from "src/policies/RevenueDistributorTask.sol";
 import {Kernel, Module} from "src/Kernel.sol";
+import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
@@ -36,6 +37,8 @@ import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoan
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
+import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
+import {BurnerLoansUniswapV3Adapter} from "src/periphery/adapters/BurnerLoansUniswapV3Adapter.sol";
 import {BurnerLoansAuth} from "src/policies/burnerloans/BurnerLoansAuth.sol";
 import {BurnerLoansCollateral} from "src/policies/burnerloans/BurnerLoansCollateral.sol";
 import {BurnerLoansConfig} from "src/policies/burnerloans/BurnerLoansConfig.sol";
@@ -2032,6 +2035,40 @@ contract DeployV3 is WithEnvironment {
         BurnerLoansAuth burnerLoansAuth = new BurnerLoansAuth(kernel, core);
         console2.log("BurnerLoansAuth deployed at", address(burnerLoansAuth));
         return (address(burnerLoansAuth), "olympus.periphery");
+    }
+
+    /// @notice Deploys the adapter for the chain's Uniswap V3 SwapRouter.
+    function deployBurnerLoansUniswapV3Adapter() public returns (address, string memory) {
+        address router = _getAddressNotZero("external.uniswap.UniswapV3SwapRouter");
+        console2.log("BurnerLoansUniswapV3Adapter router", router);
+
+        vm.broadcast();
+        BurnerLoansUniswapV3Adapter adapter = new BurnerLoansUniswapV3Adapter(router);
+        return (address(adapter), "olympus.periphery");
+    }
+
+    /// @notice Deploys Composites disabled and owned by the DAO multisig.
+    function deployBurnerLoansComposites() public returns (address, string memory) {
+        address core = _getAddressNotZero("olympus.policies.BurnerLoansCore");
+        address collateral = _getAddressNotZero("olympus.policies.BurnerLoansCollateral");
+        address debt = _getAddressNotZero("olympus.policies.BurnerLoansDebt");
+        address owner = _getAddressNotZero("olympus.multisig.dao");
+        IBurnerLoansComposites.Integrations memory integrations = IBurnerLoansComposites
+            .Integrations({
+                migrator: _getAddressNotZero("external.maker.daiUsdsMigrator"),
+                swapAdapter: _getAddressNotZero("olympus.periphery.BurnerLoansUniswapV3Adapter"),
+                flashLender: _getAddressNotZero("external.maker.flash")
+            });
+
+        vm.broadcast();
+        BurnerLoansComposites composites = new BurnerLoansComposites(
+            core,
+            collateral,
+            debt,
+            owner,
+            integrations
+        );
+        return (address(composites), "olympus.periphery");
     }
 
     /// @notice Deploys the one-use launch helper after every immutable dependency exists.

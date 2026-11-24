@@ -28,8 +28,10 @@ Auth deploys immediately after Core and is permanently bound to it and the trust
 It is periphery, so it needs no Kernel policy activation, role or independent enable call.
 Lens also has no Kernel lifecycle: `deployBurnerLoansLens` binds it to Core, and SeizerTask
 receives that Lens in its constructor. Activator verifies both links at deployment and launch.
-OCG selects Auth on Core before enabling Core. Bundler deployment remains a TODO.
+OCG selects Auth on Core before enabling Core.
 Oracle factories are not required: PriceCache reads PRICE directly.
+
+Deploy Composites separately after the [OCG launch](#deploy-and-enable-composites).
 
 ## 2. Prepare Kernel membership
 
@@ -211,6 +213,37 @@ Confirm helper ADMIN was revoked, both custody/market configurations match the a
 required Core action roles are present, configuration timelocks are selected and enabled, and the
 Heart list matches the recorded order. The lifecycle fork suite tests deposit, borrow, extend,
 repay, withdraw, seize, provider funding and automation under the unmodified launch settings.
+
+### Deploy and enable Composites
+
+After verifying the OCG launch, simulate the separate periphery deployment.
+
+```bash
+./shell/deployV3.sh --sequence src/scripts/deploy/savedDeployments/burner_loans_composites.json --chain mainnet --account launch-deployer --env .env
+```
+
+The adapter deploys first and binds to `external.uniswap.UniswapV3SwapRouter`, the Ethereum V3
+SwapRouter that implements `ISwapRouter`.
+[Uniswap Ethereum deployments](https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments)
+
+Check that Composites binds to the launched Core, Collateral and Debt, the deployed adapter,
+`external.maker.daiUsdsMigrator` and `external.maker.flash`. Confirm the constructor sets
+`olympus.multisig.dao` as owner. After reviewing the simulation, deploy with
+`--broadcast true --verify true` and record the confirmed addresses in `src/scripts/env.json` under
+`olympus.periphery.BurnerLoansUniswapV3Adapter` and `olympus.periphery.BurnerLoansComposites`.
+Deploy both as periphery. The DAO Safe owns the Composites lifecycle.
+
+Composites starts disabled. Submit `enable(bytes)` from the DAO Safe to the reviewed Composites
+address with `data = 0x` and zero ETH. Review the Safe simulation and confirm `owner()` is the
+DAO Safe and `isEnabled()` is true after execution. Borrowers approve only the tokens they
+explicitly fund and grant Composites scoped lending authority for the operations that require it.
+
+The DAO Safe can pause Composites with `disable(0x)`, restore it with `enable(0x)`, and call
+`rescue(token)` to recover the full ERC-20 balance held between executions. Use a direct DAO Safe
+transaction to pause Composites. The generic `EnablerBatch.disable` selects the Emergency Safe for
+role-controlled policies.
+
+### Operate the lending policies
 
 Use the [operations index](../src/scripts/ops/README.md#burner-loans-and-shared-services) for the
 standalone batches. Create args files when needed. Queuing and execution are separate runs;
