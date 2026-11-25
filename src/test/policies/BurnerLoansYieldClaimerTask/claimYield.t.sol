@@ -91,9 +91,13 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
         (address token, uint256 amount) = _claimer.claimYield(address(_yieldAsset));
         assertEq(token, address(_yieldAsset), "Underlying output identity");
         assertEq(amount, 1, "Exact raw output");
+        // One raw asset unit moves from the vault to Treasury even if either initiated the claim.
+        uint256 expectedCallerBalance = callerBefore;
+        if (caller_ == address(_yieldVault)) expectedCallerBalance -= amount;
+        if (caller_ == _payout.treasury()) expectedCallerBalance += amount;
         assertEq(
-            _yieldAsset.balanceOf(caller_) - callerBefore,
-            caller_ == _payout.treasury() ? 1 : 0,
+            _yieldAsset.balanceOf(caller_),
+            expectedCallerBalance,
             "Initiating a claim creates no caller entitlement"
         );
         assertEq(_yieldAsset.balanceOf(_payout.treasury()) - before, 1, "Only destination is paid");
@@ -249,11 +253,12 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
 
     // Scenarios: BLYC-CLAIM-YIELD-A01, BLYC-CLAIM-YIELD-L01.
     function test_whenPermissionlessCallerSeeds() public {
-        address[6] memory callers = [
+        address[7] memory callers = [
             address(0),
             address(this),
             address(_core),
             address(_claimer),
+            address(_yieldVault),
             _borrower,
             _heart
         ];

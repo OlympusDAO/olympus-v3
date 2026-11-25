@@ -34,6 +34,12 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         Configuration
     }
     ReentrantPayoutToken internal _callbackAsset;
+    address internal _callbackAuthority;
+
+    function setUp() public override {
+        super.setUp();
+        _callbackAuthority = makeAddr("callbackAuthority");
+    }
 
     // Scenarios: RD-RESCUE-L01.
     function test_givenDistributorEnabled_whenAdminRescues(
@@ -772,7 +778,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                     uint256 nestedCustody
                 ) = _prepareSurplusCallback(NestedAction.Surplus, differentToken != 0);
                 _callbackAsset.setBubbleCallbackFailure(false);
-                address caller = operatorCaller == 0 ? admin : address(this);
+                address caller = operatorCaller == 0 ? admin : _callbackAuthority;
                 _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
                 assertEq(
                     _callbackAsset.callbackRevertData(),
@@ -801,7 +807,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                     uint256 nestedCustody
                 ) = _prepareSurplusCallback(NestedAction.Surplus, differentToken != 0);
                 _callbackAsset.setBubbleCallbackFailure(true);
-                address caller = operatorCaller == 0 ? admin : address(this);
+                address caller = operatorCaller == 0 ? admin : _callbackAuthority;
                 _assertRDSurplusFailure(
                     _callbackAsset,
                     address(_callbackAsset),
@@ -831,7 +837,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 uint256 nestedCustody
             ) = _prepareSurplusCallback(NestedAction.PendingPayout, false);
             _callbackAsset.setBubbleCallbackFailure(false);
-            address caller = operatorCaller == 0 ? admin : address(this);
+            address caller = operatorCaller == 0 ? admin : _callbackAuthority;
             _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
             assertEq(
                 _callbackAsset.callbackRevertData(),
@@ -859,7 +865,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 uint256 nestedCustody
             ) = _prepareSurplusCallback(NestedAction.PendingPayout, false);
             _callbackAsset.setBubbleCallbackFailure(true);
-            address caller = operatorCaller == 0 ? admin : address(this);
+            address caller = operatorCaller == 0 ? admin : _callbackAuthority;
             _assertRDSurplusFailure(
                 _callbackAsset,
                 address(_callbackAsset),
@@ -889,7 +895,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 uint256 nestedCustody
             ) = _prepareSurplusCallback(NestedAction.Retry, false);
             _callbackAsset.setBubbleCallbackFailure(false);
-            address caller = operatorCaller == 0 ? admin : address(this);
+            address caller = operatorCaller == 0 ? admin : _callbackAuthority;
             _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
             assertEq(
                 _callbackAsset.callbackRevertData(),
@@ -917,7 +923,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 uint256 nestedCustody
             ) = _prepareSurplusCallback(NestedAction.Retry, false);
             _callbackAsset.setBubbleCallbackFailure(true);
-            address caller = operatorCaller == 0 ? admin : address(this);
+            address caller = operatorCaller == 0 ? admin : _callbackAuthority;
             _assertRDSurplusFailure(
                 _callbackAsset,
                 address(_callbackAsset),
@@ -947,7 +953,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 uint256 nestedCustody
             ) = _prepareSurplusCallback(NestedAction.Distribute, false);
             _callbackAsset.setBubbleCallbackFailure(false);
-            address caller = operatorCaller == 0 ? admin : address(this);
+            address caller = operatorCaller == 0 ? admin : _callbackAuthority;
             _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
             assertEq(
                 _callbackAsset.callbackRevertData(),
@@ -975,7 +981,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 uint256 nestedCustody
             ) = _prepareSurplusCallback(NestedAction.Distribute, false);
             _callbackAsset.setBubbleCallbackFailure(true);
-            address caller = operatorCaller == 0 ? admin : address(this);
+            address caller = operatorCaller == 0 ? admin : _callbackAuthority;
             _assertRDSurplusFailure(
                 _callbackAsset,
                 address(_callbackAsset),
@@ -1005,7 +1011,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 uint256 nestedCustody
             ) = _prepareSurplusCallback(NestedAction.Configuration, false);
             _callbackAsset.setBubbleCallbackFailure(false);
-            address caller = operatorCaller == 0 ? admin : address(this);
+            address caller = operatorCaller == 0 ? admin : _callbackAuthority;
             _assertRDSurplusPayment(_callbackAsset, bob, _SURPLUS_PAYOUT, caller);
             assertEq(
                 _callbackAsset.callbackRevertData(),
@@ -1033,7 +1039,7 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
                 uint256 nestedCustody
             ) = _prepareSurplusCallback(NestedAction.Configuration, false);
             _callbackAsset.setBubbleCallbackFailure(true);
-            address caller = operatorCaller == 0 ? admin : address(this);
+            address caller = operatorCaller == 0 ? admin : _callbackAuthority;
             _assertRDSurplusFailure(
                 _callbackAsset,
                 address(_callbackAsset),
@@ -1059,13 +1065,20 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
             _MANAGED_RESERVE,
             "callback observes unrelated liabilities intact"
         );
+        if (action_ == NestedAction.Configuration) {
+            address yieldRecipient = distributor.yieldRecipient();
+            vm.prank(_callbackAuthority);
+            distributor.setYieldRecipient(yieldRecipient);
+            return;
+        }
+
+        vm.prank(_callbackAuthority);
         if (action_ == NestedAction.Surplus) distributor.rescue(nestedAsset_, bob);
         else if (action_ == NestedAction.PendingPayout)
             distributor.rescuePendingPayout(nestedAsset_, alice, bob, 1);
         else if (action_ == NestedAction.Retry)
             distributor.transferPendingPayout(nestedAsset_, alice);
-        else if (action_ == NestedAction.Distribute) distributor.distribute(nestedAsset_);
-        else distributor.setYieldRecipient(distributor.yieldRecipient());
+        else distributor.distribute(nestedAsset_);
     }
 
     // Scenarios: RD-RESCUE-L01.
@@ -1090,6 +1103,8 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
         NestedAction action_,
         bool differentToken_
     ) internal returns (MockERC20 nestedAsset, bytes32 nestedBefore, uint256 nestedCustody) {
+        // Keep the seeded authority distinct from the actor performing the nested action.
+        vm.assume(_configurationSeed != _callbackAuthority);
         _createManagedRescueDebt();
         _callbackAsset = new ReentrantPayoutToken();
         _callbackAsset.mint(address(distributor), _SURPLUS_PAYOUT);
@@ -1102,8 +1117,8 @@ contract RevenueDistributorRescueTest is RevenueDistributorSurplusRescueTestBase
             }
         }
         vm.prank(admin);
-        if (_configurationSeed == address(0)) distributor.setConfigOperator(address(this));
-        else rolesAdmin.grantRole(ADMIN_ROLE, address(this));
+        if (_configurationSeed == address(0)) distributor.setConfigOperator(_callbackAuthority);
+        else rolesAdmin.grantRole(ADMIN_ROLE, _callbackAuthority);
         nestedBefore = _rdRawRescueHash(address(nestedAsset));
         nestedCustody = nestedAsset.balanceOf(address(distributor));
         _callbackAsset.setCallbackFrom(

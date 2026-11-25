@@ -72,7 +72,7 @@ abstract contract DEPOSTest {
     // =======================================================================
 
     IDepositPositionManager public DEPOS;
-    address public godmode;
+    address public deployer;
     address public admin;
     address public user;
     uint256 internal _positionId;
@@ -83,11 +83,11 @@ abstract contract DEPOSTest {
 
     function setUp() public virtual {
         // Deploy contracts
-        godmode = address(this);
+        deployer = makeAddr("deployer");
         admin = makeAddr("admin");
         user = makeAddr("user");
 
-        vm.startPrank(godmode);
+        vm.startPrank(deployer);
         DEPOS = IDepositPositionManager(address(new DepositPositionManager()));
         vm.stopPrank();
     }
@@ -312,6 +312,14 @@ ignores one axis, keep the applicable tests and state that independence in the c
 
 ### Caller Authorization
 
+- Assign standing roles, ownership, and executor authority to named fixture addresses such as
+    `admin`, `operator`, and `executor`, including when a constructor grants authority to the
+    deployer. Use `vm.prank` or `vm.startPrank` to make the acting identity explicit. Keep the
+    test contract's address in the fuzz domain whenever it meets the same preconditions as any
+    other address.
+- For callbacks, route the callback to the harness and prank the named actor immediately before
+    the restricted protocol call. When testing a role-bearing contract, give the role to the
+    contract that represents that actor in the scenario.
 - Cover every permitted caller class separately.
 - Fuzz unauthorized callers. Exclude every authorized identity and only addresses that intentionally
     exercise a different behavior covered by another test.
