@@ -606,7 +606,7 @@ contract BurnerLoansCompositesExecuteSwapsTest is BurnerLoansCompositesGrantMode
         );
     }
 
-    // Scenarios: BLREX-P27.
+    // Scenarios: BLREX-P36.
     function test_whenTargetBalanceIsAlreadyMetSkipsAdapter() public {
         vm.expectCall(
             address(_adapter),
@@ -626,6 +626,33 @@ contract BurnerLoansCompositesExecuteSwapsTest is BurnerLoansCompositesGrantMode
         assertEq(_asset.balanceOf(_borrower), beforeAsset, "Funded output asset returned");
     }
 
+    // Scenarios: BLREX-P37.
+    function test_whenTargetBalanceIsZeroSkipsSwap() public {
+        vm.expectCall(
+            address(_adapter),
+            abi.encodePacked(IBurnerLoansSwapAdapter.swapExactOutput.selector),
+            0
+        );
+        bytes[] memory results = _executeDaiExactOutput(IExecutor.OutputTarget.Balance, 0, 10e18);
+        assertEq(abi.decode(results[0], (uint256)), 0, "Zero balance target spends no DAI");
+        assertEq(_dai.balanceOf(_borrower), 100e18, "All funded DAI returns to the borrower");
+        assertEq(_dai.balanceOf(address(_executor)), 0, "Executor retains no caller DAI");
+    }
+
+    // Scenarios: BLREX-I15.
+    function test_whenFixedOutputAmountIsZero_reverts() public {
+        vm.expectRevert(IExecutor.BurnerLoansComposites_InvalidExchangeAmount.selector);
+        _executeDaiExactOutput(IExecutor.OutputTarget.Amount, 0, 10e18);
+        assertEq(_dai.balanceOf(_borrower), 100e18, "Invalid amount leaves wallet DAI unchanged");
+    }
+
+    // Scenarios: BLREX-I16.
+    function test_whenZeroBalanceTargetHasZeroInputCap_reverts() public {
+        vm.expectRevert(IExecutor.BurnerLoansComposites_InvalidExchangeAmount.selector);
+        _executeDaiExactOutput(IExecutor.OutputTarget.Balance, 0, 0);
+        assertEq(_dai.balanceOf(_borrower), 100e18, "Invalid cap leaves wallet DAI unchanged");
+    }
+
     // Scenarios: BLREX-T18.
     function test_whenExactOutputAdapterDeliversLessThanRequested_reverts() public {
         _adapter.setOutput(address(_asset), 10e6 - 1);
@@ -636,7 +663,7 @@ contract BurnerLoansCompositesExecuteSwapsTest is BurnerLoansCompositesGrantMode
                 10e6 - 1
             )
         );
-        _executeFixedBuy();
+        _executeDaiExactOutput(IExecutor.OutputTarget.Amount, 10e6, 10e18);
         assertEq(_dai.balanceOf(_borrower), 100e18, "Wallet debit rolled back");
     }
 
@@ -652,19 +679,24 @@ contract BurnerLoansCompositesExecuteSwapsTest is BurnerLoansCompositesGrantMode
                 10e18 + 1
             )
         );
-        _executeFixedBuy();
+        _executeDaiExactOutput(IExecutor.OutputTarget.Amount, 10e6, 10e18);
         assertEq(_dai.balanceOf(_borrower), 100e18, "Wallet debit rolled back");
     }
 
-    function _executeFixedBuy() private {
+    function _executeDaiExactOutput(
+        IExecutor.OutputTarget target_,
+        uint256 amountOut_,
+        uint256 maxAmountIn_
+    ) private returns (bytes[] memory) {
         vm.prank(_borrower);
-        _executor.execute(
-            _funding(address(_dai), 100e18),
-            _single(_exactOutput(address(_dai), IExecutor.OutputTarget.Amount, 10e6, 10e18)),
-            new IExecutor.Output[](0),
-            IExecutor.FlashLoan(0, 0),
-            type(uint48).max
-        );
+        return
+            _executor.execute(
+                _funding(address(_dai), 100e18),
+                _single(_exactOutput(address(_dai), target_, amountOut_, maxAmountIn_)),
+                new IExecutor.Output[](0),
+                IExecutor.FlashLoan(0, 0),
+                type(uint48).max
+            );
     }
 
     function _exactOutput(

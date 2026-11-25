@@ -408,8 +408,12 @@ acceptance evidence, but are not needed to prove Composites' opaque forwarding b
 | ID | Caller | Operation and inputs | Required execution and effects | Test |
 | --- | --- | --- | --- | --- |
 | BLREX-P26 | A | Fixed output and maximum input | Buy the extension fee token within the cap, pay the actual fee, and refund unused input and collateral | Covered: [test][test_givenOlderDebt_whenExactOutputFundsExtension] |
-| BLREX-P27 | A | Target balance exceeds the available output balance, or is already met | Buy only the shortfall, or skip the exchange and return zero spent | Covered: [test][test_whenTargetBalanceBuysOnlyTheShortfall], [test][test_whenTargetBalanceIsAlreadyMetSkipsAdapter] |
-| BLREX-P28 | A | Final exact-output swap targets an active DAI repayment | Buy principal plus actual fee less available DAI, respect the spend cap, then settle the lender and refund | Covered: [test][test_whenExactOutputTargetsFlashRepayment] |
+| BLREX-P27 | A | Balance target exceeds the available output balance | Buy only the shortfall and refund the unused input | Covered: [test][test_whenTargetBalanceBuysOnlyTheShortfall] |
+| BLREX-P36 | A | Positive balance target equals the available output balance | Skip the swap, return zero spent, and refund funded output tokens | Covered: [test][test_whenTargetBalanceIsAlreadyMetSkipsAdapter] |
+| BLREX-P37 | A | Balance target has `amountOut = 0` and a positive input cap | Skip the swap, return zero spent, and refund the funded input | Covered: [test][test_whenTargetBalanceIsZeroSkipsSwap] |
+| BLREX-I15 | A | Fixed amount target has `amountOut = 0` and a positive input cap | Reject the zero purchase amount and leave wallet balances unchanged | Covered: [test][test_whenFixedOutputAmountIsZero_reverts] |
+| BLREX-I16 | A | Balance target has `amountOut = 0` and a zero input cap | Reject the zero input cap and leave wallet balances unchanged | Covered: [test][test_whenZeroBalanceTargetHasZeroInputCap_reverts] |
+| BLREX-P28 | A | Final exact-output swap uses the flash repayment target with `amountOut = 0` for an active DAI repayment | Buy principal plus actual fee less available DAI, respect the spend cap, then settle the lender and refund | Covered: [test][test_whenExactOutputTargetsFlashRepayment] |
 | BLREX-P29 | A | Final fixed `ConvertDaiUsds` covers the DAI repayment shortfall | Convert the specified USDS, collect principal plus any fee, and refund unused USDS | Covered: [test][test_whenFixedDaiUsdsConversionFundsFlashRepayment] |
 | BLREX-P30 | A | Flash DAI to OHM, repay older debt, withdraw collateral and buy the DAI shortfall | Clear the position, repay the lender and refund the remaining collateral | Covered: [test][test_givenOlderDebt_givenReusableGrant_whenFlashSwapClosesPosition] |
 | BLREX-I13 | A | Repayment target outside a flash batch, before the final operation, with a non-DAI output, or with a fixed amount | Reject before wallet collection | Covered: [test][test_whenRepaymentTargetIsOutOfContext_reverts] |
@@ -737,12 +741,15 @@ omission case BLREX-I12.
 [test_givenOlderDebt_whenExactOutputFundsExtension]: ./executeSwaps.t.sol#L446
 [test_whenTargetBalanceBuysOnlyTheShortfall]: ./executeSwaps.t.sol#L561
 [test_whenTargetBalanceIsAlreadyMetSkipsAdapter]: ./executeSwaps.t.sol#L610
+[test_whenTargetBalanceIsZeroSkipsSwap]: ./executeSwaps.t.sol#L630
+[test_whenFixedOutputAmountIsZero_reverts]: ./executeSwaps.t.sol#L643
+[test_whenZeroBalanceTargetHasZeroInputCap_reverts]: ./executeSwaps.t.sol#L650
 [test_whenExactOutputTargetsFlashRepayment]: ./executeFlash.t.sol#L716
 [test_whenFixedDaiUsdsConversionFundsFlashRepayment]: ./executeFlash.t.sol#L761
 [test_givenOlderDebt_givenReusableGrant_whenFlashSwapClosesPosition]: ./executeFlash.t.sol#L896
 [test_whenRepaymentTargetIsOutOfContext_reverts]: ./executeFlash.t.sol#L813
-[test_whenExactOutputAdapterDeliversLessThanRequested_reverts]: ./executeSwaps.t.sol#L630
-[test_whenExactOutputAdapterDebitsMoreThanTheCap_reverts]: ./executeSwaps.t.sol#L644
+[test_whenExactOutputAdapterDeliversLessThanRequested_reverts]: ./executeSwaps.t.sol#L657
+[test_whenExactOutputAdapterDebitsMoreThanTheCap_reverts]: ./executeSwaps.t.sol#L671
 [test_whenExactOutputInputCapExceedsAvailableFunds]: ./executeSwaps.t.sol#L489
 [test_whenExactOutputInputBalanceIsEntirelyProtected_reverts]: ./executeSwaps.t.sol#L534
 [test_whenFixedDaiUsdsConversionLeavesRepaymentShort_reverts]: ./executeFlash.t.sol#L787

@@ -978,7 +978,7 @@ contract BurnerLoansComposites is
         if (p_.outputTarget == OutputTarget.FlashRepayment) {
             if (!canTargetRepayment_ || p_.tokenOut != _DAI || p_.amountOut != 0)
                 revert BurnerLoansComposites_InvalidRepaymentTarget();
-        } else if (p_.amountOut == 0) {
+        } else if (p_.outputTarget == OutputTarget.Amount && p_.amountOut == 0) {
             revert BurnerLoansComposites_InvalidExchangeAmount();
         }
     }
