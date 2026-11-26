@@ -473,7 +473,7 @@ contract HeartTest is Test {
     function testCorrectness_setRewardAuctionParams() public {
         // Set timestamp so that a heart beat is available
         uint48 frequency = heart.frequency();
-        vm.warp(block.timestamp + frequency);
+        vm.warp(vm.getBlockTimestamp() + frequency);
 
         // Set new params
         uint256 newMaxReward = uint256(2e9);
@@ -502,7 +502,7 @@ contract HeartTest is Test {
         // Expect the heart to reward the new token and amount on a beat
         uint256 startBalance = ohm.balanceOf(address(this));
 
-        vm.warp(block.timestamp + frequency + newAuctionDuration);
+        vm.warp(vm.getBlockTimestamp() + frequency + newAuctionDuration);
         heart.beat();
 
         uint256 endBalance = ohm.balanceOf(address(this));

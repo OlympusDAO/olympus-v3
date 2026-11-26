@@ -31,6 +31,7 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 | OP-P02 | ADMIN_ROLE holder | true | false | Fuzz zero/nonzero | Changed nonzero EOA or contract | Success | New operator controls setters; old operator rejected; direct admin still works; pointer/event change only | Covered: [test][test_givenFundedActivePolicy_whenAdminChangesOperator], [test][test_givenOperatorLifecycleAndIdentitySeeds] |
 | OP-P04 | ADMIN_ROLE holder | true | true | Nonzero | Zero | Success | Operator becomes zero; old operator rejected; direct admin still works; exact event; configuration, debt and custody unchanged | Covered: [test][test_givenFundedActivePolicy_whenAdminChangesOperator], [test][test_givenOperatorLifecycleAndIdentitySeeds] |
 | OP-P05 | ADMIN_ROLE holder | true | false | Nonzero | Zero | Success | Operator becomes zero; old operator rejected; direct admin still works; exact event; configuration, debt and custody unchanged | Covered: [test][test_givenFundedActivePolicy_whenAdminChangesOperator], [test][test_givenOperatorLifecycleAndIdentitySeeds] |
+| OP-P06 | ADMIN_ROLE holder | true | true | Operator also holds ADMIN_ROLE | Zero | Success | The former operator can still rescue a pending payout using its separate ADMIN_ROLE grant | Covered: [test][test_givenOperatorHasAdminRole_whenAdminClearsOperator_thenFormerOperatorCanRescue] |
 
 ## Lifecycle
 
@@ -59,8 +60,9 @@ The following row maps the narrow competing-fault regression; it does not expand
 
 [test_givenPolicyActiveAndOperatorState_whenNonAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L15
 [test_givenPolicyInactive_whenAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L220
-[test_givenOperatorLifecycleAndIdentitySeeds]: ./setConfigOperator.t.sol#L384
+[test_givenOperatorLifecycleAndIdentitySeeds]: ./setConfigOperator.t.sol#L406
 [test_givenFundedActivePolicy_whenAdminChangesOperator]: ./setConfigOperator.t.sol#L303
-[test_givenFundedPolicy_whenAdminRepeatsOperator_reverts]: ./setConfigOperator.t.sol#L357
+[test_givenOperatorHasAdminRole_whenAdminClearsOperator_thenFormerOperatorCanRescue]: ./setConfigOperator.t.sol#L358
+[test_givenFundedPolicy_whenAdminRepeatsOperator_reverts]: ./setConfigOperator.t.sol#L379
 [test_givenPolicyInactiveAndOperatorState_whenNonAdminSetsAnyOperator_reverts]: ./setConfigOperator.t.sol#L61
 [test_givenPolicyInactive_whenNonAdminSetsOperator_revertsActivityFirst]: ./setConfigOperator.t.sol#L258

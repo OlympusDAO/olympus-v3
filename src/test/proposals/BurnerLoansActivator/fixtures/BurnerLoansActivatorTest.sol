@@ -6,7 +6,7 @@ import {IERC20 as OZIERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IOperator} from "src/policies/interfaces/IOperator.sol";
 import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
 import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
-import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IBurnerLoansActivator} from "src/proposals/helpers/interfaces/IBurnerLoansActivator.sol";
 
 // Libraries
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";
@@ -22,7 +22,7 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {BurnerLoansActivator} from "src/proposals/BurnerLoansActivator.sol";
+import {BurnerLoansActivator} from "src/proposals/helpers/BurnerLoansActivator.sol";
 import {MockPeriodicTask} from "src/test/bases/PeriodicTaskManager/MockPeriodicTask.sol";
 import {MockPeriodicTaskManager} from "src/test/bases/PeriodicTaskManager/MockPeriodicTaskManager.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";

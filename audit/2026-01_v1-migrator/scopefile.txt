@@ -3,4 +3,4 @@ src/policies/Burner.sol
 src/policies/V1Migrator.sol
 src/policies/interfaces/IV1Migrator.sol
 src/proposals/MigrationProposal.sol
-src/proposals/MigrationProposalHelper.sol
+src/proposals/helpers/MigrationProposalHelper.sol

@@ -23,7 +23,7 @@ src/bases/interfaces/IRescueable.sol
 
 # Shared Libraries
 
-src/scripts/ops/lib/LZConfigLib.sol
+src/libraries/LZConfigLib.sol
 src/libraries/Errors.sol
 src/libraries/ERC7528Constants.sol
 
@@ -34,7 +34,7 @@ src/scripts/deploy/DeployV3.s.sol
 # OCG Proposal
 
 src/proposals/LZBridgeSecurityUpgradeProposal.sol
-src/proposals/LZBridgeActivator.sol
+src/proposals/helpers/LZBridgeActivator.sol
 
 # Multisig Batch Scripts
 

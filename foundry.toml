@@ -1,12 +1,11 @@
 [profile.default]
 ffi = true
-# Carrying the AST doubles the size of `out/`, which CI caches.
+# Generate the AST only for commands that need it.
 ast = false
-# Pinned so that every machine compiles with the same compiler. Without an explicit version, Forge
-# resolves each source file to the newest installed compiler that satisfies its pragma, so a
-# developer and CI diverge silently. Forge cannot auto-resolve a release newer than the list built
-# into its binary, but an explicitly pinned version is fetched from the live release list on demand.
-solc_version = "0.8.36"
+solc = "solar:0.3.1"
+out = "out-solar"
+cache_path = "cache-solar"
+test_failures_file = "cache-solar/test-failures"
 # Forge 1.8.1 defaults to the osaka EVM version. Pin the target that the deployment chains run.
 evm_version = "prague"
 legacy_assertions = true
@@ -22,34 +21,17 @@ fs_permissions = [
 gas_limit = "18446744073709551615"
 # Run each top-level test call as a separate transaction so account and storage access costs match
 # production execution. Keeping this explicit also gives Forge 1.7 and 1.8 the same test semantics.
-# Multisig simulations override this below because their internal calls share one transaction.
+# The multisig profile disables isolation because Safe calls share one transaction.
 # The `deploy` profile also produces the gas snapshots, so needs isolation (inherited).
 isolate = true
 
-# Everyday builds favor compile speed. Use the deploy profile whenever producing bytecode for
-# deployment or checking contract sizes.
+# Release optimizer settings live on the deploy profile.
 optimizer = false
 verbosity = 2
-# Gas snapshots must use deployment-equivalent bytecode. Use `pnpm run test:gas`, or set
-# `FOUNDRY_PROFILE=deploy` when running Forge snapshot commands directly.
+# Gas snapshots are opt-in through `pnpm run test:gas`.
 gas_snapshot_emit = false
+snapshots = "out-solar/snapshots"
 
-# These source graphs do not compile without the optimizer because solc exhausts the EVM stack while
-# generating their ABI encoding/decoding assembly.
-additional_compiler_profiles = [{ name = "optimized", optimizer = true, optimizer_runs = 400 }]
-compilation_restrictions = [
-    { paths = "src/external/governance/GovernorBravoDelegate.sol", optimizer_runs = 400 },
-    { paths = "src/policies/BondCallback.sol", optimizer_runs = 400 },
-    { paths = "src/policies/BoostedLiquidity/BLVaultLido.sol", optimizer_runs = 400 },
-    { paths = "src/policies/BoostedLiquidity/BLVaultLusd.sol", optimizer_runs = 400 },
-    { paths = "src/policies/BoostedLiquidity/BLVaultManagerLido.sol", optimizer_runs = 400 },
-    { paths = "src/policies/BoostedLiquidity/BLVaultManagerLusd.sol", optimizer_runs = 400 },
-    { paths = "src/proposals/*.sol", optimizer_runs = 400 },
-    # Upstream LayerZero test graphs fail legacy code generation unoptimized. Keeping this at the
-    # dependency roots avoids optimizer exceptions for individual repository test files.
-    { paths = "dependencies/@layerzerolabs-*/**", optimizer_runs = 400 },
-    { paths = "dependencies/forge-proposal-simulator-1.0.1/**", optimizer_runs = 400 },
-]
 libs = ["dependencies"]
 # Tests live here, not in the default `test` directory. While this pointed at a directory that does
 # not exist, Forge replaced the `test/=src/test/` entry of remappings.txt with narrower generated
@@ -61,38 +43,44 @@ test = "src/test"
 # to each compilation job Forge runs.
 ignored_warnings_from = ["dependencies", "deprecated"]
 
-[profile.deploy]
-optimizer = true
-optimizer_runs = 400
-gas_snapshot_emit = true
-# The whole deployment graph already uses these settings, so the everyday-build exceptions would
-# only split this profile into redundant compiler jobs.
-additional_compiler_profiles = []
-compilation_restrictions = []
-script_execution_protection = false
+[profile.default.fuzz]
+runs = 256
+failure_persist_dir = "cache-solar/fuzz"
+
+[profile.default.invariant]
+# Forge distributes campaigns by suite. Four workers keep a long suite from running serially.
+workers = 4
+failure_persist_dir = "cache-solar/invariant"
 
 [profile.multisig]
-script_execution_protection = false
-# A Safe batch runs internal calls in one transaction paid for by its relayer. Isolation instead
-# treats each pranked call as a transaction from the Safe. Forge 1.8.1 can then charge OP Stack L1
-# data fees to the Safe and reject an unfunded Safe before the target contract executes.
 isolate = false
+script_execution_protection = false
 
-# Used by `forge coverage`, which recompiles from scratch every run and keeps nothing in `out/`.
+[profile.deploy]
+solc = "0.8.36"
+out = "out"
+cache_path = "cache"
+test_failures_file = "cache/test-failures"
+snapshots = "snapshots"
+optimizer = true
+optimizer_runs = 400
+script_execution_protection = false
+
+[profile.deploy.fuzz]
+failure_persist_dir = "cache/fuzz"
+
+[profile.deploy.invariant]
+failure_persist_dir = "cache/invariant"
+
+# Coverage inherits the Solar compiler and changes only report and test settings.
 [profile.coverage]
 # The report is the output; test traces are not.
 verbosity = 0
 # A coverage run must not rewrite the tracked gas snapshots, which are measured under the settings
 # of a normal build.
 gas_snapshot_emit = false
-# Coverage output is long enough without solc warnings.
+# Coverage output is long enough without compiler warnings.
 ignored_warnings_from = ["dependencies", "src"]
-# Emptied so that coverage compiles in a single job. The restrictions above otherwise add a
-# second job carrying the same compiler version, and coverage items of two such jobs are
-# misattributed between files. The graphs those restrictions cover still compile here because
-# `shell/test_coverage.sh` runs `forge coverage --ir-minimum`, which routes them through the IR
-# pipeline instead of the optimizer.
-compilation_restrictions = []
 
 # Coverage needs each line reached once, not a wide search. A `forge-config` comment in a test file
 # overrides both of the sections below, and the command line does not override that comment either,
@@ -105,16 +93,6 @@ runs = 1
 depth = 15
 # Hides the per-selector call table that every invariant suite would otherwise print.
 show_metrics = false
-
-[fuzz]
-runs = 256
-
-[invariant]
-# Forge 1.7 ran one campaign per invariant function and spread those across the test thread pool.
-# 1.8 runs one campaign per invariant suite with the `auto` default, so
-# set 4 workers to speed up the suite.
-# Override with `--invariant-workers` locally.
-workers = 4
 
 [lint]
 severity = ["high", "medium", "low", "info", "gas", "code-size"]

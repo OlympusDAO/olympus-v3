@@ -7,30 +7,41 @@ inputs:
         required: false
         default: "false"
 
+    prefix:
+        description: Cache key namespace, including the cache layout version.
+        default: foundry-v1
+    artifact-path:
+        description: Foundry artifact path passed to actions/cache.
+        default: out
+    cache-path:
+        description: Foundry compiler cache path or glob passed to actions/cache.
+        default: cache/solidity-files-cache.json
+    scope-file:
+        description: Workflow or script that defines the compilation scope.
+        default: .github/workflows/build.yml
+
 runs:
     using: composite
     steps:
-        # Only the full-build job writes caches so sparse or partial builds cannot replace the
-        # complete artifact set. Parallel test jobs use that run's uploaded build artifacts.
-        # Keep compiler profiles separate so switching profiles cannot reuse an immutable cache key.
+        # Keep fallback restores within the same cache layout, compiler settings, and scope.
         - name: Restore Foundry build cache
           if: ${{ inputs.save != 'true' }}
           uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
           with:
               path: |
-                  out
-                  cache/solidity-files-cache.json
-              key: foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.FOUNDRY_PROFILE || 'default' }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.sol') }}
+                  ${{ inputs.artifact-path }}
+                  ${{ inputs.cache-path }}
+              key: ${{ inputs.prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ env.FOUNDRY_PROFILE || 'default' }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', inputs.scope-file, 'package.json', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.sol') }}
               restore-keys: |
-                  foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.FOUNDRY_PROFILE || 'default' }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-
+                  ${{ inputs.prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ env.FOUNDRY_PROFILE || 'default' }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', inputs.scope-file, 'package.json', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-
 
         - name: Restore and save Foundry build cache
           if: ${{ inputs.save == 'true' }}
           uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
           with:
               path: |
-                  out
-                  cache/solidity-files-cache.json
-              key: foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.FOUNDRY_PROFILE || 'default' }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.sol') }}
+                  ${{ inputs.artifact-path }}
+                  ${{ inputs.cache-path }}
+              key: ${{ inputs.prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ env.FOUNDRY_PROFILE || 'default' }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', inputs.scope-file, 'package.json', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.sol') }}
               restore-keys: |
-                  foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.FOUNDRY_PROFILE || 'default' }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-
+                  ${{ inputs.prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ env.FOUNDRY_PROFILE || 'default' }}-${{ hashFiles('.github/actions/bootstrap/action.yml', 'foundry.toml', inputs.scope-file, 'package.json', 'remappings.txt', 'soldeer.lock', 'pnpm-lock.yaml') }}-

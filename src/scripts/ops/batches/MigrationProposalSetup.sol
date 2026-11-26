@@ -7,7 +7,7 @@ import {console2} from "@forge-std-1.16.2/console2.sol";
 
 import {OwnedERC20} from "src/external/OwnedERC20.sol";
 
-import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {MigrationProposalHelper} from "src/proposals/helpers/MigrationProposalHelper.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";

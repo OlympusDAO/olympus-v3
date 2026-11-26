@@ -7,8 +7,8 @@ import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockRelease
 import {Actions, Kernel} from "src/Kernel.sol";
 import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
 import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
-import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
-import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
+import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/CCIPTokenPoolConfigProposalChecker.sol";
 
 import {CCIPTokenPoolConfigProposalCheckerTest} from "./CCIPTokenPoolConfigProposalCheckerTest.sol";
 

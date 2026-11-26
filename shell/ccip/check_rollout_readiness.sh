@@ -13,7 +13,7 @@
 # wins; otherwise the chain uses its foundry.toml RPC alias, which needs
 # ALCHEMY_API_KEY from the env file.
 #
-# Note: forge script needs an out/ directory produced by a full `forge build`; a
+# Note: forge script needs artifacts for the active profile from a full `forge build`; a
 # path-scoped build can leave it unable to load the script bytecode.
 #
 # Deliberately no -e: a failed run on one chain must not stop the sweep, since

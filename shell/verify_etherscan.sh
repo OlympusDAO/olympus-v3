@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Verifies contracts on Etherscan or custom verifier using metadata from out/ directory.
+# Verifies contracts on Etherscan or custom verifier using Solc deploy metadata from out/.
 #
 # Usage:
 # ./verify_etherscan.sh
@@ -57,7 +57,7 @@ fi
 
 if [ ! -f "$metadata" ]; then
     echo "ERROR: Metadata file not found: $metadata"
-    echo "Make sure the file exists and the contract has been compiled with 'forge build'"
+    echo "Build the deployment artifact with 'FOUNDRY_PROFILE=deploy forge build'"
     exit 1
 fi
 
@@ -72,6 +72,11 @@ CONTRACT_PATH=$(echo "$COMPILATION_TARGET" | jq -r 'to_entries[0] | "\(.key):\(.
 METADATA_COMPILER_VERSION=$(jq -r '.metadata.compiler.version' "$metadata")
 OPTIMIZER_ENABLED=$(jq -r '.metadata.settings.optimizer.enabled' "$metadata")
 METADATA_OPTIMIZER_RUNS=$(jq -r '.metadata.settings.optimizer.runs' "$metadata")
+
+if [[ "$METADATA_COMPILER_VERSION $COMPILER_VERSION_OVERRIDE" == *solar* ]]; then
+    echo "ERROR: Verification requires Solc deployment metadata and compiler version."
+    exit 1
+fi
 
 # Use overrides if provided, otherwise use metadata values
 if [ -n "$COMPILER_VERSION_OVERRIDE" ]; then
@@ -150,7 +155,7 @@ if [ "$VERIFY" != "true" ]; then
 fi
 
 # Build verification command
-VERIFY_CMD="forge verify-contract --watch"
+VERIFY_CMD="FOUNDRY_PROFILE=deploy forge verify-contract --watch"
 
 # Always pass compiler version and optimizer runs (forge auto-detection can be unreliable)
 VERIFY_CMD="$VERIFY_CMD --compiler-version $COMPILER_VERSION --num-of-optimizations $OPTIMIZER_RUNS"

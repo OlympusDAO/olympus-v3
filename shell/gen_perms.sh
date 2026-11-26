@@ -37,13 +37,13 @@ require_command forge "Install Foundry: https://getfoundry.sh"
 require_command jq
 require_command pnpm "Install the Node dependencies: pnpm install"
 
-# --ast asks solc for the AST whatever `ast` is set to in foundry.toml, and --skip test is safe
+# --ast asks the compiler for the AST whatever `ast` is set to in foundry.toml, and --skip test is safe
 # because a `permissioned` function can only be declared on a module, while no module lives in the
 # test tree.
 #
 # The build goes to its own artifact and cache directories. Sharing them with a normal build makes
 # the two invalidate each other on every alternation, because the requested compiler output differs,
-# and it would also leave the AST in the `out/` that CI uploads to every test job.
+# and it would also leave the AST in the artifacts that CI uploads to every test job.
 AST_ROOT=".gen-perms"
 
 # The tree is discarded first. Forge keeps the artifact of a contract that a source file no longer

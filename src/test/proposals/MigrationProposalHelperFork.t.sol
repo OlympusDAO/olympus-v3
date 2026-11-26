@@ -15,7 +15,7 @@ import {ERC20 as SolmateERC20} from "solmate/tokens/ERC20.sol";
 import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 import {IERC20Errors} from "@openzeppelin-5.3.0/interfaces/draft-IERC6093.sol";
 
-import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {MigrationProposalHelper} from "src/proposals/helpers/MigrationProposalHelper.sol";
 
 /// @notice Fork test for MigrationProposalHelper
 /// @dev    Tests the activate() function which performs the OHM v1 to OHM v2 migration and burn

@@ -406,14 +406,14 @@ contract PriceV2Test is PriceV2BaseTest {
         // Add base assets to price module
         _addBaseAssets(nonce_);
 
-        uint32 startTimestamp = uint32(block.timestamp);
+        uint32 startTimestamp = uint32(vm.getBlockTimestamp());
 
         // Warp forward to just before the end of the observation frequency
         vm.warp(startTimestamp + OBSERVATION_FREQUENCY - 1);
 
         // Update the Chainlink price feed
         onemaUsdPriceFeed.setLatestAnswer(int256(5e8));
-        onemaUsdPriceFeed.setTimestamp(block.timestamp);
+        onemaUsdPriceFeed.setTimestamp(vm.getBlockTimestamp());
 
         // Value is as expected
         (uint256 t1_price, uint48 t1_timestamp) = price.getPrice(
@@ -421,7 +421,7 @@ contract PriceV2Test is PriceV2BaseTest {
             IPRICEv2.Variant.CURRENT
         );
         assertEq(t1_price, uint256(5e18));
-        assertEq(t1_timestamp, uint48(block.timestamp));
+        assertEq(t1_timestamp, uint48(vm.getBlockTimestamp()));
 
         // Get the moving average
         (, uint48 t1_movingAverageTimestamp) = price.getPrice(
@@ -434,7 +434,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Update the Chainlink price feed
         onemaUsdPriceFeed.setLatestAnswer(int256(5e8));
-        onemaUsdPriceFeed.setTimestamp(block.timestamp);
+        onemaUsdPriceFeed.setTimestamp(vm.getBlockTimestamp());
 
         // As useMovingAverage is enabled, calling the current price will
         // use the MA, which is now stale, and revert
@@ -464,7 +464,7 @@ contract PriceV2Test is PriceV2BaseTest {
             IPRICEv2.Variant.CURRENT
         );
         assertEq(t2_price, uint256(5e18));
-        assertEq(t2_timestamp, uint48(block.timestamp));
+        assertEq(t2_timestamp, uint48(vm.getBlockTimestamp()));
 
         // Moving average is now updated
         (, uint48 t3_movingAverageTimestamp) = price.getPrice(
@@ -1835,7 +1835,7 @@ contract PriceV2Test is PriceV2BaseTest {
         _addBaseAssets(nonce_);
 
         // Get current cached data for onema from initialization
-        uint48 start = uint48(block.timestamp);
+        uint48 start = uint48(vm.getBlockTimestamp());
         IPRICEv2.Asset memory asset = price.getAssetData(address(onema));
         _assertAssetData(
             asset,
@@ -1857,7 +1857,7 @@ contract PriceV2Test is PriceV2BaseTest {
         onemaUsdPriceFeed.setLatestAnswer(int256(50e8));
 
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
-        onemaUsdPriceFeed.setTimestamp(block.timestamp);
+        onemaUsdPriceFeed.setTimestamp(vm.getBlockTimestamp());
 
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
@@ -1884,14 +1884,14 @@ contract PriceV2Test is PriceV2BaseTest {
         for (uint256 i; i < 14; i++) {
             asset = price.getAssetData(address(onema));
 
-            vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
-            onemaUsdPriceFeed.setTimestamp(block.timestamp);
+            vm.warp(vm.getBlockTimestamp() + OBSERVATION_FREQUENCY);
+            onemaUsdPriceFeed.setTimestamp(vm.getBlockTimestamp());
 
             vm.prank(priceWriter);
             price.storeObservation(address(onema));
         }
 
-        uint48 lastStore = uint48(block.timestamp);
+        uint48 lastStore = uint48(vm.getBlockTimestamp());
 
         // Get updated cached data for onema
         asset = price.getAssetData(address(onema));
@@ -1911,8 +1911,8 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(asset.cumulativeObs, uint256(50e18) * 15); // all data points should be 50e18 now
 
         // Warp forward in time and store a new price
-        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
-        onemaUsdPriceFeed.setTimestamp(block.timestamp);
+        vm.warp(vm.getBlockTimestamp() + OBSERVATION_FREQUENCY);
+        onemaUsdPriceFeed.setTimestamp(vm.getBlockTimestamp());
 
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
@@ -1922,10 +1922,10 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(asset.nextObsIndex, 1, "next index should be 1 since we added a new value");
 
         // Store price again and check that event is emitted
-        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+        vm.warp(vm.getBlockTimestamp() + OBSERVATION_FREQUENCY);
         vm.prank(priceWriter);
         vm.expectEmit(true, false, false, true);
-        emit PriceStored(address(onema), uint256(50e18), uint48(block.timestamp));
+        emit PriceStored(address(onema), uint256(50e18), uint48(vm.getBlockTimestamp()));
         price.storeObservation(address(onema));
     }
 

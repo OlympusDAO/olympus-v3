@@ -310,7 +310,7 @@ Add the deployed addresses to `src/scripts/env.json`:
 
 ### 2b. Verify Contracts
 
-Run the verification script:
+Run the verification script with the default profile. It reads state from deployed contracts.
 
 ```bash
 forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
@@ -336,7 +336,8 @@ This script:
 
 ## Step 3: Setup Minter Permissions
 
-Grant `minter_admin` role to the executor address if not already granted:
+Grant the `minter_admin` role to the executor address if needed. The wrapper uses the default
+profile to call the deployed RolesAdmin.
 
 **Using cast wallet:**
 
@@ -377,12 +378,13 @@ Note: The `test` mint category will be added automatically by the ReplaceStaking
 
 ## Step 4: Deploy New Bophades Contracts
 
-Deploy new module and policies:
+`ReplaceStaking` deploys a new DLGTE module and new policy contracts. Use the Solc `deploy` profile
+for both the Sepolia deployment and the Anvil rehearsal so they compile the same creation bytecode.
 
 **Using cast wallet:**
 
 ```bash
-forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
+FOUNDRY_PROFILE=deploy forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
     --rpc-url sepolia \
     --account <<wallet>> \
     --sender 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
@@ -394,7 +396,7 @@ forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
 **Using Ledger:**
 
 ```bash
-forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
+FOUNDRY_PROFILE=deploy forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
     --rpc-url sepolia \
     --ledger \
     --mnemonic-indexes <<index>> \
@@ -407,7 +409,7 @@ forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
 **Anvil Fork:**
 
 ```bash
-forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
+FOUNDRY_PROFILE=deploy forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
     --rpc-url http://localhost:8545 \
     --account <<account>> \
     --sender 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
