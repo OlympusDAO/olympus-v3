@@ -307,13 +307,14 @@ contract RevenueDistributorSetConfigOperatorTest is RevenueDistributorTest {
         bool disabled_
     ) public {
         uint64 id = _seedLifecycleQueue();
-        _grantLifecycleAuthority(caller_, ADMIN_ROLE, false, false);
         if (cleared_) {
             vm.prank(admin);
             distributor.setConfigOperator(address(0));
         }
         address previous = distributor.configOperator();
+        vm.assume(caller_ != previous);
         vm.assume(target_ != previous);
+        _grantLifecycleAuthority(caller_, ADMIN_ROLE, false, false);
         _setRevenuePolicyLifecycle(address(distributor), true, !disabled_);
         bytes32 funds = _revenueFundsDigest();
         bytes32 queue = _queuedLifecycleDigest(id);
@@ -351,6 +352,27 @@ contract RevenueDistributorSetConfigOperatorTest is RevenueDistributorTest {
             7,
             "Direct governance authority retained"
         );
+    }
+
+    // Scenario: OP-P06.
+    function test_givenOperatorHasAdminRole_whenAdminClearsOperator_thenFormerOperatorCanRescue()
+        public
+    {
+        _seedLifecycleQueue();
+        address formerOperator = address(configTimelock);
+        _grantLifecycleAuthority(formerOperator, ADMIN_ROLE, false, false);
+        uint256 recipientBalance = token.balanceOf(bob);
+
+        vm.prank(admin);
+        distributor.setConfigOperator(address(0));
+        assertEq(distributor.configOperator(), address(0), "Operator selection cleared");
+
+        vm.prank(formerOperator);
+        distributor.rescuePendingPayout(address(token), address(treasury), bob, 1);
+
+        // One raw token unit moves from Treasury's pending payout to Bob, leaving 8 - 1 = 7.
+        assertEq(token.balanceOf(bob), recipientBalance + 1, "Former operator can pay as admin");
+        assertEq(distributor.pendingPayout(address(token), address(treasury)), 7, "Payout debited");
     }
 
     // Scenarios: OP-I01, OP-I02.

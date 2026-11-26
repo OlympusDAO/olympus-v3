@@ -35,7 +35,7 @@ import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoa
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IBurnerLoansSeize} from "src/policies/interfaces/burnerloans/IBurnerLoansSeize.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IBurnerLoansActivator} from "src/proposals/helpers/interfaces/IBurnerLoansActivator.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansUniswapV3Adapter} from "src/periphery/adapters/BurnerLoansUniswapV3Adapter.sol";
@@ -55,7 +55,7 @@ import {BurnerLoansRiskConfigTimelock} from "src/policies/burnerloans/BurnerLoan
 import {BurnerLoansSeize} from "src/policies/burnerloans/BurnerLoansSeize.sol";
 import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerTask.sol";
 import {BurnerLoansYieldClaimerTask} from "src/policies/burnerloans/BurnerLoansYieldClaimerTask.sol";
-import {BurnerLoansActivator} from "src/proposals/BurnerLoansActivator.sol";
+import {BurnerLoansActivator} from "src/proposals/helpers/BurnerLoansActivator.sol";
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 
 // Bridge
@@ -114,14 +114,14 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 // Migration contracts
 import {OwnedERC20} from "src/external/OwnedERC20.sol";
 import {Burner} from "src/policies/Burner.sol";
-import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {MigrationProposalHelper} from "src/proposals/helpers/MigrationProposalHelper.sol";
 import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // OCG Activator contracts
-import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
-import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
+import {ConvertibleDepositActivator} from "src/proposals/helpers/ConvertibleDepositActivator.sol";
+import {LZBridgeActivator} from "src/proposals/helpers/LZBridgeActivator.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/CCIPTokenPoolConfigProposalChecker.sol";
 
 // solhint-disable gas-custom-errors
 

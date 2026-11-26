@@ -2268,9 +2268,9 @@ contract OperatorTest is Test {
         vm.prank(guardian);
         operator.initialize();
 
-        uint48 startTime = uint48(block.timestamp);
-        vm.warp(block.timestamp + 1 hours);
-        uint48 newTime = uint48(block.timestamp);
+        uint48 startTime = uint48(vm.getBlockTimestamp());
+        vm.warp(vm.getBlockTimestamp() + 1 hours);
+        uint48 newTime = uint48(vm.getBlockTimestamp());
 
         /// Confirm that both sides are currently up
         assertTrue(RANGE.active(true));

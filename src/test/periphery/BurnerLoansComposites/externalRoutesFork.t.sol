@@ -33,8 +33,12 @@ contract BurnerLoansCompositesExternalRoutesForkTest is BurnerLoansCompositesTes
     BurnerLoansUniswapV3Adapter internal _adapter;
 
     function setUp() public override {
+        try vm.activeFork() returns (uint256) {
+            vm.rollFork(_FORK_BLOCK);
+        } catch {
+            vm.createSelectFork("mainnet", _FORK_BLOCK);
+        }
         assertEq(block.chainid, 1, "Fork must use Ethereum mainnet");
-        vm.rollFork(_FORK_BLOCK);
         _borrower = vm.addr(_FORK_SIGNER_KEY);
         assertEq(_borrower.code.length, 0, "Fork borrower is an undelegated EOA");
         super.setUp();

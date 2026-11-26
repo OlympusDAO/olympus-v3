@@ -19,7 +19,7 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
+import {ConvertibleDepositActivator} from "src/proposals/helpers/ConvertibleDepositActivator.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";

@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IBurnerLoansActivator} from "src/proposals/helpers/interfaces/IBurnerLoansActivator.sol";
 
 // Contracts
 import {DeployV3} from "src/scripts/deploy/DeployV3.s.sol";

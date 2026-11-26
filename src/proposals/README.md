@@ -2,6 +2,9 @@
 
 Before creating a new proposal, it's essential to understand Olympus' On-Chain Governance (OCG) system. Please review the details in the [OCG Implementation Document](./OCG.md).
 
+Place contracts deployed for on-chain proposal execution in `src/proposals/helpers/`.
+The Solc size check includes this directory alongside the protocol contracts.
+
 ## The Importance of Community Reviews
 
 The lifecycle of a proposal begins with a crucial step: the **Review Phase**. This is where the Olympus community plays a pivotal role in assessing and verifying the proposed on-chain actions. The community ensures that these actions align with the protocol's goals, the proposal intent, and the discussions held in the forums.
@@ -137,7 +140,7 @@ To create a new simulatable proposal, follow these steps:
 
 5. **Run Validation and Resolve Lint Findings**
 
-    - Use Forge 1.8.1, as configured by the repository bootstrap action, for this check.
+    - Use the Forge version pinned by the repository bootstrap action for this check.
     - Run Forge lint from the repository root, replacing the example filenames with your proposal and test:
 
         ```sh
@@ -160,5 +163,14 @@ OCG proposals should be tested before submission on mainnet. To do so, perform t
     - This requires `FORK_TEST_RPC_URL` to be set as an environment variable beforehand.
 2. Deploy the required contracts as normal, but provide `--rpc-url http://localhost:8545` as an argument.
 3. Perform any DAO MS batches as normal, but provide `--rpc-url http://localhost:8545` as an argument.
-4. Submit the proposal using the following command, e.g. `forge script src/proposals/ConvertibleDepositProposal.sol:ConvertibleDepositProposalScript --rpc-url http://localhost:8545 --account <castAccount> -vvv --slow`
+4. Simulate submission with the proposal wrapper:
+
+    ```sh
+    bash src/scripts/proposals/submitProposal.sh \
+        --file src/proposals/ConvertibleDepositProposal.sol \
+        --contract ConvertibleDepositProposalScript \
+        --chain http://localhost:8545 \
+        --account <castAccount>
+    ```
+
     - This will run the proposal as a part of simulating submission. If there are any issues, it will revert.

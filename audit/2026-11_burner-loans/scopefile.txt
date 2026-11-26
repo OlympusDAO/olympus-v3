@@ -80,9 +80,9 @@ src/policies/interfaces/deposits/IDepositManagerConfigTimelock.sol
 src/policies/interfaces/deposits/IDepositManagerV1_1.sol
 src/policies/interfaces/utils/IOperatorAuth.sol
 src/policies/utils/OperatorAuth.sol
-src/proposals/BurnerLoansActivator.sol
+src/proposals/helpers/BurnerLoansActivator.sol
 src/proposals/BurnerLoansProposal.sol
-src/proposals/interfaces/IBurnerLoansActivator.sol
+src/proposals/helpers/interfaces/IBurnerLoansActivator.sol
 
 # Existing files: changes and affected integrations only
 src/bases/BaseAssetManager.sol

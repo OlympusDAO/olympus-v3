@@ -16,7 +16,7 @@ import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/ID
 import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
-import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IBurnerLoansActivator} from "src/proposals/helpers/interfaces/IBurnerLoansActivator.sol";
 
 import {IBurnerLoansAuthTarget} from "src/policies/interfaces/burnerloans/IBurnerLoansAuthTarget.sol";
 
@@ -29,7 +29,7 @@ import {BurnerLoansActivatorTest} from "./fixtures/BurnerLoansActivatorTest.sol"
 import {Actions, Policy} from "src/Kernel.sol";
 import {Kernel} from "src/Kernel.sol";
 import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerTask.sol";
-import {BurnerLoansActivator} from "src/proposals/BurnerLoansActivator.sol";
+import {BurnerLoansActivator} from "src/proposals/helpers/BurnerLoansActivator.sol";
 import {MockPeriodicTask} from "src/test/bases/PeriodicTaskManager/MockPeriodicTask.sol";
 
 contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {

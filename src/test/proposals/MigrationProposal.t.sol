@@ -17,7 +17,7 @@ import {OwnedERC20} from "src/external/OwnedERC20.sol";
 
 // MigrationProposal imports
 import {MigrationProposal} from "src/proposals/MigrationProposal.sol";
-import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {MigrationProposalHelper} from "src/proposals/helpers/MigrationProposalHelper.sol";
 
 using SafeTransferLib for ERC20;
 

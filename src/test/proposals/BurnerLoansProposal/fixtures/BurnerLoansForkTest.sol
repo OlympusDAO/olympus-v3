@@ -18,7 +18,7 @@ import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {IBurnerLoansDebt} from "src/policies/interfaces/burnerloans/IBurnerLoansDebt.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
 import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
-import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IBurnerLoansActivator} from "src/proposals/helpers/interfaces/IBurnerLoansActivator.sol";
 
 // Libraries
 import {fromSubKeycode, toSubKeycode} from "src/Submodules.sol";
@@ -28,7 +28,7 @@ import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefini
 import {ContinuouslyUpdatedFeed} from "./ContinuouslyUpdatedFeed.sol";
 import {Actions, Kernel, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {BurnerLoansActivator} from "src/proposals/BurnerLoansActivator.sol";
+import {BurnerLoansActivator} from "src/proposals/helpers/BurnerLoansActivator.sol";
 import {BurnerLoansProposal} from "src/proposals/BurnerLoansProposal.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {BurnerLoansDeployHarness} from "src/test/proposals/BurnerLoansActivator/fixtures/BurnerLoansDeployHarness.sol";

@@ -1,4 +1,6 @@
 /out/
+/out-solar/
+/cache-solar/
 .context/
 cache/
 .gen-perms/

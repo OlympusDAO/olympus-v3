@@ -33,7 +33,7 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 
-import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
+import {ConvertibleDepositActivator} from "src/proposals/helpers/ConvertibleDepositActivator.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositActivatorForkTest is Test {

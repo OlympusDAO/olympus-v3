@@ -27,7 +27,7 @@ import {IHeart as IHeart_v1_6} from "src/policies/interfaces/IHeart_v1_6.sol";
 import {IEmissionManager as IEmissionManager_v1_1} from "src/policies/interfaces/IEmissionManager_v1_1.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 
-import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
+import {ConvertibleDepositActivator} from "src/proposals/helpers/ConvertibleDepositActivator.sol";
 
 /// @notice Combined proposal that enables and configures the Convertible Deposit system
 contract ConvertibleDepositProposal is GovernorBravoProposal {

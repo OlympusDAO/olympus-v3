@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IProposal} from "proposal-sim/proposals/IProposal.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IBurnerLoansActivator} from "src/proposals/helpers/interfaces/IBurnerLoansActivator.sol";
 
 // Libraries
 import {BL_COLLATERAL_POLICY_ROLE, BL_DEBT_POLICY_ROLE, BL_LIQUIDATION_POLICY_ROLE, BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActionRoles.sol";

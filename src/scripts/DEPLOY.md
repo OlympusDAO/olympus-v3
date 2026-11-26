@@ -1,5 +1,11 @@
 # Deployment Instructions - Mainnet
 
+The deployment wrappers select the `deploy` profile (Solc 0.8.36, Prague, optimizer on at 400 runs).
+Set `FOUNDRY_PROFILE=deploy` when invoking `forge script` or `forge create` directly to produce
+deployment bytecode. Use the same profile for `forge verify-contract`.
+Verify existing deployments from the original deployment revision so the source paths and
+compiler settings match their bytecode metadata.
+
 ## Deployment
 
 1. Update the solidity deployment script `src/scripts/deployment/DeployV2.sol`.

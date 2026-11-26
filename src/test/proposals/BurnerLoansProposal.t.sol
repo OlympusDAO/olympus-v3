@@ -33,7 +33,7 @@ import {ContinuouslyUpdatedFeed} from "./BurnerLoansProposal/fixtures/Continuous
 import {UnavailableFeed} from "./BurnerLoansProposal/fixtures/UnavailableFeed.sol";
 import {Policy} from "src/Kernel.sol";
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
-import {IBurnerLoansActivator} from "src/proposals/interfaces/IBurnerLoansActivator.sol";
+import {IBurnerLoansActivator} from "src/proposals/helpers/interfaces/IBurnerLoansActivator.sol";
 import {BurnerLoansProposal} from "src/proposals/BurnerLoansProposal.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";

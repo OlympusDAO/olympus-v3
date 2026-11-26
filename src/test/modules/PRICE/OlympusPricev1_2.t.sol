@@ -152,7 +152,7 @@ contract OlympusPricev1_2Test is Test {
     }
 
     modifier givenObservationFrequencyHasElapsed() {
-        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+        vm.warp(vm.getBlockTimestamp() + OBSERVATION_FREQUENCY);
         _;
     }
 
@@ -736,14 +736,14 @@ contract OlympusPricev1_2Test is Test {
         IPRICEv2.Asset memory reserveADataBefore = price.getAssetData(address(reserveA));
         IPRICEv2.Asset memory reserveBDataBefore = price.getAssetData(address(reserveB));
 
-        uint48 snapshotTimestamp = uint48(block.timestamp);
+        uint48 snapshotTimestamp = uint48(vm.getBlockTimestamp());
 
         // Update moving average
         vm.prank(priceWriterV1_2);
         price.updateMovingAverage();
 
         // Warp
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
 
         // Verify OHM moving average was updated
         uint256 ohmMAAfter = price.getMovingAverage();

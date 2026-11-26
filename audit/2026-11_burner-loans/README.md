@@ -22,7 +22,7 @@ From the checkout under review, compare the source with the fixed `develop` base
 git diff --find-renames d8ec9bd5a93ae09fee8d3cc9f3c5b6c0a79498a1 HEAD -- src
 ```
 
-The scope includes the scoped-authorization implementation and the OCG launch proposal. [BurnerLoansProposal](../../src/proposals/BurnerLoansProposal.sol), [BurnerLoansActivator](../../src/proposals/BurnerLoansActivator.sol), and [IBurnerLoansActivator](../../src/proposals/interfaces/IBurnerLoansActivator.sol) are in scope. Deployment scripts and operations batch files remain excluded.
+The scope includes the scoped-authorization implementation and the OCG launch proposal. [BurnerLoansProposal](../../src/proposals/BurnerLoansProposal.sol), [BurnerLoansActivator](../../src/proposals/helpers/BurnerLoansActivator.sol), and [IBurnerLoansActivator](../../src/proposals/helpers/interfaces/IBurnerLoansActivator.sol) are in scope. Deployment scripts and operations batch files remain excluded.
 
 ## Recommended Reading
 
@@ -60,7 +60,7 @@ The source defines behavior if a document differs from implementation. Tests and
 | [DepositManager](../../src/policies/deposits/DepositManager.sol) and [its timelock](../../src/policies/deposits/DepositManagerConfigTimelock.sol) | Shared custody, receipt liabilities, vault shares, borrowing accounting, and delayed configuration. |
 | [BackingOracle](../../src/policies/BackingOracle.sol), [its timelock](../../src/policies/BackingOracleConfigTimelock.sol), [PriceCache](../../src/policies/price/PriceCache.sol), and [PriceCacherTask](../../src/policies/PriceCacherTask.sol) | Backing storage and bounded updates, reusable price snapshots, and periodic warming. |
 | [RevenueDistributor](../../src/policies/RevenueDistributor.sol), [its timelock](../../src/policies/RevenueDistributorConfigTimelock.sol), and [its task](../../src/policies/RevenueDistributorTask.sol) | Allocation of received tokens to repurchase/configured recipients and Treasury, delayed route changes, and periodic settlement. |
-| [Proposal](../../src/proposals/BurnerLoansProposal.sol) and [Activator](../../src/proposals/BurnerLoansActivator.sol) | Governance role grants, one-use atomic launch, initial configuration, Heart insertion order, and temporary ADMIN revocation. |
+| [Proposal](../../src/proposals/BurnerLoansProposal.sol) and [Activator](../../src/proposals/helpers/BurnerLoansActivator.sol) | Governance role grants, one-use atomic launch, initial configuration, Heart insertion order, and temporary ADMIN revocation. |
 
 Core authenticates settlement roles and trusts reviewed action contracts to forward the actual operator and apply economic checks. Auth validates scoped grants, and Core enforces resulting-position bounds under its shared settlement guard. Replacing an action preserves the facility, custody namespace, and grants on the selected Auth.
 

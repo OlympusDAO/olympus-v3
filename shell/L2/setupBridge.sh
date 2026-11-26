@@ -37,7 +37,7 @@ validate_text "$RPC_URL" "No RPC URL specified. Specify the RPC_URL in the $ENV_
 
 echo ""
 echo "Summary:"
-echo "  Deploying from account: $account"
+echo "  Sending from account: $account"
 echo "  Local chain: $localChain"
 echo "  Remote chain: $remoteChain"
 echo "  Using RPC at URL: $RPC_URL"
@@ -48,7 +48,7 @@ set_broadcast_flag $BROADCAST
 set_resume_flag $RESUME
 set_account_address $account
 
-# Deploy using script
+# Configure the existing bridge
 echo ""
 echo "Running forge script"
 forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy \
