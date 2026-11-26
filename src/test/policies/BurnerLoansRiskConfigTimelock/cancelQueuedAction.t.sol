@@ -37,7 +37,7 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
 
     // Scenarios: BLRCT-CANCEL-A02.
     function test_whenUnauthorized_reverts(address caller_, bool enabled_) public {
-        vm.assume(!_roles.hasRole(caller_, EMERGENCY_ROLE));
+        vm.assume(caller_ != _fixtureAdmin && !_roles.hasRole(caller_, EMERGENCY_ROLE));
         vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         bytes32 queued = _queueDigest(id);

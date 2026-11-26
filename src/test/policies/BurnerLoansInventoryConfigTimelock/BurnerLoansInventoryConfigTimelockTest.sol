@@ -71,6 +71,8 @@ abstract contract BurnerLoansInventoryConfigTimelockTest is BurnerLoansModularTe
 
     function _grantRecoveryAdmin(address caller_, bool blAdmin_, bool overlap_) internal {
         vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin && caller_ != _recipient);
+        // The recovery fixture verifies the timelock can forward without an ADMIN grant.
+        vm.assume(caller_ != address(_timelock));
         _grantFixtureRole(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
         if (overlap_) _grantFixtureRole(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
     }
