@@ -50,6 +50,7 @@ jobs:
               run: pnpm run size
 
     gas-snapshots:
+        name: Gas snapshots - ${{ matrix.group }}
         # test:gas needs an RPC secret for its fork suite. GitHub withholds that secret from
         # external forks and Dependabot PRs, so only trusted PRs and branch pushes run this job.
         if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
@@ -57,6 +58,10 @@ jobs:
         timeout-minutes: 60
         env:
             FOUNDRY_PROFILE: deploy
+        strategy:
+            fail-fast: true
+            matrix:
+                group: [burner-loans, bridge, other]
 
         steps:
             - name: Checkout
@@ -71,14 +76,15 @@ jobs:
               uses: ./.github/actions/foundry-cache
               with:
                   save: "true"
-                  prefix: foundry-gas-v1
-                  artifact-path: out/gas
-                  cache-path: cache/gas/*/solidity-files-cache.json
+                  prefix: foundry-gas-v1-${{ matrix.group }}
+                  artifact-path: out/gas/${{ matrix.group }}
+                  cache-path: cache/gas/${{ matrix.group }}/solidity-files-cache.json
                   scope-file: shell/test_gas_sharded.sh
 
-            - name: Run gas test shards (Solc)
-              run: pnpm run test:gas:sharded
+            - name: Run gas test shard (Solc)
+              run: pnpm run test:gas:sharded "$GAS_SHARD"
               env:
+                  GAS_SHARD: ${{ matrix.group }}
                   ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
 
             - name: Check gas snapshots (Solc)

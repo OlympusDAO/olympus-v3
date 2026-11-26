@@ -45,9 +45,11 @@ canonical snapshots. The repository test wrapper requires the deploy profile and
 release before it runs with snapshot emission enabled. For a raw Forge snapshot command, select
 the Solc deploy profile explicitly.
 
-CI runs the Burner Loans, bridge, and remaining gas tests in series with a cache per group. New
-test paths fall into one of these groups by name. Forge follows imports across groups, so each
-group also selects which test paths run.
-`pnpm run test:gas:check` compares tracked snapshot changes and flags newly created files.
+CI runs the Burner Loans, bridge, and remaining gas tests in parallel on separate runners with
+a cache per group. Each job fails if `pnpm run test:gas:check` detects changed or new snapshot files.
+New test paths fall into a group by name. Forge follows imports across groups, so each group also
+selects which test paths run.
+Locally, run all groups in series with `pnpm run test:gas:sharded`, or pass one group name to
+run it on its own.
 Gas, fork, cross-chain, and proposal jobs use RPC credentials from GitHub. The workflow skips
 those jobs on untrusted fork and Dependabot pull requests.

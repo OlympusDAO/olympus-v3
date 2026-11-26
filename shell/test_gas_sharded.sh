@@ -3,6 +3,14 @@ set -euo pipefail
 
 source "$(dirname "$0")/lib/repo.sh"
 cd_repo_root
+
+if (($# == 0)); then
+    set -- burner-loans bridge other
+elif (($# != 1)) || [[ "$1" != burner-loans && "$1" != bridge && "$1" != other ]]; then
+    echo "Usage: $0 [burner-loans|bridge|other]" >&2
+    exit 2
+fi
+
 require_command jq
 
 export FOUNDRY_PROFILE=deploy
@@ -31,7 +39,7 @@ done
 
 # Limit compile roots before each test invocation. Execution filters alone
 # leave tests under src/ in the compiler graph.
-for group in burner-loans bridge other; do
+for group in "$@"; do
     exclude=()
     include=()
     for index in "${!patterns[@]}"; do
