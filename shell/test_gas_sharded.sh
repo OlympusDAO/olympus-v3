@@ -13,15 +13,12 @@ export FOUNDRY_SRC=src/test
 # Assign every test root to one group. Forge still loads the imported closure.
 patterns=()
 groups=()
-for root in src/test/* src/test/policies/*; do
+for root in src/test/* src/test/{periphery,policies,proposals}/*; do
     case "$root" in
-        src/test/policies) continue ;;
-        src/test/periphery) group=periphery ;;
-        src/test/policies/BurnerLoansCore | src/test/policies/BurnerLoansSeize | src/test/policies/BurnerLoansSeizerTask) group=burner-core ;;
-        src/test/policies/BurnerLoans*) group=burner-policies ;;
-        src/test/policies/bridge | src/test/policies/price | src/test/policies/utils) group=bridge-price-utils ;;
-        src/test/policies/*) group=other-policies ;;
-        *) group=other-tests ;;
+        src/test/periphery | src/test/policies | src/test/proposals) continue ;;
+        */BurnerLoans*) group=burner-loans ;;
+        */bridge | */CCIP* | */LZ*) group=bridge ;;
+        *) group=other ;;
     esac
     if [[ -d "$root" ]]; then
         patterns+=("$root/**")
@@ -34,7 +31,7 @@ done
 
 # Limit compile roots before each test invocation. Execution filters alone
 # leave tests under src/ in the compiler graph.
-for group in other-tests periphery other-policies bridge-price-utils burner-policies burner-core; do
+for group in burner-loans bridge other; do
     exclude=()
     include=()
     for index in "${!patterns[@]}"; do

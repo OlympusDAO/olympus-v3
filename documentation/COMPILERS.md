@@ -24,8 +24,9 @@ version during compilation. The profile pins the actual Solar release. All profi
   own creation code. Run scripts that embed locally compiled creation code through the release
   tooling with `FOUNDRY_PROFILE=deploy`.
 - Coverage inherits Solar from `default` and uses `--ir-minimum` with reduced fuzz and invariant
-  budgets. Changing compilers can change source mappings and report totals. The Burner Loans
-  external-routes fixture needs an active fork, so it runs through `pnpm run test:fork`.
+  budgets. Changing compilers can change source mappings and report totals. Fork tests such as
+  the Burner Loans external-routes suite select their own pinned mainnet fork when needed.
+  Coverage uses the `mainnet` RPC alias and its `ALCHEMY_API_KEY` for those tests.
   In a fixed-seed comparison, both compilers passed all 217 library tests. Solar reported
   48 of 70 branches covered in `src/libraries/`, and Solc reported 43 of 70.
 
@@ -33,8 +34,9 @@ version during compilation. The profile pins the actual Solar release. All profi
 
 `pnpm run size` reuses the `deploy` profile's `out/` and `cache/` locally. Forge checks the sizes of
 both freshly compiled and cached artifacts for the selected graph. CI runs this check on a fresh
-runner without restoring a compiler cache. The roots include the production contracts and
-`src/proposals/helpers/`. Forge includes their transitive imports.
+runner without restoring a compiler cache. The size script discovers top-level Solidity files and
+directories under `src/`. It skips `test/`, `scripts/`, and `proposals/` as roots and adds
+`src/proposals/helpers/` explicitly. Forge follows imports from all selected roots.
 Deployment scripts and simulation contracts have their own entry points. See the
 [proposal guide](../src/proposals/README.md) for placing deployable proposal helpers.
 
@@ -43,9 +45,9 @@ canonical snapshots. The repository test wrapper requires the deploy profile and
 release before it runs with snapshot emission enabled. For a raw Forge snapshot command, select
 the Solc deploy profile explicitly.
 
-CI runs the six gas groups in series with a cache per group. Their Forge root exclusions bound
-compilation while allowing imports to enter the graph. The positive test path filters assign each
-case to its own group, including when an import loads a test contract from a different group.
+CI runs the Burner Loans, bridge, and remaining gas tests in series with a cache per group. New
+test paths fall into one of these groups by name. Forge follows imports across groups, so each
+group also selects which test paths run.
 `pnpm run test:gas:check` compares tracked snapshot changes and flags newly created files.
 Gas, fork, cross-chain, and proposal jobs use RPC credentials from GitHub. The workflow skips
 those jobs on untrusted fork and Dependabot pull requests.

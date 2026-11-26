@@ -29,7 +29,7 @@
         "prettier": "pnpm run format",
         "prettier:check": "pnpm run format:check",
         "prettier:list": "pnpm run format:check",
-        "size": "FOUNDRY_PROFILE=deploy forge build --sizes src/*.sol src/bases src/external src/interfaces src/libraries src/modules src/periphery src/policies src/proposals/helpers",
+        "size": "bash ./shell/check_contract_sizes.sh",
         "skill:validate": "node shell/validate-skill.js",
         "test": "./shell/test_all.sh",
         "test:coverage": "bash ./shell/test_coverage.sh",

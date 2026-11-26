@@ -30,7 +30,6 @@ rm -f "$LCOV_FILE"
 
 # A failing test does not suppress the reports, but a compilation failure leaves nothing to report,
 # so the exit status is kept and checked against the tracefile below.
-# Coverage starts without an active fork. The external-routes fixture needs the fork command.
 coverage_status=0
 FOUNDRY_PROFILE=coverage forge coverage \
     --threads 1 \
@@ -39,7 +38,6 @@ FOUNDRY_PROFILE=coverage forge coverage \
     --exclude-tests \
     --no-match-coverage "^src/(scripts|proposals|interfaces|external)|(^|/)dependencies/" \
     --no-match-path "src/test/{deprecated,external,proposals,sim,mocks,lib}/**" \
-    --no-match-contract '^BurnerLoansCompositesExternalRoutesForkTest$' \
     --no-match-test "^invariant_" \
     > "$COVERAGE_LOG" 2>&1 || coverage_status=$?
 
