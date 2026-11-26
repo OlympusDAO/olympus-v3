@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
+import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
 
 // Contracts
 import {Actions, Kernel} from "src/Kernel.sol";

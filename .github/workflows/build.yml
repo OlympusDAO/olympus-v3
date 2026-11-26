@@ -9,8 +9,7 @@ on:
 permissions:
     contents: read
 
-# Supersede in-flight pull request runs. Push runs are never cancelled, so they always finish
-# publishing their cache entry and build artifact.
+# Supersede in-flight pull request runs. Push runs always finish their checks.
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -18,7 +17,6 @@ concurrency:
 jobs:
     build:
         runs-on: ubuntu-latest
-        # Cap a hung job; the GitHub default is six hours. The jobs that wait on RPC get more room.
         timeout-minutes: 30
 
         steps:
@@ -30,24 +28,67 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Restore and save Foundry build cache
-              uses: ./.github/actions/foundry-cache
-              with:
-                  # Fork pull requests may restore trusted caches but must not publish cache entries.
-                  save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-
-            - name: Build
+            - name: Build (Solar)
               run: pnpm run build
 
-            - name: Upload Foundry build artifacts
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+    size-check:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        env:
+            FOUNDRY_PROFILE: deploy
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
               with:
-                  name: foundry-build
-                  path: |
-                      out
-                      cache/solidity-files-cache.json
-                  if-no-files-found: error
-                  retention-days: 1
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Check production contract sizes (Solc)
+              run: pnpm run size
+
+    gas-snapshots:
+        name: Gas snapshots - ${{ matrix.group }}
+        # test:gas needs an RPC secret for its fork suite. GitHub withholds that secret from
+        # external forks and Dependabot PRs, so only trusted PRs and branch pushes run this job.
+        if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        env:
+            FOUNDRY_PROFILE: deploy
+        strategy:
+            fail-fast: true
+            matrix:
+                group: [bridge, other]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Restore and save Solc gas build cache
+              uses: ./.github/actions/foundry-cache
+              with:
+                  save: "true"
+                  prefix: foundry-gas-v1-${{ matrix.group }}
+                  artifact-path: out/gas/${{ matrix.group }}
+                  cache-path: cache/gas/${{ matrix.group }}/solidity-files-cache.json
+                  scope-file: shell/test_gas_sharded.sh
+
+            - name: Run gas test shard (Solc)
+              run: pnpm run test:gas:sharded "$GAS_SHARD"
+              env:
+                  GAS_SHARD: ${{ matrix.group }}
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+
+            - name: Check gas snapshots (Solc)
+              run: pnpm run test:gas:check
 
     permission-lists:
         runs-on: ubuntu-latest
@@ -63,15 +104,10 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            # The check compiles the non-test sources with the AST enabled, into artifact and cache
-            # directories of its own that it discards before each run. Neither the cache nor the
-            # build artifacts that the build job publishes carry the AST, so this job depends on
-            # neither.
-            - name: Check the generated permission lists
+            - name: Check the generated permission lists (Solar)
               run: pnpm run gen:perms:check
 
     unit-tests:
-        needs: build
         runs-on: ubuntu-latest
         timeout-minutes: 30
 
@@ -84,17 +120,10 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Download Foundry build artifacts
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-              with:
-                  name: foundry-build
-                  path: .
-
-            - name: Run unit tests
+            - name: Run unit tests (Solar)
               run: pnpm run test:unit
 
     invariant-tests:
-        needs: build
         runs-on: ubuntu-latest
         timeout-minutes: 45
 
@@ -107,20 +136,13 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Download Foundry build artifacts
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-              with:
-                  name: foundry-build
-                  path: .
-
-            - name: Run invariant tests
+            - name: Run invariant tests (Solar)
               run: pnpm run test:invariant
 
     # RPC secrets are unavailable to fork and Dependabot pull requests.
     fork-tests:
         name: Fork tests - ${{ matrix.shard.name }}
         if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
-        needs: build
         runs-on: ubuntu-latest
         timeout-minutes: 45
         strategy:
@@ -145,20 +167,13 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Download Foundry build artifacts
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-              with:
-                  name: foundry-build
-                  path: .
-
-            - name: Run fork tests - ${{ matrix.shard.name }}
+            - name: Run fork tests (Solar) - ${{ matrix.shard.name }}
               run: pnpm run ${{ matrix.shard.script }}
               env:
                   ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
 
     proposal-tests:
         if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
-        needs: build
         runs-on: ubuntu-latest
         timeout-minutes: 45
 
@@ -171,20 +186,13 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Download Foundry build artifacts
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-              with:
-                  name: foundry-build
-                  path: .
-
-            - name: Run proposal simulation tests
+            - name: Run proposal simulation tests (Solar)
               run: pnpm run test:proposal
               env:
                   ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
 
     crosschain-tests:
         if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
-        needs: build
         runs-on: ubuntu-latest
         timeout-minutes: 45
 
@@ -197,13 +205,7 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Download Foundry build artifacts
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-              with:
-                  name: foundry-build
-                  path: .
-
-            - name: Run cross-chain fork tests
+            - name: Run cross-chain fork tests (Solar)
               run: pnpm run test:crosschainfork
               env:
                   ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}

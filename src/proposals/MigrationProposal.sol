@@ -11,7 +11,7 @@ import {ProposalScript} from "./ProposalScript.sol";
 
 // Contracts
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {MigrationProposalHelper} from "src/proposals/helpers/MigrationProposalHelper.sol";
 import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {Burner} from "src/policies/Burner.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";

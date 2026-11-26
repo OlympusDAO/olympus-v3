@@ -11,7 +11,7 @@ import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravo
 import {ProposalScript} from "src/proposals/ProposalScript.sol";
 
 // Libraries
-import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 // Interfaces
 import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
@@ -29,7 +29,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
-import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
+import {LZBridgeActivator} from "src/proposals/helpers/LZBridgeActivator.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @notice OCG proposal for the LayerZero Bridge Security Upgrade.

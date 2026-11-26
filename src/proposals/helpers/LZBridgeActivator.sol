@@ -9,7 +9,7 @@ import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimite
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointDelegate} from "src/policies/interfaces/ILZEndpointDelegate.sol";
 import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
-import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 /// @title LZBridgeActivator
 /// @notice Single-use contract to configure and activate the LZBridgeGateway during the

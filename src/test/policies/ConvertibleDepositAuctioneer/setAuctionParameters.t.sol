@@ -279,7 +279,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_newTickSizeLessThanCurrentTickCapacity(
         uint256 newTickSize_
     ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
-        uint48 lastUpdate = uint48(block.timestamp);
+        uint48 lastUpdate = uint48(vm.getBlockTimestamp());
 
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
@@ -297,7 +297,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been adjusted to the new tick size
-        _assertPreviousTick(newCapacity, MIN_PRICE, newTickSize, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, newTickSize, uint48(vm.getBlockTimestamp()));
     }
 
     // when the new tick size is >= the current tick capacity
@@ -306,7 +306,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_newTickSizeGreaterThanCurrentTickCapacity(
         uint256 newTickSize_
     ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
-        uint48 lastUpdate = uint48(block.timestamp);
+        uint48 lastUpdate = uint48(vm.getBlockTimestamp());
 
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
@@ -323,7 +323,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been unchanged
-        _assertPreviousTick(newCapacity, MIN_PRICE, newTickSize, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, newTickSize, uint48(vm.getBlockTimestamp()));
     }
 
     // when the new min price is > than the current tick price
@@ -332,7 +332,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_newMinPriceGreaterThanCurrentTickPrice(
         uint256 newMinPrice_
     ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
-        uint48 lastUpdate = uint48(block.timestamp);
+        uint48 lastUpdate = uint48(vm.getBlockTimestamp());
 
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
@@ -349,7 +349,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been set to the new min price
-        _assertPreviousTick(newCapacity, newMinPrice, TICK_SIZE, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, newMinPrice, TICK_SIZE, uint48(vm.getBlockTimestamp()));
     }
 
     // when the new min price is <= the current tick price
@@ -358,7 +358,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_newMinPriceLessThanCurrentTickPrice(
         uint256 newMinPrice_
     ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
-        uint48 lastUpdate = uint48(block.timestamp);
+        uint48 lastUpdate = uint48(vm.getBlockTimestamp());
 
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
@@ -375,7 +375,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been unchanged
-        _assertPreviousTick(newCapacity, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, TICK_SIZE, uint48(vm.getBlockTimestamp()));
     }
 
     // given this is the first day of the auction cycle

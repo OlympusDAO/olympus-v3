@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Code coverage. Runs under the `coverage` profile, which collapses the build into a single compile
-# job and trims the fuzz and invariant budgets. See foundry.toml.
+# The `coverage` profile inherits Solar and trims the fuzz and invariant budgets. See foundry.toml.
 #
 # `forge coverage` recompiles the whole project from scratch on every run and keeps nothing in
 # `out/`, so this is slow and memory hungry regardless of the filters below. `--threads 1` trades

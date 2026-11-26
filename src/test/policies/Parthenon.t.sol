@@ -205,13 +205,13 @@ contract ParthenonTest is Test {
     }
 
     function testCorrectness_activateProposal() public {
-        uint256 submissionTimestamp = block.timestamp;
+        uint256 submissionTimestamp = vm.getBlockTimestamp();
         uint256 collateralAmt = _calculateCollateral();
         uint256 proposalId = _submitUnactivatedProposal();
 
         // fast forward past activation lock
-        vm.warp(block.timestamp + governance.ACTIVATION_TIMELOCK() + 1);
-        uint256 activationTimestamp = block.timestamp;
+        vm.warp(vm.getBlockTimestamp() + governance.ACTIVATION_TIMELOCK() + 1);
+        uint256 activationTimestamp = vm.getBlockTimestamp();
         vm.prank(voter1);
         governance.activateProposal(proposalId);
 
@@ -238,7 +238,7 @@ contract ParthenonTest is Test {
         assertEq(isCollateralReturned, false);
 
         // assert vesting reset
-        assertEq(VOTES.lastActionTimestamp(voter1), block.timestamp);
+        assertEq(VOTES.lastActionTimestamp(voter1), vm.getBlockTimestamp());
     }
 
     function testRevert_activateProposal_UnableToActivate() public {
@@ -512,7 +512,7 @@ contract ParthenonTest is Test {
     }
 
     function testRevert_reclaimCollateral_UnmetCollateralDuration() public {
-        uint256 submissionTimestamp = block.timestamp;
+        uint256 submissionTimestamp = vm.getBlockTimestamp();
         bytes memory err = abi.encodeWithSignature("UnmetCollateralDuration()");
         uint256 proposalId = _submitProposal();
 
@@ -565,7 +565,7 @@ contract ParthenonTest is Test {
         proposalId = INSTR.totalInstructions();
 
         // fast forward past activation lock
-        vm.warp(block.timestamp + governance.ACTIVATION_TIMELOCK() + 1);
+        vm.warp(vm.getBlockTimestamp() + governance.ACTIVATION_TIMELOCK() + 1);
         vm.prank(voter1);
         governance.activateProposal(proposalId);
     }

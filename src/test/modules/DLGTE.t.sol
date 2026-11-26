@@ -1181,12 +1181,12 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
             totalCollateral,
             type(uint256).max
         );
-        // Isolated execution starts with cold delegate escrows and storage, which is what a real
-        // transaction pays. That more than doubles the measurement: this rescind costs 1,359,884
-        // gas without isolation and 2,961,509 gas with it.
+        // Isolated execution starts with cold delegate escrows and storage. Forge 1.10.0's evm2
+        // measures 3,380,505 gas with the release Solc build. Keep about 140,000 gas of headroom,
+        // as under the previous Forge runtime.
         assertLt(
             gasBefore - gasleft(),
-            3_100_000,
+            3_520_000,
             "cold rescindDelegations gas should remain below the regression limit"
         );
     }

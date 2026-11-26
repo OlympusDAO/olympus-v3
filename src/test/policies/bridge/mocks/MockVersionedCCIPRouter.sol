@@ -36,15 +36,11 @@ contract MockVersionedCCIPRouter is MockCCIPRouter {
         }
         // 64 bytes: the ABI encoding of the empty string
         if (currentMode == MockRouterCandidate.ReturnMode.EmptyString) return abi.encode("");
-        // Raw memory of the oversized length of `MockRouterCandidate`, returned without the
-        // ABI encoder so that the caller sees the length exactly
+        // The typed fallback returns the bytes directly, like MockRouterCandidate.
         if (currentMode == MockRouterCandidate.ReturnMode.OversizedReturn) {
-            // A raw `return` is the only way to answer with unencoded memory of that length
-            // forge-lint: disable-next-item(inline-assembly)
-            // solhint-disable-next-line no-inline-assembly
-            assembly {
-                return(0, OVERSIZED_RETURN_LENGTH)
-            }
+            // Allocate only for this mode. A raw assembly return can cause Solar to reserve
+            // this memory before any branch, exhausting the probe even for a short reply.
+            return new bytes(OVERSIZED_RETURN_LENGTH);
         }
         // 96 bytes of data that does not decode as a string
         return

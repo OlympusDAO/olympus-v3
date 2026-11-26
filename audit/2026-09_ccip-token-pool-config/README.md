@@ -141,8 +141,8 @@ of it are in scope.
 ### Deployment and Configuration
 
 - [CCIPTokenPoolConfigProposal](../../src/proposals/CCIPTokenPoolConfigProposal.sol)
-- [CCIPTokenPoolConfigProposalChecker](../../src/proposals/CCIPTokenPoolConfigProposalChecker.sol)
-    and its [interface](../../src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol):
+- [CCIPTokenPoolConfigProposalChecker](../../src/proposals/helpers/CCIPTokenPoolConfigProposalChecker.sol)
+    and its [interface](../../src/proposals/helpers/interfaces/ICCIPTokenPoolConfigProposalChecker.sol):
     the read-only contract the proposal calls as its first action, which asserts the handover
     preconditions and the pool backing at execution
 - [DeployV3](../../src/scripts/deploy/DeployV3.s.sol)

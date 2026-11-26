@@ -5,7 +5,7 @@ import {ProposalTest} from "./ProposalTest.sol";
 import {console2} from "forge-std/console2.sol";
 
 // Libraries
-import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 // Interfaces
 import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
@@ -23,7 +23,7 @@ import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeAndDelegateConfig} from "src/policies/bridge/LZBridgeAndDelegateConfig.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
-import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
+import {LZBridgeActivator} from "src/proposals/helpers/LZBridgeActivator.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 

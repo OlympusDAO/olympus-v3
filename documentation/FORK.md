@@ -30,6 +30,10 @@ The script automatically detects localhost URLs and applies the `--legacy` flag 
 
 ## Prerequisites
 
+Repository fork tests use Solar 0.3.1 by default, including the fork shards in CI.
+Use `FOUNDRY_PROFILE=deploy` to assess gas with the Solc release bytecode.
+The deployment wrappers select this profile automatically, including for deployments to a fork.
+
 ```bash
 # Start Anvil fork (uses mainnet RPC from foundry.toml)
 pnpm run anvil:fork

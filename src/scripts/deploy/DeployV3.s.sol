@@ -83,14 +83,14 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 // Migration contracts
 import {OwnedERC20} from "src/external/OwnedERC20.sol";
 import {Burner} from "src/policies/Burner.sol";
-import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {MigrationProposalHelper} from "src/proposals/helpers/MigrationProposalHelper.sol";
 import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // OCG Activator contracts
-import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
-import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
+import {ConvertibleDepositActivator} from "src/proposals/helpers/ConvertibleDepositActivator.sol";
+import {LZBridgeActivator} from "src/proposals/helpers/LZBridgeActivator.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/CCIPTokenPoolConfigProposalChecker.sol";
 
 // solhint-disable gas-custom-errors
 

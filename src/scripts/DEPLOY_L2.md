@@ -155,7 +155,8 @@ This should be run using the deployer account.
 After a successful handoff broadcast, run `L2HandoffBatch.acceptHandoff` through the existing Safe batch wrapper.
 This separate command simulates, signs, and proposes one Safe transaction containing `RolesAdmin.pullNewAdmin()` and `CCIPBurnMintTokenPool.acceptOwnership()`.
 The proposal signing wallet must be a DAO Safe owner. It can differ from the deployer. Ledger and `cast wallet` accounts are supported.
-The wrapper uses `FOUNDRY_PROFILE=deploy` for deployment compiler settings and `--no-isolate` for Safe batch simulation.
+The wrapper selects the `multisig` profile. It inherits Solar from `default` and disables Forge
+isolation and script execution protection for Safe batch simulation.
 Confirm and execute that proposal in the DAO Safe. Proposing alone does not transfer ownership.
 The batch checks accepted ownership during simulation and skips transfers already accepted by the DAO.
 A handoff preview creates no Safe proposal because the pending transfers have not been broadcast.

@@ -133,11 +133,11 @@ contract VOTESTest is Test {
         // mint VOTES from gOHM at 1:1
         vm.startPrank(user1);
         gOHM.approve(address(VOTES), amt);
-        uint256 user1DepositTimestamp = block.timestamp;
+        uint256 user1DepositTimestamp = vm.getBlockTimestamp();
         VOTES.mint(amt, user1);
 
-        // force block.timestamp to change to test lastDepositTimestamp
-        vm.warp(block.timestamp + 1);
+        // force vm.getBlockTimestamp() to change to test lastDepositTimestamp
+        vm.warp(vm.getBlockTimestamp() + 1);
 
         // assert VOTES was minted at 1:1
         assertEq(VOTES.balanceOf(user1), amt);
@@ -150,11 +150,11 @@ contract VOTESTest is Test {
 
         vm.startPrank(user2);
         gOHM.approve(address(VOTES), amt * 2);
-        uint256 user2DepositTimestamp = block.timestamp;
+        uint256 user2DepositTimestamp = vm.getBlockTimestamp();
         VOTES.mint(amt, user2);
 
-        // force block.timestamp to change to test lastDepositTimestamp
-        vm.warp(block.timestamp + 1);
+        // force vm.getBlockTimestamp() to change to test lastDepositTimestamp
+        vm.warp(vm.getBlockTimestamp() + 1);
 
         // assert that VOTES was minted at 1:2
         assertEq(VOTES.balanceOf(user2), amt);

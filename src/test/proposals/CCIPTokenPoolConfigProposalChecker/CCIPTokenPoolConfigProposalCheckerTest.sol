@@ -6,7 +6,7 @@ import {IBurnMintERC20} from "@chainlink-ccip-1.6.0/shared/token/ERC20/IBurnMint
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
-import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
+import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
 
 // Contracts
 import {Test} from "@forge-std-1.16.2/Test.sol";
@@ -20,7 +20,7 @@ import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
 import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/CCIPTokenPoolConfigProposalChecker.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";

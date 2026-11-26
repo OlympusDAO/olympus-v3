@@ -18,7 +18,7 @@
             "broadcast/{DeployUsdsMocks.sol,DeployV2.sol,DeployV3.s.sol,L2Deploy.s.sol,LZBridgeTestnetDeploy.s.sol}/**/run-*.json",
             "!broadcast/**/{31337,dry-run}/**",
             "!broadcast/**/*-latest.json",
-            "!!**/{node_modules,dependencies,cache,coverage,docs,lib,out,.gen-perms}/**",
+            "!!**/{node_modules,dependencies,cache,cache-solar,coverage,docs,lib,out,out-solar,.gen-perms}/**",
             "!src/scripts/deploy/savedDeployments/**",
             "!pnpm-lock.yaml"
         ],
