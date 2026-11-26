@@ -6,7 +6,7 @@ The development tools are listed in `mise.toml`:
 
 - Node.js 24.22.1
 - pnpm 11.28.10
-- Foundry 1.8.1 (`forge`, `cast`, and `anvil`)
+- Foundry 1.10.0 (`forge`, `cast`, and `anvil`)
 - jq 1.8.2 for shell scripts and permission generation
 - Python 3.13.18 for the bridge supply helper
 - shfmt 3.14.1 for shell formatting
@@ -16,10 +16,28 @@ With [mise](https://mise.jdx.dev/), run `mise trust` and `mise install` from the
 Use `mise exec --` before a command when your shell does not activate mise.
 
 Run `pnpm install` to install all dependencies.
-Run `pnpm build` or `forge build` to run a build.
 
-Run `pnpm test:coverage` for Forge's coverage summary and `lcov.info` data.
-Forge generates both outputs directly; no separate LCOV installation is needed.
+## Compilers
+
+| Local task | Commands | Profile and compiler |
+| --- | --- | --- |
+| Build, lint, and ordinary tests | `pnpm build`, `forge build`, `pnpm run lint:check`, `pnpm test`, and the unit, invariant, fork, proposal, and cross-chain test commands | `default`, Solar 0.3.1 |
+| Run deprecated tests | `pnpm run test:deprecated` | `default`, Solar 0.3.1 |
+| Reproduce a result with the release compiler | `FOUNDRY_PROFILE=deploy forge test …` | `deploy`, Solc 0.8.36 |
+| Deploy and verify contracts | Deployment wrappers. Set `FOUNDRY_PROFILE=deploy` when using Forge directly to produce deployment bytecode or verify contracts. | `deploy`, Solc 0.8.36 |
+| Prepare, simulate, or send calls through a Safe | Safe wrappers | `multisig`, inherits Solar 0.3.1 from `default` |
+| Check production bytecode sizes | `pnpm run size` | `deploy`, Solc 0.8.36 |
+| Record canonical gas snapshots | `pnpm run test:gas` or `pnpm run test:gas:sharded` | `deploy`, Solc 0.8.36 |
+| Generate coverage and `lcov.info` | `pnpm run test:coverage` | `coverage`, inherits Solar 0.3.1 from `default` |
+
+| CI check | Profile and compiler |
+| --- | --- |
+| Build, lint, permissions, unit, invariant, fork, proposal, and cross-chain tests | `default`, Solar 0.3.1 |
+| Production size | `deploy`, Solc 0.8.36 |
+| Gas tests and snapshots | `deploy`, Solc 0.8.36 |
+
+See [Compiler and CI assumptions](documentation/COMPILERS.md) for settings, cache boundaries,
+and the rules for recording gas snapshots.
 
 Run `pnpm format` to format files, or `pnpm format:check` to check them.
 Biome formats JSON, YAML, and JavaScript; Taplo formats TOML; shfmt formats shell scripts.

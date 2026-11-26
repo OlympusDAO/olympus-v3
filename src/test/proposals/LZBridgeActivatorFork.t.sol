@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {Test} from "@forge-std-1.16.2/Test.sol";
 
 // Libraries
-import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 // Interfaces
 import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
@@ -22,7 +22,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
-import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
+import {LZBridgeActivator} from "src/proposals/helpers/LZBridgeActivator.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {MockLZEndpointDelegate} from "src/test/policies/bridge/LZEndpointDelegate/MockLZEndpointDelegate.sol";
 import {MockLZBridgeGateway} from "src/test/policies/bridge/LZEndpointDelegate/MockLZBridgeGateway.sol";

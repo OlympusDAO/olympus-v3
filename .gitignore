@@ -1,4 +1,6 @@
 /out/
+/out-solar/
+/cache-solar/
 cache/
 .gen-perms/
 .gen_perms.*.sol

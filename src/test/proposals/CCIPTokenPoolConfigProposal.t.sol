@@ -13,7 +13,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
-import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
+import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
 import {ICCIPFeeOnRamp15, ICCIPFeeOnRampConfig, ICCIPFeeQuoter20, ICCIPFeeRouter, ICCIPFeeTypeAndVersion} from "src/scripts/ops/lib/CCIPFeeBudgetLib.sol";
 
 // Libraries
@@ -34,7 +34,7 @@ import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
 import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CCIPTokenPoolConfigProposal} from "src/proposals/CCIPTokenPoolConfigProposal.sol";
-import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/CCIPTokenPoolConfigProposalChecker.sol";
 import {ProposalTest} from "./ProposalTest.sol";
 
 // Rig loops walk the routes and lanes that `env.json` declares, reading the fork

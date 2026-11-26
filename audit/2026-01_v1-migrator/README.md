@@ -59,7 +59,7 @@ The new design addresses these issues:
             - [IV1Migrator.sol](../../src/policies/interfaces/IV1Migrator.sol) - Interface for V1Migrator
     - [proposals/](../../src/proposals)
         - [MigrationProposal.sol](../../src/proposals/MigrationProposal.sol) - OCG proposal script (not deployed, defines proposal actions)
-        - [MigrationProposalHelper.sol](../../src/proposals/MigrationProposalHelper.sol) - Single-use helper contract for treasury defunding
+        - [MigrationProposalHelper.sol](../../src/proposals/helpers/MigrationProposalHelper.sol) - Single-use helper contract for treasury defunding
 
 [PR #196](https://github.com/OlympusDAO/olympus-v3/pull/196) contains these changes.
 

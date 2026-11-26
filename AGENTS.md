@@ -59,6 +59,9 @@ Ask first:
 
 ## Repo Workflow
 
+Keep GitHub Actions `run` steps to single commands. Put shell logic in repository scripts and
+expose it through a `pnpm run` entry point so the same command runs locally and in CI.
+
 Use the repo's existing commands and tooling for commit, push, and PR work. Do not add scripts for this workflow.
 
 ### Validation Gates
@@ -344,8 +347,9 @@ Key standards summary:
 
 ### Code Standards
 
-- Solidity compiler: pinned to 0.8.36 through `solc_version` in `foundry.toml`, so every machine builds identically. Sources declare flexible pragmas (`>=0.8.x`) and none pins an exact version; `src/LEGACY.md` lists the files that did before the pin.
-- Optimizer runs: 10,000 (except for some contracts that require specific runs to meet bytecode limits, see foundry.toml)
+- Compiler: `foundry.toml` pins Solar for development and ordinary CI, and Solc for deployment
+  and release checks. See [Compiler and CI assumptions](documentation/COMPILERS.md).
+- Deployment optimizer: 400 runs under the Solc deploy profile.
 - Follow existing patterns for module/policy development
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`

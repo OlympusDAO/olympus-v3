@@ -38,16 +38,12 @@ contract MockRouterCandidate {
         if (currentMode == ReturnMode.ShortReturn) return abi.encodePacked(uint256(32));
         // 64 bytes: the ABI encoding of the empty string
         if (currentMode == ReturnMode.EmptyString) return abi.encode("");
-        // 256 KiB of raw memory, returned without the ABI encoder so that the caller sees the
-        // length exactly. Producing it costs more gas than a bounded probe forwards, so a caller
-        // that caps the probe sees the call fail instead.
+        // The typed fallback returns the bytes directly. Expanding to 256 KiB exceeds the
+        // probe's gas budget.
         if (currentMode == ReturnMode.OversizedReturn) {
-            // A raw `return` is the only way to answer with unencoded memory of that length
-            // forge-lint: disable-next-item(inline-assembly)
-            // solhint-disable-next-line no-inline-assembly
-            assembly {
-                return(0, OVERSIZED_RETURN_LENGTH)
-            }
+            // Allocate only for this mode. A raw assembly return can cause Solar to reserve
+            // this memory before any branch, exhausting the probe even for a short reply.
+            return new bytes(OVERSIZED_RETURN_LENGTH);
         }
         // 96 bytes of data that does not decode as a string
         return

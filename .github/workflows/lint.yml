@@ -35,12 +35,8 @@ jobs:
                   install_args: shfmt
                   add_shims_to_path: false
 
-            - name: Restore Foundry build cache
-              uses: ./.github/actions/foundry-cache
-
-            # forge lint emits ABI-only artifacts. Isolate this reporting pass so it cannot replace
-            # the restored full artifacts consumed by the authoritative lint:check step below.
-            - name: Run forge lint inline annotations
+            # Keep ABI-only artifacts from the annotation pass in its own directories.
+            - name: Report Forge lint annotations (Solar)
               env:
                   FOUNDRY_OUT: ${{ runner.temp }}/forge-lint-out
                   FOUNDRY_CACHE_PATH: ${{ runner.temp }}/forge-lint-cache
@@ -49,5 +45,5 @@ jobs:
                   install-foundry: false
                   fail-level: error
 
-            - name: Run lint check
+            - name: Run lint checks (Solar)
               run: pnpm run lint:check

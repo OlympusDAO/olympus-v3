@@ -3752,7 +3752,7 @@ contract GovernorBravoDelegateTest is Test {
         assertEq(proposalId, 1);
 
         // Warp forward so voting period has started
-        vm.roll(block.number + 21601);
+        vm.roll(vm.getBlockNumber() + 21601);
         address(governorBravoDelegator).functionCall(
             abi.encodeWithSignature("activate(uint256)", proposalId)
         );
@@ -3765,7 +3765,7 @@ contract GovernorBravoDelegateTest is Test {
             abi.encodeWithSignature("castVote(uint256,uint8)", proposalId, 1)
         );
 
-        vm.roll(block.number + 50401);
+        vm.roll(vm.getBlockNumber() + 50401);
 
         // Queue proposal
         address(governorBravoDelegator).functionCall(
@@ -3773,7 +3773,7 @@ contract GovernorBravoDelegateTest is Test {
         );
 
         // Warp forward through timelock delay
-        vm.warp(block.timestamp + 1 days + 1);
+        vm.warp(vm.getBlockTimestamp() + 1 days + 1);
 
         Module moduleForTRSRY = kernel.getModuleForKeycode(toKeycode("TRSRY"));
         assertEq(address(moduleForTRSRY), address(0));
@@ -3819,7 +3819,7 @@ contract GovernorBravoDelegateTest is Test {
         assertEq(proposalId, 2);
 
         // Warp forward so voting period has started
-        vm.roll(block.number + 21601);
+        vm.roll(vm.getBlockNumber() + 21601);
         address(governorBravoDelegator).functionCall(
             abi.encodeWithSignature("activate(uint256)", proposalId)
         );
@@ -3832,7 +3832,7 @@ contract GovernorBravoDelegateTest is Test {
             abi.encodeWithSignature("castVote(uint256,uint8)", proposalId, 1)
         );
 
-        vm.roll(block.number + 50401);
+        vm.roll(vm.getBlockNumber() + 50401);
 
         // Queue proposal
         address(governorBravoDelegator).functionCall(
@@ -3840,7 +3840,7 @@ contract GovernorBravoDelegateTest is Test {
         );
 
         // Warp forward through timelock delay
-        vm.warp(block.timestamp + 1 days + 1);
+        vm.warp(vm.getBlockTimestamp() + 1 days + 1);
 
         // Execute proposal
         address(governorBravoDelegator).functionCall(
@@ -3881,7 +3881,7 @@ contract GovernorBravoDelegateTest is Test {
         assertEq(proposalId, 3);
 
         // Warp forward so voting period has started
-        vm.roll(block.number + 21601);
+        vm.roll(vm.getBlockNumber() + 21601);
         address(governorBravoDelegator).functionCall(
             abi.encodeWithSignature("activate(uint256)", proposalId)
         );
@@ -3894,7 +3894,7 @@ contract GovernorBravoDelegateTest is Test {
             abi.encodeWithSignature("castVote(uint256,uint8)", proposalId, 1)
         );
 
-        vm.roll(block.number + 50401);
+        vm.roll(vm.getBlockNumber() + 50401);
 
         // Queue proposal
         address(governorBravoDelegator).functionCall(
@@ -3902,7 +3902,7 @@ contract GovernorBravoDelegateTest is Test {
         );
 
         // Warp forward through timelock delay
-        vm.warp(block.timestamp + 1 days + 1);
+        vm.warp(vm.getBlockTimestamp() + 1 days + 1);
 
         // Execute proposal
         address(governorBravoDelegator).functionCall(

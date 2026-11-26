@@ -30,7 +30,7 @@ import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoo
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
-import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
+import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
 
 // Constants
 import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -40,7 +40,7 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/helpers/CCIPTokenPoolConfigProposalChecker.sol";
 
 // The proposal and the script that submits it share one file, like the other proposals here
 // forge-lint: disable-start(multi-contract-file)

@@ -8,7 +8,7 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {TestHelperOz5} from "@lz-test-devtools-8.0.1/TestHelperOz5.sol";
 
 // Contracts
