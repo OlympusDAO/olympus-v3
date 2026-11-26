@@ -18,18 +18,21 @@ import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures
 abstract contract BurnerLoansCompositesTest is BurnerLoansModularTest {
     BurnerLoansComposites internal _executor;
     IExecutor.Integrations internal _integrationConfig;
+    address internal _compositesOwner;
     uint256 internal constant _SIGNER_KEY = 0xA11CE;
 
     function setUp() public virtual override {
         super.setUp();
+        _compositesOwner = makeAddr("compositesOwner");
         _integrationConfig = _integrations();
         _executor = new BurnerLoansComposites(
             address(_core),
             address(_collateral),
             address(_debt),
-            address(this),
+            _compositesOwner,
             _integrationConfig
         );
+        vm.prank(_compositesOwner);
         _executor.enable("");
         vm.prank(_borrower);
         _asset.approve(address(_executor), type(uint256).max);

@@ -25,7 +25,7 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
         address caller_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, true, enabled_);
+        _setPolicyLifecycle(_payout, true, enabled_);
         bytes32 beforeState = _ledgerDigest();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -64,14 +64,21 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
         bool paused_,
         bool replaced_
     ) public {
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_keeper, true);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(10_000);
         _token.setTransferReverts(_keeper, true);
         _creditReferral(_token, 0, _keeper, 25);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_keeper, false);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(0);
-        if (paused_) _payout.disable("");
-        if (replaced_) _core.setPayout(address(_otherPayout));
+        _setPolicyLifecycle(_payout, true, !paused_);
+        if (replaced_) {
+            vm.prank(_fixtureAdmin);
+            _core.setPayout(address(_otherPayout));
+        }
         vm.mockCallRevert(address(_risk), bytes(""), hex"deadbeef");
         vm.prank(caller_);
         assertEq(
@@ -109,7 +116,9 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
         _creditReferral(_token, 0, _keeper, 25);
         _token.setTransferReverts(_secondKeeper, true);
         _creditReferral(_token, 0, _secondKeeper, 7);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_keeper, false);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_secondKeeper, true);
         _token.setTransferReverts(_secondKeeper, false);
         vm.prank(caller_);
@@ -136,9 +145,11 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
             0,
             "Initial rejected delivery retains entitlement"
         );
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
+        vm.prank(_fixtureAdmin);
         _payout.reEnable();
         _assertReferral(address(_token), _keeper, 25);
         _token.setTransferReverts(_keeper, false);
@@ -296,8 +307,9 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
         assertEq(fee, 10, "Pending fee bucket");
         assertEq(seized, 20, "Pending Treasury bucket");
         assertEq(total, 60, "10 fee + 20 seizure + 30 keeper = 60 raw units");
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(_otherPayout));
-        _setState(_payout, true, false);
+        _setPolicyLifecycle(_payout, true, false);
         _token.setTransferReverts(recipient, false);
         vm.prank(caller_);
         uint256 paid = _payout.transferPendingPayout(address(_token), recipient);
@@ -524,7 +536,7 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
         address old = _treasury();
         _seedBuckets(10, 20, 30, old);
         OlympusTreasury replacement = new OlympusTreasury(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(replacement));
         assertEq(_payout.treasury(), address(replacement), "Getter resolves current Kernel module");
         _token.setTransferReverts(old, false);
         vm.prank(caller_);
@@ -555,6 +567,7 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
         _useDistributor();
         address old = address(_distributor);
         _seedBuckets(10, 20, 30, old);
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(false);
         _token.setTransferReverts(old, false);
         _token.setTransferReverts(_treasury(), false);
@@ -766,9 +779,10 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
             address(_core),
             2_000_000
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(claimer));
-        _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, address(claimer));
-        _rolesAdmin.grantRole(HEART_ROLE, _recipient);
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(claimer));
+        _grantFixtureRole(BL_YIELD_CLAIMER_ROLE, address(claimer));
+        _grantFixtureRole(HEART_ROLE, _recipient);
+        vm.prank(_fixtureAdmin);
         claimer.enable("");
         _token.setTransferReverts(_keeper, false);
         _token.setTransferReverts(_treasury(), false);
@@ -798,7 +812,7 @@ contract BurnerLoansPayoutTransferPendingPayoutTest is BurnerLoansPayoutTest {
         address caller_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
         _expectInactivePayout();
         vm.prank(caller_);

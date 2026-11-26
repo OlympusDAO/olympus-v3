@@ -72,7 +72,7 @@ contract BurnerLoansCollateralDisableTest is BurnerLoansCollateralTest {
         bool enabled_
     ) public givenCollateralEnabled {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(policy, active_, enabled_);
+        _setPolicyLifecycle(policy, active_, enabled_);
         vm.prank(emergency);
         _collateral.disable("");
         _assertRejection(false, START_TIMESTAMP);
@@ -86,7 +86,7 @@ contract BurnerLoansCollateralDisableTest is BurnerLoansCollateralTest {
         uint8 roles_,
         bool active_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, active_, true);
+        _setPolicyLifecycle(_collateral, active_, true);
         _disableAs(caller_, SafeCast.toUint8(bound(roles_, 1, 3)));
         assertEq(kernel.isPolicyActive(_collateral), active_, "Disable preserves membership");
     }
@@ -154,7 +154,7 @@ contract BurnerLoansCollateralDisableTest is BurnerLoansCollateralTest {
         address caller_,
         bool active_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, active_, false);
+        _setPolicyLifecycle(_collateral, active_, false);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
         _collateral.disable("");
@@ -166,7 +166,8 @@ contract BurnerLoansCollateralDisableTest is BurnerLoansCollateralTest {
         public
         givenCollateralEnabled
     {
-        _rolesAdmin.revokeRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
+        _revokeFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
         assertFalse(_collateral.isEnabled(), "Pause independent of settlement authority");
         _assertAccountingPreserved();
@@ -178,6 +179,7 @@ contract BurnerLoansCollateralDisableTest is BurnerLoansCollateralTest {
         givenCollateralEnabled
     {
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
         assertFalse(_collateral.isEnabled(), "Broken dependency cannot prevent pause");
         vm.clearMockedCalls();
@@ -188,6 +190,7 @@ contract BurnerLoansCollateralDisableTest is BurnerLoansCollateralTest {
     function test_givenDisabled_whenNonemptyDisableData_thenStateWins(
         address caller_
     ) public givenCollateralEnabled {
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
@@ -211,11 +214,12 @@ contract BurnerLoansCollateralDisableTest is BurnerLoansCollateralTest {
         bool active_,
         bool enabled_
     ) public givenCollateralEnabled {
-        _setPolicyState(policy, active_, enabled_);
+        _setPolicyLifecycle(policy, active_, enabled_);
         vm.expectEmit(address(_collateral));
         emit IEnabler.Disabled();
         vm.expectEmit(address(_collateral));
-        emit IEnablerV2.Transition(address(this), false, "", uint48(block.timestamp));
+        emit IEnablerV2.Transition(_fixtureAdmin, false, "", uint48(block.timestamp));
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
         assertFalse(_collateral.isEnabled(), "Core state cannot prevent pause");
         _assertAccountingPreserved();

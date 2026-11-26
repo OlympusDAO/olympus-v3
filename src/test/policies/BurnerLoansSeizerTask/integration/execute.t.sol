@@ -26,7 +26,9 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
 
     function setUp() public override {
         super.setUp();
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_otherAsset));
     }
 
@@ -36,7 +38,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
     {
         for (uint256 i; i < 50; ++i) _seedDebt(address(uint160(0x10000 + i)), 10e6, 1e9);
         _mature();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _floan.getActiveBorrowerCount(_core.marketId(address(_asset))),
             25,
@@ -53,10 +55,10 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             "Compacted borrower cursor remains valid"
         );
         assertEq(_task.nextAssetIndex(), 1, "B gets the next turn");
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_inventory.activePrincipalOhm(), 25e9, "B visit cannot process A again");
         assertEq(_task.nextAssetIndex(), 0, "A follows B");
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _floan.getActiveBorrowerCount(_core.marketId(address(_asset))),
             0,
@@ -78,6 +80,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _canonicalScan();
         _mockPosition(_ALICE, 100e6, 10e9, uint48(block.timestamp + 1 days), 1);
         _mockPosition(_CAROL, 300e6, 30e9, uint48(block.timestamp), 1);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(4, 1);
         bytes memory settlement = abi.encodeCall(
             _liquidation.seize,
@@ -97,7 +100,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             ),
             uint64(0)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Sparse scanning uses only A turn");
     }
 
@@ -109,7 +112,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             _boundedScan(address(_asset), 0),
             abi.encode(new address[](0), uint256(3), uint256(0))
         );
-        _task.execute();
+        _executeAsHeart(_task);
         vm.clearMockedCalls();
         assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Expiry progress already wrapped");
         assertEq(
@@ -124,7 +127,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             "Saved cursor exceeds live count"
         );
         _mature();
-        _task.execute(); // B receives its turn before A repairs the stale cursor.
+        _executeAsHeart(_task); // B receives its turn before A repairs the stale cursor.
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 3), uint64(0));
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
         vm.expectCall(
@@ -143,7 +146,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             ),
             uint64(1)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _inventory.activePrincipalOhm(),
             0,
@@ -162,8 +165,9 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _seedDebt(_BOB, 10e6, 1e9);
         _seedDebt(_CAROL, 10e6, 1e9);
         _seedDebt(_DAVE, 10e6, 1e9);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(3, 1);
-        _task.execute(); // All healthy: cursor 3 of 4.
+        _executeAsHeart(_task); // All healthy: cursor 3 of 4.
         assertEq(_task.expiredAssetCursor(address(_asset)), 3, "Healthy scan advances past prefix");
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -173,8 +177,8 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _repay(_BOB, 1e9);
         _repay(_CAROL, 1e9); // List now contains only Alice and Dave.
         _mature();
-        _task.execute(); // B turn.
-        _task.execute(); // A resets 3 -> 0 and settles one borrower immediately.
+        _executeAsHeart(_task); // B turn.
+        _executeAsHeart(_task); // A resets 3 -> 0 and settles one borrower immediately.
         assertEq(
             _floan.getActiveBorrowerCount(_core.marketId(address(_asset))),
             1,
@@ -198,8 +202,9 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _seedDebt(_BOB, 10e6, 1e9);
         _seedDebt(_CAROL, 10e6, 1e9);
         _seedDebt(_DAVE, 10e6, 1e9);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(3, 1);
-        _task.execute();
+        _executeAsHeart(_task);
         _mature();
         vm.prank(makeAddr("external keeper"));
         _liquidation.seize(address(_asset), _two(_BOB, _CAROL));
@@ -213,8 +218,8 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             3,
             "Foreign seizure does not edit Task cursor"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _floan.getActiveBorrowerCount(_core.marketId(address(_asset))),
             1,
@@ -239,8 +244,9 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _seedDebt(_DAVE, 10e6, 1e9);
         // Repaying Alice swaps unexpired Dave to index zero, ahead of expired Bob.
         _repay(_ALICE, 1e9);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -251,8 +257,8 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             1,
             "First scan stops after healthy prefix"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             0,
@@ -273,7 +279,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         );
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), SettlementFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Failed settlement does not block B");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -288,8 +294,8 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         assertEq(_inventory.activePrincipalOhm(), 1e9, "Failed batch changes no principal");
         assertEq(_lens.getPosition(address(_asset), _ALICE).debtOhm, 1e9, "Debt remains for retry");
         vm.clearMockedCalls();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(_inventory.activePrincipalOhm(), 0, "Later A visit retries the full batch");
     }
 
@@ -303,7 +309,9 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             abi.encodeCall(_core.isAssetRegistered, (unsupported)),
             abi.encode(true)
         );
+        vm.prank(_fixtureAdmin);
         task.addAsset(unsupported);
+        vm.prank(_fixtureAdmin);
         task.addAsset(address(_asset));
         vm.clearMockedCalls();
         vm.expectEmit(true, false, false, true, address(task));
@@ -311,7 +319,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             unsupported,
             IBurnerLoansCore.BurnerLoansCore_AssetNotConfigured.selector
         );
-        task.execute();
+        _executeAsHeart(task);
         assertEq(task.nextAssetIndex(), 1, "Unsupported entry does not block registered asset");
         assertEq(
             task.expiredAssetCursor(unsupported),
@@ -323,7 +331,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             0,
             "Unsupported entry has no borrower progress"
         );
-        task.execute();
+        _executeAsHeart(task);
         assertEq(task.nextAssetIndex(), 0, "Registered asset remains reachable");
     }
 
@@ -333,6 +341,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
     {
         _seedDebt(_ALICE, 10e6, 1e9);
         _mature();
+        vm.prank(_seizerHeart);
         _task.execute{gas: 150_000}();
         assertEq(
             _task.nextAssetIndex(),
@@ -349,11 +358,14 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
     // Scenarios: BLSEIZ-EXECUTE-P08.
     function test_givenTaskExhaustsGas_whenHeartRunsTasks_thenLaterTaskExecutes() public {
         MockPeriodicTaskManager manager = new MockPeriodicTaskManager(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(manager));
-        _rolesAdmin.grantRole(HEART_ROLE, address(manager));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(manager));
+        _grantFixtureRole(HEART_ROLE, address(manager));
         MockPeriodicTask later = new MockPeriodicTask();
+        vm.prank(_fixtureAdmin);
         manager.addPeriodicTask(address(_task));
+        vm.prank(_fixtureAdmin);
         manager.addPeriodicTask(address(later));
+        vm.prank(_fixtureAdmin);
         _task.setExecutionGasLimit(1);
         manager.executeAllTasks{gas: 500_000}();
         assertEq(later.count(), 1, "Bounded task failure does not block later Heart work");
@@ -369,9 +381,9 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             _boundedScan(address(_asset), 0),
             abi.encode(new address[](0), uint256(1), uint256(0))
         );
-        _task.execute();
+        _executeAsHeart(_task);
         vm.clearMockedCalls();
-        _task.execute(); // B receives its ordinary turn.
+        _executeAsHeart(_task); // B receives its ordinary turn.
         _expectNoRiskReads();
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureExecuted(
@@ -381,7 +393,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
             0,
             0
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -403,8 +415,9 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _seedDebt(_BOB, 10e6, 1e9);
         _seedDebt(_CAROL, 10e6, 1e9);
         _seedDebt(_DAVE, 10e6, 1e9);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(3, 1);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.expiredAssetCursor(address(_asset)), 3, "A saved a nonzero borrower cursor");
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -419,7 +432,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         );
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(SettlementFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Whole-body failure rotates last asset back to first");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -453,7 +466,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         _mature();
         address treasury = address(_kernel.getModuleForKeycode(toKeycode("TRSRY")));
         uint256 treasuryBefore = _asset.balanceOf(treasury);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_lens.getPosition(address(_asset), _ALICE).debtOhm, 0, "Position debt cleared");
         assertEq(
             _lens.getPosition(address(_asset), _ALICE).depositedCollateral,
@@ -490,7 +503,7 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
         uint256 beforeApproval = mintr.mintApproval(address(_inventory));
         vm.prank(address(_inventory));
         mintr.decreaseMintApproval(address(_inventory), 1);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _mintr().mintApproval(address(_inventory)),
             beforeApproval - 1,
@@ -500,13 +513,15 @@ contract BurnerLoansSeizerTaskExecuteIntegrationTest is BurnerLoansSeizerTaskPro
     }
 
     function test_givenNoManagedAssets_doesNotRestoreUnrecordedDeficit() public {
+        vm.prank(_fixtureAdmin);
         _task.removeAsset(address(_asset));
+        vm.prank(_fixtureAdmin);
         _task.removeAsset(address(_otherAsset));
         MINTRv1 mintr = _mintr();
         uint256 beforeApproval = mintr.mintApproval(address(_inventory));
         vm.prank(address(_inventory));
         mintr.decreaseMintApproval(address(_inventory), 1);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _mintr().mintApproval(address(_inventory)),
             beforeApproval - 1,

@@ -59,6 +59,7 @@ contract BurnerLoansInventoryConfigTimelockConstructorTest is
 
     // Scenarios: BLINCT-CONSTRUCTOR-I05.
     function test_givenInventoryOnOtherKernel_whenDeployed_reverts(address deployer_) public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         _mockInventoryKernel(address(other));
         vm.expectRevert(
@@ -135,7 +136,7 @@ contract BurnerLoansInventoryConfigTimelockConstructorTest is
         bool enabled_,
         address deployer_
     ) public {
-        _setState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         bytes32 funds = _inventoryDigest();
         vm.expectEmit();
         emit IGracePeriod.GracePeriodSet(7 days);

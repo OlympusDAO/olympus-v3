@@ -19,9 +19,11 @@ import {BurnerLoansLensTest} from "./BurnerLoansLensTest.sol";
 // Small canonical populations and raw token units are intentional boundary fixtures.
 // forge-lint: disable-start(literal-instead-of-constant,unsafe-typecast,calls-loop,unused-return)
 contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest {
+    address internal _seizerActor = makeAddr("lens seizer");
+
     function setUp() public override {
         super.setUp();
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(this));
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, _seizerActor);
         vm.mockCall(
             address(_depositManager),
             abi.encodeWithSelector(IDepositManagerV1_1.previewWithdraw.selector),
@@ -61,7 +63,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
                 asset_
             )
         );
-        _lens.getExpiredBorrowersBoundedFor(address(this), asset_, 0, 0, 0);
+        _lens.getExpiredBorrowersBoundedFor(_seizerActor, asset_, 0, 0, 0);
     }
 
     // Scenarios: BLLENS-EXPIRED-D01.
@@ -72,7 +74,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
             abi.encodeWithSelector(FloanReadFailed.selector)
         );
         vm.expectRevert(FloanReadFailed.selector);
-        _lens.getExpiredBorrowersBoundedFor(address(this), address(_asset), 0, 0, 0);
+        _lens.getExpiredBorrowersBoundedFor(_seizerActor, address(_asset), 0, 0, 0);
     }
 
     // Scenarios: BLLENS-EXPIRED-D01.
@@ -84,7 +86,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
             abi.encodeWithSelector(FloanReadFailed.selector)
         );
         vm.expectRevert(FloanReadFailed.selector);
-        _lens.getExpiredBorrowersBoundedFor(address(this), address(_asset), 0, 1, 1);
+        _lens.getExpiredBorrowersBoundedFor(_seizerActor, address(_asset), 0, 1, 1);
     }
 
     // Scenarios: BLLENS-EXPIRED-D01.
@@ -96,7 +98,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
             abi.encodeWithSelector(FloanReadFailed.selector)
         );
         vm.expectRevert(FloanReadFailed.selector);
-        _lens.getExpiredBorrowersBoundedFor(address(this), address(_asset), 0, 1, 1);
+        _lens.getExpiredBorrowersBoundedFor(_seizerActor, address(_asset), 0, 1, 1);
     }
 
     // Scenarios: BLLENS-EXPIRED-P01, BLLENS-EXPIRED-N01.
@@ -107,7 +109,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
         vm.prank(caller_);
         (address[] memory borrowers, uint256 cursor, uint256 reward) = _lens
             .getExpiredBorrowersBoundedFor(
-                address(this),
+                _seizerActor,
                 address(_asset),
                 0,
                 type(uint256).max,
@@ -160,7 +162,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
                 address(0)
             )
         );
-        _lens.getExpiredBorrowersBoundedFor(address(this), address(0), 0, 0, 0);
+        _lens.getExpiredBorrowersBoundedFor(_seizerActor, address(0), 0, 0, 0);
     }
 
     // Scenarios: BLLENS-EXPIRED-P02.
@@ -245,11 +247,14 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
         bool enabled_
     ) public {
         _mixed();
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.prank(caller_);
         _assertPage(0, 4, 4, _two(_BOB, _DAVE), 0);
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_core));
-        if (!enabled_) _core.reEnable();
+        if (!active_) _executeFixtureKernelAction(Actions.ActivatePolicy, address(_core));
+        if (!enabled_) {
+            vm.prank(_fixtureAdmin);
+            _core.reEnable();
+        }
         _assertPage(0, 4, 4, _two(_BOB, _DAVE), 0);
     }
 
@@ -274,10 +279,10 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
         );
         vm.prank(caller_);
         _assertPage(0, 4, 4, _two(_BOB, _DAVE), 0);
-        _rolesAdmin.grantRole(HEART_ROLE, address(this));
+        _grantFixtureRole(HEART_ROLE, _seizerActor);
         vm.prank(caller_);
         _assertPage(0, 4, 4, _two(_BOB, _DAVE), 0);
-        _rolesAdmin.revokeRole(BURNER_LOANS_SEIZER_ROLE, address(this));
+        _revokeFixtureRole(BURNER_LOANS_SEIZER_ROLE, _seizerActor);
         vm.prank(caller_);
         _assertPage(0, 4, 4, _two(_BOB, _DAVE), 0);
     }
@@ -294,7 +299,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
     // Scenarios: BLLENS-EXPIRED-A02.
     function test_givenProtocolCaller_whenZeroOrdinaryActorQuoted() public {
         _mixed();
-        _ordinaryQuote(address(this), address(0));
+        _ordinaryQuote(_seizerActor, address(0));
     }
 
     // Scenarios: BLLENS-EXPIRED-D02.
@@ -327,7 +332,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
             abi.encodeWithSelector(WithdrawalPreviewFailed.selector)
         );
         vm.expectRevert(WithdrawalPreviewFailed.selector);
-        _lens.getExpiredBorrowersBoundedFor(address(this), address(_asset), 0, 4, 4);
+        _lens.getExpiredBorrowersBoundedFor(_seizerActor, address(_asset), 0, 4, 4);
     }
 
     // Scenarios: BLLENS-EXPIRED-D04.
@@ -339,7 +344,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
             abi.encodeWithSelector(RewardQuoteFailed.selector)
         );
         vm.expectRevert(RewardQuoteFailed.selector);
-        _lens.getExpiredBorrowersBoundedFor(address(this), address(_asset), 0, 4, 4);
+        _lens.getExpiredBorrowersBoundedFor(_seizerActor, address(_asset), 0, 4, 4);
     }
 
     function _ordinaryQuote(address caller_, address actor_) internal {
@@ -424,7 +429,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
         uint256 cursor_
     ) internal view {
         (address[] memory borrowers, uint256 cursor, uint256 reward) = _lens
-            .getExpiredBorrowersBoundedFor(address(this), address(_asset), start_, count_, limit_);
+            .getExpiredBorrowersBoundedFor(_seizerActor, address(_asset), start_, count_, limit_);
         assertEq(borrowers, expected_, "Exact canonical expired selection");
         assertEq(cursor, cursor_, "Exact first unexamined cursor");
         assertEq(reward, 0, "Protocol actor quote is zero");
@@ -438,7 +443,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
                 population_
             )
         );
-        _lens.getExpiredBorrowersBoundedFor(address(this), address(_asset), start_, 0, 0);
+        _lens.getExpiredBorrowersBoundedFor(_seizerActor, address(_asset), start_, 0, 0);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansLens.BurnerLoansLens_InvalidStart.selector,
@@ -447,7 +452,7 @@ contract BurnerLoansLensGetExpiredBorrowersBoundedForTest is BurnerLoansLensTest
             )
         );
         _lens.getExpiredBorrowersBoundedFor(
-            address(this),
+            _seizerActor,
             address(_asset),
             start_,
             type(uint256).max,

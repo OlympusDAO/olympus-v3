@@ -81,10 +81,9 @@ abstract contract BurnerLoansDebtLifecycleTest is BurnerLoansDebtTest {
     }
 
     function _grantReEnableCaller(address caller_, bool blAdmin_, bool overlap_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_)
-            _rolesAdmin.grantRole(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantFixtureRole(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
     }
 }
 

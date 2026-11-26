@@ -29,8 +29,9 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
         address caller_
     ) public {
         _admin(caller_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_config, false, true);
+        _setPolicyLifecycle(_config, false, true);
         _transitionReverts(
             abi.encodeCall(_timelock.enable, (bytes(""))),
             caller_,
@@ -46,8 +47,9 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
         address caller_
     ) public {
         _admin(caller_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_config, true, false);
+        _setPolicyLifecycle(_config, true, false);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("isEnabled()"), hex"deadbeef");
         bytes32 funds = _economicDigest();
         _expectTransition(caller_, true, "");
@@ -62,8 +64,9 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
         address caller_
     ) public {
         _admin(caller_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_config, false, false);
+        _setPolicyLifecycle(_config, false, false);
         _transitionReverts(
             abi.encodeCall(_timelock.enable, (bytes(""))),
             caller_,
@@ -77,7 +80,9 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
     // Scenarios: BLCT-ENABLE-D04.
     function test_givenForeignConfigKernel_whenEnable_reverts(address caller_) public {
         _admin(caller_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.mockCall(
             address(_config),
@@ -99,7 +104,7 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
     // Scenarios: BLCT-ENABLE-L02.
     function test_givenOwnPolicyInactive_whenEnable_reverts(address caller_) public {
         _admin(caller_);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _transitionReverts(
             abi.encodeCall(_timelock.enable, (bytes(""))),
             caller_,
@@ -116,7 +121,9 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
         bool zero_
     ) public {
         _admin(caller_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(zero_ ? address(0) : _recipient);
         _expectTransition(caller_, true, "");
         vm.prank(caller_);
@@ -127,6 +134,7 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
     // Scenarios: BLCT-ENABLE-A01.
     function test_givenAdmin_whenEnabled_thenExactTransition(address caller_) public {
         _admin(caller_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         bytes32 funds = _economicDigest();
         _expectTransition(caller_, true, "");
@@ -140,6 +148,7 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
     // Scenarios: BLCT-ENABLE-A02.
     function test_givenNonAdmin_whenEnabled_reverts(address caller_) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _transitionReverts(
             abi.encodeCall(_timelock.enable, (bytes(""))),
@@ -152,6 +161,7 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
     function test_givenAdmin_whenNonemptyData_reverts(address caller_, bytes memory data_) public {
         _admin(caller_);
         data_ = _nonempty(data_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _transitionReverts(
             abi.encodeCall(_timelock.enable, (data_)),
@@ -180,6 +190,7 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
     ) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
         data_ = _nonempty(data_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _transitionReverts(
             abi.encodeCall(_timelock.enable, (data_)),
@@ -193,7 +204,7 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
         address caller_,
         bool active_
     ) public {
-        _setState(_timelock, active_, true);
+        _setPolicyLifecycle(_timelock, active_, true);
         _transitionReverts(
             abi.encodeCall(_timelock.enable, (bytes(""))),
             caller_,
@@ -253,8 +264,9 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
 
     // Scenarios: BLCT-ENABLE-D07.
     function test_givenMissingConsumedInterface_whenActivated_reverts(bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_config, true, enabled_);
+        _setPolicyLifecycle(_config, true, enabled_);
         bytes4[3] memory ids = [
             type(IBurnerLoansConfig).interfaceId,
             type(IConfigOperator).interfaceId,
@@ -274,6 +286,7 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
                     address(_config)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _timelock.enable("");
             assertFalse(_timelock.isEnabled(), "Incompatible target cannot activate queue");
             vm.mockCall(
@@ -286,6 +299,7 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
 
     // Scenarios: BLCT-ENABLE-D12.
     function test_givenMissingCoreInterface_whenActivated_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         uint48 transition = _timelock.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -299,16 +313,19 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
                 address(_core)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertFalse(_timelock.isEnabled(), "Incompatible Core leaves consumer paused");
         assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertTrue(_timelock.isEnabled(), "Restored interface permits retry");
     }
 
     // Scenarios: BLCT-ENABLE-D13.
     function test_givenRevertingCoreInterface_whenActivated_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         uint48 transition = _timelock.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -326,16 +343,19 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
                 address(_core)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertFalse(_timelock.isEnabled(), "Incompatible Core leaves consumer paused");
         assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertTrue(_timelock.isEnabled(), "Restored interface permits retry");
     }
 
     // Scenarios: BLCT-ENABLE-D14.
     function test_givenMalformedCoreInterface_whenActivated_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         uint48 transition = _timelock.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -349,16 +369,19 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
                 address(_core)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertFalse(_timelock.isEnabled(), "Incompatible Core leaves consumer paused");
         assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertTrue(_timelock.isEnabled(), "Restored interface permits retry");
     }
 
     // Scenarios: BLCT-ENABLE-D15.
     function test_givenRevertingCoreBinding_whenActivated_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         uint48 transition = _timelock.lastTransitionAt();
         bytes memory binding = abi.encodeCall(IBurnerLoansConfig.facility, ());
@@ -375,16 +398,19 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
                 address(_config)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertFalse(_timelock.isEnabled(), "Invalid Core binding leaves queue paused");
         assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertTrue(_timelock.isEnabled(), "Restored binding permits retry");
     }
 
     // Scenarios: BLCT-ENABLE-D16.
     function test_givenMalformedCoreBinding_whenActivated_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         uint48 transition = _timelock.lastTransitionAt();
         bytes memory binding = abi.encodeCall(IBurnerLoansConfig.facility, ());
@@ -397,18 +423,22 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
                 address(_config)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertFalse(_timelock.isEnabled(), "Invalid Core binding leaves queue paused");
         assertEq(_timelock.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertTrue(_timelock.isEnabled(), "Restored binding permits retry");
     }
 
     // Scenarios: BLCT-ENABLE-P10.
     function test_givenCoreLifecycle_whenActivated(bool active_, bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertTrue(
             _timelock.isEnabled(),

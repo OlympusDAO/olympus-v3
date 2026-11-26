@@ -8,7 +8,6 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(calls-loop, literal-instead-of-constant, reentrancy-no-eth, unused-return)
 
 // Interfaces
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/burnerloans/IBurnerLoansInventory.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
@@ -19,7 +18,7 @@ import {StdStorage, stdStorage} from "forge-std/StdStorage.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Actions, Policy, toKeycode} from "src/Kernel.sol";
+import {Actions, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {BurnerLoansInventoryConfigTimelock} from "src/policies/burnerloans/BurnerLoansInventoryConfigTimelock.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
@@ -30,6 +29,7 @@ abstract contract BurnerLoansInventoryConfigTimelockTest is BurnerLoansModularTe
     uint64 internal _pendingId;
 
     modifier givenPendingRecovery() {
+        vm.prank(_fixtureAdmin);
         _pendingId = _timelock.queueRescueSurplus();
         _;
     }
@@ -43,10 +43,12 @@ abstract contract BurnerLoansInventoryConfigTimelockTest is BurnerLoansModularTe
     function setUp() public virtual override {
         super.setUp();
         _timelock = new BurnerLoansInventoryConfigTimelock(_kernel, _inventory);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_timelock));
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(_timelock));
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
     }
 
     function _makeReady(uint64 id_) internal {
@@ -67,16 +69,10 @@ abstract contract BurnerLoansInventoryConfigTimelockTest is BurnerLoansModularTe
         return address(_kernel.getModuleForKeycode(toKeycode("TRSRY")));
     }
 
-    function _setState(Policy target_, bool active_, bool enabled_) internal {
-        if (!enabled_) IEnabler(address(target_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(target_));
-    }
-
     function _grantRecoveryAdmin(address caller_, bool blAdmin_, bool overlap_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this) && caller_ != _recipient);
-        _rolesAdmin.grantRole(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_)
-            _rolesAdmin.grantRole(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin && caller_ != _recipient);
+        _grantFixtureRole(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantFixtureRole(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
     }
 
     function _inventoryDigest() internal view returns (bytes32) {

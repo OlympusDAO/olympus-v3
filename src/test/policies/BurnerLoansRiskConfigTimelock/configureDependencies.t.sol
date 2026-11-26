@@ -21,7 +21,7 @@ contract BurnerLoansRiskConfigTimelockConfigureDependenciesTest is
         bool enabled_,
         uint8 minor_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         vm.mockCall(
             address(_roles),
             abi.encodeCall(IVersioned.VERSION, ()),
@@ -77,10 +77,11 @@ contract BurnerLoansRiskConfigTimelockConfigureDependenciesTest is
 
     // Scenarios: BLRCT-DEPENDENCIES-P02.
     function test_givenRolesUpgraded_whenReconfigured() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         bytes32 queued = _queueDigest(id);
         OlympusRoles replacement = new OlympusRoles(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(replacement));
         assertEq(
             address(_timelock.ROLES()),
             address(replacement),

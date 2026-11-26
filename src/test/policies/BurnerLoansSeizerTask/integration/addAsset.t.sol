@@ -7,7 +7,9 @@ import {BurnerLoansSeizerTaskProgressTest} from "../fixtures/BurnerLoansSeizerTa
 contract BurnerLoansSeizerTaskAddAssetRegistrationTest is BurnerLoansSeizerTaskProgressTest {
     // Scenarios: BLSEIZ-ADD-ASSET-P04.
     function test_givenOriginationsDisabled_whenRegisteredAssetAdded() public {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_asset));
         assertTrue(_task.isAssetManaged(address(_asset)), "Existing debt remains manageable");
     }

@@ -91,7 +91,7 @@ contract BurnerLoansLensConstructorTest is BurnerLoansLensTest {
 
     // Scenarios: BLLENS-CONSTRUCTOR-P02.
     function test_givenActiveEnabledCore_whenDeployed(address caller_) public {
-        _setCoreLifecycle(true, true);
+        _setPolicyLifecycle(_core, true, true);
         vm.recordLogs();
         vm.prank(caller_);
         BurnerLoansLens lens = new BurnerLoansLens(address(_core));
@@ -104,7 +104,7 @@ contract BurnerLoansLensConstructorTest is BurnerLoansLensTest {
 
     // Scenarios: BLLENS-CONSTRUCTOR-L01.
     function test_givenActiveDisabledCore_whenDeployed(address caller_) public {
-        _setCoreLifecycle(true, false);
+        _setPolicyLifecycle(_core, true, false);
         vm.recordLogs();
         vm.prank(caller_);
         BurnerLoansLens lens = new BurnerLoansLens(address(_core));
@@ -117,7 +117,7 @@ contract BurnerLoansLensConstructorTest is BurnerLoansLensTest {
 
     // Scenarios: BLLENS-CONSTRUCTOR-L02.
     function test_givenInactiveEnabledCore_whenDeployed(address caller_) public {
-        _setCoreLifecycle(false, true);
+        _setPolicyLifecycle(_core, false, true);
         vm.recordLogs();
         vm.prank(caller_);
         BurnerLoansLens lens = new BurnerLoansLens(address(_core));
@@ -130,7 +130,7 @@ contract BurnerLoansLensConstructorTest is BurnerLoansLensTest {
 
     // Scenarios: BLLENS-CONSTRUCTOR-L03.
     function test_givenInactiveDisabledCore_whenDeployed(address caller_) public {
-        _setCoreLifecycle(false, false);
+        _setPolicyLifecycle(_core, false, false);
         vm.recordLogs();
         vm.prank(caller_);
         BurnerLoansLens lens = new BurnerLoansLens(address(_core));

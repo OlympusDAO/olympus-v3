@@ -26,6 +26,8 @@ contract CoreAdmissionHandler is Test {
     Kernel internal _kernel;
     IBurnerLoansAuth internal _auth;
     address internal _asset;
+    address internal immutable _executor;
+    address internal immutable _admin;
     address public constant OPERATOR = address(0x777);
     bool public expectedActive = true;
     bool public expectedEnabled = true;
@@ -34,11 +36,20 @@ contract CoreAdmissionHandler is Test {
 
     // Controlled test bindings/callers intentionally retain zero-address cases where applicable.
     // forge-lint: disable-start(missing-zero-check)
-    constructor(BurnerLoansCore core_, Kernel kernel_, IBurnerLoansAuth auth_, address asset_) {
+    constructor(
+        BurnerLoansCore core_,
+        Kernel kernel_,
+        IBurnerLoansAuth auth_,
+        address asset_,
+        address executor_,
+        address admin_
+    ) {
         _core = core_;
         _kernel = kernel_;
         _auth = auth_;
         _asset = asset_;
+        _executor = executor_;
+        _admin = admin_;
     }
 
     // forge-lint: disable-end(missing-zero-check)
@@ -48,13 +59,19 @@ contract CoreAdmissionHandler is Test {
     function transition(bool active_, bool enabled_) external {
         // Enable requires activity; temporarily restore it before independently selecting the final flags.
         if (!expectedActive) {
-            vm.prank(_kernel.executor());
+            vm.prank(_executor);
             _kernel.executeAction(Actions.ActivatePolicy, address(_core));
         }
-        if (enabled_ && !expectedEnabled) _core.enable("");
-        if (!enabled_ && expectedEnabled) _core.disable("");
+        if (enabled_ && !expectedEnabled) {
+            vm.prank(_admin);
+            _core.enable("");
+        }
+        if (!enabled_ && expectedEnabled) {
+            vm.prank(_admin);
+            _core.disable("");
+        }
         if (!active_) {
-            vm.prank(_kernel.executor());
+            vm.prank(_executor);
             _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
         }
         expectedActive = active_;

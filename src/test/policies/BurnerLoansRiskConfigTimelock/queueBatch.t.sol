@@ -22,6 +22,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         _expectRejectedQueue(
             abi.encodeWithSelector(ITimelockBatchQueue.ITimelockBatchQueue_BatchEmpty.selector)
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(new ITimelockBatchQueue.BatchAction[](0));
         assertEq(_timelock.nextActionId(), 1, "empty consumes no ID");
     }
@@ -37,6 +38,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 15
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(a);
         assertEq(_timelock.nextActionId(), 1, "oversized consumes no ID");
     }
@@ -59,6 +61,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         ITimelockBatchQueue.BatchAction memory a = _bpsAction(2500);
         a.target = target_;
         _expectRejectedQueue(_invalid(a));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(a));
         _assertRejectedQueue(_single(a));
     }
@@ -71,6 +74,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         ITimelockBatchQueue.BatchAction memory a = _bpsAction(2500);
         a.selector = selector_;
         _expectRejectedQueue(_invalid(a));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(a));
         _assertRejectedQueue(_single(a));
     }
@@ -82,6 +86,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         vm.assume(length != a.payload.length);
         a.payload = new bytes(length);
         _expectRejectedQueue(_invalid(a));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(a));
         _assertRejectedQueue(_single(a));
     }
@@ -124,6 +129,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 bps
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(bps)));
         _assertRejectedQueue(_single(_bpsAction(bps)));
     }
@@ -133,6 +139,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         _expectRejectedQueue(
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_ZeroAddress.selector)
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_referrerAction(address(0), allowed_)));
         _assertRejectedQueue(_single(_referrerAction(address(0), allowed_)));
     }
@@ -141,6 +148,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
     function test_whenDuplicateDomain_reverts() public {
         ITimelockBatchQueue.BatchAction memory a = _bpsAction(1);
         _expectRejectedQueue(_pending(a, 1));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_pair(a, _bpsAction(2)));
         _assertRejectedQueue(_pair(a, _bpsAction(2)));
     }
@@ -149,15 +157,18 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
     function test_whenOppositeMembership_reverts() public {
         ITimelockBatchQueue.BatchAction memory a = _referrerAction(_recipient, true);
         _expectRejectedQueue(_pending(a, 1));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_pair(a, _referrerAction(_recipient, false)));
         _assertRejectedQueue(_pair(a, _referrerAction(_recipient, false)));
     }
 
     // Scenarios: BLRCT-BATCH-P02.
     function test_givenOlderPending_whenLastConflicts_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetPriceCacheMaxAge(3600);
         bytes32 previous = _queueDigest(id);
         _expectRejectedQueue(_pending(_ageAction(0), id));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_pair(_bpsAction(2500), _ageAction(0)));
         _assertRejectedQueue(_pair(_bpsAction(2500), _ageAction(0)));
         assertEq(_queueDigest(id), previous, "older intent untouched");
@@ -174,9 +185,10 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         uint256[3] memory order = _permutation(uint8(bound(order_, 0, 5)));
         ITimelockBatchQueue.BatchAction[] memory sorted = new ITimelockBatchQueue.BatchAction[](3);
         for (uint256 i; i < 3; ++i) sorted[i] = a[order[i]];
-        _expectQueue(sorted, address(this));
+        _expectQueue(sorted, _fixtureAdmin);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(sorted);
-        _assertQueued(id, sorted, address(this));
+        _assertQueued(id, sorted, _fixtureAdmin);
         _makeReady(id);
         _executeAndAssert(id, _recipient);
     }
@@ -184,6 +196,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
     // Scenarios: BLRCT-BATCH-N02.
     function test_whenTimestampLastRepresentable() public {
         vm.warp(uint256(type(uint48).max) - 4 days);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_bpsAction(2500)));
         assertEq(
             _timelock.getQueuedAction(id).expiresAt,
@@ -196,6 +209,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
     function test_whenTimestampOverflow_reverts(uint48 now_) public {
         vm.warp(bound(now_, uint256(type(uint48).max) - 4 days + 1, type(uint48).max));
         vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         assertEq(_timelock.nextActionId(), 1, "timestamp failure rolls ID back");
         assertEq(
@@ -208,6 +222,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
     function _rejectWord(ITimelockBatchQueue.BatchAction memory a_, bytes memory payload_) private {
         a_.payload = payload_;
         _expectRejectedQueue(_invalid(a_));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(a_));
         _assertRejectedQueue(_single(a_));
     }
@@ -223,8 +238,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         ITimelockBatchQueue.BatchAction memory a = _ageAction(1);
         a.payload = abi.encode(value_);
         _expectRejectedQueue(_invalid(a));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -234,16 +248,20 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         uint8 role_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(_recipient);
-        _setState(_config, false, false);
+        _setPolicyLifecycle(_config, false, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
-    function _queue(ITimelockBatchQueue.BatchAction memory a_) private returns (uint64) {
+    function _queue(
+        address caller_,
+        ITimelockBatchQueue.BatchAction memory a_
+    ) private returns (uint64) {
+        vm.prank(caller_);
         return _timelock.queueBatch(_single(a_));
     }
 
@@ -275,22 +293,24 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
 
     // Scenarios: BLRCT-BATCH-L01, BLRCT-BATCH-L02.
     function test_givenInactive_whenQueued_reverts(bool enabled_) public {
-        if (!enabled_) _timelock.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
+        _setPolicyLifecycle(_timelock, false, enabled_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
 
     // Scenarios: BLRCT-BATCH-L03.
     function test_givenDisabled_whenQueued_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -298,13 +318,14 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
     // Scenarios: BLRCT-BATCH-D01, BLRCT-BATCH-D02, BLRCT-BATCH-D03.
     function test_givenRiskUnavailable_whenQueued_reverts(bool active_, bool enabled_) public {
         vm.assume(!active_ || !enabled_);
-        _setState(_risk, active_, enabled_);
+        _setPolicyLifecycle(_risk, active_, enabled_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -312,19 +333,21 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
     // Scenarios: BLRCT-BATCH-D04.
     function test_givenOperatorChanged_whenQueued_reverts(address operator_) public {
         vm.assume(operator_ != address(_timelock));
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(operator_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_NotController.selector
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
 
     // Scenarios: BLRCT-BATCH-D05.
     function test_givenForeignKernel_whenQueued_reverts() public {
-        _setState(_risk, false, false);
+        _setPolicyLifecycle(_risk, false, false);
         vm.mockCall(address(_risk), abi.encodeWithSignature("kernel()"), abi.encode(address(0xF0)));
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -334,6 +357,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(0xF0)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -351,6 +375,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -364,6 +389,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -381,6 +407,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -399,17 +426,19 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         assertEq(_timelock.nextActionId(), next, "invalid metadata consumes no ID");
     }
 
     // Scenarios: BLRCT-BATCH-D08.
     function test_givenUpstreamUnavailable_whenQueued(bool active_, bool enabled_) public {
-        _setState(_config, active_, enabled_);
-        _setState(_core, active_, enabled_);
-        _expectQueue(_single(_bpsAction(2500)), address(this));
+        _setPolicyLifecycle(_config, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
+        _expectQueue(_single(_bpsAction(2500)), _fixtureAdmin);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_bpsAction(2500)));
-        _assertQueued(id, _single(_bpsAction(2500)), address(this));
+        _assertQueued(id, _single(_bpsAction(2500)), _fixtureAdmin);
     }
 
     // Scenarios: BLRCT-BATCH-L04, BLRCT-BATCH-N01.
@@ -423,10 +452,13 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
 
     // Scenarios: BLRCT-BATCH-L04.
     function test_givenReEnabled_whenQueued() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_timelock));
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_bpsAction(2500)));
         assertEq(id, 1, "reenabled and reactivated queue accepts intent");
     }
@@ -451,6 +483,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_bpsAction(2500)));
@@ -481,6 +514,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_bpsAction(2500)));
@@ -508,14 +542,15 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
         bool coreActive_,
         bool coreEnabled_
     ) private {
-        _setState(_config, configActive_, configEnabled_);
-        _setState(_core, coreActive_, coreEnabled_);
-        _expectQueue(_single(_bpsAction(2500)), address(this));
+        _setPolicyLifecycle(_config, configActive_, configEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _expectQueue(_single(_bpsAction(2500)), _fixtureAdmin);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("facility()"), hex"deadbeef");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("risk()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_bpsAction(2500)));
         vm.clearMockedCalls();
-        _assertQueued(id, _single(_bpsAction(2500)), address(this));
+        _assertQueued(id, _single(_bpsAction(2500)), _fixtureAdmin);
     }
 
     function _expectNoUpstreamDiscoveryCalls() private {
@@ -553,6 +588,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_bpsAction(2500)));
@@ -575,6 +611,7 @@ contract BurnerLoansRiskConfigTimelockQueueBatchTest is BurnerLoansRiskConfigTim
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueBatch(_single(_bpsAction(2500)));
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_bpsAction(2500)));

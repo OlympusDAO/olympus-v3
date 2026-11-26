@@ -28,7 +28,7 @@ contract BurnerLoansCollateralSetGracePeriodTest is BurnerLoansCollateralTest {
     ) public givenCollateralEnabled {
         period_ = uint32(bound(period_, 1, type(uint32).max));
         _grantCaller(caller_, 1, ADMIN_ROLE);
-        _setPolicyState(policy, active_, enabled_);
+        _setPolicyLifecycle(policy, active_, enabled_);
         uint48 last = _collateral.lastTransitionAt();
         vm.expectEmit(address(_collateral));
         emit IGracePeriod.GracePeriodSet(period_);
@@ -155,8 +155,9 @@ contract BurnerLoansCollateralSetGracePeriodTest is BurnerLoansCollateralTest {
     function test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts(
         address caller_
     ) public givenCollateralEnabled {
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_collateral));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_collateral));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,

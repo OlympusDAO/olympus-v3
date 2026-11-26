@@ -27,7 +27,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
         bool enabled_
     ) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
-        _setCoreLifecycle(true, enabled_);
+        _setPolicyLifecycle(_core, true, enabled_);
         bytes32 before = _state();
         vm.expectCall(
             address(_floan),
@@ -46,7 +46,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
         bool enabled_
     ) public {
         _grantAdmin(caller_);
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -60,6 +60,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-CONFIGURATOR-D01.
     function test_whenZeroConfigOperatorSet_reverts() public {
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_ZeroAddress.selector);
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(address(0));
     }
 
@@ -80,6 +81,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
         );
         vm.recordLogs();
         vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(address(_config));
         assertEq(_core.configOperator(), address(_config), "Config authority unchanged");
         assertEq(vm.getRecordedLogs().length, 0, "Unchanged authority emits no event");
@@ -95,7 +97,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
         vm.assume(next_ != address(0) && next_ != address(_config));
         _deposit(2000e6);
         _borrow(100e9);
-        _setCoreLifecycle(true, enabled_);
+        _setPolicyLifecycle(_core, true, enabled_);
         bytes32 ledger = _ledger();
         address riskOperator = _risk.configOperator();
         address inventoryOperator = _inventory.configOperator();
@@ -125,6 +127,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
     ) public {
         CoreService next = _service();
         _setPolicyLifecycle(next, active_, enabled_);
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(address(next));
         assertEq(
             _core.configOperator(),
@@ -141,6 +144,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
             bytes(""),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(address(next));
         assertEq(_core.configOperator(), address(next), "Core queries no candidate metadata");
     }
@@ -151,12 +155,14 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
     ) public {
         vm.assume(riskOperator_ != address(0xCAFE));
         vm.assume(riskOperator_ != address(_config));
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(riskOperator_);
         address oracle = _risk.backingOracle();
         address cache = _risk.priceCache();
         uint48 cacheAge = _risk.priceCacheMaxAge();
         address inventoryOperator = _inventory.configOperator();
         address payoutOperator = _payout.configOperator();
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(address(0xCAFE));
         assertEq(_risk.configOperator(), riskOperator_, "Risk authority untouched");
         assertEq(_risk.backingOracle(), oracle, "Risk oracle untouched");
@@ -192,6 +198,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
             abi.encodeWithSignature("configurator()"),
             abi.encodeWithSelector(DependencyFailed.selector)
         );
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(address(0xCAFE));
         assertEq(
             _core.configOperator(),
@@ -228,6 +235,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         vm.expectRevert(DependencyFailed.selector);
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(address(0xCAFE));
         assertEq(
             _floan.getMarket(firstId).manager,
@@ -245,9 +253,10 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
             IERC20(address(_ohm)),
             _depositManager
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(fresh));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(fresh));
         vm.expectEmit(true, false, false, true, address(fresh));
         emit IConfigOperator.ConfigOperatorSet(next_);
+        vm.prank(_fixtureAdmin);
         fresh.setConfigOperator(next_);
         assertEq(fresh.getAssetCount(), 0, "Empty market collection remains empty");
         assertEq(
@@ -265,6 +274,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
         uint32 first = _core.marketId(address(_asset));
         uint32 second = _core.marketId(address(other));
         bytes32 ledger = _ledger();
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(_recipient);
         assertEq(_floan.getMarket(first).manager, _recipient, "First manager transferred");
         assertEq(_floan.getMarket(second).manager, _recipient, "Second manager transferred");
@@ -278,7 +288,7 @@ contract BurnerLoansCoreSetConfigOperatorTest is BurnerLoansCoreTest {
         bool enabled_
     ) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,

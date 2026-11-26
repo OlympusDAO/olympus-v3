@@ -26,10 +26,14 @@ contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansModularTe
         bool payoutActive_
     ) public {
         RevenueDistributor distributor = new RevenueDistributor(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(distributor));
+        vm.prank(_fixtureAdmin);
         distributor.enable("");
+        vm.prank(_fixtureAdmin);
         distributor.setAssetRoutes(address(_asset), 0, new IRevenueDistributor.AssetRoute[](0));
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(distributor));
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
         vm.prank(_borrower);
         _collateral.depositCollateral(address(_asset), _COLLATERAL_AMOUNT, _borrower);
@@ -63,11 +67,12 @@ contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansModularTe
             address(distributor),
             5_000_000
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(task));
-        _rolesAdmin.grantRole(HEART_ROLE, heart);
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(task));
+        _grantFixtureRole(HEART_ROLE, heart);
+        vm.prank(_fixtureAdmin);
         task.enable("");
-        if (!coreActive_) _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
-        if (!payoutActive_) _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        if (!coreActive_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
+        if (!payoutActive_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
         _asset.mint(address(distributor), _DISTRIBUTOR_RECEIPT);
         address treasury = address(_kernel.getModuleForKeycode(toKeycode("TRSRY")));
         uint256 treasuryBefore = _asset.balanceOf(treasury);
@@ -112,7 +117,7 @@ contract RevenueDistributorTaskBurnerLoansSeparationTest is BurnerLoansModularTe
                 borrowed.fee,
                 "Inactive retry preserves custody"
             );
-            _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+            _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
         }
         // Active Payout recovery remains independent of Core membership.
         assertEq(

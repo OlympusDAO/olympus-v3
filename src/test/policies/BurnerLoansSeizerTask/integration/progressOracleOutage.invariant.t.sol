@@ -47,8 +47,13 @@ contract BurnerLoansSeizerTaskProgressOracleOutageInvariantTest is
         uint256 expired = _task.expiredAssetCursor(address(_asset));
         uint256 unhealthy = _task.unhealthyAssetCursor(address(_asset));
         uint256 now_ = vm.getBlockTimestamp();
-        if (!_task.isEnabled()) _task.reEnable();
+        if (!_task.isEnabled()) {
+            vm.prank(_fixtureAdmin);
+            _task.reEnable();
+        }
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
+        vm.prank(_fixtureAdmin);
         _task.setExecutionGasLimit(10_000_000);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -67,7 +72,7 @@ contract BurnerLoansSeizerTaskProgressOracleOutageInvariantTest is
         // A finite page traversal followed by each removal fits this quadratic bound.
         uint256 budget = 4 * (remaining + 1) * (remaining + 1);
         for (uint256 i; i < budget && _floan.getActiveBorrowerCount(market) > 2; ++i)
-            _task.execute();
+            _executeAsHeart(_task);
 
         assertEq(vm.getBlockTimestamp(), now_, "Outage drain cannot mature unexpired debt");
         assertEq(_floan.getActiveBorrowerCount(market), 2, "Only the two unexpired loans remain");

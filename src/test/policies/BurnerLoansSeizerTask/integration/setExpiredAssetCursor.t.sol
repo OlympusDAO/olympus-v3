@@ -16,7 +16,9 @@ contract BurnerLoansSeizerTaskSetExpiredAssetCursorIntegrationTest is
 
     function setUp() public override {
         super.setUp();
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_otherAsset));
         _seedDebt(_ALICE, 10e6, 1e9);
         _seedDebt(_BOB, 10e6, 1e9);
@@ -25,6 +27,7 @@ contract BurnerLoansSeizerTaskSetExpiredAssetCursorIntegrationTest is
 
     // Scenarios: BLSEIZ-EXPIRED-CURSOR-P04.
     function test_whenBorrowerCursorSelected_thenExecutionResumesThere() public {
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(address(_asset), 2);
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
         vm.expectCall(
@@ -35,7 +38,7 @@ contract BurnerLoansSeizerTaskSetExpiredAssetCursorIntegrationTest is
             ),
             uint64(1)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -65,8 +68,11 @@ contract BurnerLoansSeizerTaskSetExpiredAssetCursorIntegrationTest is
             abi.encodeCall(_floan.getActiveBorrowerCount, (_core.marketId(address(_otherAsset)))),
             abi.encode(uint256(2))
         );
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(address(_otherAsset), 1);
+        vm.prank(_fixtureAdmin);
         _task.setNextAssetIndex(1);
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(address(_asset), 2);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -101,6 +107,7 @@ contract BurnerLoansSeizerTaskSetExpiredAssetCursorIntegrationTest is
             abi.encodeWithSelector(CursorReadFailed.selector)
         );
         vm.expectRevert(CursorReadFailed.selector);
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(address(_asset), 1);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),

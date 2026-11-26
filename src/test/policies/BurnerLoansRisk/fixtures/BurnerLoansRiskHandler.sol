@@ -16,25 +16,29 @@ import {BurnerLoansRisk} from "src/policies/burnerloans/BurnerLoansRisk.sol";
 /// @dev Exercises a Kernel-active Risk. Unit tests cover deactivation and grace boundaries.
 contract BurnerLoansRiskHandler is Test {
     BurnerLoansRisk internal immutable _risk;
-    address internal immutable _otherAdmin;
+    address internal immutable _ADMIN;
+    address internal immutable _KERNEL_EXECUTOR;
     address public expectedOperator;
     uint48 public expectedAge;
     bool public expectedEnabled = true;
 
-    constructor(BurnerLoansRisk risk_, address otherAdmin_) {
+    constructor(BurnerLoansRisk risk_, address admin_, address kernelExecutor_) {
         _risk = risk_;
-        _otherAdmin = otherAdmin_;
+        _ADMIN = admin_;
+        _KERNEL_EXECUTOR = kernelExecutor_;
         expectedAge = risk_.priceCacheMaxAge();
     }
 
     function selectOperator(address next_) external {
         if (next_ == expectedOperator) return;
+        vm.prank(_ADMIN);
         _risk.setConfigOperator(next_);
         expectedOperator = next_;
     }
 
     function setAgeAsAdmin(uint48 age_) external {
         if (!expectedEnabled) return;
+        vm.prank(_ADMIN);
         _risk.setPriceCacheMaxAge(age_);
         expectedAge = age_;
     }
@@ -47,12 +51,7 @@ contract BurnerLoansRiskHandler is Test {
     }
 
     function attemptUnauthorizedAge(address caller_, uint48 age_) external {
-        if (
-            !expectedEnabled ||
-            caller_ == address(this) ||
-            caller_ == _otherAdmin ||
-            caller_ == expectedOperator
-        ) return;
+        if (!expectedEnabled || caller_ == _ADMIN || caller_ == expectedOperator) return;
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _risk.setPriceCacheMaxAge(age_);
@@ -60,6 +59,7 @@ contract BurnerLoansRiskHandler is Test {
 
     function pause() external {
         if (!expectedEnabled) return;
+        vm.prank(_ADMIN);
         _risk.disable("");
         expectedEnabled = false;
     }
@@ -73,9 +73,11 @@ contract BurnerLoansRiskHandler is Test {
             vm.expectRevert(
                 abi.encodeWithSelector(PolicyDependency.PolicyDependency_NotActive.selector, oracle)
             );
+            vm.prank(_ADMIN);
             _risk.enable("");
             return;
         }
+        vm.prank(_ADMIN);
         _risk.enable("");
         expectedEnabled = true;
     }
@@ -88,7 +90,7 @@ contract BurnerLoansRiskHandler is Test {
         address oracle = _risk.backingOracle();
         if (_risk.kernel().isPolicyActive(Policy(oracle)) == active_) return;
         Kernel kernel = _risk.kernel();
-        vm.prank(_otherAdmin);
+        vm.prank(_KERNEL_EXECUTOR);
         kernel.executeAction(active_ ? Actions.ActivatePolicy : Actions.DeactivatePolicy, oracle);
     }
 }

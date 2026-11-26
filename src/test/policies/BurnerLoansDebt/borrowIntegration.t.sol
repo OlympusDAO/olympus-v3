@@ -71,6 +71,7 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
     function test_givenAnotherBorrowerDebt_whenSharedMarketCapExceeded_reverts() public {
         _openRealDebtFor(_asset, _recipient, 2000e6, 100e9);
         _depositCollateral(2000e6);
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), 150e9);
         bytes32 other = keccak256(abi.encode(_lens.getPosition(address(_asset), _recipient)));
         _expectBorrowRevert(
@@ -97,6 +98,7 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
         MockERC20 other = _admitSecondAsset();
         _openRealDebtFor(other, _borrower, 2000e6, 100e9);
         _depositCollateral(2000e6);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(150e9);
         bytes32 otherState = _stateDigestFor(address(other), _borrower);
         _expectBorrowRevert(
@@ -233,6 +235,7 @@ contract BurnerLoansDebtBorrowIntegrationTest is BurnerLoansDebtIntegrationTest 
     // Scenarios: BLDEBT-BORROW-P07.
     function test_givenGlobalUtilizationAtKink_whenMarketBelowKink_thenMarketRate() public {
         _openRealDebt(200_000e6, 40_000e9);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(50_000e9);
         // Global utilization=80%, market=40%; rate=25+100*40/80=75 bps.
         // Fee=125e6*75/10000=937500; final backing=50125 assets.

@@ -30,7 +30,7 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
         address caller_,
         uint16 bps_
     ) public givenOperator {
-        vm.assume(caller_ != address(this) && caller_ != _operator);
+        vm.assume(caller_ != _riskAdmin && caller_ != _operator);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _risk.setReferralFeeBps(bps_);
@@ -51,6 +51,7 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
                 bps
             )
         );
+        vm.prank(_riskAdmin);
         _risk.setReferralFeeBps(bps);
         assertEq(_risk.referralFeeBps(), 0, "invalid percentage unchanged");
     }
@@ -67,17 +68,20 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
         address caller_,
         address operator_
     ) public {
-        if (_risk.configOperator() != operator_) _risk.setConfigOperator(operator_);
+        if (_risk.configOperator() != operator_) {
+            vm.prank(_riskAdmin);
+            _risk.setConfigOperator(operator_);
+        }
         _grantAdmin(caller_);
         _setBps(caller_, uint16(bound(bps_, 1, 10000)));
     }
 
     // Scenarios: BLRISK-REFERRAL-BPS-A01, BLRISK-REFERRAL-BPS-A02, BLRISK-REFERRAL-BPS-N01, BLRISK-REFERRAL-BPS-P02.
     function test_whenPercentageBoundaryTransitions() public givenOperator {
-        _setBps(address(this), 10000);
+        _setBps(_riskAdmin, 10000);
         _setBps(_operator, 1);
         _setBps(_operator, 9999);
-        _setBps(address(this), 0);
+        _setBps(_riskAdmin, 0);
     }
 
     // Scenarios: BLRISK-REFERRAL-BPS-A02, BLRISK-REFERRAL-BPS-N01.
@@ -88,8 +92,10 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-REFERRAL-BPS-P01.
     function test_whenSamePercentage(uint16 bps_) public {
         uint16 bps = uint16(bound(bps_, 0, 10000));
+        vm.prank(_riskAdmin);
         _risk.setReferralFeeBps(bps);
         vm.recordLogs();
+        vm.prank(_riskAdmin);
         _risk.setReferralFeeBps(bps);
         assertEq(_risk.referralFeeBps(), bps, "same value retained");
         assertEq(vm.getRecordedLogs().length, 0, "same percentage emits no event");
@@ -100,10 +106,13 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
         bool enabled_,
         bool operator_
     ) public givenOperator {
-        if (!enabled_) _risk.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        if (!enabled_) {
+            vm.prank(_riskAdmin);
+            _risk.disable("");
+        }
+        _executeRiskKernelAction(Actions.DeactivatePolicy, address(_risk));
         _expectInactive();
-        vm.prank(operator_ ? _operator : address(this));
+        vm.prank(operator_ ? _operator : _riskAdmin);
         _risk.setReferralFeeBps(type(uint16).max);
         assertEq(_risk.referralFeeBps(), 0, "inactive configuration unchanged");
     }
@@ -113,16 +122,16 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
         bool operator_
     ) public givenOperator givenDisabled {
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(operator_ ? _operator : address(this));
+        vm.prank(operator_ ? _operator : _riskAdmin);
         _risk.setReferralFeeBps(type(uint16).max);
     }
 
     // Scenarios: BLRISK-REFERRAL-BPS-L04.
     function test_givenReEnabled_whenPercentageChanges() public givenReEnabled {
-        _setBps(address(this), 1);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
-        _setBps(address(this), 10000);
+        _setBps(_riskAdmin, 1);
+        _executeRiskKernelAction(Actions.DeactivatePolicy, address(_risk));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(_risk));
+        _setBps(_riskAdmin, 10000);
     }
 
     // Scenarios: BLRISK-REFERRAL-BPS-D01.
@@ -158,7 +167,7 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-REFERRAL-BPS-A03, BLRISK-REFERRAL-BPS-A04.
     function test_givenBlaOnly_whenSettingChanged_reverts(uint16 bps_) public givenOperator {
         address caller = address(0xB1A0);
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller);
         _risk.setReferralFeeBps(bps_);
@@ -167,7 +176,7 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-REFERRAL-BPS-A03, BLRISK-REFERRAL-BPS-A04.
     function test_givenEmergencyOnly_whenSettingChanged_reverts(uint16 bps_) public givenOperator {
         address caller = address(0xE110);
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller);
+        _grantRiskRole(EMERGENCY_ROLE, caller);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller);
         _risk.setReferralFeeBps(bps_);
@@ -175,6 +184,7 @@ contract BurnerLoansRiskSetReferralFeeBpsTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REFERRAL-BPS-A03, BLRISK-REFERRAL-BPS-A04.
     function test_givenFormerOperator_whenSettingChanged_reverts(uint16 bps_) public givenOperator {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(0xF000));
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(_operator);

@@ -15,7 +15,7 @@ contract BurnerLoansCollateralRequestPermissionsTest is BurnerLoansCollateralTes
         bool active_,
         bool enabled_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, active_, enabled_);
+        _setPolicyLifecycle(_collateral, active_, enabled_);
         vm.prank(caller_);
         Permissions[] memory permissions = _collateral.requestPermissions();
         assertEq(permissions.length, 0, "Action needs no module writes");

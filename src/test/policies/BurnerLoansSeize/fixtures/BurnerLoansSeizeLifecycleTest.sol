@@ -15,7 +15,7 @@ import {BL_LIQUIDATION_POLICY_ROLE} from "src/policies/burnerloans/libraries/Loa
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Actions, Policy} from "src/Kernel.sol";
+import {Policy} from "src/Kernel.sol";
 import {BurnerLoansDebtTest} from "src/test/policies/BurnerLoansDebt/BurnerLoansDebtTest.sol";
 
 // Literals are independent expected values and boundary seeds.
@@ -66,16 +66,15 @@ abstract contract BurnerLoansSeizeLifecycleTest is BurnerLoansDebtTest {
     }
 
     function _grantReEnableCaller(address caller_, bool blAdmin_, bool overlap_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_)
-            _rolesAdmin.grantRole(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantFixtureRole(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
     }
 
     function _grantDisableCaller(address caller_, bool emergency_, bool overlap_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_) _rolesAdmin.grantRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantFixtureRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
     }
 
     function _mockUnavailableCoreViews() internal {
@@ -85,8 +84,10 @@ abstract contract BurnerLoansSeizeLifecycleTest is BurnerLoansDebtTest {
 
     function _setEnabledHistory(bool zeroHistory_) internal {
         if (zeroHistory_) {
+            vm.prank(_fixtureAdmin);
             _liquidation.disable("");
             vm.warp(0);
+            vm.prank(_fixtureAdmin);
             _liquidation.enable("");
         }
     }
@@ -106,16 +107,13 @@ abstract contract BurnerLoansSeizeLifecycleTest is BurnerLoansDebtTest {
         grace_ = uint32(bound(grace_, 1, type(uint32).max));
         last_ = uint48(bound(last_, 1, type(uint48).max - grace_));
         now_ = uint48(bound(now_, last_, uint256(last_) + grace_));
+        vm.prank(_fixtureAdmin);
         _liquidation.setGracePeriod(grace_);
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.warp(now_);
         _;
-    }
-
-    function _restorePolicyState(Policy subject_, bool active_, bool enabled_) internal {
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(subject_));
-        if (!enabled_) IEnabler(address(subject_)).enable("");
     }
 
     function _expectDependencyUnavailable(Policy dependency_) internal {

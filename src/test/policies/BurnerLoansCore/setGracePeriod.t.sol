@@ -41,10 +41,12 @@ contract BurnerLoansCoreSetGracePeriodTest is BurnerLoansCoreTest {
     // Scenarios: BLCOREGR-P01.
     function test_givenSamePeriod_whenGraceSet(uint32 period_) public {
         period_ = uint32(bound(period_, 1, type(uint32).max));
+        vm.prank(_fixtureAdmin);
         _core.setGracePeriod(period_);
         uint48 transition = _core.lastTransitionAt();
         vm.expectEmit(false, false, false, true, address(_core));
         emit IGracePeriod.GracePeriodSet(period_);
+        vm.prank(_fixtureAdmin);
         _core.setGracePeriod(period_);
         assertEq(_core.gracePeriod(), period_, "Same nonzero period accepted");
         assertEq(
@@ -64,26 +66,29 @@ contract BurnerLoansCoreSetGracePeriodTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCOREGR-L02, BLCOREGR-L03, BLCOREGR-L04.
     function test_givenUnavailableCore_whenGraceSet_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_core)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setGracePeriod(0);
     }
 
     // Scenarios: BLCOREGR-L02.
     function test_givenActiveDisabled_whenGraceSet_reverts() public {
-        _setCoreLifecycle(true, false);
+        _setPolicyLifecycle(_core, true, false);
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(_fixtureAdmin);
         _core.setGracePeriod(0);
     }
 
     // Scenarios: BLCOREGR-I01.
     function test_whenZeroGraceSet_reverts() public {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
+        vm.prank(_fixtureAdmin);
         _core.setGracePeriod(0);
     }
 
@@ -93,6 +98,7 @@ contract BurnerLoansCoreSetGracePeriodTest is BurnerLoansCoreTest {
             abi.encodeWithSignature("setGracePeriod(uint32)", uint32(1)),
             false
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),

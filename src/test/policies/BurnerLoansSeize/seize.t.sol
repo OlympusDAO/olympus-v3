@@ -28,7 +28,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
     function test_givenDepositManagerInactive_whenSeizedOrPreviewed_reverts(
         address keeper_
     ) public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_depositManager));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_depositManager));
         _expectRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -41,12 +41,14 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
 
     // Scenarios: BLLIQ-SEIZE-D11.
     function test_givenDepositPeriodDisabled_whenSeized_thenExitRemainsAvailable() public {
+        vm.prank(_fixtureAdmin);
         _depositManager.disableAssetPeriod(IERC20(address(_asset)), 1, address(_core));
         _assertSingleSeizure();
     }
 
     // Scenarios: BLLIQ-SEIZE-D10.
     function test_givenDepositManagerPaused_whenSeizedOrPreviewed_reverts(address keeper_) public {
+        vm.prank(_fixtureAdmin);
         _depositManager.disable("");
         _expectRejected(
             abi.encodeWithSelector(
@@ -365,7 +367,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
         address caller_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         _expectRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -378,7 +380,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
 
     // Scenarios: BLLIQ-SEIZE-A02.
     function test_givenSettlementRoleRevoked_whenSeized_reverts(address caller_) public {
-        _rolesAdmin.revokeRole(BL_LIQUIDATION_POLICY_ROLE, address(_liquidation));
+        _revokeFixtureRole(BL_LIQUIDATION_POLICY_ROLE, address(_liquidation));
         _expectRejected(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_LIQUIDATION_POLICY_ROLE),
             _borrowers(),
@@ -445,9 +447,9 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
         bool coreEnabled_,
         address caller_
     ) public {
-        _setPolicyState(_liquidation, true, enabled_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_liquidation, true, enabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_liquidation));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectAdmissionRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -463,8 +465,9 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
         bool coreEnabled_,
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectAdmissionRejected(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_);
     }
 
@@ -475,7 +478,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
         address caller_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _expectAdmissionRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -510,7 +513,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
         address caller_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         _expectRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -533,15 +536,17 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizeTestBase {
 
     // Scenarios: BLLIQ-SEIZE-L01.
     function test_givenActionReEnabled_whenSeized_thenDefaultSucceeds() public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
+        vm.prank(_fixtureAdmin);
         _liquidation.reEnable();
         _assertSingleSeizure();
     }
 
     // Scenarios: BLLIQ-SEIZE-L01.
     function test_givenActionReactivated_whenSeized_thenDefaultSucceeds() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_liquidation));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_liquidation));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_liquidation));
         _assertSingleSeizure();
     }
 

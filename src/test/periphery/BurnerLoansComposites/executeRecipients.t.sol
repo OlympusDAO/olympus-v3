@@ -163,17 +163,20 @@ contract BurnerLoansCompositesExecuteRecipientsTest is BurnerLoansCompositesGran
 
     function _registerShareMarket(MockERC20 underlying_, MockERC4626 vault_) private {
         _price.setPrice(address(underlying_), 1e18);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(
             IERC20(address(underlying_)),
             IERC4626(address(vault_)),
             type(uint256).max,
             0
         );
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(
             IERC20(address(underlying_)),
             LoanParameters._DEPOSIT_PERIOD,
             address(_core)
         );
+        vm.prank(_fixtureAdmin);
         _config.addAsset(
             address(underlying_),
             100_000e9,

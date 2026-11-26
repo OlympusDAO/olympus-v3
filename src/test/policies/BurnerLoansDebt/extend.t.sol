@@ -299,6 +299,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         public
         givenDebtBearingPosition
     {
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
         uint48 oldMaturity = _position().maturity;
         vm.prank(_borrower);
@@ -337,7 +338,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
 
     // Scenarios: BLEXT-EXTEND-A09.
     function test_givenDebtRoleRevoked_whenExtended_reverts() public givenDebtBearingPosition {
-        _rolesAdmin.revokeRole(BL_DEBT_POLICY_ROLE, address(_debt));
+        _revokeFixtureRole(BL_DEBT_POLICY_ROLE, address(_debt));
         bytes32 rollbackBefore = _stateDigest(_borrower);
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
@@ -365,7 +366,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         public
         givenDebtBearingPosition
     {
-        _rolesAdmin.grantRole("burner_loans_extension", address(_collateral));
+        _grantFixtureRole("burner_loans_extension", address(_collateral));
         uint48 maturity = _position().maturity + _TERM_LENGTH;
         bytes32 rollbackBefore = _stateDigest(_borrower);
         vm.expectRevert(
@@ -500,7 +501,9 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
 
     function test_givenReEnabledDebt_whenExtended_thenSucceeds() public givenDebtBearingPosition {
         uint48 oldMaturity = _position().maturity;
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _debt.reEnable();
         vm.prank(_borrower);
         IBurnerLoansDebt.ExtendPreview memory result = _debt.extend(
@@ -519,6 +522,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
 
     // Scenarios: BLEXT-EXTEND-L02.
     function test_givenDebtDisabled_whenExtended_reverts() public givenDebtBearingPosition {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         bytes32 rollbackBefore = _stateDigest(_borrower);
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -535,7 +539,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
 
     // Scenarios: BLEXT-EXTEND-L06.
     function test_givenDebtInactive_whenExtended_reverts() public givenDebtBearingPosition {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_debt));
         bytes32 rollbackBefore = _stateDigest(_borrower);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -798,6 +802,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
 
     // Scenarios: BLEXT-EXTEND-D04.
     function test_givenOriginationsDisabled_whenExtended_reverts() public givenMockDebt {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         _expectExtendRevert(
             abi.encodeWithSelector(
@@ -935,6 +940,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         public
         givenMockDebt
     {
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(
             address(_asset),
             IBurnerLoansRisk.AssetRiskConfigInput(8500, 12500, 100, 1, 90 days, 1000e6)
@@ -1157,8 +1163,8 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         address caller_,
         bool validInput_
     ) public {
-        _setPolicyState(_debt, false, enabled_);
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_debt, false, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectExtendRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -1177,8 +1183,9 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         address caller_,
         bool validInput_
     ) public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectExtendRevert(
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
             validInput_ ? 1 : 0,
@@ -1195,7 +1202,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
         bool validInput_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _expectExtendRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -1299,7 +1306,7 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
     ) public givenMockDebt {
         vm.assume(!active_ || !enabled_);
         _mockRisk(7);
-        _setPolicyState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes memory reason = abi.encodeWithSelector(
             PolicyDependency.PolicyDependency_NotActive.selector,
             address(_payout)
@@ -1369,8 +1376,8 @@ contract BurnerLoansDebtExtendTest is BurnerLoansDebtTest {
 
     // Scenarios: BLEXT-EXTEND-L01.
     function test_givenPolicyReactivated_whenExtendExecuted_thenSucceeds() public givenMockDebt {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_debt));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_debt));
         _mockRisk(0);
         vm.prank(_borrower);
         _debt.extend(address(_asset), _borrower, 1, 0, address(0));

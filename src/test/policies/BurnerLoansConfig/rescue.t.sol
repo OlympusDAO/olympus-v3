@@ -72,7 +72,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         vm.expectRevert(_inactiveError(address(_config)));
         vm.prank(_configurationCaller);
         _config.previewRescue(address(_asset), _recipient);
@@ -89,8 +89,9 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         vm.expectRevert(_inactiveError(address(_config)));
         vm.prank(_configurationCaller);
         _config.previewRescue(address(_asset), _recipient);
@@ -107,6 +108,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(_configurationCaller);
@@ -124,6 +126,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         _asset.mint(address(_core), 1);
         vm.prank(_configurationCaller);
@@ -145,7 +148,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         vm.expectRevert(_inactiveError(address(_core)));
         vm.prank(_configurationCaller);
         _config.previewRescue(address(_asset), _recipient);
@@ -339,7 +342,9 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
         vm.assume(caller_ != address(_config) || !admin_);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(_recipient);
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(_recipient);
         _mutationReverts(
             _configurationCaller,
@@ -361,6 +366,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
             tokenDeployer_
         );
         token.mint(address(_core), 100);
+        vm.prank(_fixtureAdmin);
         _config.rescue(address(token), _recipient);
         assertFalse(token.callbackSucceeded(), "Nested recovery rejected");
         assertEq(
@@ -387,7 +393,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         token.mint(address(_core), 100);
         token.setBubbleCallbackFailure(true);
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.rescue, (address(token), _recipient)),
             abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
         );
@@ -397,6 +403,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCRE-A03.
     function test_givenConfigDeselected_whenAnyViewerQuotesRecovery(address viewer_) public {
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(makeAddr("anotherConfig"));
         _asset.mint(address(_core), 7);
         vm.prank(viewer_);
@@ -407,7 +414,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         );
         assertEq(_asset.balanceOf(address(_core)), 7, "quote transfers nothing");
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.rescue, (address(_asset), _recipient)),
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
         );
@@ -419,8 +426,7 @@ contract BurnerLoansConfigRescueTest is BurnerLoansConfigTest {
         bool enabled_
     ) public {
         _excludeConfigCallers(caller_);
-        if (!enabled_) _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_config, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,

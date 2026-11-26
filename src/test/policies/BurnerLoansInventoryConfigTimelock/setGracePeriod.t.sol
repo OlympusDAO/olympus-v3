@@ -26,8 +26,8 @@ contract BurnerLoansInventoryConfigTimelockSetGracePeriodTest is
         uint32 period_,
         address caller_
     ) public givenPendingRecovery {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(ADMIN_ROLE, caller_);
         period_ = SafeCast.toUint32(bound(period_, 1, type(uint32).max));
         bytes32 state = _queueDigest(_pendingId);
         uint48 last = _timelock.lastTransitionAt();
@@ -62,7 +62,7 @@ contract BurnerLoansInventoryConfigTimelockSetGracePeriodTest is
     function test_givenActiveDisabledTimelock_whenGraceSet_reverts(
         address caller_
     ) public givenPendingRecovery {
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_timelock, true, false);
         _expectGraceRejected(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_, 1);
     }
 
@@ -70,7 +70,7 @@ contract BurnerLoansInventoryConfigTimelockSetGracePeriodTest is
     function test_givenInactiveDisabledTimelock_whenGraceSet_reverts(
         address caller_
     ) public givenPendingRecovery {
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _expectGraceRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -83,13 +83,13 @@ contract BurnerLoansInventoryConfigTimelockSetGracePeriodTest is
 
     // Scenarios: BLINCT-GRACE-L02.
     function test_givenInactiveTimelock_whenGraceSet_reverts() public givenPendingRecovery {
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         _expectGraceRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             ),
-            address(this),
+            _fixtureAdmin,
             1
         );
     }
@@ -98,7 +98,7 @@ contract BurnerLoansInventoryConfigTimelockSetGracePeriodTest is
     function test_whenPeriodZero_reverts() public givenPendingRecovery {
         _expectGraceRejected(
             abi.encodeWithSelector(IGracePeriod.GracePeriod_ZeroPeriod.selector),
-            address(this),
+            _fixtureAdmin,
             0
         );
     }
@@ -138,7 +138,7 @@ contract BurnerLoansInventoryConfigTimelockSetGracePeriodTest is
         bool enabled_,
         uint32 period_
     ) public {
-        _setState(_timelock, false, enabled_);
+        _setPolicyLifecycle(_timelock, false, enabled_);
         vm.etch(address(_timelock.ROLES()), hex"fe");
         uint32 beforePeriod = _timelock.gracePeriod();
         uint48 beforeAt = _timelock.lastTransitionAt();

@@ -106,7 +106,10 @@ contract BurnerLoansSeizerTaskSetScanLimitsTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-SCAN-LIMITS-P03.
     function test_whenLimitsUnchanged_thenNoEvent() public {
         vm.recordLogs();
-        _task.setScanLimits(_task.maxBorrowersToCheck(), _task.maxBorrowersToSeize());
+        uint16 checks = _task.maxBorrowersToCheck();
+        uint8 seize = _task.maxBorrowersToSeize();
+        vm.prank(_seizerAdmin);
+        _task.setScanLimits(checks, seize);
         assertEq(vm.getRecordedLogs().length, 0, "Unchanged limits are an event-free no-op");
     }
 
@@ -120,6 +123,7 @@ contract BurnerLoansSeizerTaskSetScanLimitsTest is BurnerLoansSeizerTaskTest {
                 address(_task)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(1, 1);
     }
 
@@ -131,6 +135,7 @@ contract BurnerLoansSeizerTaskSetScanLimitsTest is BurnerLoansSeizerTaskTest {
                 seize_
             )
         );
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(checks_, seize_);
         assertEq(_task.maxBorrowersToCheck(), 500, "Invalid input preserves scan limit");
         assertEq(_task.maxBorrowersToSeize(), 25, "Invalid input preserves batch limit");

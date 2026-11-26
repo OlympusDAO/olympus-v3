@@ -97,6 +97,18 @@ abstract contract BurnerLoansLensScanTest is BurnerLoansLensTest {
         uint256 cursor_,
         uint256 reward_
     ) internal {
+        _assertScan(caller_, address(this), start_, count_, expected_, cursor_, reward_);
+    }
+
+    function _assertScan(
+        address caller_,
+        address explicitQuoteCaller_,
+        uint256 start_,
+        uint256 count_,
+        address[] memory expected_,
+        uint256 cursor_,
+        uint256 reward_
+    ) internal {
         vm.recordLogs();
         vm.prank(caller_);
         (address[] memory borrowers, uint256 cursor, uint256 reward) = _lens.getSeizableBorrowers(
@@ -107,13 +119,14 @@ abstract contract BurnerLoansLensScanTest is BurnerLoansLensTest {
         assertEq(borrowers, expected_, "Convenience candidate order");
         assertEq(cursor, cursor_, "Convenience cursor");
         assertEq(reward, reward_, "Convenience reward");
+        vm.prank(explicitQuoteCaller_);
         (borrowers, cursor, reward) = _lens.getSeizableBorrowersFor(
             caller_,
             address(_asset),
             start_,
             count_
         );
-        assertEq(borrowers, expected_, "Explicit unpranked actor candidates");
+        assertEq(borrowers, expected_, "Explicit actor candidates");
         assertEq(cursor, cursor_, "Explicit actor cursor");
         assertEq(reward, reward_, "Explicit actor reward");
         assertEq(vm.getRecordedLogs().length, 0, "Scans emit no logs");

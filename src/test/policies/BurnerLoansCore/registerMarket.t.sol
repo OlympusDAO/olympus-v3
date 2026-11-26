@@ -12,7 +12,6 @@ import {BL_YIELD_CLAIMER_ROLE} from "src/policies/burnerloans/libraries/LoanActi
 
 // Contracts
 import {BurnerLoansCoreTest} from "./BurnerLoansCoreTest.sol";
-import {Actions} from "src/Kernel.sol";
 
 contract BurnerLoansCoreRegisterMarketTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-MARKET-A01.
@@ -63,7 +62,7 @@ contract BurnerLoansCoreRegisterMarketTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-MARKET-L03, BLCORE-MARKET-L04.
     function test_givenCoreInactive_whenRegistered_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -76,8 +75,7 @@ contract BurnerLoansCoreRegisterMarketTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-MARKET-D01, BLCORE-MARKET-D02, BLCORE-MARKET-D03, BLCORE-MARKET-D04.
     function test_givenConfigUnavailable_whenRegistered(bool active_, bool enabled_) public {
-        if (!enabled_) _config.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.mockCallRevert(
             address(_config),
             bytes(""),
@@ -120,7 +118,7 @@ contract BurnerLoansCoreRegisterMarketTest is BurnerLoansCoreTest {
         assertEq(_core.getAssetCount(), count, "Mode update never duplicates asset");
         assertEq(vm.getRecordedLogs().length, 0, "No duplicate registration event");
         assertEq(keccak256(abi.encode(_floan.getMarket(id))), market, "No FLOAN mutation");
-        _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, address(_collateral));
+        _grantFixtureRole(BL_YIELD_CLAIMER_ROLE, address(_collateral));
         vm.mockCall(
             address(_depositManager),
             abi.encodeWithSignature(
@@ -152,6 +150,7 @@ contract BurnerLoansCoreRegisterMarketTest is BurnerLoansCoreTest {
         uint32 market_,
         bool shares_
     ) public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 beforeState = _state();
         uint256 count = _core.getAssetCount();
@@ -169,6 +168,7 @@ contract BurnerLoansCoreRegisterMarketTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-MARKET-L02.
     function test_givenExistingAssetAndDisabledCore_whenModeUpdated_reverts(bool shares_) public {
         uint32 market = _core.marketId(address(_asset));
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 beforeState = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);

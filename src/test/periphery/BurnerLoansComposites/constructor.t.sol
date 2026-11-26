@@ -104,7 +104,7 @@ contract BurnerLoansCompositesConstructorTest is BurnerLoansCompositesTest {
             address(_core),
             address(_collateral),
             address(_debt),
-            address(this),
+            _compositesOwner,
             integrations_
         );
     }
@@ -220,15 +220,17 @@ contract BurnerLoansCompositesConstructorTest is BurnerLoansCompositesTest {
         address dependency = selector == 0
             ? address(_core)
             : (selector == 1 ? address(_collateral) : address(_debt));
-        if (paused_) IEnabler(dependency).disable("");
-        else _kernel.executeAction(Actions.DeactivatePolicy, dependency);
+        if (paused_) {
+            vm.prank(_fixtureAdmin);
+            IEnabler(dependency).disable("");
+        } else _executeFixtureKernelAction(Actions.DeactivatePolicy, dependency);
         vm.prank(deployer_);
         BurnerLoansComposites created = _construct(
             address(_core),
             address(_collateral),
             address(_debt)
         );
-        assertEq(created.owner(), address(this), "Caller can deploy with explicit owner");
+        assertEq(created.owner(), _compositesOwner, "Caller can deploy with explicit owner");
         assertFalse(created.isEnabled(), "Construction leaves executor disabled");
     }
 
@@ -238,7 +240,13 @@ contract BurnerLoansCompositesConstructorTest is BurnerLoansCompositesTest {
         address debt_
     ) private returns (BurnerLoansComposites) {
         return
-            new BurnerLoansComposites(core_, collateral_, debt_, address(this), _integrationConfig);
+            new BurnerLoansComposites(
+                core_,
+                collateral_,
+                debt_,
+                _compositesOwner,
+                _integrationConfig
+            );
     }
 
     function _expectDependencyRejection(address dependency_) private {

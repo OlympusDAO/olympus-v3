@@ -24,10 +24,12 @@ contract BurnerLoansAuthCancelGrantCoreIntegrationTest is BurnerLoansCoreTest {
     // Scenarios: BLAUTH-CANCEL-L01.
     function test_whenCancelledWhileDisabled() public {
         _approveOperator(_borrower, _recipient, type(uint48).max);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.prank(_borrower);
         _auth.cancelGrant(_recipient);
         assertEq(_auth.pairEpochs(_borrower, _recipient), 2, "Cancellation advances a paused pair");
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         assertFalse(
             _isSenderAuthorized(_recipient, _borrower),

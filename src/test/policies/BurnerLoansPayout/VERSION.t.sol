@@ -11,7 +11,7 @@ contract BurnerLoansPayoutVERSIONTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 state = _ledgerDigest();
         vm.prank(caller_);
         (uint8 major, uint8 minor) = _payout.VERSION();

@@ -24,8 +24,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         _outsider(caller_);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -33,12 +32,12 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
     function test_givenUnauthorizedProposer_givenConfigDisabled_whenQueued_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         _outsider(caller_);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -49,6 +48,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         bool zero_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(zero_ ? address(0) : _recipient);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
@@ -57,8 +57,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -69,7 +68,9 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         bool zero_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(zero_ ? address(0) : _recipient);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
@@ -78,8 +79,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -91,8 +91,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -102,12 +101,11 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, true);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -117,12 +115,11 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, false);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -132,12 +129,11 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, true);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -147,12 +143,11 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, false);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -162,8 +157,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, true);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -171,8 +166,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -182,8 +176,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, false);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -191,8 +185,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -202,8 +195,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, true);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -211,8 +204,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -222,8 +214,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, false);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -231,8 +223,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -242,8 +233,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, true);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -251,8 +242,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -262,8 +252,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, false);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -271,8 +261,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -282,8 +271,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, true);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -291,8 +280,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -302,8 +290,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, false);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -311,8 +299,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -322,8 +309,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, true);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, true, true);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -331,8 +318,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_config)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -342,8 +328,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, false);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, true, true);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -351,8 +337,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_config)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -362,8 +347,8 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, false);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, true, true);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -371,8 +356,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_config)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -381,8 +365,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -395,14 +378,12 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
         bytes32 original = _queueDigest(id);
         a.payload = abi.encode(address(_asset), same_ ? _recipient : _borrower);
         _expectRejectedQueue(_pending(a, id));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
         assertEq(_queueDigest(id), original, "Duplicate preserves original payload and owner");
     }
@@ -421,7 +402,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
     // Scenarios: BLCT-QUEUE-RESCUE-P04.
     function test_givenCommittedStateDrift_whenExecuted_reverts(address executor_) public {
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
-        uint64 id = _queue(a);
+        uint64 id = _queue(_fixtureAdmin, a);
         bytes32 expected = _hash(a);
         vm.mockCall(
             address(_core),
@@ -437,7 +418,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         address executor_
     ) public {
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
-        uint64 id = _queue(a);
+        uint64 id = _queue(_fixtureAdmin, a);
         _makeReady(id);
         _asset.mint(address(_core), 123);
         uint256 beforeBalance = _asset.balanceOf(_recipient);
@@ -463,8 +444,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(0)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -481,8 +461,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_core)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -499,8 +478,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_payout)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -517,8 +495,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_config)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -535,8 +512,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_kernel)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -553,8 +529,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_asset)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -565,8 +540,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         _expectRejectedQueue(
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidAsset.selector, address(0))
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -582,8 +556,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         _expectRejectedQueue(
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidAsset.selector, token_)
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -595,15 +568,14 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
     // Scenarios: BLCT-QUEUE-RESCUE-D01.
     function test_givenCoreInactive_whenQueued_reverts(address caller_, uint8 role_) public {
         _proposer(caller_, role_);
-        _setState(_core, false, true);
+        _setPolicyLifecycle(_core, false, true);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(_asset), _recipient);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -611,8 +583,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
                 address(_core)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -623,7 +594,7 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         MockRevertingTransferToken token = new MockRevertingTransferToken(6);
         token.mint(address(_core), 123);
         ITimelockBatchQueue.BatchAction memory a = _rescueAction(address(token), _recipient);
-        uint64 id = _queue(a);
+        uint64 id = _queue(_fixtureAdmin, a);
         token.setTransferReverts(_recipient, true);
         _makeReady(id);
         _executeReverts(
@@ -644,8 +615,12 @@ contract BurnerLoansConfigTimelockQueueRescueTest is BurnerLoansConfigTimelockTe
         _restore(checkpoint);
     }
 
-    function _queue(ITimelockBatchQueue.BatchAction memory a_) internal returns (uint64) {
+    function _queue(
+        address caller_,
+        ITimelockBatchQueue.BatchAction memory a_
+    ) internal returns (uint64) {
         (address token, address destination) = abi.decode(a_.payload, (address, address));
+        vm.prank(caller_);
         return _timelock.queueRescue(token, destination);
     }
 }

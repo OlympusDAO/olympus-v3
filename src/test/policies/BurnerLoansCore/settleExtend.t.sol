@@ -33,7 +33,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
     function setUp() public override {
         super.setUp();
         _actor = _service();
-        _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(BL_DEBT_POLICY_ROLE, address(_actor));
     }
 
     // Scenarios: BLCORE-SETTLE-EXTEND-I05.
@@ -134,7 +134,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-SETTLE-EXTEND-A03.
     function test_givenOnlySiblingRole_whenSettled_reverts() public {
         CoreService sibling = _service();
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(sibling));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(sibling));
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
         );
@@ -156,6 +156,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-EXTEND-A04.
     function test_givenWrongKernelCaller_whenSettled() public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _actor.changeKernel(other);
@@ -170,6 +171,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-EXTEND-L01.
     function test_givenCoreDisabled_whenSettled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -192,7 +194,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-EXTEND-L02, BLCORE-SETTLE-EXTEND-L03.
     function test_givenCoreInactive_whenSettled_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -219,7 +221,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-EXTEND-D01.
     function test_givenCallerInactive_whenSettled() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_actor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_actor));
         test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer(false, address(_core));
     }
 
@@ -274,6 +276,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
     function test_givenOriginationsDisabled_whenExtended_reverts() public {
         _deposit(2000e6);
         _borrow(1);
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         bytes32 before = _ledger();
         vm.expectRevert(
@@ -625,7 +628,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_core),
             address(_actor),
@@ -654,7 +657,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_core),
             address(_actor),
@@ -682,7 +685,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_core),
             address(_actor),
@@ -715,7 +718,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_core),
             address(_actor),
@@ -747,7 +750,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_payout),
             address(_actor),
@@ -781,7 +784,7 @@ contract BurnerLoansCoreSettleExtendTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_payout),
             address(_actor),

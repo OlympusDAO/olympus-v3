@@ -37,6 +37,7 @@ contract BurnerLoansSeizerTaskProgressMixedMaturityInvariantTest is
             8e16,
             "Fixture has genuinely underwater unexpired debt"
         );
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 8);
         _treasuryBefore = _asset.balanceOf(_payout.treasury());
     }
@@ -61,8 +62,13 @@ contract BurnerLoansSeizerTaskProgressMixedMaturityInvariantTest is
         uint256 expired = _task.expiredAssetCursor(address(_asset));
         uint256 unhealthy = _task.unhealthyAssetCursor(address(_asset));
         uint256 now_ = vm.getBlockTimestamp();
-        if (!_task.isEnabled()) _task.reEnable();
+        if (!_task.isEnabled()) {
+            vm.prank(_fixtureAdmin);
+            _task.reEnable();
+        }
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
+        vm.prank(_fixtureAdmin);
         _task.setExecutionGasLimit(10_000_000);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -80,7 +86,7 @@ contract BurnerLoansSeizerTaskProgressMixedMaturityInvariantTest is
         // that population; two-asset rotation and conservative rewinds fit this quadratic bound.
         uint256 budget = 4 * (remaining + 1) * (remaining + 1);
         for (uint256 i; i < budget && _floan.getActiveBorrowerCount(market) != 0; ++i)
-            _task.execute();
+            _executeAsHeart(_task);
         assertEq(vm.getBlockTimestamp(), now_, "Drain never matures unexpired positions");
         assertEq(
             _floan.getActiveBorrowerCount(market),

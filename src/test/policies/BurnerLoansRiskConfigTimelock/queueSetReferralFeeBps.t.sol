@@ -29,22 +29,24 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
 
     // Scenarios: BLRCT-QUEUE-BPS-L01, BLRCT-QUEUE-BPS-L02.
     function test_givenInactive_whenQueued_reverts(bool enabled_) public {
-        if (!enabled_) _timelock.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
+        _setPolicyLifecycle(_timelock, false, enabled_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
 
     // Scenarios: BLRCT-QUEUE-BPS-L03.
     function test_givenDisabled_whenQueued_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -52,13 +54,14 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
     // Scenarios: BLRCT-QUEUE-BPS-D01, BLRCT-QUEUE-BPS-D02, BLRCT-QUEUE-BPS-D03.
     function test_givenRiskUnavailable_whenQueued_reverts(bool active_, bool enabled_) public {
         vm.assume(!active_ || !enabled_);
-        _setState(_risk, active_, enabled_);
+        _setPolicyLifecycle(_risk, active_, enabled_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -66,19 +69,21 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
     // Scenarios: BLRCT-QUEUE-BPS-D04.
     function test_givenOperatorChanged_whenQueued_reverts(address operator_) public {
         vm.assume(operator_ != address(_timelock));
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(operator_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_NotController.selector
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
 
     // Scenarios: BLRCT-QUEUE-BPS-D05.
     function test_givenForeignKernel_whenQueued_reverts() public {
-        _setState(_risk, false, false);
+        _setPolicyLifecycle(_risk, false, false);
         vm.mockCall(address(_risk), abi.encodeWithSignature("kernel()"), abi.encode(address(0xF0)));
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -88,6 +93,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(0xF0)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -105,6 +111,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -118,6 +125,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -135,6 +143,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         _assertRejectedQueue(_single(_bpsAction(2500)));
     }
@@ -153,17 +162,19 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         assertEq(_timelock.nextActionId(), next, "invalid metadata consumes no ID");
     }
 
     // Scenarios: BLRCT-QUEUE-BPS-D08.
     function test_givenUpstreamUnavailable_whenQueued(bool active_, bool enabled_) public {
-        _setState(_config, active_, enabled_);
-        _setState(_core, active_, enabled_);
-        _expectQueue(_single(_bpsAction(2500)), address(this));
+        _setPolicyLifecycle(_config, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
+        _expectQueue(_single(_bpsAction(2500)), _fixtureAdmin);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
-        _assertQueued(id, _single(_bpsAction(2500)), address(this));
+        _assertQueued(id, _single(_bpsAction(2500)), _fixtureAdmin);
     }
 
     // Scenarios: BLRCT-QUEUE-BPS-L04, BLRCT-QUEUE-BPS-N01.
@@ -177,10 +188,13 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
 
     // Scenarios: BLRCT-QUEUE-BPS-L04.
     function test_givenReEnabled_whenQueued() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_timelock));
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         assertEq(id, 1, "reenabled and reactivated queue accepts intent");
     }
@@ -194,6 +208,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 bps
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(bps);
         _assertRejectedQueue(_single(_bpsAction(bps)));
     }
@@ -203,25 +218,31 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
         uint16[4] memory values = [uint16(0), 1, 9999, 10000];
         for (uint256 i; i < values.length; ++i) {
             uint256 checkpoint = vm.snapshotState();
-            _expectQueue(_single(_bpsAction(values[i])), address(this));
+            _expectQueue(_single(_bpsAction(values[i])), _fixtureAdmin);
+            vm.prank(_fixtureAdmin);
             uint64 id = _timelock.queueSetReferralFeeBps(values[i]);
-            _assertQueued(id, _single(_bpsAction(values[i])), address(this));
+            _assertQueued(id, _single(_bpsAction(values[i])), _fixtureAdmin);
             _restore(checkpoint);
         }
     }
 
     // Scenarios: BLRCT-QUEUE-BPS-P02.
     function test_givenPendingPercentage_whenQueuedAgain_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(1);
         _expectRejectedQueue(_pending(_bpsAction(2), id));
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2);
         _assertRejectedQueue(_single(_bpsAction(2)));
     }
 
     // Scenarios: BLRCT-QUEUE-BPS-P03.
     function test_givenOtherDomainsPending_whenQueued() public {
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetPriceCacheMaxAge(3600);
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         assertEq(id, 3, "three independent intents");
         assertEq(_timelock.pendingActionId(_key(_ageAction(3600))), 1, "age key retained");
@@ -252,6 +273,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_bpsAction(2500)));
@@ -282,6 +304,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_bpsAction(2500)));
@@ -309,14 +332,15 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
         bool coreActive_,
         bool coreEnabled_
     ) private {
-        _setState(_config, configActive_, configEnabled_);
-        _setState(_core, coreActive_, coreEnabled_);
-        _expectQueue(_single(_bpsAction(2500)), address(this));
+        _setPolicyLifecycle(_config, configActive_, configEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _expectQueue(_single(_bpsAction(2500)), _fixtureAdmin);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("facility()"), hex"deadbeef");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("risk()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         vm.clearMockedCalls();
-        _assertQueued(id, _single(_bpsAction(2500)), address(this));
+        _assertQueued(id, _single(_bpsAction(2500)), _fixtureAdmin);
     }
 
     function _expectNoUpstreamDiscoveryCalls() private {
@@ -354,6 +378,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_bpsAction(2500)));
@@ -376,6 +401,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_bpsAction(2500)));
@@ -410,14 +436,16 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferralFeeBpsTest is
 
     // Scenarios: BLRCT-QUEUE-BPS-P01.
     function test_givenMaximumCurrentPercentage_whenSameValueQueued() public {
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(10000);
-        _expectQueue(_single(_bpsAction(10000)), address(this));
+        _expectQueue(_single(_bpsAction(10000)), _fixtureAdmin);
         vm.expectCall(
             address(_risk),
             abi.encodeCall(IBurnerLoansRisk.setReferralFeeBps, (uint16(10000))),
             uint64(0)
         );
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(10000);
-        _assertQueued(id, _single(_bpsAction(10000)), address(this));
+        _assertQueued(id, _single(_bpsAction(10000)), _fixtureAdmin);
     }
 }

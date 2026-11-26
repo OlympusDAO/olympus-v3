@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC20 as OZERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/burnerloans/IBurnerLoansConfig.sol";
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
@@ -20,7 +19,7 @@ import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
-import {Actions, Policy} from "src/Kernel.sol";
+import {Actions} from "src/Kernel.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
 
 /// @dev Config scenarios require the token to propagate the original settlement-guard error.
@@ -40,17 +39,19 @@ abstract contract BurnerLoansConfigTest is BurnerLoansModularTest {
     function setUp() public virtual override {
         super.setUp();
         _configurationCaller = makeAddr("configOperator");
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(_configurationCaller);
         _market = _core.marketId(address(_asset));
     }
 
     modifier givenConfigDisabled() {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         _;
     }
 
     modifier givenConfigInactive() {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _;
     }
 
@@ -71,7 +72,7 @@ abstract contract BurnerLoansConfigTest is BurnerLoansModularTest {
 
     function _grantAdmin(address caller_) internal {
         vm.assume(caller_ != address(0));
-        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _grantFixtureRole(ADMIN_ROLE, caller_);
     }
 
     function _grantConfigCaller(address caller_, bool admin_, bool operator_) internal {
@@ -79,8 +80,11 @@ abstract contract BurnerLoansConfigTest is BurnerLoansModularTest {
         vm.assume(admin_ || operator_);
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
         vm.assume(caller_ != _config.configOperator());
-        if (admin_) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (operator_) _config.setConfigOperator(caller_);
+        if (admin_) _grantFixtureRole(ADMIN_ROLE, caller_);
+        if (operator_) {
+            vm.prank(_fixtureAdmin);
+            _config.setConfigOperator(caller_);
+        }
     }
 
     function _excludeConfigCallers(address caller_) internal view {
@@ -102,7 +106,9 @@ abstract contract BurnerLoansConfigTest is BurnerLoansModularTest {
     }
 
     function _registerDepositAsset(MockERC20 token_, address vault_) internal {
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(IERC20(address(token_)), IERC4626(vault_), type(uint256).max, 0);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(address(token_)), 1, address(_core));
     }
 
@@ -115,6 +121,7 @@ abstract contract BurnerLoansConfigTest is BurnerLoansModularTest {
         MockERC20 token = _listingToken(18);
         MockERC4626 vault = new MockERC4626(OZERC20(address(token)), "Vault", "V");
         _registerDepositAsset(token, address(vault));
+        vm.prank(_fixtureAdmin);
         _config.addAsset(
             address(token),
             100000e9,
@@ -178,11 +185,6 @@ abstract contract BurnerLoansConfigTest is BurnerLoansModularTest {
             );
     }
 
-    function _setPolicyState(Policy policy_, bool active_, bool enabled_) internal {
-        if (!enabled_) IEnabler(address(policy_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(policy_));
-    }
-
     function _mutationReverts(address caller_, bytes memory data_, bytes memory error_) internal {
         bytes32 beforeState = _stateDigest();
         vm.prank(caller_);
@@ -238,8 +240,11 @@ abstract contract BurnerLoansConfigTest is BurnerLoansModularTest {
         vm.prank(_borrower);
         token.approve(address(_core), type(uint256).max);
         vm.assume(admin_ || operator_);
-        if (admin_) _rolesAdmin.grantRole(ADMIN_ROLE, address(token));
-        if (operator_) _config.setConfigOperator(address(token));
+        if (admin_) _grantFixtureRole(ADMIN_ROLE, address(token));
+        if (operator_) {
+            vm.prank(_fixtureAdmin);
+            _config.setConfigOperator(address(token));
+        }
         token.setCallbackFrom(address(_core), address(_config), data_);
     }
 

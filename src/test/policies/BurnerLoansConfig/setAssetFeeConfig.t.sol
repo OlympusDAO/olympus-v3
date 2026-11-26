@@ -87,7 +87,7 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         _assertConfigSet(_configurationCaller, cfg);
     }
@@ -100,7 +100,8 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         _assertConfigurationRejected(
@@ -118,8 +119,8 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
     }
@@ -132,9 +133,10 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
     }
@@ -147,7 +149,7 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         cfg.baseFeeBps = 10001;
         _assertConfigurationRejected(
@@ -165,7 +167,8 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         cfg.baseFeeBps = 10001;
@@ -184,8 +187,8 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         cfg.baseFeeBps = 10001;
         _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
@@ -199,9 +202,10 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         cfg.baseFeeBps = 10001;
         _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
@@ -560,7 +564,9 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
+        vm.prank(_fixtureAdmin);
         _config.enable("");
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         _assertConfigSet(_configurationCaller, cfg);
@@ -572,8 +578,8 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_config));
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         _assertConfigSet(_configurationCaller, cfg);
     }
@@ -705,13 +711,14 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
     function test_whenPermittedCallerClassesSeeded() public {
         address adminOnly = makeAddr("adminOnly");
         address overlap = makeAddr("adminAndOperator");
-        _rolesAdmin.grantRole(ADMIN_ROLE, adminOnly);
+        _grantFixtureRole(ADMIN_ROLE, adminOnly);
         _assertConfigSet(adminOnly, IBurnerLoansRisk.AssetFeeConfig(100, 5000, 200, 300));
         _assertConfigSet(
             _configurationCaller,
             IBurnerLoansRisk.AssetFeeConfig(101, 5000, 200, 300)
         );
-        _rolesAdmin.grantRole(ADMIN_ROLE, overlap);
+        _grantFixtureRole(ADMIN_ROLE, overlap);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(overlap);
         _assertConfigSet(overlap, IBurnerLoansRisk.AssetFeeConfig(102, 5000, 200, 300));
     }
@@ -808,8 +815,10 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
             _kernel,
             IBurnerLoansConfig(address(_config))
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(timelock));
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(address(timelock));
+        vm.prank(_fixtureAdmin);
         timelock.enable("");
         assertFalse(
             _roles.hasRole(address(timelock), ADMIN_ROLE),
@@ -817,6 +826,7 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansConfigTest {
         );
         IBurnerLoansRisk.AssetFeeConfig memory cfg = _feeConfig();
         vm.expectCall(address(_config), _feeValidation(address(_asset), cfg));
+        vm.prank(_fixtureAdmin);
         uint64 id = timelock.queueSetAssetFeeConfig(address(_asset), cfg);
         vm.warp(timelock.getQueuedAction(id).executableAt);
         timelock.executeQueuedAction(id);

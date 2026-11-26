@@ -39,6 +39,7 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
     // Scenarios: BLRCT-REENABLE-A01.
     function test_whenUnauthorized_reverts(address caller_) public {
         _outsider(caller_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
@@ -52,6 +53,7 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
         uint32 elapsed_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.warp(vm.getBlockTimestamp() + bound(elapsed_, 0, _timelock.gracePeriod()));
         vm.prank(caller_);
@@ -62,19 +64,23 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
 
     // Scenarios: BLRCT-REENABLE-N02.
     function test_givenAfterGrace_whenReEnabled_reverts(uint48 now_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         uint48 deadline = _timelock.lastTransitionAt() + _timelock.gracePeriod();
         vm.warp(bound(now_, uint256(deadline) + 1, type(uint48).max));
         vm.expectRevert(
             abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, deadline)
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
     // Scenarios: BLRCT-REENABLE-N03.
     function test_givenDeadlineOverflow_whenReEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(type(uint32).max);
         vm.warp(type(uint48).max);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.expectRevert(
             abi.encodeWithSignature(
@@ -83,60 +89,72 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                 uint256(type(uint48).max) + type(uint32).max
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
     // Scenarios: BLRCT-REENABLE-N04.
     function test_givenMaximumDeadline_whenReEnabled() public {
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(1);
         vm.warp(uint256(type(uint48).max) - 1);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.warp(type(uint48).max);
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
         assertEq(_timelock.lastTransitionAt(), type(uint48).max, "maximum transition accepted");
     }
 
     // Scenarios: BLRCT-REENABLE-D01, BLRCT-REENABLE-D03.
     function test_givenRiskUnavailable_whenReEnabled_reverts(bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_risk, false, enabled_);
+        _setPolicyLifecycle(_risk, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
     // Scenarios: BLRCT-REENABLE-L01.
     function test_givenInactive_whenReEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_timelock));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
     // Scenarios: BLRCT-REENABLE-D04.
     function test_givenWrongOperator_whenReEnabled_reverts(address operator_) public {
         vm.assume(operator_ != address(_timelock));
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(operator_);
         vm.expectRevert(
             IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_NotController.selector
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
     // Scenarios: BLRCT-REENABLE-D05.
     function test_givenForeignKernel_whenTransition_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_risk, false, false);
+        _setPolicyLifecycle(_risk, false, false);
         vm.mockCall(address(_risk), abi.encodeWithSignature("kernel()"), abi.encode(address(0xF0)));
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -146,12 +164,14 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                 address(0xF0)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
         assertFalse(_timelock.isEnabled(), "failed transition unchanged");
     }
 
     // Scenarios: BLRCT-REENABLE-D06.
     function test_givenFailedKernelRead_whenTransition_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         bytes memory callData = abi.encodeWithSignature("kernel()");
         vm.mockCallRevert(address(_risk), callData, hex"deadbeef");
@@ -161,6 +181,7 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
         assertFalse(_timelock.isEnabled(), "failed status preserves disabled state");
     }
@@ -168,6 +189,7 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
     // Scenarios: BLRCT-REENABLE-D06.
     function test_givenMalformedKernelRead_whenTransition_reverts(bytes memory data_) public {
         vm.assume(data_.length != 32);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         bytes memory callData = abi.encodeWithSignature("kernel()");
         vm.mockCall(address(_risk), callData, data_);
@@ -177,12 +199,14 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
         assertFalse(_timelock.isEnabled(), "malformed status preserves disabled state");
     }
 
     // Scenarios: BLRCT-REENABLE-D07.
     function test_givenFailedOperatorRead_whenTransition_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.mockCallRevert(
             address(_risk),
@@ -195,11 +219,13 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
     // Scenarios: BLRCT-REENABLE-D07.
     function test_givenDirtyOperatorRead_whenTransition_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.mockCall(
             address(_risk),
@@ -212,22 +238,26 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
     // Scenarios: BLRCT-REENABLE-P01.
     function test_givenUpstreamPaused_whenTransition() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_config, false, false);
-        _setState(_core, false, false);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_core, false, false);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("facility()"), hex"deadbeef");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("risk()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
         assertTrue(_timelock.isEnabled(), "upstream pointers do not gate Risk controller");
     }
 
     // Scenarios: BLRCT-REENABLE-D06.
     function test_givenDirtyKernelWords_whenTransition_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.mockCall(
             address(_risk),
@@ -240,6 +270,7 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
@@ -249,6 +280,7 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
         bytes memory data_
     ) public {
         vm.assume(data_.length != 32);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         if (reverts_)
             vm.mockCallRevert(address(_risk), abi.encodeWithSignature("configOperator()"), data_);
@@ -259,22 +291,26 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
     }
 
     // Scenarios: BLRCT-REENABLE-D02.
     function test_givenPausedRisk_whenActivated() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_risk, true, false);
+        _setPolicyLifecycle(_risk, true, false);
         vm.mockCallRevert(address(_risk), abi.encodeWithSignature("isEnabled()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
         assertTrue(_timelock.isEnabled(), "Paused Risk permits activation for repair");
     }
 
     // Scenarios: BLRCT-REENABLE-D08.
     function test_givenMissingConsumedInterface_whenActivated_reverts(bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_risk, true, enabled_);
+        _setPolicyLifecycle(_risk, true, enabled_);
         bytes4[3] memory ids = [
             type(IBurnerLoansRisk).interfaceId,
             type(IConfigOperator).interfaceId,
@@ -292,6 +328,7 @@ contract BurnerLoansRiskConfigTimelockReEnableTest is BurnerLoansRiskConfigTimel
                     address(_risk)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _timelock.reEnable();
             assertFalse(_timelock.isEnabled(), "Incompatible target cannot activate queue");
             vm.mockCall(

@@ -1,10 +1,10 @@
 {
-    "BurnerLoans.freshPriceCache.borrow.first": "677853",
-    "BurnerLoans.freshPriceCache.depositCollateral.existingDebtPosition": "337362",
-    "BurnerLoans.freshPriceCache.depositCollateral.newPosition": "562171",
-    "BurnerLoans.freshPriceCache.extend.oneTerm": "455853",
-    "BurnerLoans.freshPriceCache.repay.partial": "232993",
-    "BurnerLoans.freshPriceCache.seize.single": "570140",
-    "BurnerLoans.freshPriceCache.withdrawCollateral.allWithoutDebt": "286180",
-    "BurnerLoans.freshPriceCache.withdrawCollateral.partialWithDebt": "427440"
+    "BurnerLoans.freshPriceCache.borrow.first": "677882",
+    "BurnerLoans.freshPriceCache.depositCollateral.existingDebtPosition": "337380",
+    "BurnerLoans.freshPriceCache.depositCollateral.newPosition": "562200",
+    "BurnerLoans.freshPriceCache.extend.oneTerm": "455865",
+    "BurnerLoans.freshPriceCache.repay.partial": "233011",
+    "BurnerLoans.freshPriceCache.seize.single": "570077",
+    "BurnerLoans.freshPriceCache.withdrawCollateral.allWithoutDebt": "286227",
+    "BurnerLoans.freshPriceCache.withdrawCollateral.partialWithDebt": "427476"
 }

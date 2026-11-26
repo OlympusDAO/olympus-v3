@@ -54,14 +54,17 @@ contract BurnerLoansLensGetAssetCollateralStatusIntegrationTest is BurnerLoansLe
     function test_givenRealVaultDonation_whenStatusRead(address caller_) public {
         MockERC20 token = new MockERC20("Vault asset", "V", 6);
         MockERC4626 vault = new MockERC4626(OZIERC20(address(token)), "Vault", "SV");
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(
             IERC20(address(token)),
             IERC4626(address(vault)),
             type(uint256).max,
             0
         );
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(address(token)), 1, address(_core));
         _price.setPrice(address(token), 1e18);
+        vm.prank(_fixtureAdmin);
         _config.addAsset(
             address(token),
             100_000e9,

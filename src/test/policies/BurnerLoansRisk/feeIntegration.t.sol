@@ -286,6 +286,7 @@ contract BurnerLoansRiskFeeIntegrationTest is BurnerLoansModularTest {
             11875000000000000,
             "initial selected market fee"
         );
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(200000e9);
         _supplyInventory(address(0xF00D), 100e9);
         assertEq(_inventory.suppliedOhm(), 100e9, "global funding changed");
@@ -309,9 +310,12 @@ contract BurnerLoansRiskFeeIntegrationTest is BurnerLoansModularTest {
             0,
             address(_core)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(replacement));
+        vm.prank(_fixtureAdmin);
         replacement.setConfigOperator(address(_config));
+        vm.prank(_fixtureAdmin);
         replacement.enable("");
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(replacement));
         assertTrue(_risk.isEnabled(), "old Risk remains enabled");
         assertTrue(_kernel.isPolicyActive(_risk), "old Risk remains active");
@@ -337,7 +341,9 @@ contract BurnerLoansRiskFeeIntegrationTest is BurnerLoansModularTest {
     function test_givenSharedReferralPercentage_whenDifferentMarketsAndTermsQuoted() public {
         uint32 six = _feeMarket(0, 1e18, 6, IBurnerLoansRisk.AssetFeeConfig(100, 0, 0, 0));
         uint32 eighteen = _feeMarket(0, 1e18, 18, IBurnerLoansRisk.AssetFeeConfig(100, 0, 0, 0));
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_recipient, true);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(2500);
         // One OHM at $1 and 100% collateralization requires 1e6 or 1e18 raw collateral.
         // 100bps gross fee = 10000 or 1e16. A 25% referral receives 2500 or 25e14.

@@ -106,6 +106,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     function _changedAges(address caller_, uint48 previous_, uint48 age_) private {
         vm.assume(previous_ != age_);
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(previous_);
         _assertAgeChanged(caller_, age_);
     }
@@ -117,13 +118,13 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
     }
 
     function _assertNoRiskAuthority() private {
-        _ageReverts(address(this), 0, abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        _ageReverts(_fixtureAdmin, 0, abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         _ageReverts(
             _configurationCaller,
             1,
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector)
         );
-        _rolesAdmin.grantRole(ADMIN_ROLE, _configurationCaller);
+        _grantFixtureRole(ADMIN_ROLE, _configurationCaller);
         _ageReverts(
             _configurationCaller,
             type(uint48).max,
@@ -134,24 +135,25 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
     function _disabledConfigRejectsCallerSeeds() private {
         _expectNoForward(1);
         bytes memory failure = abi.encodeWithSelector(IEnabler.NotEnabled.selector);
-        _ageReverts(address(this), 1, failure);
+        _ageReverts(_fixtureAdmin, 1, failure);
         _ageReverts(_configurationCaller, 1, failure);
         _ageReverts(_borrower, 1, failure);
         _ageReverts(address(0), 1, failure);
-        _rolesAdmin.grantRole(ADMIN_ROLE, _configurationCaller);
+        _grantFixtureRole(ADMIN_ROLE, _configurationCaller);
         _ageReverts(_configurationCaller, 1, failure);
     }
 
     function _coreStateAcceptsChange(bool active_, bool enabled_, uint48 age_) private {
         uint256 checkpoint = vm.snapshotState();
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _assertAgeChanged(_configurationCaller, age_);
         assertTrue(vm.revertToStateAndDelete(checkpoint), "restore Core lifecycle seed");
     }
 
     function _coreStateAcceptsNoOp(bool active_, bool enabled_, uint48 age_) private {
         uint256 checkpoint = vm.snapshotState();
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(age_);
         _assertAgeUnchanged(_configurationCaller, age_);
         assertTrue(vm.revertToStateAndDelete(checkpoint), "restore Core lifecycle seed");
@@ -167,9 +169,12 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
             0,
             address(_core)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_risk));
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(_config));
+        vm.prank(_fixtureAdmin);
         _risk.enable("");
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(_risk));
     }
 
@@ -191,7 +196,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-A01.
     function test_whenUnauthorizedCallerSeedsConfigureAge_reverts() public {
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
         _expectNoForward(1);
         _ageReverts(address(0), 1, abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         _ageReverts(
@@ -204,6 +209,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-A01.
     function test_givenRiskOnlyOperator_whenConfigCalled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(_borrower);
         _expectNoForward(1);
         _ageReverts(_borrower, 1, abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
@@ -223,6 +229,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
         address caller_,
         uint48 age_
     ) public givenConfigurationCaller(caller_, true, false) {
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(age_);
         _assertAgeUnchanged(caller_, age_);
     }
@@ -239,7 +246,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-A02, BLCFG-CACHE-AGE-N02.
     function test_givenAdminOnly_whenAgeBoundaries() public {
-        _boundaryAges(address(this));
+        _boundaryAges(_fixtureAdmin);
     }
 
     // Scenarios: BLCFG-CACHE-AGE-A02, BLCFG-CACHE-AGE-L01, BLCFG-CACHE-AGE-N01.
@@ -256,6 +263,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
         address caller_,
         uint48 age_
     ) public givenConfigurationCaller(caller_, false, true) {
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(age_);
         _assertAgeUnchanged(caller_, age_);
     }
@@ -289,6 +297,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
         address caller_,
         uint48 age_
     ) public givenConfigurationCaller(caller_, true, true) {
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(age_);
         _assertAgeUnchanged(caller_, age_);
     }
@@ -305,13 +314,14 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-A02, BLCFG-CACHE-AGE-N02.
     function test_givenAdminAndOperator_whenAgeBoundaries() public {
-        _rolesAdmin.grantRole(ADMIN_ROLE, _configurationCaller);
+        _grantFixtureRole(ADMIN_ROLE, _configurationCaller);
         _boundaryAges(_configurationCaller);
     }
 
     // Scenarios: BLCFG-CACHE-AGE-A01, BLCFG-CACHE-AGE-A03.
     function test_givenOperatorReplaced_whenFormerOperatorCalls_reverts() public {
         address former = _configurationCaller;
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(_recipient);
         _expectNoForward(1);
         _ageReverts(former, 1, abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
@@ -319,18 +329,21 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-A06.
     function test_givenOperatorReplaced_whenNewOperatorCalls() public {
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(_recipient);
         _assertAgeChanged(_recipient, 1);
     }
 
     // Scenarios: BLCFG-CACHE-AGE-A04.
     function test_givenConfigOperatorUnset_whenAdminCalls() public {
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(address(0));
-        _assertAgeChanged(address(this), 1);
+        _assertAgeChanged(_fixtureAdmin, 1);
     }
 
     // Scenarios: BLCFG-CACHE-AGE-A01.
     function test_givenConfigOperatorUnset_whenZeroCallerCalls_reverts() public {
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(address(0));
         _expectNoForward(1);
         _ageReverts(address(0), 1, abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
@@ -378,7 +391,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
         givenConfigInactive
     {
         _expectNoForward(1);
-        _ageReverts(address(this), 1, _inactiveError(address(_config)));
+        _ageReverts(_fixtureAdmin, 1, _inactiveError(address(_config)));
         _ageReverts(_configurationCaller, 1, _inactiveError(address(_config)));
         _ageReverts(_borrower, 1, _inactiveError(address(_config)));
         _ageReverts(address(0), 1, _inactiveError(address(_config)));
@@ -386,26 +399,30 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-L05.
     function test_givenReEnabledConfig_whenAgeChanged() public {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
+        vm.prank(_fixtureAdmin);
         _config.reEnable();
         _assertAgeChanged(_configurationCaller, 1);
     }
 
     // Scenarios: BLCFG-CACHE-AGE-D01.
     function test_givenConfigNotRiskOperator_whenPermittedCallersCall_reverts() public {
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(_recipient);
         _assertNoRiskAuthority();
     }
 
     // Scenarios: BLCFG-CACHE-AGE-D01.
     function test_givenRiskOperatorUnset_whenPermittedCallersCall_reverts() public {
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(0));
         _assertNoRiskAuthority();
     }
 
     // Scenarios: BLCFG-CACHE-AGE-D02.
     function test_givenDisabledRisk_whenAgeSet_reverts(uint48 age_) public {
-        _setPolicyState(_risk, true, false);
+        _setPolicyLifecycle(_risk, true, false);
         _ageReverts(
             _configurationCaller,
             age_,
@@ -415,38 +432,41 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-D02.
     function test_givenDisabledRisk_whenAgeUnchanged_reverts() public {
-        _setPolicyState(_risk, true, false);
+        _setPolicyLifecycle(_risk, true, false);
         _ageReverts(_configurationCaller, 0, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     // Scenarios: BLCFG-CACHE-AGE-D03.
     function test_givenInactiveRisk_whenAgeSet_reverts(uint48 age_) public {
-        _setPolicyState(_risk, false, true);
+        _setPolicyLifecycle(_risk, false, true);
         _ageReverts(_configurationCaller, age_, _inactiveError(address(_risk)));
     }
 
     // Scenarios: BLCFG-CACHE-AGE-D03.
     function test_givenInactiveRisk_whenAgeUnchanged_reverts() public {
-        _setPolicyState(_risk, false, true);
+        _setPolicyLifecycle(_risk, false, true);
         _ageReverts(_configurationCaller, 0, _inactiveError(address(_risk)));
     }
 
     // Scenarios: BLCFG-CACHE-AGE-D04.
     function test_givenInactiveDisabledRisk_whenAgeSet_reverts(uint48 age_) public {
-        _setPolicyState(_risk, false, false);
+        _setPolicyLifecycle(_risk, false, false);
         _ageReverts(_configurationCaller, age_, _inactiveError(address(_risk)));
     }
 
     // Scenarios: BLCFG-CACHE-AGE-D05.
     function test_givenConfigHoldsRiskAdmin_whenAnotherRiskOperatorSelected() public {
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(_recipient);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_config));
+        _grantFixtureRole(ADMIN_ROLE, address(_config));
         _assertAgeChanged(_configurationCaller, 1);
     }
 
     // Scenarios: BLCFG-CACHE-AGE-D06.
     function test_givenReEnabledRisk_whenAgeChanged() public {
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
+        vm.prank(_fixtureAdmin);
         _risk.reEnable();
         _assertAgeChanged(_configurationCaller, 1);
     }
@@ -454,21 +474,23 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-CACHE-AGE-P01.
     function test_whenUnchangedAgeEndpoints() public {
         _assertAgeUnchanged(_configurationCaller, 0);
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(1);
         _assertAgeUnchanged(_configurationCaller, 1);
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(type(uint48).max);
         _assertAgeUnchanged(_configurationCaller, type(uint48).max);
     }
 
     // Scenarios: BLCFG-CACHE-AGE-P02.
     function test_givenIndependentCoreState_whenAgeChanged(bool active_, bool enabled_) public {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _assertAgeChanged(_configurationCaller, 1);
     }
 
     // Scenarios: BLCFG-CACHE-AGE-P02.
     function test_givenIndependentCoreState_whenAgeUnchanged(bool active_, bool enabled_) public {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _assertAgeUnchanged(_configurationCaller, 0);
     }
 
@@ -490,6 +512,7 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-P03.
     function test_givenRiskReplacement_whenAgeChanged() public {
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(5);
         BurnerLoansRisk previous = _selectReplacementRisk();
         vm.expectCall(
@@ -544,8 +567,10 @@ contract BurnerLoansConfigSetPriceCacheMaxAgeTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CACHE-AGE-T03.
     function test_givenReplacementRiskPaused_whenAgeSet_reverts() public {
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(5);
         BurnerLoansRisk previous = _selectReplacementRisk();
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
         _ageReverts(_configurationCaller, 1, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         assertEq(previous.priceCacheMaxAge(), 5, "operational old Risk is not used as fallback");

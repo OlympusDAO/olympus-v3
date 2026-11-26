@@ -27,6 +27,7 @@ contract BurnerLoansPayoutDisableCallbackTest is BurnerLoansPayoutCallbackTest {
             abi.encodeCall(IEnabler.disable, (bytes(""))),
             false
         );
+        vm.prank(_fixtureAdmin);
         _payout.rescue(address(_callbackToken), _destination);
         _assertCallbackRejected();
         assertEq(_payout.isEnabled(), true, "Nested transition rejected");

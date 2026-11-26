@@ -36,6 +36,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
     function test_givenControllerChanged_whenActionExecutes_reverts(
         address caller_
     ) public givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(_inventoryConfigurator);
         _makeReady(_pendingId);
         _expectExecuteRejected(
@@ -78,7 +79,9 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         public
         givenProviderSurplus
     {
+        vm.prank(_fixtureAdmin);
         _pendingId = _timelock.queueBurnSurplus();
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
         _makeReady(_pendingId);
         _expectExecuteRejected(
@@ -101,7 +104,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         );
         now_ = SafeCast.toUint48(bound(now_, beforeAction.executableAt, beforeAction.expiresAt));
         vm.warp(now_);
-        _setState(_inventory, true, inventoryEnabled_);
+        _setPolicyLifecycle(_inventory, true, inventoryEnabled_);
         uint256 beforeTreasury = _ohm.balanceOf(_treasury());
         uint256 beforeSupply = _ohm.totalSupply();
         vm.expectEmit(address(_inventory));
@@ -176,7 +179,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         address caller_
     ) public givenPendingRecovery {
         _makeReady(_pendingId);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_timelock, true, false);
         _expectExecuteRejected(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_);
     }
 
@@ -185,7 +188,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         address caller_
     ) public givenPendingRecovery {
         _makeReady(_pendingId);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _expectExecuteRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -200,7 +203,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         address caller_
     ) public givenPendingRecovery {
         _makeReady(_pendingId);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         _expectExecuteRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -216,7 +219,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         address caller_
     ) public givenPendingRecovery {
         _makeReady(_pendingId);
-        _setState(_inventory, false, enabled_);
+        _setPolicyLifecycle(_inventory, false, enabled_);
         _expectExecuteRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -248,6 +251,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         address caller_
     ) public givenPendingRecovery {
         _makeReady(_pendingId);
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(0));
         _expectExecuteRejected(
             abi.encodeWithSelector(
@@ -266,7 +270,9 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
     function test_givenControllerRotatesBack_whenExecuted_thenOriginalCommitmentMatches(
         address caller_
     ) public givenProviderSurplus givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(_inventoryConfigurator);
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(_timelock));
         _makeReady(_pendingId);
         vm.prank(caller_);
@@ -287,9 +293,10 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
     {
         _makeReady(_pendingId);
         _timelock.executeQueuedAction(_pendingId);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBurnSurplus();
         assertEq(id, uint256(_pendingId) + 1, "New queue gets next ID");
-        _assertQueued(id, IBurnerLoansInventory.burnSurplus.selector, address(this));
+        _assertQueued(id, IBurnerLoansInventory.burnSurplus.selector, _fixtureAdmin);
         assertTrue(_timelock.getQueuedAction(_pendingId).executed, "Execution tombstone retained");
     }
 
@@ -349,7 +356,9 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
     function test_givenCancelledAction_whenCalled_revertsBeforeAuthorization(
         address caller_
     ) public givenPendingRecovery {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(this));
+        address emergencyCanceller = makeAddr("emergencyCanceller");
+        _grantFixtureRole(EMERGENCY_ROLE, emergencyCanceller);
+        vm.prank(emergencyCanceller);
         _timelock.cancelQueuedAction(_pendingId);
         bytes32 funds = _inventoryDigest();
         bytes memory reason = abi.encodeWithSelector(
@@ -389,6 +398,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
     function test_givenMintrBurnFailure_whenExecuted_thenRollbackAndRetry(
         address caller_
     ) public givenProviderSurplus {
+        vm.prank(_fixtureAdmin);
         _pendingId = _timelock.queueBurnSurplus();
         _makeReady(_pendingId);
         address mintr = address(_kernel.getModuleForKeycode(toKeycode("MINTR")));
@@ -457,7 +467,9 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         address caller_
     ) public givenProviderSurplus givenPendingRecovery {
         BurnerLoansConfig replacement = new BurnerLoansConfig(_kernel, _core);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(replacement));
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(address(replacement));
         assertEq(
             address(_timelock.inventory()),
@@ -486,8 +498,10 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
             IERC20(address(_ohm)),
             address(_core)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(replacement));
+        vm.prank(_fixtureAdmin);
         replacement.enable("");
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(replacement));
         _ohm.mint(address(_inventory), 1e9);
         _makeReady(_pendingId);
@@ -514,7 +528,7 @@ contract BurnerLoansInventoryConfigTimelockExecuteQueuedActionTest is
         RecoveryCallbackOhm template = new RecoveryCallbackOhm();
         vm.etch(address(_ohm), address(template).code);
         RecoveryCallbackOhm token = RecoveryCallbackOhm(address(_ohm));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(token));
+        _grantFixtureRole(ADMIN_ROLE, address(token));
         token.arm(address(_inventory), abi.encodeCall(_inventory.rescueSurplus, ()));
         assertEq(
             _ohm.balanceOf(address(_inventory)),

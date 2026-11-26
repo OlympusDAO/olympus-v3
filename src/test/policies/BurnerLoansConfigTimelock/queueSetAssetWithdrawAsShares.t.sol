@@ -28,8 +28,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         _outsider(caller_);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -37,12 +36,12 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
     function test_givenUnauthorizedProposer_givenConfigDisabled_whenQueued_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         _outsider(caller_);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -53,6 +52,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         bool zero_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(zero_ ? address(0) : _recipient);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
@@ -61,8 +61,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -73,7 +72,9 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         bool zero_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(zero_ ? address(0) : _recipient);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
@@ -82,8 +83,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -95,8 +95,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -106,12 +105,11 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, true);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -121,12 +119,11 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, false);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -136,12 +133,11 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, true);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -151,12 +147,11 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, false);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -166,8 +161,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, true);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -175,8 +170,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -186,8 +180,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, false);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -195,8 +189,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -206,8 +199,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, true);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -215,8 +208,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -226,8 +218,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, false);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -235,8 +227,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -246,8 +237,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, true);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -255,8 +246,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -266,8 +256,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, false);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -275,8 +265,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -286,8 +275,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, true);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -295,8 +284,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -306,8 +294,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, false);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -315,8 +303,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -326,8 +313,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, true);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, true, true);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -335,8 +322,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_config)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -346,8 +332,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, false, false);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, true, true);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -355,8 +341,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_config)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -366,8 +351,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_config, true, false);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, true, true);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -375,8 +360,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_config)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -395,8 +379,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 unregistered_
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -405,8 +388,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -420,14 +402,12 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         _useVaultAsset();
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(address(_asset), false);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
         bytes32 original = _queueDigest(id);
         a.payload = abi.encode(address(_asset), same_ ? false : true);
         _expectRejectedQueue(_pending(a, id));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
         assertEq(_queueDigest(id), original, "Duplicate preserves original payload and owner");
     }
@@ -448,8 +428,9 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
     function test_givenCommittedStateDrift_whenExecuted_reverts(address executor_) public {
         (address token, ) = _vaultAsset();
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(token, false);
-        uint64 id = _queue(a);
+        uint64 id = _queue(_fixtureAdmin, a);
         bytes32 expected = _hash(a);
+        vm.prank(_fixtureAdmin);
         _config.setAssetWithdrawAsShares(token, true);
         _makeReady(id);
         _executeReverts(id, executor_, _stateChanged(id, 0, a, expected));
@@ -461,7 +442,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
     ) public {
         (address token, ) = _vaultAsset();
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(token, true);
-        uint64 id = _queue(a);
+        uint64 id = _queue(_fixtureAdmin, a);
         _makeReady(id);
         _executeAndAssert(id, executor_);
     }
@@ -531,8 +512,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(_asset)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -545,8 +525,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         (address token, ) = _vaultAsset();
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(token, false);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -559,8 +538,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         (address token, ) = _vaultAsset();
         ITimelockBatchQueue.BatchAction memory a = _sharesAction(token, true);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -580,8 +558,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
                 address(vault)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -590,12 +567,15 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         address executor_
     ) public {
         (address token, address vault) = _vaultAsset();
+        vm.prank(_fixtureAdmin);
         _config.setAssetWithdrawAsShares(token, true);
         ITimelockBatchQueue.BatchAction[] memory actions = _pair(
             _capAction(address(_asset), 200000e9),
             _sharesAction(token, false)
         );
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(actions);
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetShareWithdrawalRequired(IERC20(token), true);
         _makeReady(id);
         _executeReverts(
@@ -620,8 +600,12 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
         _restore(checkpoint);
     }
 
-    function _queue(ITimelockBatchQueue.BatchAction memory a_) internal returns (uint64) {
+    function _queue(
+        address caller_,
+        ITimelockBatchQueue.BatchAction memory a_
+    ) internal returns (uint64) {
         (address asset, bool shares) = abi.decode(a_.payload, (address, bool));
+        vm.prank(caller_);
         return _timelock.queueSetAssetWithdrawAsShares(asset, shares);
     }
 }

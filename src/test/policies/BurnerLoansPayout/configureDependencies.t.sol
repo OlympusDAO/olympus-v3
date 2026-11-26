@@ -17,7 +17,7 @@ contract BurnerLoansPayoutConfigureDependenciesTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 state = _ledgerDigest();
         vm.prank(caller_);
         Keycode[] memory keys = _payout.configureDependencies();
@@ -36,9 +36,9 @@ contract BurnerLoansPayoutConfigureDependenciesTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         OlympusRoles next = new OlympusRoles(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(next));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(next));
         vm.prank(caller_);
         _payout.configureDependencies();
         assertEq(
@@ -54,7 +54,7 @@ contract BurnerLoansPayoutConfigureDependenciesTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         vm.mockCall(
             address(_kernel),
             abi.encodeCall(_kernel.getModuleForKeycode, (toKeycode("ROLES"))),
@@ -72,7 +72,7 @@ contract BurnerLoansPayoutConfigureDependenciesTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         vm.mockCall(
             address(_kernel),
             abi.encodeCall(_kernel.getModuleForKeycode, (toKeycode("TRSRY"))),
@@ -91,7 +91,7 @@ contract BurnerLoansPayoutConfigureDependenciesTest is BurnerLoansPayoutTest {
         uint8 major_
     ) public givenPendingBuckets {
         vm.assume(major_ != 1);
-        _setState(_payout, active_, true);
+        _setPolicyLifecycle(_payout, active_, true);
         vm.mockCall(
             address(_roles),
             abi.encodeWithSignature("VERSION()"),
@@ -117,6 +117,7 @@ contract BurnerLoansPayoutConfigureDependenciesTest is BurnerLoansPayoutTest {
             hex"deadbeef"
         );
         bytes32 state = _ledgerDigest();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(false);
         assertEq(_ledgerDigest(), state, "Cached authority does not alter custody");
     }

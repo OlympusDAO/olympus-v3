@@ -120,8 +120,8 @@ contract BurnerLoansPayoutConfigTimelockConstructorTest is BurnerLoansPayoutConf
         bool coreActive_,
         bool coreEnabled_
     ) public {
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, payoutActive_, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, payoutActive_, payoutEnabled_);
         bytes32 beforeFunds = _payoutDigest();
         address controller = _payout.configOperator();
         vm.prank(deployer_);

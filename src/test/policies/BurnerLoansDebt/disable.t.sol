@@ -29,7 +29,7 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
         vm.assume(caller_ != address(0));
         _grantRoleIfMissing(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
         if (overlap_) _grantRoleIfMissing(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
-        _setPolicyState(_debt, active_, true);
+        _setPolicyLifecycle(_debt, active_, true);
         vm.warp(123);
         vm.expectEmit(address(_debt));
         emit IEnabler.Disabled();
@@ -60,7 +60,7 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
         address caller_,
         bool active_
     ) public {
-        _setPolicyState(_debt, active_, false);
+        _setPolicyLifecycle(_debt, active_, false);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
         _debt.disable("");
@@ -71,6 +71,7 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
     function test_whenNonemptyDisableData_reverts(bytes memory data_) public {
         vm.assume(data_.length != 0);
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
+        vm.prank(_fixtureAdmin);
         _debt.disable(data_);
         assertTrue(_debt.isEnabled(), "Rejected payload cannot disable");
         _assertLoansPreserved();
@@ -78,7 +79,8 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBT-DISABLE-A04.
     function test_givenSettlementRoleRevoked_whenDisabled_thenSucceeds() public {
-        _rolesAdmin.revokeRole(_SETTLEMENT_ROLE, address(_debt));
+        _revokeFixtureRole(_SETTLEMENT_ROLE, address(_debt));
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         assertFalse(_debt.isEnabled(), "Pause independent of settlement authority");
         _assertLoansPreserved();
@@ -87,6 +89,7 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
     // Scenarios: BLDEBT-DISABLE-D01.
     function test_givenCoreKernelViewBroken_whenDisabled_thenNoDependencyRead() public {
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         assertFalse(_debt.isEnabled(), "Broken dependency cannot prevent pause");
         vm.clearMockedCalls();
@@ -95,6 +98,7 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBT-DISABLE-I03.
     function test_givenDisabled_whenNonemptyDisableData_thenStateWins(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
@@ -118,11 +122,12 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.expectEmit(address(_debt));
         emit IEnabler.Disabled();
         vm.expectEmit(address(_debt));
-        emit IEnablerV2.Transition(address(this), false, "", uint48(block.timestamp));
+        emit IEnablerV2.Transition(_fixtureAdmin, false, "", uint48(block.timestamp));
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         assertFalse(_debt.isEnabled(), "Core state cannot prevent pause");
         _assertLoansPreserved();
@@ -188,7 +193,7 @@ contract BurnerLoansDebtDisableTest is BurnerLoansDebtLifecycleTest {
     // Scenarios: BLDEBT-DISABLE-A01, BLDEBT-DISABLE-L02.
     function test_givenExistingAdmin_whenDisabled_thenExactTransition() public {
         test_givenEnabled_whenPermittedCallerDisables_thenExactTransition(
-            address(this),
+            _fixtureAdmin,
             false,
             true,
             true

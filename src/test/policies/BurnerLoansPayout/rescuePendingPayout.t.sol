@@ -39,7 +39,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
             "Rescue preview includes every pending bucket"
         );
         uint256 beforeTransfers = _token.transferCallCount();
-        vm.prank(operatorOnly_ ? _controller : address(this));
+        vm.prank(operatorOnly_ ? _controller : _fixtureAdmin);
         _payout.rescuePendingPayout(address(_token), recipient, _destination, amount_);
         // Raw token units. Consume K10, protocol20, seized30, then referral40.
         uint256 keeperRemaining = amount_ <= 10 ? 10 - amount_ : 0;
@@ -96,6 +96,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
             _destination,
             40
         );
+        vm.prank(_fixtureAdmin);
         _payout.rescuePendingPayout(address(_token), recipient, _destination, 100);
         _assertBuckets(address(_token), recipient, 0, 0, 0, 0);
         _assertReferral(address(_token), recipient, 0);
@@ -121,7 +122,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
         vm.expectRevert(reason);
         _payout.previewRescuePendingPayout(address(_token), recipient, _destination, amount_);
         vm.expectRevert(reason);
-        vm.prank(operatorOnly_ ? _controller : address(this));
+        vm.prank(operatorOnly_ ? _controller : _fixtureAdmin);
         _payout.rescuePendingPayout(address(_token), recipient, _destination, amount_);
         assertEq(
             _ledgerDigest(),
@@ -142,14 +143,17 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
         amount_ = bound(amount_, 1, pending_);
         _token.setTransferReverts(_keeper, true);
         _creditReferral(_token, 0, _keeper, pending_);
-        if (paused_) _payout.disable("");
-        if (retired_) _core.setPayout(address(_otherPayout));
+        _setPolicyLifecycle(_payout, true, !paused_);
+        if (retired_) {
+            vm.prank(_fixtureAdmin);
+            _core.setPayout(address(_otherPayout));
+        }
         assertEq(
             _payout.previewRescuePendingPayout(address(_token), _keeper, _destination, amount_),
             pending_,
             "Referral-only entitlement is eligible"
         );
-        vm.prank(operatorOnly_ ? _controller : address(this));
+        vm.prank(operatorOnly_ ? _controller : _fixtureAdmin);
         _payout.rescuePendingPayout(address(_token), _keeper, _destination, amount_);
         _assertReferral(address(_token), _keeper, pending_ - amount_);
         _assertBuckets(address(_token), _keeper, 0, 0, 0, pending_ - amount_);
@@ -184,6 +188,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
             18,
             "Only this keeper5 and referral13 are eligible"
         );
+        vm.prank(_fixtureAdmin);
         _payout.rescuePendingPayout(address(_token), _keeper, _destination, 6);
         _assertBuckets(address(_token), _keeper, 7, 10, 0, 36);
         _assertReferral(address(_token), _keeper, 12);
@@ -204,6 +209,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 _destination
             )
         );
+        vm.prank(_fixtureAdmin);
         _payout.rescuePendingPayout(address(_token), _keeper, _destination, 25);
         assertEq(
             _ledgerDigest(),
@@ -211,6 +217,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
             "Strict transfer failure restores referral bucket, aggregate and indexes"
         );
         _token.setTransferReverts(_destination, false);
+        vm.prank(_fixtureAdmin);
         _payout.rescuePendingPayout(address(_token), _keeper, _destination, 25);
         _assertReferral(address(_token), _keeper, 0);
         _assertBuckets(address(_token), _keeper, 0, 0, 0, 0);
@@ -264,11 +271,11 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
         givenPendingBuckets
     {
         address formerAdmin = address(0xabc1);
-        _rolesAdmin.grantRole(ADMIN_ROLE, formerAdmin);
-        _setState(_payout, false, true);
+        _grantFixtureRole(ADMIN_ROLE, formerAdmin);
+        _setPolicyLifecycle(_payout, false, true);
         OlympusRoles next = new OlympusRoles(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(next));
-        _rolesAdmin.grantRole(ADMIN_ROLE, _destination);
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(next));
+        _grantFixtureRole(ADMIN_ROLE, _destination);
         assertEq(address(_payout.ROLES()), address(_roles), "Inactive Payout retains old cache");
         assertTrue(_roles.hasRole(formerAdmin, ADMIN_ROLE), "Former ADMIN remains in old module");
         assertFalse(
@@ -283,7 +290,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
         vm.prank(formerAdmin);
         _payout.setConfigOperator(formerAdmin);
         assertEq(_ledgerDigest(), state, "Stale authority cannot redirect funds");
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
         assertEq(address(_payout.ROLES()), address(next), "Reactivation refreshes authority");
         vm.prank(_destination);
         _payout.rescuePendingPayout(address(_token), _keeper, _destination, 1);
@@ -317,6 +324,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
     // Scenarios: BLCU-PENDING-RESCUE-A01.
     function test_givenFormerController_whenRecovering_reverts() public {
         address former = _controller;
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
         test_whenUnauthorizedRecovery_reverts(former);
     }
@@ -1392,9 +1400,10 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
         bool coreEnabled_
     ) public givenPendingBuckets {
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(_otherPayout));
-        _setState(_payout, true, enabled_);
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         vm.prank(caller_);
         assertEq(
             _payout.previewRescuePendingPayout(address(_token), _keeper, _destination, 1),
@@ -1988,7 +1997,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2017,7 +2026,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 uint256(1),
                 uint256(0)
             ),
-            address(this),
+            _fixtureAdmin,
             address(_token),
             _keeper,
             _destination,
@@ -2036,7 +2045,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 uint256(1),
                 uint256(0)
             ),
-            address(this),
+            _fixtureAdmin,
             address(_token),
             _keeper,
             _destination,
@@ -2067,7 +2076,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 uint256(1),
                 uint256(0)
             ),
-            address(this),
+            _fixtureAdmin,
             address(_token),
             _keeper,
             _destination,
@@ -2098,7 +2107,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2119,7 +2128,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2134,7 +2143,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 uint256(1),
                 uint256(0)
             ),
-            address(this),
+            _fixtureAdmin,
             address(_token),
             address(_distributor),
             _destination,
@@ -2159,7 +2168,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2180,7 +2189,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2201,7 +2210,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2222,7 +2231,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2243,7 +2252,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2258,7 +2267,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 uint256(1),
                 uint256(0)
             ),
-            address(this),
+            _fixtureAdmin,
             address(_token),
             _treasury(),
             _destination,
@@ -2283,7 +2292,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2304,7 +2313,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2325,7 +2334,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2346,7 +2355,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2367,7 +2376,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2383,7 +2392,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 uint256(1),
                 uint256(0)
             ),
-            address(this),
+            _fixtureAdmin,
             address(_token),
             _treasury(),
             _destination,
@@ -2407,7 +2416,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2427,7 +2436,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2447,7 +2456,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2467,7 +2476,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2487,7 +2496,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2507,7 +2516,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2527,7 +2536,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2547,7 +2556,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2567,7 +2576,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2587,7 +2596,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 0
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2607,7 +2616,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 0,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2627,7 +2636,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2647,7 +2656,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
                 feeDebit: 10,
                 seizedDebit: 20
             }),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -2687,7 +2696,7 @@ contract BurnerLoansPayoutRescuePendingPayoutTest is BurnerLoansPayoutTest {
     ) public givenPendingBuckets {
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
 
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
         _expectInactivePayout();
         vm.prank(caller_);

@@ -22,8 +22,11 @@ import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionTest {
     function _admitVault(MockERC20 token_, address vault_, bool shares_) internal {
         _price.setPrice(address(token_), 1e18);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(IERC20(address(token_)), IERC4626(vault_), type(uint256).max, 0);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(address(token_)), 1, address(_core));
+        vm.prank(_fixtureAdmin);
         _config.addAsset(
             address(token_),
             100000e9,
@@ -274,9 +277,12 @@ abstract contract BurnerLoansCollateralVaultTest is BurnerLoansCollateralActionT
 
     function _configureCache() internal returns (PriceCache cache) {
         cache = new PriceCache(_kernel, 18, "USD");
-        _kernel.executeAction(Actions.ActivatePolicy, address(cache));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(cache));
+        vm.prank(_fixtureAdmin);
         cache.enable("");
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCache(address(cache));
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(60);
         cache.cachePrice(address(_ohm), address(_asset));
     }

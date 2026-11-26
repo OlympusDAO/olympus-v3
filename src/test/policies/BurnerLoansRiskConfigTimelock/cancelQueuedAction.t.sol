@@ -19,10 +19,11 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
         bool enabled_,
         uint48 now_
     ) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(EMERGENCY_ROLE, caller_);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_threeActions());
-        if (!enabled_) _timelock.disable("");
+        _setPolicyLifecycle(_timelock, true, enabled_);
         vm.warp(bound(now_, vm.getBlockTimestamp(), type(uint48).max));
         vm.mockCallRevert(address(_risk), abi.encodeWithSignature("kernel()"), hex"ff");
         vm.expectEmit(address(_timelock));
@@ -37,9 +38,10 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
     // Scenarios: BLRCT-CANCEL-A02.
     function test_whenUnauthorized_reverts(address caller_, bool enabled_) public {
         vm.assume(!_roles.hasRole(caller_, EMERGENCY_ROLE));
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         bytes32 queued = _queueDigest(id);
-        if (!enabled_) _timelock.disable("");
+        _setPolicyLifecycle(_timelock, true, enabled_);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _timelock.cancelQueuedAction(id);
@@ -48,14 +50,16 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
 
     // Scenarios: BLRCT-CANCEL-L01.
     function test_givenInactive_whenCancelled_reverts(bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
-        _setState(_timelock, false, enabled_);
+        _setPolicyLifecycle(_timelock, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
         assertEq(
             _timelock.pendingActionId(_key(_bpsAction(2500))),
@@ -76,11 +80,11 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
 
     function _assertProposerCancellation(bool revokeRole_) private {
         address proposer = makeAddr("proposer");
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, proposer);
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, proposer);
         ITimelockBatchQueue.BatchAction[] memory actions = _threeActions();
         vm.prank(proposer);
         uint64 id = _timelock.queueBatch(actions);
-        if (revokeRole_) _rolesAdmin.revokeRole(BURNER_LOANS_ADMIN_ROLE, proposer);
+        if (revokeRole_) _revokeFixtureRole(BURNER_LOANS_ADMIN_ROLE, proposer);
 
         vm.expectEmit(address(_timelock));
         emit ITimelockBatchQueue.TimelockActionCancelled(id, proposer);
@@ -106,6 +110,7 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
 
     // Scenarios: BLRCT-CANCEL-I02.
     function test_givenExecuted_whenCancelled_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         _timelock.executeQueuedAction(id);
@@ -115,13 +120,17 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
                 id
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
     }
 
     // Scenarios: BLRCT-CANCEL-I03.
     function test_givenCancelled_whenRepeated_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -129,14 +138,18 @@ contract BurnerLoansRiskConfigTimelockCancelQueuedActionTest is BurnerLoansRiskC
                 id
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
     }
 
     // Scenarios: BLRCT-CANCEL-P01.
     function test_givenExpired_whenCancelledAndRequeued() public {
+        vm.prank(_fixtureAdmin);
         uint64 old = _timelock.queueSetReferralFeeBps(2500);
         vm.warp(uint256(_timelock.getQueuedAction(old).expiresAt) + 1);
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(old);
+        vm.prank(_fixtureAdmin);
         uint64 fresh = _timelock.queueSetReferralFeeBps(2500);
         assertEq(fresh, old + 1, "new intent ID");
         assertEq(

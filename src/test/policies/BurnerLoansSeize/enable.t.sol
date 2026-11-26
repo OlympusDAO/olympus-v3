@@ -30,7 +30,7 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
     ) public {
         _setEnabledHistory(zeroHistory_);
         _mockUnavailableCoreViews();
-        _setPolicyState(_liquidation, active_, true);
+        _setPolicyLifecycle(_liquidation, active_, true);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _liquidation.enable("");
@@ -39,19 +39,21 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQ-ENABLE-L02.
     function test_givenInactive_whenEnabled_reverts() public {
-        _setPolicyState(_liquidation, false, false);
+        _setPolicyLifecycle(_liquidation, false, false);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_liquidation)
             )
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         _assertLoansPreserved();
     }
 
     // Scenarios: BLLIQ-ENABLE-A02.
     function test_givenDisabled_whenUnauthorizedEnables_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
@@ -63,6 +65,7 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
     // Scenarios: BLLIQ-ENABLE-A01.
     function test_givenDisabled_whenAdminEnables_thenExactTransition(address caller_) public {
         vm.assume(caller_ != address(0));
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         _grantRoleIfMissing(ADMIN_ROLE, caller_);
         vm.warp(456);
@@ -77,8 +80,10 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
     // Scenarios: BLLIQ-ENABLE-I01.
     function test_whenNonemptyEnableData_reverts(bytes memory data_) public {
         vm.assume(data_.length != 0);
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
+        vm.prank(_fixtureAdmin);
         _liquidation.enable(data_);
         assertFalse(_liquidation.isEnabled(), "Rejected payload cannot enable");
         _assertLoansPreserved();
@@ -97,6 +102,7 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
         address caller_
     ) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
@@ -106,6 +112,7 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQ-ENABLE-D04.
     function test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch() public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.mockCall(
             address(_core),
@@ -120,13 +127,16 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
                 address(0x1234)
             )
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         vm.clearMockedCalls();
         _assertLoansPreserved();
     }
 
     function test_givenInventoryKernelChanged_whenEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.mockCall(
             address(_inventory),
@@ -141,17 +151,20 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
                 address(other)
             )
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
     }
 
     // Scenarios: BLLIQ-ENABLE-L03.
     function test_givenSettlementRoleRevoked_whenEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
-        _rolesAdmin.revokeRole(_SETTLEMENT_ROLE, address(_liquidation));
+        _revokeFixtureRole(_SETTLEMENT_ROLE, address(_liquidation));
         uint48 last = _liquidation.lastTransitionAt();
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, _SETTLEMENT_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         assertFalse(_liquidation.isEnabled(), "Missing settlement authority blocks activation");
         assertEq(_liquidation.lastTransitionAt(), last, "Failed activation preserves history");
@@ -182,16 +195,19 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
         bool enabled_
     ) public {
         vm.assume(!active_ || !enabled_);
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
-        _setPolicyState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         uint48 last = _liquidation.lastTransitionAt();
         _expectDependencyUnavailable(_payout);
 
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         _assertActivationRejected(last);
-        _restorePolicyState(_payout, active_, enabled_);
-        _expectEnabledTransition(address(this));
+        _restorePolicyLifecycle(_payout, active_, enabled_);
+        _expectEnabledTransition(_fixtureAdmin);
 
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         _assertEnabled();
     }
@@ -212,17 +228,20 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
         bool enabled_
     ) public {
         vm.assume(!active_ || !enabled_);
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
 
         uint48 last = _liquidation.lastTransitionAt();
         _expectDependencyUnavailable(_core);
 
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         _assertActivationRejected(last);
-        _restorePolicyState(_core, active_, enabled_);
-        _expectEnabledTransition(address(this));
+        _restorePolicyLifecycle(_core, active_, enabled_);
+        _expectEnabledTransition(_fixtureAdmin);
 
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         _assertEnabled();
     }
@@ -244,17 +263,20 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
         bool enabled_
     ) public {
         vm.assume(!active_ || !enabled_);
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
-        _setPolicyState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         assertTrue(_core.isEnabled(), "Core remains enabled during independent Inventory drift");
         uint48 last = _liquidation.lastTransitionAt();
         _expectDependencyUnavailable(_inventory);
 
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         _assertActivationRejected(last);
-        _restorePolicyState(_inventory, active_, enabled_);
-        _expectEnabledTransition(address(this));
+        _restorePolicyLifecycle(_inventory, active_, enabled_);
+        _expectEnabledTransition(_fixtureAdmin);
 
+        vm.prank(_fixtureAdmin);
         _liquidation.enable("");
         _assertEnabled();
     }
@@ -293,7 +315,7 @@ contract BurnerLoansSeizeEnableTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQ-ENABLE-A01.
     function test_givenExistingAdmin_whenEnabled_thenExactTransition() public {
-        test_givenDisabled_whenAdminEnables_thenExactTransition(address(this));
+        test_givenDisabled_whenAdminEnables_thenExactTransition(_fixtureAdmin);
     }
 }
 

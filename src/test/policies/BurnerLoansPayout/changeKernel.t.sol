@@ -11,6 +11,7 @@ contract BurnerLoansPayoutChangeKernelTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         _assertPointerOnly(address(next), active_, enabled_);
     }
@@ -31,7 +32,7 @@ contract BurnerLoansPayoutChangeKernelTest is BurnerLoansPayoutTest {
         address next_
     ) public givenPendingBuckets {
         vm.assume(caller_ != address(_kernel));
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 state = _ledgerDigest();
         vm.expectRevert(
             abi.encodeWithSelector(KernelAdapter.KernelAdapter_OnlyKernel.selector, caller_)
@@ -43,7 +44,7 @@ contract BurnerLoansPayoutChangeKernelTest is BurnerLoansPayoutTest {
     }
 
     function _assertPointerOnly(address next_, bool active_, bool enabled_) internal {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 state = _ledgerDigest();
         address roles = address(_payout.ROLES());
         uint48 last = _payout.lastTransitionAt();

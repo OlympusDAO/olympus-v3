@@ -48,7 +48,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-A01.
     function test_whenUnauthorizedCaller_reverts(address caller_) public givenDisabled {
-        vm.assume(caller_ != address(this));
+        vm.assume(caller_ != _riskAdmin);
         uint48 beforeTime = _risk.lastTransitionAt();
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
@@ -59,15 +59,15 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-A02, BLRISK-REENABLE-L01.
     function test_givenAdmin_whenTransition(address caller_) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         _transition(caller_);
     }
 
     // Scenarios: BLRISK-REENABLE-L02.
     function test_givenAdminActive_whenAlreadyEnabled_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _risk.reEnable();
@@ -77,8 +77,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminInactive_whenAlreadyEnabled_reverts(
         address caller_
     ) public givenInactive {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _risk.reEnable();
@@ -88,8 +88,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminInactive_whenTransition_reverts(
         address caller_
     ) public givenDisabled givenInactive {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         _expectInactive();
         vm.prank(caller_);
         _risk.reEnable();
@@ -99,8 +99,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminOracleInterface_whenTransition_reverts(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_oracle),
             abi.encodeCall(IERC165.supportsInterface, (type(IBackingOracle).interfaceId)),
@@ -123,8 +123,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminCacheInterface_whenTransition_reverts(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         bytes4[3] memory interfaces = [
             type(IPriceCache).interfaceId,
             type(IEnabler).interfaceId,
@@ -151,8 +151,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminCacheKernel_whenTransition_reverts(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_cache),
             abi.encodeWithSignature("kernel()"),
@@ -177,8 +177,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminCache11_whenTransition(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_kernel),
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_cache)),
@@ -192,8 +192,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminCache10_whenTransition(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_kernel),
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_cache)),
@@ -207,8 +207,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminCache01_whenTransition(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_kernel),
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_cache)),
@@ -222,8 +222,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdminCache00_whenTransition(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_kernel),
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_cache)),
@@ -237,8 +237,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenAdmin_whenDependencyRestored(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         _cache.setInterfaceSupport(type(IEnabler).interfaceId, false);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -254,8 +254,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N01.
     function test_givenAdminNeverEnabled_whenReEnabled_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         BurnerLoansRisk fresh = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
@@ -264,7 +264,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             0,
             address(this)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(fresh));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(fresh));
         vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(caller_);
         fresh.reEnable();
@@ -277,12 +277,14 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         uint48 last_,
         uint48 now_
     ) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         uint32 grace = uint32(bound(grace_, 1, type(uint32).max));
         uint48 last = uint48(bound(last_, 1, type(uint48).max - grace));
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(grace);
         vm.warp(last);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.warp(bound(now_, last, uint256(last) + grace));
         _transition(caller_);
@@ -290,8 +292,9 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N02.
     function test_givenAdmin_whenAtDisable(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.warp(uint256(_risk.lastTransitionAt()) + 0);
         _transition(caller_);
@@ -299,8 +302,9 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N02.
     function test_givenAdmin_whenAtDeadline(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.warp(uint256(_risk.lastTransitionAt()) + _risk.gracePeriod());
         _transition(caller_);
@@ -311,8 +315,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         address caller_,
         uint48 now_
     ) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         uint48 deadline = _risk.lastTransitionAt() + _risk.gracePeriod();
         vm.warp(bound(now_, uint256(deadline) + 1, type(uint48).max));
         vm.expectRevert(
@@ -324,8 +328,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N03.
     function test_givenAdmin_whenAfterDeadline_reverts(address caller_) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         uint48 deadline = _risk.lastTransitionAt() + _risk.gracePeriod();
         vm.warp(uint256(deadline) + 1);
         vm.expectRevert(
@@ -337,8 +341,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N03.
     function test_givenAdmin_whenMaxTimestamp_reverts(address caller_) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         uint48 deadline = _risk.lastTransitionAt() + _risk.gracePeriod();
         vm.warp(type(uint48).max);
         vm.expectRevert(
@@ -354,12 +358,14 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         uint32 grace_,
         uint48 last_
     ) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         uint32 grace = uint32(bound(grace_, 1, type(uint32).max));
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(grace);
         uint48 last = uint48(bound(last_, uint256(type(uint48).max) - grace + 1, type(uint48).max));
         vm.warp(last);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -374,10 +380,11 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N04.
     function test_givenAdmin_whenOverflowStart_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         uint256 last = uint256(type(uint48).max) - _risk.gracePeriod() + 1;
         vm.warp(last);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -392,10 +399,11 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N04.
     function test_givenAdmin_whenOverflowEnd_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         uint256 last = type(uint48).max;
         vm.warp(last);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -410,15 +418,15 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-A02, BLRISK-REENABLE-L01.
     function test_givenLoanAdmin_whenTransition(address caller_) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         _transition(caller_);
     }
 
     // Scenarios: BLRISK-REENABLE-L02.
     function test_givenLoanAdminActive_whenAlreadyEnabled_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _risk.reEnable();
@@ -428,8 +436,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminInactive_whenAlreadyEnabled_reverts(
         address caller_
     ) public givenInactive {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _risk.reEnable();
@@ -439,8 +447,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminInactive_whenTransition_reverts(
         address caller_
     ) public givenDisabled givenInactive {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         _expectInactive();
         vm.prank(caller_);
         _risk.reEnable();
@@ -450,8 +458,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminOracleInterface_whenTransition_reverts(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_oracle),
             abi.encodeCall(IERC165.supportsInterface, (type(IBackingOracle).interfaceId)),
@@ -474,8 +482,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminCacheInterface_whenTransition_reverts(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         bytes4[3] memory interfaces = [
             type(IPriceCache).interfaceId,
             type(IEnabler).interfaceId,
@@ -502,8 +510,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminCacheKernel_whenTransition_reverts(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_cache),
             abi.encodeWithSignature("kernel()"),
@@ -528,8 +536,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminCache11_whenTransition(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_kernel),
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_cache)),
@@ -543,8 +551,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminCache10_whenTransition(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_kernel),
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_cache)),
@@ -558,8 +566,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminCache01_whenTransition(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_kernel),
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_cache)),
@@ -573,8 +581,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdminCache00_whenTransition(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.mockCall(
             address(_kernel),
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_cache)),
@@ -588,8 +596,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenLoanAdmin_whenDependencyRestored(
         address caller_
     ) public givenCache givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         _cache.setInterfaceSupport(type(IEnabler).interfaceId, false);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -605,8 +613,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N01.
     function test_givenLoanAdminNeverEnabled_whenReEnabled_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         BurnerLoansRisk fresh = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
@@ -615,7 +623,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             0,
             address(this)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(fresh));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(fresh));
         vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(caller_);
         fresh.reEnable();
@@ -628,12 +636,14 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         uint48 last_,
         uint48 now_
     ) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         uint32 grace = uint32(bound(grace_, 1, type(uint32).max));
         uint48 last = uint48(bound(last_, 1, type(uint48).max - grace));
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(grace);
         vm.warp(last);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.warp(bound(now_, last, uint256(last) + grace));
         _transition(caller_);
@@ -641,8 +651,9 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N02.
     function test_givenLoanAdmin_whenAtDisable(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.warp(uint256(_risk.lastTransitionAt()) + 0);
         _transition(caller_);
@@ -650,8 +661,9 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N02.
     function test_givenLoanAdmin_whenAtDeadline(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.warp(uint256(_risk.lastTransitionAt()) + _risk.gracePeriod());
         _transition(caller_);
@@ -662,8 +674,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         address caller_,
         uint48 now_
     ) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         uint48 deadline = _risk.lastTransitionAt() + _risk.gracePeriod();
         vm.warp(bound(now_, uint256(deadline) + 1, type(uint48).max));
         vm.expectRevert(
@@ -675,8 +687,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N03.
     function test_givenLoanAdmin_whenAfterDeadline_reverts(address caller_) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         uint48 deadline = _risk.lastTransitionAt() + _risk.gracePeriod();
         vm.warp(uint256(deadline) + 1);
         vm.expectRevert(
@@ -688,8 +700,8 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N03.
     function test_givenLoanAdmin_whenMaxTimestamp_reverts(address caller_) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         uint48 deadline = _risk.lastTransitionAt() + _risk.gracePeriod();
         vm.warp(type(uint48).max);
         vm.expectRevert(
@@ -705,12 +717,14 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         uint32 grace_,
         uint48 last_
     ) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         uint32 grace = uint32(bound(grace_, 1, type(uint32).max));
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(grace);
         uint48 last = uint48(bound(last_, uint256(type(uint48).max) - grace + 1, type(uint48).max));
         vm.warp(last);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -725,10 +739,11 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N04.
     function test_givenLoanAdmin_whenOverflowStart_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         uint256 last = uint256(type(uint48).max) - _risk.gracePeriod() + 1;
         vm.warp(last);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -743,10 +758,11 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-N04.
     function test_givenLoanAdmin_whenOverflowEnd_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         uint256 last = type(uint48).max;
         vm.warp(last);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -763,6 +779,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     function test_givenMalformedCoreKernel_whenActivated_revertsThenRestored(
         bytes memory data_
     ) public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.assume(data_.length != 32);
         vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), data_);
@@ -773,11 +790,12 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     // Scenarios: BLRISK-REENABLE-K03.
     function test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored() public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         bytes[6] memory responses = [
             new bytes(0),
@@ -799,12 +817,14 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             );
         }
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     // Scenarios: BLRISK-REENABLE-K01.
     function test_givenDifferentCoreKernel_whenActivated_revertsThenRestored() public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
+        vm.prank(_riskKernelExecutor);
         address otherKernel = address(new Kernel());
         vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), abi.encode(otherKernel));
         _expectCoreRejected(
@@ -816,13 +836,14 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     // Scenarios: BLRISK-REENABLE-K02.
     function test_givenRevertingCoreKernel_whenActivated_revertsThenRestored(
         bytes memory data_
     ) public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.mockCallRevert(address(this), abi.encodeWithSignature("kernel()"), data_);
         _expectCoreRejected(
@@ -832,11 +853,12 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     // Scenarios: BLRISK-REENABLE-I20.
     function test_givenMissingCoreInterface_whenActivated_revertsThenRestored() public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         bytes memory probe = abi.encodeCall(
             IERC165.supportsInterface,
@@ -851,11 +873,12 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     // Scenarios: BLRISK-REENABLE-I21.
     function test_givenRevertingCoreInterface_whenActivated_revertsThenRestored() public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         bytes memory probe = abi.encodeCall(
             IERC165.supportsInterface,
@@ -873,11 +896,12 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     // Scenarios: BLRISK-REENABLE-I22.
     function test_givenMalformedCoreInterface_whenActivated_revertsThenRestored() public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         bytes memory probe = abi.encodeCall(
             IERC165.supportsInterface,
@@ -891,7 +915,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     function _expectCoreRejected(bytes memory reason_) private {
@@ -899,6 +923,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         uint48 transition = _risk.lastTransitionAt();
         vm.recordLogs();
         vm.expectRevert(reason_);
+        vm.prank(_riskAdmin);
         _risk.reEnable();
         assertFalse(_risk.isEnabled(), "Rejected activation preserves paused state");
         assertEq(_risk.lastTransitionAt(), transition, "Rejected activation preserves history");
@@ -916,7 +941,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
         bool enabled_
     ) public givenDisabled {
         _mockCoreReadiness(active_, enabled_);
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     // Scenarios: BLRISK-REENABLE-K05.
@@ -932,15 +957,17 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-REENABLE-D06.
     function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
         vm.assume(!active_ || !enabled_);
+        vm.prank(_riskAdmin);
         _risk.disable("");
         _oracle.setEnabled(enabled_);
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        if (!active_) _executeRiskKernelAction(Actions.DeactivatePolicy, address(_oracle));
         vm.expectRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_oracle)
             )
         );
+        vm.prank(_riskAdmin);
         _risk.reEnable();
     }
 
@@ -956,6 +983,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-REENABLE-D08.
     function test_givenBackingForeignKernel_whenAdmitted_reverts() public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.mockCall(
             address(_oracle),
@@ -970,11 +998,13 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
                 address(0xBAD)
             )
         );
+        vm.prank(_riskAdmin);
         _risk.reEnable();
     }
 
     // Scenarios: BLRISK-REENABLE-D09.
     function test_givenBackingMalformedKernel_whenAdmitted_reverts() public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.mockCall(
             address(_oracle),
@@ -987,11 +1017,13 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
                 address(_oracle)
             )
         );
+        vm.prank(_riskAdmin);
         _risk.reEnable();
     }
 
     // Scenarios: BLRISK-REENABLE-D10.
     function test_givenBackingMissingEnabler_whenAdmitted_reverts() public {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         vm.mockCall(
             address(_oracle),
@@ -1004,6 +1036,7 @@ contract BurnerLoansRiskReEnableTest is BurnerLoansRiskTest {
                 address(_oracle)
             )
         );
+        vm.prank(_riskAdmin);
         _risk.reEnable();
     }
 }

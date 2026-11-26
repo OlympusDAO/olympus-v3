@@ -46,7 +46,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
         address candidate_
     ) public {
         _grantAdmin(caller_);
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -93,7 +93,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
         bytes32 ledger = _ledger();
         address previous = _core.risk();
         address operatorBefore = _next.configOperator();
-        if (!enabled_) _core.disable("");
+        _setPolicyLifecycle(_core, true, enabled_);
         vm.expectEmit(false, false, false, true, address(_core));
         emit IBurnerLoansCore.RiskSet(address(_next));
         vm.prank(caller_);
@@ -115,8 +115,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
     ) public {
         vm.assume(!active_ || !enabled_);
         _grantAdmin(caller_);
-        if (!enabled_) _next.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_next));
+        _setPolicyLifecycle(_next, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -163,6 +162,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-RISK-I03.
     function test_givenWrongKernel_whenSelected_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _next.changeKernel(other);
@@ -652,7 +652,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         _next.setCore(address(0));
         _next.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_next));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_next));
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         vm.expectRevert(
@@ -677,13 +677,14 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
         bool enabled_
     ) public {
         _next.setConfigOperator(operator_);
-        if (!enabled_) _core.disable("");
+        _setPolicyLifecycle(_core, true, enabled_);
         bytes32 ledger = _ledger();
         address config = _core.configOperator();
         address inventoryOperator = _inventory.configOperator();
         address payoutOperator = _payout.configOperator();
         vm.expectEmit(false, false, false, true, address(_core));
         emit IBurnerLoansCore.RiskSet(address(_next));
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(_next));
         assertEq(_core.risk(), address(_next), "Risk selection is independent of its controller");
         assertEq(_next.configOperator(), operator_, "No controller synchronization");
@@ -699,6 +700,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
         vm.mockCallRevert(address(_next), abi.encodeWithSignature("configurator()"), hex"01");
         vm.expectCall(address(_next), abi.encodeWithSignature("configOperator()"), uint64(0));
         vm.expectCall(address(_next), abi.encodeWithSignature("configurator()"), uint64(0));
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(_next));
         assertEq(_core.risk(), address(_next), "No Risk authority getter is consumed");
     }
@@ -709,6 +711,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
         vm.mockCall(address(_next), abi.encodeWithSignature("configurator()"), hex"01");
         vm.expectCall(address(_next), abi.encodeWithSignature("configOperator()"), uint64(0));
         vm.expectCall(address(_next), abi.encodeWithSignature("configurator()"), uint64(0));
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(_next));
         assertEq(_core.risk(), address(_next), "No Risk authority getter is consumed");
     }
@@ -720,6 +723,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
             false
         );
         address before = _core.risk();
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),
@@ -751,6 +755,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setRisk(address(_next));
         }
     }
@@ -766,6 +771,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setRisk(address(_next));
         }
     }
@@ -783,6 +789,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(_next));
     }
 
@@ -802,6 +809,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setRisk(address(_next));
         }
     }
@@ -819,6 +827,7 @@ contract BurnerLoansCoreSetRiskTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(_next));
     }
 

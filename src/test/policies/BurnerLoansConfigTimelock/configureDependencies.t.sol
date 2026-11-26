@@ -15,6 +15,7 @@ contract BurnerLoansConfigTimelockConfigureDependenciesTest is BurnerLoansConfig
         address caller_,
         uint8 major_
     ) public {
+        vm.prank(_fixtureExecutor);
         Kernel empty = new Kernel();
         vm.prank(address(_kernel));
         _timelock.changeKernel(empty);
@@ -56,7 +57,7 @@ contract BurnerLoansConfigTimelockConfigureDependenciesTest is BurnerLoansConfig
         vm.prank(caller_);
         _timelock.configureDependencies();
         OlympusRoles replacement = new OlympusRoles(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(replacement));
         vm.prank(caller_);
         _timelock.configureDependencies();
         assertEq(address(_timelock.ROLES()), address(replacement), "Replacement cache refreshed");

@@ -40,6 +40,7 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool otherFlag_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(otherFlag_);
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         bytes32 state = _ledgerDigest();
@@ -59,7 +60,9 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool otherFlag_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(otherFlag_);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         bytes32 state = _ledgerDigest();
@@ -81,11 +84,13 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool coreEnabled_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
+        vm.prank(_fixtureAdmin);
         _distributor.disable("");
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
-        _setState(_payout, true, enabled_);
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         bytes32 state = _ledgerDigest();
         vm.mockCallRevert(
             address(_distributor),
@@ -107,6 +112,7 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool overlap_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _distributor.disable("");
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         bytes32 state = _ledgerDigest();
@@ -157,8 +163,9 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool old_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(old_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_distributor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_distributor));
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         _expectFlagRejected(
             abi.encodeWithSelector(
@@ -178,7 +185,9 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool old_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(old_);
+        vm.prank(_fixtureAdmin);
         _distributor.disable("");
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         _expectFlagRejected(
@@ -199,7 +208,9 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool old_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(old_);
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _distributor.changeKernel(next);
@@ -223,7 +234,9 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool overlap_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _distributor.changeKernel(next);
@@ -243,9 +256,11 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
         bool enabled_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(address(_config));
-        _setState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("kernel()"), hex"deadbeef");
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("isEnabled()"), hex"deadbeef");
         bytes32 state = _ledgerDigest();
@@ -418,10 +433,12 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
 
     function test_givenValidYieldRoute_whenQueried_thenDirectRecipient(address caller_) public {
         _useDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
         bytes32 state = _ledgerDigest();
         vm.prank(caller_);
         assertEq(_payout.yieldRecipient(), address(_distributor), "Yield bypasses Payout custody");
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(false);
         vm.prank(caller_);
         assertEq(_payout.yieldRecipient(), _treasury(), "Disabled routing resolves live Treasury");
@@ -429,13 +446,14 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
     }
 
     function test_givenPayoutPaused_whenYieldRecipientQueried_reverts() public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
         _payout.yieldRecipient();
     }
 
     function test_givenPayoutInactive_whenYieldRecipientQueried_reverts() public {
-        _setState(_payout, false, true);
+        _setPolicyLifecycle(_payout, false, true);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -448,10 +466,12 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
     // Scenarios: BLCU-YIELD-P03, BLCU-YIELD-P05.
     function test_whenSameFlagValue_thenRoutingSlotNotWritten(bool value_) public {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(value_);
         uint256 slot = _flagSlot("sendYieldToDistributor()");
         vm.record();
         vm.recordLogs();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(value_);
         _assertNoWriteToFlag(slot);
         assertEq(vm.getRecordedLogs().length, 0, "Same value emits no setter event");
@@ -466,7 +486,7 @@ contract BurnerLoansPayoutSetSendYieldToDistributorTest is BurnerLoansPayoutTest
     ) public givenPendingBuckets {
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
 
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
 
         _expectInactivePayout();

@@ -7,13 +7,11 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {Vm} from "@forge-std-1.16.2/Vm.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 
 // Libraries
-import {Actions} from "src/Kernel.sol";
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
 
 // Contracts
@@ -35,8 +33,7 @@ contract BurnerLoansCoreConstructorTest is BurnerLoansCoreTest {
     ) public {
         decimals_ = uint8(bound(decimals_, 0, 36));
         vm.mockCall(address(_ohm), abi.encodeWithSignature("decimals()"), abi.encode(decimals_));
-        if (!enabled_) IEnabler(address(_depositManager)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_depositManager));
+        _setPolicyLifecycle(_depositManager, active_, enabled_);
         vm.recordLogs();
         vm.prank(deployer_);
         BurnerLoansCore fresh = new BurnerLoansCore(

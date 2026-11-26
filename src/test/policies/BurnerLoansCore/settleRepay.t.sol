@@ -25,7 +25,7 @@ contract BurnerLoansCoreSettleRepayTest is BurnerLoansCoreTest {
     function setUp() public override {
         super.setUp();
         _actor = _service();
-        _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(BL_DEBT_POLICY_ROLE, address(_actor));
     }
 
     // Scenarios: BLCORE-SETTLE-REPAY-A02.
@@ -43,7 +43,7 @@ contract BurnerLoansCoreSettleRepayTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-SETTLE-REPAY-A03.
     function test_givenOnlySiblingRole_whenSettled_reverts() public {
         CoreService sibling = _service();
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(sibling));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(sibling));
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
         );
@@ -53,6 +53,7 @@ contract BurnerLoansCoreSettleRepayTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-REPAY-A04.
     function test_givenWrongKernelCaller_whenSettled() public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _actor.changeKernel(other);
@@ -67,6 +68,7 @@ contract BurnerLoansCoreSettleRepayTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-REPAY-L01.
     function test_givenCoreDisabled_whenSettled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -77,7 +79,7 @@ contract BurnerLoansCoreSettleRepayTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-REPAY-L02, BLCORE-SETTLE-REPAY-L03.
     function test_givenCoreInactive_whenSettled_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -92,7 +94,7 @@ contract BurnerLoansCoreSettleRepayTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-REPAY-D01.
     function test_givenCallerInactive_whenSettled() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_actor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_actor));
         test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer(false, address(_core));
     }
 
@@ -192,9 +194,12 @@ contract BurnerLoansCoreSettleRepayTest is BurnerLoansCoreTest {
         principal_ = uint128(bound(principal_, 1, type(uint128).max));
         amount_ = uint128(bound(amount_, 1, principal_));
         _deposit(1);
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), type(uint128).max);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(type(uint128).max);
         _borrow(principal_);
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), originations_);
         vm.prank(_recipient);
         _ohm.approve(address(_core), type(uint256).max);

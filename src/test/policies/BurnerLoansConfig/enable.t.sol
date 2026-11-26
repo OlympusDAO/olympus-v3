@@ -56,7 +56,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
     ) public givenConfigDisabled {
         vm.assume(data_.length > 0 && data_.length <= 256);
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, (data_)),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );
@@ -67,7 +67,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
         address caller_,
         bool active_
     ) public {
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _mutationReverts(
             caller_,
             abi.encodeCall(_config.enable, ("")),
@@ -77,9 +77,9 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ENABLE-L02.
     function test_givenInactivePolicy_whenActivated_reverts() public givenConfigDisabled {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             _inactiveError(address(_config))
         );
@@ -87,9 +87,9 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ENABLE-D05.
     function test_givenCoreInactiveEnabled_whenActivated_reverts() public givenConfigDisabled {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -100,9 +100,10 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ENABLE-D07.
     function test_givenCoreActiveDisabled_whenActivated_reverts() public givenConfigDisabled {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -113,10 +114,11 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ENABLE-D09.
     function test_givenCoreInactiveDisabled_whenActivated_reverts() public givenConfigDisabled {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -133,7 +135,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
             abi.encodeWithSignature("MockBeforeEnableReverted()")
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
@@ -146,7 +148,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
     function test_givenMalformedEnabled_whenActivated_reverts() public givenConfigDisabled {
         vm.mockCall(address(_core), abi.encodeWithSignature("isEnabled()"), hex"01");
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
@@ -163,7 +165,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
             abi.encode(address(0xBAD))
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_KernelMismatch.selector,
@@ -185,7 +187,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
             abi.encode(false)
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 IBurnerLoansConfig.BurnerLoansConfig_InvalidCore.selector,
@@ -202,7 +204,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
             abi.encode(false)
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 IBurnerLoansConfig.BurnerLoansConfig_InvalidCore.selector,
@@ -215,7 +217,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
     function test_givenDifferentOhm_whenActivated_reverts() public givenConfigDisabled {
         vm.mockCall(address(_core), abi.encodeWithSignature("ohm()"), abi.encode(address(_asset)));
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 IBurnerLoansConfig.BurnerLoansConfig_InvalidCore.selector,
@@ -232,7 +234,7 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
             abi.encode(address(0xBAD))
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, ("")),
             abi.encodeWithSelector(
                 IBurnerLoansConfig.BurnerLoansConfig_InvalidCore.selector,
@@ -246,13 +248,14 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
         bool active_,
         bool enabled_
     ) public givenConfigDisabled {
-        _setPolicyState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("inventory()"), hex"deadbeef");
         bytes32 beforeEconomics = _economicDigest();
         vm.expectEmit(address(_config));
         emit IEnabler.Enabled();
         vm.expectEmit(address(_config));
-        emit IEnablerV2.Transition(address(this), true, "", uint48(vm.getBlockTimestamp()));
+        emit IEnablerV2.Transition(_fixtureAdmin, true, "", uint48(vm.getBlockTimestamp()));
+        vm.prank(_fixtureAdmin);
         _config.enable("");
         assertEq(_config.lastTransitionAt(), vm.getBlockTimestamp(), "Exact enable timestamp");
         assertTrue(_config.isEnabled(), "Inventory is not Config's direct dependency");
@@ -271,22 +274,22 @@ contract BurnerLoansConfigEnableTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-ENABLE-I01.
     function test_whenNonemptyPayloadBoundariesSeeded_reverts() public givenConfigDisabled {
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, (hex"00")),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, (hex"01")),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, (abi.encode(uint256(0)))),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.enable, (new bytes(256))),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );

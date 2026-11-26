@@ -28,7 +28,7 @@ contract BurnerLoansSeizeDisableTest is BurnerLoansSeizeLifecycleTest {
         bool active_
     ) public {
         _grantDisableCaller(caller_, emergency_, overlap_);
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_liquidation));
         vm.warp(123);
         vm.expectEmit(address(_liquidation));
         emit IEnabler.Disabled();
@@ -63,7 +63,7 @@ contract BurnerLoansSeizeDisableTest is BurnerLoansSeizeLifecycleTest {
         address caller_,
         bool active_
     ) public {
-        _setPolicyState(_liquidation, active_, false);
+        _setPolicyLifecycle(_liquidation, active_, false);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
         _liquidation.disable("");
@@ -88,7 +88,8 @@ contract BurnerLoansSeizeDisableTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQ-DISABLE-A04.
     function test_givenSettlementRoleRevoked_whenDisabled_thenSucceeds() public {
-        _rolesAdmin.revokeRole(_SETTLEMENT_ROLE, address(_liquidation));
+        _revokeFixtureRole(_SETTLEMENT_ROLE, address(_liquidation));
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         assertFalse(_liquidation.isEnabled(), "Pause independent of settlement authority");
         _assertLoansPreserved();
@@ -97,6 +98,7 @@ contract BurnerLoansSeizeDisableTest is BurnerLoansSeizeLifecycleTest {
     // Scenarios: BLLIQ-DISABLE-D01.
     function test_givenCoreKernelViewBroken_whenDisabled_thenNoDependencyRead() public {
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         assertFalse(_liquidation.isEnabled(), "Broken dependency cannot prevent pause");
         vm.clearMockedCalls();
@@ -105,6 +107,7 @@ contract BurnerLoansSeizeDisableTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQ-DISABLE-I03.
     function test_givenDisabled_whenNonemptyDisableData_thenStateWins(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
@@ -128,11 +131,12 @@ contract BurnerLoansSeizeDisableTest is BurnerLoansSeizeLifecycleTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.expectEmit(address(_liquidation));
         emit IEnabler.Disabled();
         vm.expectEmit(address(_liquidation));
-        emit IEnablerV2.Transition(address(this), false, "", uint48(block.timestamp));
+        emit IEnablerV2.Transition(_fixtureAdmin, false, "", uint48(block.timestamp));
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         assertFalse(_liquidation.isEnabled(), "Core state cannot prevent pause");
         _assertLoansPreserved();
@@ -198,6 +202,7 @@ contract BurnerLoansSeizeDisableTest is BurnerLoansSeizeLifecycleTest {
             abi.encodeWithSignature("kernel()"),
             abi.encode(address(0x1234))
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         assertFalse(_liquidation.isEnabled(), "Kernel drift cannot prevent local pause");
         vm.clearMockedCalls();

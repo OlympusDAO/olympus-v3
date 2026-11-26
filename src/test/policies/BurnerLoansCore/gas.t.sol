@@ -53,21 +53,22 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     address internal _provider = address(0xBEEF);
     address internal _keeper = address(0xCEEF);
     address internal _heart;
+    address internal _mintApprovalAdmin = makeAddr("gasMintApprovalAdmin");
 
     function setUp() public override {
         super.setUp();
         _price.setPrice(address(_ohm), 10e18);
         _treasury = address(_kernel.getModuleForKeycode(toKeycode("TRSRY")));
         _mintr = OlympusMinter(address(_kernel.getModuleForKeycode(toKeycode("MINTR"))));
-        _rolesAdmin.grantRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, _provider);
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, address(this));
+        _grantFixtureRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, _provider);
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, _mintApprovalAdmin);
         _claimer = new BurnerLoansYieldClaimerTask(_kernel, address(_core), 2_000_000);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_claimer));
-        _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_claimer));
+        _grantFixtureRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
+        vm.prank(_fixtureAdmin);
         _claimer.enable("");
 
         _heart = makeAddr("gasHeart");
-        vm.startPrank(address(this));
         // Measure completed batches even with unoptimized local bytecode. The scanGas suite
         // separately tests failure and recovery under a ten-million-gas task budget.
         _seizer = new BurnerLoansSeizerTask(
@@ -78,9 +79,10 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
             _MAX_BORROWERS_TO_SEIZE,
             100_000_000
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(_seizer));
-        _rolesAdmin.grantRole(HEART_ROLE, _heart);
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(_seizer));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_seizer));
+        _grantFixtureRole(HEART_ROLE, _heart);
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, address(_seizer));
+        vm.startPrank(_fixtureAdmin);
         _seizer.addAsset(address(_asset));
         _seizer.enable("");
         vm.stopPrank();
@@ -460,7 +462,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     function test_gasSnapshot_admin_setGlobalDebtCap() public {
         uint128 newCap = 2_000_000e9;
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansInventory.setGlobalDebtCap");
         _inventory.setGlobalDebtCap(newCap);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -470,14 +472,10 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         _assertGasRecorded(gasUsed);
     }
 
-    // setBackingOracle
-    // given Burner Loans is enabled
-    //  when governance changes the backing oracle
-    //   then it records the direct address(this) gas cost
     function test_gasSnapshot_admin_setBackingOracle() public {
         MockBackingOracle newOracle = new MockBackingOracle(_kernel, 12e18);
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansRisk.setBackingOracle");
         _risk.setBackingOracle(address(newOracle));
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -493,7 +491,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     //   then it records the no-op reconciliation gas cost
     function test_gasSnapshot_syncMintApproval_noop() public {
         vm.recordLogs();
-        vm.startPrank(address(this));
+        vm.startPrank(_mintApprovalAdmin);
         vm.startSnapshotGas("BurnerLoansInventory.syncMintApproval.noop");
         uint256 approval = _inventory.syncMintApproval();
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -508,12 +506,8 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         _assertGasRecorded(gasUsed);
     }
 
-    // syncMintApproval
-    // given a full-cap position has defaulted and its restored approval is subsequently reduced
-    //  when the address(this) reconciles approval
-    //   then it records the capacity-restoration gas cost
     function test_gasSnapshot_syncMintApproval_restoreAfterDefault() public {
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(_DEBT);
         _makeUnhealthy(_borrower);
         vm.prank(_keeper);
@@ -522,7 +516,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         _mintr.decreaseMintApproval(address(_inventory), _DEBT);
 
         vm.recordLogs();
-        vm.startPrank(address(this));
+        vm.startPrank(_mintApprovalAdmin);
         vm.startSnapshotGas("BurnerLoansInventory.syncMintApproval.restoreAfterDefault");
         uint256 approval = _inventory.syncMintApproval();
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -637,7 +631,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         _configurePrice(address(asset), 1e18);
         _configureDepositManagerAsset(address(asset));
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansConfig.admin.addAsset");
         _config.addAsset(
             address(asset),
@@ -671,9 +665,10 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
             _kernel,
             IBurnerLoansCore(address(freshFacility))
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(freshFacility));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(freshFacility));
+        vm.prank(_fixtureAdmin);
         freshFacility.setConfigOperator(address(outgoing));
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
 
         vm.startSnapshotGas("BurnerLoansCore.setConfigOperator.zeroAssets");
         freshFacility.setConfigOperator(address(replacement));
@@ -691,8 +686,9 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     function test_gasSnapshot_setConfigOperator_oneAsset() public {
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansCore.setConfigOperator.oneAsset");
         _core.setConfigOperator(address(replacement));
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -715,8 +711,9 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         uint32 secondMarketId = _createDuplicateUsdsMarketForTest();
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansCore.setConfigOperator.oneAssetUnregisteredMarket");
         _core.setConfigOperator(address(replacement));
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -740,8 +737,9 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         address thirdAsset = address(_addDirectAssetForTest());
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansCore.setConfigOperator.threeAssets");
         _core.setConfigOperator(address(replacement));
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -772,7 +770,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     function test_gasSnapshot_config_setAssetDebtCap() public {
         uint128 newCap = 200_000e9;
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansConfig.admin.setAssetDebtCap");
         _config.setAssetDebtCap(address(_asset), newCap);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -790,7 +788,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         IBurnerLoansRisk.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
         config.maxLtvBps = 9_500;
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansConfig.admin.setAssetRiskConfig");
         _config.setAssetRiskConfig(address(_asset), config);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -808,7 +806,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         IBurnerLoansRisk.AssetFeeConfig memory config = _defaultAssetFeeConfig();
         config.baseFeeBps = 30;
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansConfig.admin.setAssetFeeConfig");
         _config.setAssetFeeConfig(address(_asset), config);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -823,7 +821,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     //  when governance disables originations
     //   then it records the end-to-end config and FLOAN update gas cost
     function test_gasSnapshot_config_disableOriginations() public {
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansConfig.admin.disableOriginations");
         _config.setAssetOriginationsEnabled(address(_asset), false);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -841,10 +839,10 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     //  when governance re-enables originations
     //   then it records dependency validation and the FLOAN update gas cost
     function test_gasSnapshot_config_enableOriginations() public {
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansConfig.admin.enableOriginations");
         _config.setAssetOriginationsEnabled(address(_asset), true);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -857,14 +855,10 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         _assertGasRecorded(gasUsed);
     }
 
-    // queueBatch
-    // given the config timelock is authorized and enabled
-    //  when the Burner Loans address(this) queues two related configuration actions
-    //   then it records validation and storage of the complete batch
     function test_gasSnapshot_timelock_queueBatch() public {
         ITimelockBatchQueue.BatchAction[] memory actions = _configBatch();
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         vm.startSnapshotGas("BurnerLoansConfigTimelock.queueBatch.twoActions");
         uint64 actionId = _timelock.queueBatch(actions);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -880,7 +874,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     //   then it records the complete validation, FLOAN updates, and queue cleanup gas cost
     function test_gasSnapshot_timelock_executeBatch() public {
         ITimelockBatchQueue.BatchAction[] memory actions = _configBatch();
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         uint64 actionId = _timelock.queueBatch(actions);
         vm.warp(block.timestamp + _timelock.timelockDelay());
 
@@ -925,7 +919,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
         vault = new MockERC4626(ERC20(address(asset)), "Gas Vault", "gVAULT");
         _configurePrice(address(asset), 1e18);
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureAdmin);
         _depositManager.addAsset(
             IERC20(address(asset)),
             IERC4626(address(vault)),
@@ -1062,7 +1056,9 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
     }
 
     function _configureDepositManagerAsset(address token_) internal {
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(IERC20(token_), IERC4626(address(0)), type(uint256).max, 0);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(
             IERC20(token_),
             LoanParameters._DEPOSIT_PERIOD,
@@ -1092,7 +1088,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansConfigTimelockTest {
 
     function _activateReplacementConfigurator() internal returns (BurnerLoansConfig replacement) {
         replacement = new BurnerLoansConfig(_kernel, IBurnerLoansCore(address(_core)));
-        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(replacement));
     }
 
     function _addDirectAssetForTest() internal returns (MockERC20 token) {

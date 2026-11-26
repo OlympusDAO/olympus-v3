@@ -16,7 +16,7 @@ contract BurnerLoansSeizeRequestPermissionsTest is BurnerLoansSeizeLifecycleTest
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_liquidation, active_, enabled_);
+        _setPolicyLifecycle(_liquidation, active_, enabled_);
         vm.prank(caller_);
         Permissions[] memory permissions = _liquidation.requestPermissions();
         assertEq(permissions.length, 0, "Action needs no module writes");

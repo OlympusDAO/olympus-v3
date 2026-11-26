@@ -69,7 +69,7 @@ abstract contract BurnerLoansCollateralTokenCallbackTest is BurnerLoansCollatera
     }
 
     function _armCoreConfiguration(address invoker_) internal {
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_token));
+        _grantFixtureRole(ADMIN_ROLE, address(_token));
         _token.setCallbackFrom(
             invoker_,
             address(_core),

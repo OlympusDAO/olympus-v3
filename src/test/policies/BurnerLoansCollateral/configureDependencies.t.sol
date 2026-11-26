@@ -20,7 +20,7 @@ contract BurnerLoansCollateralConfigureDependenciesTest is BurnerLoansCollateral
         address caller_
     ) public {
         OlympusRoles replacement = new OlympusRoles(kernel);
-        kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(replacement));
         vm.prank(caller_);
         Keycode[] memory dependencies = _collateral.configureDependencies();
         assertEq(dependencies.length, 1, "Only ROLES is required");
@@ -30,10 +30,7 @@ contract BurnerLoansCollateralConfigureDependenciesTest is BurnerLoansCollateral
             address(replacement),
             "Cache tracks replacement ROLES"
         );
-        assertFalse(
-            replacement.hasRole(address(this), ADMIN_ROLE),
-            "Old module's grants are not retained"
-        );
+        assertFalse(replacement.hasRole(admin, ADMIN_ROLE), "Old module's grants are not retained");
         _assertAccountingPreserved();
     }
 
@@ -70,8 +67,9 @@ contract BurnerLoansCollateralConfigureDependenciesTest is BurnerLoansCollateral
         address caller_,
         bool enabled_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, true, enabled_);
+        _setPolicyLifecycle(_collateral, true, enabled_);
         address previous = address(_collateral.ROLES());
+        vm.prank(_fixtureExecutor);
         Kernel empty = new Kernel();
         vm.prank(address(kernel));
         _collateral.changeKernel(empty);
@@ -94,7 +92,7 @@ contract BurnerLoansCollateralConfigureDependenciesTest is BurnerLoansCollateral
         bool active_,
         bool enabled_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, active_, enabled_);
+        _setPolicyLifecycle(_collateral, active_, enabled_);
         vm.prank(caller_);
         Keycode[] memory dependencies = _collateral.configureDependencies();
         assertEq(dependencies.length, 1, "One module dependency");

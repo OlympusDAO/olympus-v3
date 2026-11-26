@@ -12,8 +12,11 @@ contract BurnerLoansSeizerTaskSetUnhealthyAssetCursorTest is BurnerLoansSeizerTa
     // Scenarios: BLSEIZ-EXPIRED-CURSOR-P08, BLSEIZ-UNHEALTHY-CURSOR-P08.
     function test_givenUnequalCursors_whenBothSettersRun_thenBothCursorsAreUpdated() public {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(2, 1);
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(address(_asset), 2);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 8);
         assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
         assertEq(
@@ -22,6 +25,7 @@ contract BurnerLoansSeizerTaskSetUnhealthyAssetCursorTest is BurnerLoansSeizerTa
             "Independent unhealthy setup offset"
         );
         vm.recordLogs();
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(address(_asset), 2);
         assertEq(vm.getRecordedLogs().length, 0, "Unchanged expiry setter emits no event");
         vm.expectEmit(true, false, false, true, address(_task));
@@ -30,6 +34,7 @@ contract BurnerLoansSeizerTaskSetUnhealthyAssetCursorTest is BurnerLoansSeizerTa
             2,
             IBurnerLoansLens.Selection.Unhealthy
         );
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 2);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -46,8 +51,11 @@ contract BurnerLoansSeizerTaskSetUnhealthyAssetCursorTest is BurnerLoansSeizerTa
     // Scenarios: BLSEIZ-UNHEALTHY-CURSOR-P09.
     function test_givenUnequalCursors_whenOnlyUnhealthySelected_thenExpiryIsPreserved() public {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(2, 1);
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(address(_asset), 2);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 8);
         assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
         assertEq(
@@ -55,6 +63,7 @@ contract BurnerLoansSeizerTaskSetUnhealthyAssetCursorTest is BurnerLoansSeizerTa
             8,
             "Independent unhealthy setup offset"
         );
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 3);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),

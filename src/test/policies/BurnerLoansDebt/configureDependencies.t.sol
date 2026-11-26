@@ -16,7 +16,7 @@ contract BurnerLoansDebtConfigureDependenciesTest is BurnerLoansDebtLifecycleTes
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_debt, active_, enabled_);
+        _setPolicyLifecycle(_debt, active_, enabled_);
         vm.prank(caller_);
         Keycode[] memory dependencies = _debt.configureDependencies();
         assertEq(dependencies.length, 1, "One module dependency");
@@ -35,6 +35,7 @@ contract BurnerLoansDebtConfigureDependenciesTest is BurnerLoansDebtLifecycleTes
 
     // Scenarios: BLDEBT-DEPENDENCIES-P02.
     function test_givenRolesMissing_whenConfigured_reverts(address caller_) public {
+        vm.prank(_fixtureExecutor);
         Kernel empty = new Kernel();
         vm.prank(address(_kernel));
         _debt.changeKernel(empty);

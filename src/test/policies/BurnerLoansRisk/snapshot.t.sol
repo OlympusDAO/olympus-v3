@@ -463,7 +463,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
         MockPrice replacement = new MockPrice(_kernel, 18, 8 hours);
         replacement.setPrice(address(_ohm), 7e18);
         replacement.setPrice(address(_asset), 8e18);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeRiskKernelAction(Actions.UpgradeModule, address(replacement));
         vm.prank(caller_);
         _assertSnapshot(_risk.snapshot(address(_asset)), 7e18, 8e18, 1e18);
     }
@@ -472,7 +472,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
     function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
         vm.assume(!active_ || !enabled_);
         _oracle.setEnabled(enabled_);
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        if (!active_) _executeRiskKernelAction(Actions.DeactivatePolicy, address(_oracle));
         vm.expectRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -529,6 +529,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-SNAPSHOT-D05.
     function test_givenMigratedOracle_whenOldKernelMembershipRemains_reverts() public {
+        vm.prank(_riskKernelExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _oracle.changeKernel(next);
@@ -546,12 +547,15 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-SNAPSHOT-D06.
     function test_givenKernelMigration_whenOracleReactivated_thenPricingRestored() public {
+        vm.prank(_riskKernelExecutor);
         Kernel next = new Kernel();
-        _kernel.executeAction(Actions.MigrateKernel, address(next));
+        _executeRiskKernelAction(Actions.MigrateKernel, address(next));
+        vm.startPrank(_riskKernelExecutor);
         next.executeAction(Actions.InstallModule, address(_roles));
         next.executeAction(Actions.InstallModule, address(_floan));
         next.executeAction(Actions.InstallModule, address(_price));
         next.executeAction(Actions.ActivatePolicy, address(_risk));
+        vm.stopPrank();
         assertTrue(_risk.isEnabled(), "migration preserves local enabled flag");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -560,6 +564,7 @@ contract BurnerLoansRiskSnapshotTest is BurnerLoansRiskTest {
             )
         );
         _risk.snapshot(address(_asset));
+        vm.prank(_riskKernelExecutor);
         next.executeAction(Actions.ActivatePolicy, address(_oracle));
         assertEq(
             _risk.snapshot(address(_asset)).backingPerOhmUsd,

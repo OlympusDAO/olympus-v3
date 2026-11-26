@@ -22,7 +22,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
         bool active_,
         bool enabled_
     ) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -36,7 +36,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P01.
     function test_whenIBurnerLoansCoreQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -50,7 +50,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P03.
     function test_whenIVersionedQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -64,7 +64,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P04.
     function test_whenIERC165Queried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -78,7 +78,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P05.
     function test_whenIEnablerQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -92,7 +92,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P06.
     function test_whenIEnablerV2Queried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -106,7 +106,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P07.
     function test_whenIReEnablerQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -120,7 +120,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P08.
     function test_whenIGracePeriodQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -134,7 +134,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P12.
     function test_whenIConfigOperatorQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.recordLogs();
         vm.prank(caller_);
@@ -148,14 +148,14 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ERC165-P09.
     function test_whenInvalidInterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.prank(caller_);
         assertFalse(_core.supportsInterface(0xffffffff), "Reserved interface unsupported");
     }
 
     // Scenarios: BLCORE-ERC165-P10.
     function test_whenZeroInterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.prank(caller_);
         assertFalse(_core.supportsInterface(0x00000000), "Reserved interface unsupported");
     }
@@ -177,7 +177,7 @@ contract BurnerLoansCoreSupportsInterfaceTest is BurnerLoansCoreTest {
         vm.assume(id_ != type(IReEnabler).interfaceId);
         vm.assume(id_ != type(IGracePeriod).interfaceId);
         vm.assume(id_ != 0x00000000 && id_ != 0xffffffff);
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.prank(caller_);
         assertFalse(_core.supportsInterface(id_), "No undeclared interface advertised");
     }

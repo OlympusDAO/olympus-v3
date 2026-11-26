@@ -24,14 +24,14 @@ contract BackingOracleSetBackingRiskIntegrationTest is BurnerLoansRiskTest {
 
     function setUp() public override {
         super.setUp();
-        _rolesAdmin.grantRole(ADMIN_ROLE, _ADMIN);
-        _rolesAdmin.revokeRole(ADMIN_ROLE, address(this));
+        _grantRiskRole(ADMIN_ROLE, _ADMIN);
+        _revokeRiskRole(ADMIN_ROLE, _riskAdmin);
     }
 
     // Scenarios: BO-SETBACKINGRISKINTEGRATION-03.
     function test_whenPriceScaleDiffers_roundsUp() public {
         BackingOracle oracle = new BackingOracle(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(oracle));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(oracle));
         vm.prank(_ADMIN);
         oracle.enable(abi.encode(uint256(1e18 + 1)));
         vm.prank(_ADMIN);
@@ -50,7 +50,7 @@ contract BackingOracleSetBackingRiskIntegrationTest is BurnerLoansRiskTest {
     // Scenarios: BO-SETBACKINGRISKINTEGRATION-01.
     function test_whenRealOracleSelected() public {
         BackingOracle oracle = new BackingOracle(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(oracle));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(oracle));
         vm.prank(_ADMIN);
         oracle.enable(abi.encode(15e18));
         vm.prank(_ADMIN);
@@ -64,7 +64,7 @@ contract BackingOracleSetBackingRiskIntegrationTest is BurnerLoansRiskTest {
             _kernel,
             IBackingOracle(address(oracle))
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(timelock));
         vm.prank(_ADMIN);
         oracle.setConfigOperator(address(timelock));
         vm.prank(_ADMIN);
@@ -80,7 +80,7 @@ contract BackingOracleSetBackingRiskIntegrationTest is BurnerLoansRiskTest {
         assertEq(_risk.snapshot(address(_asset)).backingPerOhmUsd, 17e18, "live queued update");
         vm.prank(_ADMIN);
         oracle.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(oracle));
+        _executeRiskKernelAction(Actions.DeactivatePolicy, address(oracle));
         assertEq(oracle.backing(), 17e18, "oracle getter remains readable");
         vm.expectRevert(
             abi.encodeWithSelector(

@@ -30,6 +30,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
         uint64[3] memory ids;
         bytes32[3] memory commitments;
         for (uint256 i; i < 3; ++i) {
+            vm.prank(_fixtureAdmin);
             ids[q[i]] = _timelock.queueBatch(_single(a[q[i]]));
             commitments[q[i]] = _hash(a[q[i]]);
         }
@@ -87,6 +88,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-N01.
     function test_givenPending_whenBeforeNotice_reverts(uint48 elapsed_, address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         ITimelockBatchQueue.QueuedAction memory a = _timelock.getQueuedAction(id);
         vm.warp(uint256(a.queuedAt) + bound(elapsed_, 0, 1 days - 1));
@@ -103,6 +105,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-N02.
     function test_givenPending_whenWithinWindow(uint48 elapsed_, address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         ITimelockBatchQueue.QueuedAction memory a = _timelock.getQueuedAction(id);
         vm.warp(uint256(a.executableAt) + bound(elapsed_, 0, 3 days));
@@ -111,6 +114,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-N03.
     function test_givenPending_whenExpired_reverts(uint48 now_, address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         ITimelockBatchQueue.QueuedAction memory a = _timelock.getQueuedAction(id);
         vm.warp(bound(now_, uint256(a.expiresAt) + 1, type(uint48).max));
@@ -127,6 +131,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-I02.
     function test_givenExecuted_whenRepeated_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         _executeAndAssert(id, caller_);
@@ -142,7 +147,9 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-I03.
     function test_givenCancelled_whenExecuted_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
         _makeReady(id);
         vm.expectRevert(
@@ -157,9 +164,10 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-L01.
     function test_givenQueueInactive_whenExecuted_reverts(bool enabled_, address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
-        _setState(_timelock, false, enabled_);
+        _setPolicyLifecycle(_timelock, false, enabled_);
         _executeReverts(
             id,
             caller_,
@@ -172,8 +180,10 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-L02.
     function test_givenQueueDisabled_whenExecuted_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _executeReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
@@ -185,9 +195,10 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
         address caller_
     ) public {
         vm.assume(!active_ || !enabled_);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
-        _setState(_risk, active_, enabled_);
+        _setPolicyLifecycle(_risk, active_, enabled_);
         _executeReverts(
             id,
             caller_,
@@ -204,8 +215,10 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
         address caller_
     ) public {
         vm.assume(operator_ != address(_timelock));
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(operator_);
         _executeReverts(
             id,
@@ -222,19 +235,26 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
         address caller_
     ) public {
         ITimelockBatchQueue.BatchAction memory a = _threeActions()[bound(domain_, 0, 2)];
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(a));
         bytes32 original = _hash(a);
-        if (a.selector == IBurnerLoansRisk.setPriceCacheMaxAge.selector)
+        if (a.selector == IBurnerLoansRisk.setPriceCacheMaxAge.selector) {
+            vm.prank(_fixtureAdmin);
             _risk.setPriceCacheMaxAge(42);
-        else if (a.selector == IBurnerLoansRisk.setReferralFeeBps.selector)
+        } else if (a.selector == IBurnerLoansRisk.setReferralFeeBps.selector) {
+            vm.prank(_fixtureAdmin);
             _risk.setReferralFeeBps(1);
-        else _risk.setReferrerAllowed(_recipient, true);
+        } else {
+            vm.prank(_fixtureAdmin);
+            _risk.setReferrerAllowed(_recipient, true);
+        }
         _makeReady(id);
         _executeReverts(id, caller_, _stateChanged(id, 0, a, original));
     }
 
     // Scenarios: BLRCT-EXECUTE-P05.
     function test_givenSameValueIntent_whenExecuted() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(0);
         _makeReady(id);
         vm.recordLogs();
@@ -248,15 +268,22 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-P06.
     function test_givenStateAndOperatorRestored_whenExecuted() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(1);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(0);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(_recipient);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(_timelock));
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_timelock));
         _makeReady(id);
         _executeAndAssert(id, _recipient);
     }
@@ -264,8 +291,10 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
     // Scenarios: BLRCT-EXECUTE-P07.
     function test_givenBatchLateDrift_whenExecuted_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory a = _threeActions();
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(a);
         bytes32 original = _hash(a[2]);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_recipient, true);
         _makeReady(id);
         _executeReverts(id, _recipient, _stateChanged(id, 2, a[2], original));
@@ -275,6 +304,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-T01.
     function test_givenTargetTypedFailure_whenExecuted_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         bytes memory reason = abi.encodeWithSelector(
@@ -291,6 +321,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-T02.
     function test_givenTargetEmptyFailure_whenExecuted_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         vm.mockCallRevert(
@@ -310,6 +341,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-T02.
     function test_givenTargetOversizedFailure_whenExecuted_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         vm.mockCallRevert(
@@ -329,9 +361,11 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-P08.
     function test_givenExecutedDomains_whenRequeued() public {
+        vm.prank(_fixtureAdmin);
         uint64 first = _timelock.queueBatch(_threeActions());
         _makeReady(first);
         _executeAndAssert(first, _recipient);
+        vm.prank(_fixtureAdmin);
         uint64 next = _timelock.queueBatch(_threeActions());
         assertEq(next, 2, "fresh action ID");
         assertEq(
@@ -343,15 +377,17 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-P10.
     function test_givenUpstreamUnavailable_whenExecuted(bool active_, bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
-        _setState(_config, active_, enabled_);
-        _setState(_core, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _makeReady(id);
         _executeAndAssert(id, _recipient);
     }
 
     // Scenarios: BLRCT-EXECUTE-D05.
     function test_givenForeignRiskKernel_whenExecuted_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         vm.mockCall(address(_risk), abi.encodeWithSignature("kernel()"), abi.encode(address(0xF0)));
@@ -369,6 +405,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-D06.
     function test_givenFailedRiskStatus_whenExecuted_reverts(bool kernel_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         vm.mockCallRevert(
@@ -388,6 +425,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-D07.
     function test_givenDirtyRiskOperator_whenExecuted_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         vm.mockCall(
@@ -409,6 +447,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
     function test_givenSettingReadFails_whenExecuted_reverts(uint8 domain_) public {
         uint256 domain = bound(domain_, 0, 2);
         ITimelockBatchQueue.BatchAction memory action = _threeActions()[domain];
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(action));
         _makeReady(id);
         bytes32 queued = _queueDigest(id);
@@ -430,8 +469,10 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-P04, BLCT-QUEUE-CACHE-AGE-P08.
     function test_givenCoreSelectsAnotherRisk_whenOldIntentExecuted() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetPriceCacheMaxAge(3600);
         address replacement = address(_anotherRisk());
+        vm.prank(_fixtureAdmin);
         _core.setRisk(replacement);
         assertEq(_core.risk(), replacement, "Core replacement selected");
         assertEq(address(_timelock.risk()), address(_risk), "queue target stays original");
@@ -459,6 +500,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-C01.
     function test_givenInFlightTarget_whenSameIDExecutedAgain() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _installTargetCallback(
             abi.encodeCall(ITimelockBatchQueue.executeQueuedAction, (id)),
@@ -474,7 +516,8 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
 
     // Scenarios: BLRCT-EXECUTE-C02.
     function test_givenInFlightReservation_whenNewIntentQueued() public {
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, address(_risk));
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, address(_risk));
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _installTargetCallback(
             abi.encodeCall(IBurnerLoansRiskConfigTimelock.queueSetReferralFeeBps, (uint16(1))),
@@ -503,9 +546,10 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
         bool coreActive_,
         bool coreEnabled_
     ) private {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
-        _setState(_config, configActive_, configEnabled_);
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_config, configActive_, configEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("facility()"), hex"deadbeef");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("risk()"), hex"deadbeef");
         _makeReady(id);
@@ -539,6 +583,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
         bytes memory data_
     ) public {
         vm.assume(data_.length != 32);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         _makeReady(id);
         if (reverts_)
@@ -577,6 +622,7 @@ contract BurnerLoansRiskConfigTimelockExecuteQueuedActionTest is BurnerLoansRisk
         vm.assume(data_.length != 32);
         uint256 domain = bound(domain_, 0, 2);
         ITimelockBatchQueue.BatchAction memory action = _threeActions()[domain];
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(action));
         _makeReady(id);
         bytes32 queued = _queueDigest(id);

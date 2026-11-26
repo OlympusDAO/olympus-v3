@@ -14,7 +14,7 @@ import {BurnerLoansConfigTest} from "./BurnerLoansConfigTest.sol";
 contract BurnerLoansConfigRequestPermissionsTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-PERMISSIONS-P01.
     function test_whenPermissionsRequested(address caller_, bool active_, bool enabled_) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         _assertPermissions(caller_);
     }
 

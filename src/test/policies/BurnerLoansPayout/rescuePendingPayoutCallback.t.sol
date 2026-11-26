@@ -137,7 +137,8 @@ contract BurnerLoansPayoutRescuePendingPayoutCallbackTest is BurnerLoansPayoutCa
             abi.encodeCall(observer.observe, (address(token), _treasury()))
         );
         token.setCallbackPhases(true, false);
-        _payout.rescuePendingPayout(address(token), _treasury(), _destination, 5);
+        vm.prank(_fixtureAdmin);
+        _payout.rescuePendingPayout(address(token), treasury, _destination, 5);
         assertTrue(token.callbackSucceeded(), "Accounting remains readable during transfer");
         assertEq(observer.fee(), 10, "Visible fee debit");
         assertEq(observer.seized(), 20, "Visible seized debit");
@@ -169,7 +170,8 @@ contract BurnerLoansPayoutRescuePendingPayoutCallbackTest is BurnerLoansPayoutCa
             abi.encodeCall(observer.observe, (address(token), _treasury()))
         );
         token.setCallbackPhases(true, false);
-        _payout.rescuePendingPayout(address(token), _treasury(), _destination, amount_);
+        vm.prank(_fixtureAdmin);
+        _payout.rescuePendingPayout(address(token), treasury, _destination, amount_);
         assertTrue(token.callbackSucceeded(), "Accounting remains readable during transfer");
         assertEq(observer.fee(), 0, "Visible fee debit");
         assertEq(observer.seized(), 0, "Visible seized debit");

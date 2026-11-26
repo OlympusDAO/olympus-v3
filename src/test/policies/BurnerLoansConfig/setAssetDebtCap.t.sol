@@ -29,7 +29,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         address caller = makeAddr("busyConfigOutsider");
         _excludeConfigCallers(caller);
         uint128 cap = _config.getAssetConfig(address(_asset)).debtCap;
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         bytes memory reason = abi.encodeWithSelector(
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector
         );
@@ -94,7 +94,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _assertCapSet(_configurationCaller, 1);
         _validationSucceeds(caller_, _capValidation(1));
     }
@@ -107,7 +107,8 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         _bothRevert(
             _configurationCaller,
@@ -125,8 +126,8 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _bothRevert(
             _configurationCaller,
             _capCall(1),
@@ -143,9 +144,10 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _bothRevert(
             _configurationCaller,
             _capCall(1),
@@ -162,7 +164,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _setPrincipal(1);
         _bothRevert(
             _configurationCaller,
@@ -180,8 +182,9 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _setPrincipal(1);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         _bothRevert(
             _configurationCaller,
@@ -199,9 +202,9 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _setPrincipal(1);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _bothRevert(
             _configurationCaller,
             _capCall(0),
@@ -218,10 +221,11 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _setPrincipal(1);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _bothRevert(
             _configurationCaller,
             _capCall(0),
@@ -404,7 +408,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
         _supplyInventory(_recipient, 50e9);
-        _setPolicyState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         uint128 globalCap = _inventory.globalDebtCapOhm();
         uint128 debt = _inventory.activePrincipalOhm();
         uint256 mintApproval = MINTRv1(address(_kernel.getModuleForKeycode(toKeycode("MINTR"))))
@@ -533,7 +537,9 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
+        vm.prank(_fixtureAdmin);
         _config.enable("");
         _assertCapSet(_configurationCaller, 200e9);
         _validationSucceeds(_configurationCaller, _capValidation(200e9));
@@ -545,8 +551,8 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_config));
         _assertCapSet(_configurationCaller, 200e9);
         _validationSucceeds(_configurationCaller, _capValidation(200e9));
     }
@@ -585,10 +591,11 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansConfigTest {
     function test_whenPermittedCallerClassesSeeded() public {
         address adminOnly = makeAddr("adminOnly");
         address overlap = makeAddr("adminAndOperator");
-        _rolesAdmin.grantRole(ADMIN_ROLE, adminOnly);
+        _grantFixtureRole(ADMIN_ROLE, adminOnly);
         _assertCapSet(adminOnly, 1);
         _assertCapSet(_configurationCaller, 2);
-        _rolesAdmin.grantRole(ADMIN_ROLE, overlap);
+        _grantFixtureRole(ADMIN_ROLE, overlap);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(overlap);
         _assertCapSet(overlap, 3);
     }

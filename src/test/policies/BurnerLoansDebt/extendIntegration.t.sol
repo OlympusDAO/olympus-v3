@@ -48,6 +48,7 @@ contract BurnerLoansDebtExtendIntegrationTest is BurnerLoansDebtIntegrationTest 
     function test_givenRealTopUp_givenUpdatedTermLength_whenExtended() public {
         _openToppedUpDebt();
         uint48 oldMaturity = _position().maturity;
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(
             address(_asset),
             IBurnerLoansRisk.AssetRiskConfigInput(8500, 12500, 100, 15 days, 90 days, 1000e6)

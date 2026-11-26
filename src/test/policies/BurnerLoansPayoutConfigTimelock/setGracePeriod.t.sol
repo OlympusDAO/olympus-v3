@@ -70,7 +70,7 @@ contract BurnerLoansPayoutConfigTimelockSetGracePeriodTest is BurnerLoansPayoutC
         address caller_,
         uint32 period_
     ) public givenPendingRecovery {
-        _setState(_payoutTimelock, true, false);
+        _setPolicyLifecycle(_payoutTimelock, true, false);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.setGracePeriod, (period_)),
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
@@ -83,7 +83,7 @@ contract BurnerLoansPayoutConfigTimelockSetGracePeriodTest is BurnerLoansPayoutC
         address caller_,
         uint32 period_
     ) public givenPendingRecovery {
-        _setState(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.setGracePeriod, (period_)),
             abi.encodeWithSelector(
@@ -100,7 +100,7 @@ contract BurnerLoansPayoutConfigTimelockSetGracePeriodTest is BurnerLoansPayoutC
         uint32 period_
     ) public givenPendingRecovery {
         _grantProposer(caller_, false, false);
-        _setState(_payoutTimelock, false, true);
+        _setPolicyLifecycle(_payoutTimelock, false, true);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.setGracePeriod, (period_)),
             abi.encodeWithSelector(
@@ -130,7 +130,7 @@ contract BurnerLoansPayoutConfigTimelockSetGracePeriodTest is BurnerLoansPayoutC
         bool enabled_,
         uint32 period_
     ) public {
-        _setState(_payoutTimelock, false, enabled_);
+        _setPolicyLifecycle(_payoutTimelock, false, enabled_);
         vm.etch(address(_payoutTimelock.ROLES()), hex"fe");
         uint32 beforePeriod = _payoutTimelock.gracePeriod();
         uint48 beforeAt = _payoutTimelock.lastTransitionAt();

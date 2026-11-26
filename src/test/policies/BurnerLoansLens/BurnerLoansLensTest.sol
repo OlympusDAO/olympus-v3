@@ -30,11 +30,6 @@ abstract contract BurnerLoansLensTest is BurnerLoansModularTest {
     address internal constant _CAROL = address(0xCA901);
     address internal constant _DAVE = address(0xDA9E);
 
-    function _setCoreLifecycle(bool active_, bool enabled_) internal {
-        if (!enabled_) _core.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
-    }
-
     function _position(address borrower_) internal view returns (IFLOANv1.Position memory p) {
         (, uint64 id) = _floan.getPositionIdForMarketAndBorrowerAt(
             _core.marketId(address(_asset)),
@@ -234,9 +229,12 @@ abstract contract BurnerLoansLensTest is BurnerLoansModularTest {
             0,
             address(_core)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(replacement));
+        vm.prank(_fixtureAdmin);
         replacement.setConfigOperator(address(_config));
+        vm.prank(_fixtureAdmin);
         replacement.enable("");
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(replacement));
     }
 

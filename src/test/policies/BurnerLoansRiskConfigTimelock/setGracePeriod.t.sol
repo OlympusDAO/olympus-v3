@@ -20,10 +20,12 @@ contract BurnerLoansRiskConfigTimelockSetGracePeriodTest is BurnerLoansRiskConfi
         uint48 transition = _timelock.lastTransitionAt();
         vm.expectEmit(address(_timelock));
         emit IGracePeriod.GracePeriodSet(period);
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(period);
         assertEq(_timelock.gracePeriod(), period, "exact grace");
         vm.expectEmit(address(_timelock));
         emit IGracePeriod.GracePeriodSet(period);
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(period);
         assertEq(_timelock.lastTransitionAt(), transition, "same value does not reset transition");
     }
@@ -31,6 +33,7 @@ contract BurnerLoansRiskConfigTimelockSetGracePeriodTest is BurnerLoansRiskConfi
     // Scenarios: BLRCT-GRACE-I01.
     function test_whenZeroGrace_reverts() public {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(0);
     }
 
@@ -44,20 +47,23 @@ contract BurnerLoansRiskConfigTimelockSetGracePeriodTest is BurnerLoansRiskConfi
 
     // Scenarios: BLRCT-GRACE-L01.
     function test_givenInactive_whenGraceSet_reverts(bool enabled_) public {
-        _setState(_timelock, false, enabled_);
+        _setPolicyLifecycle(_timelock, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(0);
     }
 
     // Scenarios: BLRCT-GRACE-L02.
     function test_givenDisabled_whenGraceSet_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(0);
     }
 }

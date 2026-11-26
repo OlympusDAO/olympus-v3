@@ -58,6 +58,7 @@ contract BurnerLoansDebtConstructorTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBT-CONSTRUCTOR-I07.
     function test_givenDifferentKernel_whenDeployed_reverts() public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -76,7 +77,7 @@ contract BurnerLoansDebtConstructorTest is BurnerLoansDebtLifecycleTest {
         bool coreActive_,
         bool coreEnabled_
     ) public {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         vm.prank(deployer_);
         BurnerLoansDebt deployed = new BurnerLoansDebt(_kernel, _core);
         assertEq(deployed.core(), address(_core), "Immutable Core binding");

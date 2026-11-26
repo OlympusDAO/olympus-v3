@@ -23,7 +23,9 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
 
     function setUp() public virtual override {
         super.setUp();
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_otherAsset));
         _mockCount(3);
     }
@@ -62,8 +64,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
         );
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.AssetCursorSet(address(_asset), 0, _selection());
-        vm.prank(caller_);
-        _setCursor(address(_asset), 0);
+        _setCursor(caller_, address(_asset), 0);
         assertEq(_cursor(address(_asset)), 0, "Selected cursor resets without economic reads");
         assertEq(_otherCursor(address(_asset)), 1, "Unselected lane retains its nonzero offset");
         assertEq(_task.isEnabled(), state_ != 1, "Recovery preserves local lifecycle");
@@ -113,7 +114,9 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
     // Scenarios: BLSEIZ-EXPIRED-CURSOR-P02, BLSEIZ-UNHEALTHY-CURSOR-P02.
     function test_givenUnequalCursors_whenZeroSelected_thenNoDownstreamReads() public {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(address(_asset), 2);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 8);
         assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
         assertEq(
@@ -123,7 +126,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
         );
         uint256 otherBefore = _otherCursor(address(_asset));
         vm.expectCall(address(_lens), bytes(""), uint64(0));
-        _setCursor(address(_asset), 0);
+        _setCursor(_seizerAdmin, address(_asset), 0);
         assertEq(_cursor(address(_asset)), 0, "Zero resets the selected traversal");
         assertEq(_otherCursor(address(_asset)), otherBefore, "Zero preserves the other traversal");
     }
@@ -131,7 +134,9 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
     // Scenarios: BLSEIZ-EXPIRED-CURSOR-P10, BLSEIZ-UNHEALTHY-CURSOR-P10.
     function test_givenUnequalCursors_whenSelectedLaneUnchanged_thenEventFreeNoOp() public {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(address(_asset), 2);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 8);
         assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
         assertEq(
@@ -141,7 +146,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
         );
         uint256 selected = _cursor(address(_asset));
         vm.recordLogs();
-        _setCursor(address(_asset), selected);
+        _setCursor(_seizerAdmin, address(_asset), selected);
         assertEq(vm.getRecordedLogs().length, 0, "Equality checks only the selected lane");
         assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Expiry offset remains exact");
         assertEq(
@@ -162,8 +167,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
-        vm.prank(caller_);
-        _setCursor(asset_, index_);
+        _setCursor(caller_, asset_, index_);
         _assertInitialCursors();
     }
 
@@ -197,10 +201,10 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
 
     // Scenarios: BLSEIZ-EXPIRED-CURSOR-P03, BLSEIZ-UNHEALTHY-CURSOR-P03.
     function test_whenCursorUnchanged_thenValidateAndNoEvent() public {
-        _setCursor(address(_asset), 1);
+        _setCursor(_seizerAdmin, address(_asset), 1);
         vm.expectCall(address(_lens), _validation(1), uint64(1));
         vm.recordLogs();
-        _setCursor(address(_asset), 1);
+        _setCursor(_seizerAdmin, address(_asset), 1);
         assertEq(vm.getRecordedLogs().length, 0, "Unchanged selected cursor emits no event");
         assertEq(_cursor(address(_asset)), 1, "Selected offset stays exact");
         assertEq(_otherCursor(address(_asset)), 0, "Other lane stays independent");
@@ -208,7 +212,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
 
     // Scenarios: BLSEIZ-EXPIRED-CURSOR-I03, BLSEIZ-UNHEALTHY-CURSOR-I03.
     function test_givenSavedCursorStale_whenSameValueSelected_reverts() public {
-        _setCursor(address(_asset), 1);
+        _setCursor(_seizerAdmin, address(_asset), 1);
         _mockCount(1);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -217,7 +221,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                 uint256(1)
             )
         );
-        _setCursor(address(_asset), 1);
+        _setCursor(_seizerAdmin, address(_asset), 1);
         assertEq(_cursor(address(_asset)), 1, "Bounds validation precedes equality");
         assertEq(_otherCursor(address(_asset)), 0, "Failed validation preserves the other lane");
     }
@@ -230,7 +234,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
             abi.encodeWithSelector(CursorReadFailed.selector)
         );
         vm.expectRevert(CursorReadFailed.selector);
-        _setCursor(address(_asset), 1);
+        _setCursor(_seizerAdmin, address(_asset), 1);
         _assertInitialCursors();
         _assertOtherState();
     }
@@ -245,10 +249,10 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                 address(_task)
             )
         );
-        _setCursor(address(_asset), zero_ ? 0 : 1);
+        _setCursor(_seizerAdmin, address(_asset), zero_ ? 0 : 1);
         _assertInitialCursors();
         _setPolicyActive(address(_task), true);
-        _setCursor(address(_asset), 1);
+        _setCursor(_seizerAdmin, address(_asset), 1);
         assertEq(_cursor(address(_asset)), 1, "Selected recovery works after reactivation");
         assertEq(_otherCursor(address(_asset)), 0, "Reactivation does not select the other lane");
     }
@@ -269,8 +273,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
             abi.encodeWithSelector(CursorReadFailed.selector)
         );
         vm.recordLogs();
-        vm.prank(caller_);
-        _setCursor(address(_asset), 0);
+        _setCursor(caller_, address(_asset), 0);
         assertEq(vm.getRecordedLogs().length, 0, "Zero equality requires no Lens read or event");
         _assertInitialCursors();
     }
@@ -297,8 +300,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                 address(_task)
             )
         );
-        vm.prank(caller_);
-        _setCursor(address(0), type(uint256).max);
+        _setCursor(caller_, address(0), type(uint256).max);
         _assertInitialCursors();
     }
 
@@ -321,8 +323,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
         vm.expectCall(address(_lens), _validation(index_));
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.AssetCursorSet(address(_asset), index_, _selection());
-        vm.prank(caller_);
-        _setCursor(address(_asset), index_);
+        _setCursor(caller_, address(_asset), index_);
         assertEq(
             _cursor(address(_asset)),
             index_,
@@ -341,7 +342,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                 asset_
             )
         );
-        _setCursor(asset_, index_);
+        _setCursor(_seizerAdmin, asset_, index_);
         assertEq(_cursor(asset_), 0, "Unmanaged selected cursor is not created");
         assertEq(_otherCursor(asset_), 0, "Unmanaged other cursor is not created");
     }
@@ -355,7 +356,7 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                 population_
             )
         );
-        _setCursor(address(_asset), index_);
+        _setCursor(_seizerAdmin, address(_asset), index_);
         _assertInitialCursors();
     }
 
@@ -374,14 +375,23 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
                 : IBurnerLoansLens.Selection.Unhealthy;
     }
 
-    function _setCursor(address asset_, uint256 index_) internal {
-        if (_isExpired()) _task.setExpiredAssetCursor(asset_, index_);
-        else _task.setUnhealthyAssetCursor(asset_, index_);
+    function _setCursor(address caller_, address asset_, uint256 index_) internal {
+        vm.prank(caller_);
+        if (_isExpired()) {
+            _task.setExpiredAssetCursor(asset_, index_);
+        } else {
+            _task.setUnhealthyAssetCursor(asset_, index_);
+        }
     }
 
     function _setOtherCursor(address asset_, uint256 index_) private {
-        if (_isExpired()) _task.setUnhealthyAssetCursor(asset_, index_);
-        else _task.setExpiredAssetCursor(asset_, index_);
+        if (_isExpired()) {
+            vm.prank(_seizerAdmin);
+            _task.setUnhealthyAssetCursor(asset_, index_);
+        } else {
+            vm.prank(_seizerAdmin);
+            _task.setExpiredAssetCursor(asset_, index_);
+        }
     }
 
     function _cursor(address asset_) private view returns (uint256) {
@@ -402,8 +412,14 @@ abstract contract BurnerLoansSeizerTaskCursorCases is BurnerLoansSeizerTaskTest 
     }
 
     function _lifecycle(uint8 state_) private {
-        if (state_ != 0) _task.disable("");
-        if (state_ == 2) _task.reEnable();
+        if (state_ != 0) {
+            vm.prank(_seizerAdmin);
+            _task.disable("");
+        }
+        if (state_ == 2) {
+            vm.prank(_seizerAdmin);
+            _task.reEnable();
+        }
     }
 
     function _assertOtherState() private view {

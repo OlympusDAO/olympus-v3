@@ -23,8 +23,8 @@ contract BurnerLoansPayoutConfigTimelockQueueRescueTest is BurnerLoansPayoutConf
         bool payoutEnabled_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, true, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, payoutEnabled_);
         bytes32 funds = _payoutDigest();
         ITimelockBatchQueue.BatchAction[] memory actions = _single(
             _action(IBurnerLoansPayout.rescue.selector, abi.encode(address(_asset), _borrower))
@@ -46,8 +46,8 @@ contract BurnerLoansPayoutConfigTimelockQueueRescueTest is BurnerLoansPayoutConf
         bool payoutEnabled_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, false, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, false, payoutEnabled_);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueRescue, (address(_asset), _borrower)),
             abi.encodeWithSelector(
@@ -81,7 +81,7 @@ contract BurnerLoansPayoutConfigTimelockQueueRescueTest is BurnerLoansPayoutConf
         bool overlap_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_payoutTimelock, true, false);
+        _setPolicyLifecycle(_payoutTimelock, true, false);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueRescue, (address(_asset), _borrower)),
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
@@ -96,7 +96,7 @@ contract BurnerLoansPayoutConfigTimelockQueueRescueTest is BurnerLoansPayoutConf
         bool overlap_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueRescue, (address(_asset), _borrower)),
             abi.encodeWithSelector(
@@ -114,7 +114,7 @@ contract BurnerLoansPayoutConfigTimelockQueueRescueTest is BurnerLoansPayoutConf
         bool overlap_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_payoutTimelock, false, true);
+        _setPolicyLifecycle(_payoutTimelock, false, true);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueRescue, (address(_asset), _borrower)),
             abi.encodeWithSelector(
@@ -136,9 +136,10 @@ contract BurnerLoansPayoutConfigTimelockQueueRescueTest is BurnerLoansPayoutConf
         bool payoutEnabled_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, payoutActive_, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, payoutActive_, payoutEnabled_);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueRescue, (address(_asset), _borrower)),
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
@@ -261,7 +262,7 @@ contract BurnerLoansPayoutConfigTimelockQueueRescueTest is BurnerLoansPayoutConf
                         address(0x112),
                         true,
                         false,
-                        address(this),
+                        _fixtureAdmin,
                         ca != 0,
                         ce != 0,
                         pe != 0

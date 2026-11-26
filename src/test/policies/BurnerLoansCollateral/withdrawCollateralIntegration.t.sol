@@ -431,6 +431,7 @@ contract BurnerLoansCollateralWithdrawCollateralIntegrationTest is BurnerLoansCo
         public
     {
         (MockERC20 token, MockERC7540ExternalShareVault vault) = _synchronousExternalPosition();
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetShareWithdrawalRequired(IERC20(address(token)), true);
         _expectUnderlyingModeRejected(token, address(vault));
     }
@@ -441,6 +442,7 @@ contract BurnerLoansCollateralWithdrawCollateralIntegrationTest is BurnerLoansCo
     {
         (MockERC20 token, MockERC7540ExternalShareVault vault) = _synchronousExternalPosition();
         vault.setCapabilities(false, true, true, true);
+        vm.prank(_fixtureAdmin);
         _config.setAssetWithdrawAsShares(address(token), true);
         vm.prank(_borrower);
         IBurnerLoansCollateral.WithdrawPreview memory quote = _collateral.previewWithdrawCollateral(

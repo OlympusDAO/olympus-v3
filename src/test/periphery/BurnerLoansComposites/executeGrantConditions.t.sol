@@ -444,6 +444,7 @@ contract BurnerLoansCompositesExecuteGrantConditionsTest is BurnerLoansComposite
         vm.expectRevert(
             abi.encodeWithSelector(IOperatorAuth.OperatorAuth_ExpiredGrant.selector, uint48(100))
         );
+        vm.prank(_accountOwner);
         _account.runWithExistingGrant(
             _executor,
             _funding(address(_asset), 1),

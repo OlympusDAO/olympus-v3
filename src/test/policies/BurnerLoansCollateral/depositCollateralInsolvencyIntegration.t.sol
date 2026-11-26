@@ -39,6 +39,7 @@ contract BurnerLoansCollateralDepositCollateralInsolvencyIntegrationTest is
         public
     {
         (MockERC20 token, MockERC4626 vault) = _seedLossVault(20);
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(token), false);
         _fundLossDeposit(token, _borrower, 8);
         _assertLossQuote(token, _borrower, 8, 108);
@@ -57,6 +58,7 @@ contract BurnerLoansCollateralDepositCollateralInsolvencyIntegrationTest is
     // Scenarios: BLCOL-DEPOSIT-T11.
     function test_givenVaultLossAndOriginationsDisabled_whenNewBorrowerDeposits_reverts() public {
         (MockERC20 token, MockERC4626 vault) = _seedLossVault(20);
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(token), false);
         _fundLossDeposit(token, _OTHER_BORROWER, 8);
         _assertLossQuote(token, _OTHER_BORROWER, 8, 8);
@@ -109,9 +111,12 @@ contract BurnerLoansCollateralDepositCollateralInsolvencyIntegrationTest is
         vm.prank(_borrower);
         _debt.borrow(address(token), 40e9, _borrower, _borrower, 0, address(0));
         PriceCache cache = new PriceCache(_kernel, 18, "USD");
-        _kernel.executeAction(Actions.ActivatePolicy, address(cache));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(cache));
+        vm.prank(_fixtureAdmin);
         cache.enable("");
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCache(address(cache));
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(60);
         cache.cachePrice(address(_ohm), address(token));
         bytes32 beforeCache = keccak256(
@@ -263,8 +268,10 @@ contract BurnerLoansCollateralDepositCollateralInsolvencyIntegrationTest is
         MockERC20 token = new MockERC20("Shared Vault", "SV", 0);
         MockERC4626 vault = new MockERC4626(OZERC20(address(token)), "Shared Vault", "SVV");
         _admitVault(token, address(vault), false);
-        _rolesAdmin.grantRole(DEPOSIT_OPERATOR_ROLE, otherOperator);
+        _grantFixtureRole(DEPOSIT_OPERATOR_ROLE, otherOperator);
+        vm.prank(_fixtureAdmin);
         _depositManager.setOperatorName(otherOperator, "oth");
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(address(token)), 1, otherOperator);
         token.mint(otherOperator, 100);
         vm.startPrank(otherOperator);

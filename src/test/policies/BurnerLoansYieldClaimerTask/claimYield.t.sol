@@ -24,7 +24,7 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
     ) public {
         _yieldAsset.mint(address(_yieldVault), 3);
         uint256 custodyBefore = _yieldAsset.balanceOf(address(_yieldVault));
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_depositManager));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_depositManager));
         bytes memory reason = abi.encodeWithSelector(
             PolicyDependency.PolicyDependency_NotActive.selector,
             address(_depositManager)
@@ -48,9 +48,10 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
         address caller_,
         bool payoutActive_
     ) public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
-        if (!payoutActive_) _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
-        _rolesAdmin.revokeRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
+        if (!payoutActive_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
+        _revokeFixtureRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
         vm.prank(caller_);
         IBurnerLoansYieldClaim.ClaimYieldPreview memory quote = _claimer.previewClaimYield(
             address(_yieldAsset)
@@ -91,9 +92,13 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
         (address token, uint256 amount) = _claimer.claimYield(address(_yieldAsset));
         assertEq(token, address(_yieldAsset), "Underlying output identity");
         assertEq(amount, 1, "Exact raw output");
+        // One raw asset unit moves from the vault to Treasury even if either initiated the claim.
+        uint256 expectedCallerBalance = callerBefore;
+        if (caller_ == address(_yieldVault)) expectedCallerBalance -= amount;
+        if (caller_ == _payout.treasury()) expectedCallerBalance += amount;
         assertEq(
-            _yieldAsset.balanceOf(caller_) - callerBefore,
-            caller_ == _payout.treasury() ? 1 : 0,
+            _yieldAsset.balanceOf(caller_),
+            expectedCallerBalance,
             "Initiating a claim creates no caller entitlement"
         );
         assertEq(_yieldAsset.balanceOf(_payout.treasury()) - before, 1, "Only destination is paid");
@@ -107,7 +112,7 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
 
     // Scenarios: BLYC-CLAIM-YIELD-P02, BLYC-CLAIM-YIELD-P05, BLYC-CLAIM-YIELD-P08.
     function test_givenZeroYieldAndRevokedRole_whenClaimed(address caller_) public {
-        _rolesAdmin.revokeRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
+        _revokeFixtureRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
         IBurnerLoansYieldClaim.ClaimYieldPreview memory quote = _claimer.previewClaimYield(
             address(_yieldAsset)
         );
@@ -123,7 +128,7 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
     // Scenarios: BLYC-CLAIM-YIELD-P04.
     function test_givenPositiveYieldAndRevokedRole_whenClaimed_reverts(address caller_) public {
         _yieldAsset.mint(address(_yieldVault), 3);
-        _rolesAdmin.revokeRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
+        _revokeFixtureRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
         bytes memory reason = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
             BL_YIELD_CLAIMER_ROLE
@@ -165,8 +170,9 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
         bool coreActive_,
         bool coreEnabled_
     ) public {
+        vm.prank(_fixtureAdmin);
         _claimer.disable("");
-        _setCore(coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(caller_);
         _claimer.previewClaimYield(address(_yieldAsset));
@@ -181,9 +187,10 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
         bool coreActive_,
         bool coreEnabled_
     ) public {
+        vm.prank(_fixtureAdmin);
         _claimer.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_claimer));
-        _setCore(coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_claimer));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -208,8 +215,8 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
         bool coreActive_,
         bool coreEnabled_
     ) public {
-        _setCore(coreActive_, coreEnabled_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_claimer));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_claimer));
         bytes memory reason = abi.encodeWithSelector(
             IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
             address(_claimer)
@@ -229,7 +236,7 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
         bool enabled_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setCore(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes memory reason = abi.encodeWithSelector(
             PolicyDependency.PolicyDependency_NotActive.selector,
             address(_core)
@@ -242,18 +249,14 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
         _claimer.claimYield(address(_yieldAsset));
     }
 
-    function _setCore(bool active_, bool enabled_) internal {
-        if (!enabled_) _core.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
-    }
-
     // Scenarios: BLYC-CLAIM-YIELD-A01, BLYC-CLAIM-YIELD-L01.
     function test_whenPermissionlessCallerSeeds() public {
-        address[6] memory callers = [
+        address[7] memory callers = [
             address(0),
             address(this),
             address(_core),
             address(_claimer),
+            address(_yieldVault),
             _borrower,
             _heart
         ];
@@ -266,10 +269,12 @@ contract BurnerLoansYieldClaimerTaskClaimYieldTest is YieldClaimerModularTest {
 
     // Scenarios: BLYC-CLAIM-YIELD-L01.
     function test_givenReEnabledAndReactivated_whenClaimed() public {
+        vm.prank(_fixtureAdmin);
         _claimer.disable("");
+        vm.prank(_fixtureAdmin);
         _claimer.reEnable();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_claimer));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_claimer));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_claimer));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_claimer));
         test_givenOneUnitYield_whenAnyCallerClaims(address(0), address(this));
     }
 

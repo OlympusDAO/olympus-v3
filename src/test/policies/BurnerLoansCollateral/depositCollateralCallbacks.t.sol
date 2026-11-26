@@ -186,7 +186,7 @@ contract BurnerLoansCollateralDepositCollateralCallbacksTest is
         _prepareDirectToken();
         _quoteDeposit(_borrower);
         BurnerLoansCollateralCallbackReceipts receipts = _callbackReceipts();
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(receipts));
+        _grantFixtureRole(ADMIN_ROLE, address(receipts));
         receipts.arm(address(_core), abi.encodeCall(_core.setGracePeriod, (uint32(1))), false);
         _assertDepositCaughtWithoutTokenHook(_borrower);
         assertEq(
@@ -201,7 +201,7 @@ contract BurnerLoansCollateralDepositCollateralCallbacksTest is
         _prepareDirectToken();
         _quoteDeposit(_borrower);
         BurnerLoansCollateralCallbackReceipts receipts = _callbackReceipts();
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(receipts));
+        _grantFixtureRole(ADMIN_ROLE, address(receipts));
         receipts.arm(address(_core), abi.encodeCall(_core.setGracePeriod, (uint32(1))), true);
         _assertReceiptDepositRejected();
     }

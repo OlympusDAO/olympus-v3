@@ -37,7 +37,7 @@ contract BurnerLoansConfigTimelockDisableTest is BurnerLoansConfigTimelockTest {
 
     // Scenarios: BLCT-DISABLE-L01.
     function test_givenDisabledActiveTrue_whenDisabledAgain_thenStateError(address caller_) public {
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_timelock, true, false);
         _transitionReverts(
             abi.encodeCall(_timelock.disable, (bytes(""))),
             caller_,
@@ -49,7 +49,7 @@ contract BurnerLoansConfigTimelockDisableTest is BurnerLoansConfigTimelockTest {
     function test_givenDisabledActiveFalse_whenDisabledAgain_thenStateError(
         address caller_
     ) public {
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _transitionReverts(
             abi.encodeCall(_timelock.disable, (bytes(""))),
             caller_,
@@ -60,7 +60,7 @@ contract BurnerLoansConfigTimelockDisableTest is BurnerLoansConfigTimelockTest {
     // Scenarios: BLCT-DISABLE-L03.
     function test_givenConfigInactive_whenDisabled_thenSuccess(address caller_) public {
         _admin(caller_);
-        _setState(_config, false, true);
+        _setPolicyLifecycle(_config, false, true);
         _expectTransition(caller_, false, "");
         vm.prank(caller_);
         _timelock.disable("");
@@ -70,7 +70,7 @@ contract BurnerLoansConfigTimelockDisableTest is BurnerLoansConfigTimelockTest {
     // Scenarios: BLCT-DISABLE-L04.
     function test_givenOwnPolicyInactive_whenDisabled_thenSuccess(address caller_) public {
         _admin(caller_);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         _expectTransition(caller_, false, "");
         vm.prank(caller_);
         _timelock.disable("");
@@ -97,6 +97,7 @@ contract BurnerLoansConfigTimelockDisableTest is BurnerLoansConfigTimelockTest {
         address caller_,
         bytes memory data_
     ) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         data_ = _nonempty(data_);
         _transitionReverts(

@@ -17,8 +17,8 @@ contract BurnerLoansInventoryConfigTimelockVERSIONTest is BurnerLoansInventoryCo
         bool targetActive_,
         bool targetEnabled_
     ) public givenPendingRecovery {
-        _setState(_timelock, ownActive_, ownEnabled_);
-        _setState(_inventory, targetActive_, targetEnabled_);
+        _setPolicyLifecycle(_timelock, ownActive_, ownEnabled_);
+        _setPolicyLifecycle(_inventory, targetActive_, targetEnabled_);
         bytes32 beforeState = _queueDigest(_pendingId);
         vm.mockCallRevert(address(_inventory), abi.encodeWithSignature("kernel()"), hex"deadbeef");
         vm.mockCallRevert(

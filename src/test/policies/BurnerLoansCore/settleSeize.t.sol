@@ -36,7 +36,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     function setUp() public override {
         super.setUp();
         _actor = _service();
-        _rolesAdmin.grantRole(BL_LIQUIDATION_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(BL_LIQUIDATION_POLICY_ROLE, address(_actor));
         _accountingHandler = new BurnerLoansActionHandler(
             _collateral,
             _debt,
@@ -76,7 +76,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-SETTLE-SEIZE-A03.
     function test_givenOnlySiblingRole_whenSettled_reverts() public {
         CoreService sibling = _service();
-        _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(sibling));
+        _grantFixtureRole(BL_DEBT_POLICY_ROLE, address(sibling));
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_LIQUIDATION_POLICY_ROLE)
         );
@@ -86,6 +86,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-SEIZE-A04.
     function test_givenWrongKernelCaller_whenSettled() public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _actor.changeKernel(other);
@@ -100,6 +101,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-SEIZE-L01.
     function test_givenCoreDisabled_whenSettled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -110,7 +112,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-SEIZE-L02, BLCORE-SETTLE-SEIZE-L03.
     function test_givenCoreInactive_whenSettled_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -125,7 +127,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-SEIZE-D01.
     function test_givenCallerInactive_whenSettled() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_actor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_actor));
         test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer(false, address(_core));
     }
 
@@ -346,9 +348,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     function test_givenProtocolKeeper_whenSeized(bool heart_, bool overlap_) public {
         _deposit(2000e6);
         _borrow(100e9);
-        _rolesAdmin.grantRole(heart_ ? HEART_ROLE : BURNER_LOANS_SEIZER_ROLE, _recipient);
-        if (overlap_)
-            _rolesAdmin.grantRole(heart_ ? BURNER_LOANS_SEIZER_ROLE : HEART_ROLE, _recipient);
+        _grantFixtureRole(heart_ ? HEART_ROLE : BURNER_LOANS_SEIZER_ROLE, _recipient);
+        if (overlap_) _grantFixtureRole(heart_ ? BURNER_LOANS_SEIZER_ROLE : HEART_ROLE, _recipient);
         vm.expectCall(address(_price), bytes(""), uint64(0));
         vm.expectCall(_risk.backingOracle(), bytes(""), uint64(0));
         vm.expectCall(
@@ -383,7 +384,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     function test_givenProtocolKeeper_givenRiskInactive_whenSeized_reverts(bool enabled_) public {
         _deposit(2000e6);
         _borrow(100e9);
-        _rolesAdmin.grantRole(HEART_ROLE, _recipient);
+        _grantFixtureRole(HEART_ROLE, _recipient);
         _setPolicyLifecycle(_risk, false, enabled_);
         bytes32 beforeState = _state();
         vm.expectRevert(
@@ -405,7 +406,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
     function test_givenProtocolKeeper_givenRiskDisabled_whenSeized_reverts() public {
         _deposit(2000e6);
         _borrow(100e9);
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, _recipient);
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, _recipient);
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
         bytes32 beforeState = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -491,7 +493,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
         _authorizeCollateralCallback(_actor);
         token.setCallbackFrom(
             address(_depositManager),
@@ -526,7 +528,7 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
         _authorizeCollateralCallback(_actor);
         token.setCallbackFrom(
             address(_depositManager),
@@ -560,8 +562,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_depositManager),
             address(_actor),
@@ -590,8 +592,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_depositManager),
             address(_actor),
@@ -619,8 +621,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_depositManager),
             address(_actor),
@@ -649,8 +651,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_depositManager),
             address(_actor),
@@ -678,8 +680,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
@@ -714,8 +716,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
@@ -756,8 +758,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),
@@ -792,8 +794,8 @@ contract BurnerLoansCoreSettleSeizeTest is BurnerLoansCoreTest {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
         _borrow(1);
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.keeperReward.selector),

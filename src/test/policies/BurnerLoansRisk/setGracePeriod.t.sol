@@ -17,6 +17,7 @@ import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/Bu
 contract BurnerLoansRiskSetGracePeriodTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-GRACE-L01.
     function test_givenOperational_whenGraceChanges() public {
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(1);
         assertEq(_risk.gracePeriod(), 1, "grace period");
     }
@@ -24,12 +25,14 @@ contract BurnerLoansRiskSetGracePeriodTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-GRACE-L02.
     function test_givenDisabled_whenGraceChanges_reverts() public givenDisabled {
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(1);
     }
 
     // Scenarios: BLRISK-GRACE-L03.
     function test_givenInactive_whenGraceChanges_reverts() public givenInactive {
         _expectInactive();
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(1);
     }
 
@@ -40,6 +43,7 @@ contract BurnerLoansRiskSetGracePeriodTest is BurnerLoansRiskTest {
         givenInactive
     {
         _expectInactive();
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(1);
     }
 
@@ -48,7 +52,7 @@ contract BurnerLoansRiskSetGracePeriodTest is BurnerLoansRiskTest {
         address caller_,
         uint32 period_
     ) public {
-        vm.assume(caller_ != address(this));
+        vm.assume(caller_ != _riskAdmin);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
         _risk.setGracePeriod(uint32(bound(period_, 1, type(uint32).max)));
@@ -57,6 +61,7 @@ contract BurnerLoansRiskSetGracePeriodTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-GRACE-I01.
     function test_whenGraceIsZero_reverts() public {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(0);
     }
 
@@ -65,6 +70,7 @@ contract BurnerLoansRiskSetGracePeriodTest is BurnerLoansRiskTest {
         vm.expectEmit(false, false, false, true, address(_risk));
         emit IGracePeriod.GracePeriodSet(period_);
         vm.recordLogs();
+        vm.prank(_riskAdmin);
         _risk.setGracePeriod(period_);
         assertEq(vm.getRecordedLogs().length, 1, "exact grace event count");
         assertEq(_risk.gracePeriod(), period_, "exact grace");
@@ -93,9 +99,12 @@ contract BurnerLoansRiskSetGracePeriodTest is BurnerLoansRiskTest {
         address caller_,
         bool enabled_
     ) public {
-        vm.assume(caller_ != address(this));
-        if (!enabled_) _risk.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        vm.assume(caller_ != _riskAdmin);
+        if (!enabled_) {
+            vm.prank(_riskAdmin);
+            _risk.disable("");
+        }
+        _executeRiskKernelAction(Actions.DeactivatePolicy, address(_risk));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,

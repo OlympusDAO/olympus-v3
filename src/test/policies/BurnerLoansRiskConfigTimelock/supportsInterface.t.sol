@@ -22,7 +22,7 @@ contract BurnerLoansRiskConfigTimelockSupportsInterfaceTest is BurnerLoansRiskCo
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes4[9] memory ids = [
             type(IBurnerLoansRiskConfigTimelock).interfaceId,
             type(IVersioned).interfaceId,

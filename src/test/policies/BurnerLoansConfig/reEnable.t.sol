@@ -31,8 +31,8 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
-        if (admin_) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (recovery_) _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        if (admin_) _grantFixtureRole(ADMIN_ROLE, caller_);
+        if (recovery_) _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, caller_);
     }
 
     // Scenarios: BLCFG-REENABLE-A02.
@@ -42,6 +42,7 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
         vm.warp(uint256(_config.lastTransitionAt()) + _config.gracePeriod() + 1);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         _mutationReverts(
             caller_,
@@ -55,7 +56,7 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         address caller_,
         bool active_
     ) public {
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _mutationReverts(
             caller_,
             abi.encodeCall(_config.reEnable, ()),
@@ -70,7 +71,7 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         bool recovery_
     ) public givenConfigDisabled {
         _grantRecoveryCaller(caller_, admin_, recovery_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _mutationReverts(
             caller_,
             abi.encodeCall(_config.reEnable, ()),
@@ -85,7 +86,7 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         bool recovery_
     ) public givenConfigDisabled {
         _grantRecoveryCaller(caller_, admin_, recovery_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         _mutationReverts(
             caller_,
             abi.encodeCall(_config.reEnable, ()),
@@ -103,6 +104,7 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         bool recovery_
     ) public givenConfigDisabled {
         _grantRecoveryCaller(caller_, admin_, recovery_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         _mutationReverts(
             caller_,
@@ -121,8 +123,9 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         bool recovery_
     ) public givenConfigDisabled {
         _grantRecoveryCaller(caller_, admin_, recovery_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         _mutationReverts(
             caller_,
             abi.encodeCall(_config.reEnable, ()),
@@ -293,7 +296,7 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         bool recovery_
     ) public givenConfigDisabled {
         _grantRecoveryCaller(caller_, admin_, recovery_);
-        _setPolicyState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("inventory()"), hex"deadbeef");
         bytes32 beforeEconomics = _economicDigest();
         vm.expectEmit(address(_config));
@@ -328,8 +331,10 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         l = uint48(bound(l, 1, type(uint48).max - g));
         uint256 d = uint256(l) + g;
 
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(g);
         vm.warp(l);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         vm.warp(bound(now_, l, d - 1));
         _grantRecoveryCaller(caller_, admin_, recovery_);
@@ -355,8 +360,10 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         l = uint48(bound(l, 1, type(uint48).max - g));
         uint256 d = uint256(l) + g;
 
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(g);
         vm.warp(l);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         vm.warp(d);
         _grantRecoveryCaller(caller_, admin_, recovery_);
@@ -383,8 +390,10 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         l = uint48(bound(l, 1, type(uint48).max - g));
         uint256 d = uint256(l) + g;
         vm.assume(d < type(uint48).max);
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(g);
         vm.warp(l);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         vm.warp(bound(now_, d + 1, type(uint48).max));
         _grantRecoveryCaller(caller_, admin_, recovery_);
@@ -406,8 +415,10 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         _grantRecoveryCaller(caller_, admin_, recovery_);
         g = uint32(bound(g, 1, type(uint32).max));
         l = uint48(bound(l, uint256(type(uint48).max) - g + 1, type(uint48).max));
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(g);
         vm.warp(l);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         _mutationReverts(
             caller_,
@@ -439,8 +450,10 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
     function test_givenEnabledAtZeroTimestamp_whenRecoveryRequested_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         vm.warp(0);
+        vm.prank(_fixtureAdmin);
         _config.enable("");
         assertEq(_config.lastTransitionAt(), 0, "Reachable enabled zero-time history");
         _mutationReverts(
@@ -456,8 +469,8 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
         bool active_
     ) public {
         BurnerLoansConfig fresh = new BurnerLoansConfig(_kernel, IBurnerLoansCore(address(_core)));
-        _kernel.executeAction(Actions.ActivatePolicy, address(fresh));
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(fresh));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(fresh));
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(fresh));
         vm.prank(caller_);
         vm.expectRevert(IReEnabler.NeverEnabled.selector);
         fresh.reEnable();
@@ -465,10 +478,13 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-REENABLE-P02.
     function test_givenMaximumRepresentableDeadline_whenRecoveryAtDeadline() public {
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(1);
         vm.warp(uint256(type(uint48).max) - 1);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         vm.warp(type(uint48).max);
+        vm.prank(_fixtureAdmin);
         _config.reEnable();
         assertTrue(_config.isEnabled(), "Maximum deadline is inclusive");
         assertEq(_config.lastTransitionAt(), type(uint48).max, "Maximum timestamp preserved");
@@ -476,18 +492,20 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-REENABLE-P03.
     function test_givenExpiredGraceBoundarySeeds_whenRecoveryRequested_reverts() public {
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(1);
         vm.warp(1);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         vm.warp(3);
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.reEnable, ()),
             abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, uint48(2))
         );
         vm.warp(type(uint48).max);
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.reEnable, ()),
             abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, uint48(2))
         );
@@ -495,11 +513,13 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-REENABLE-N01.
     function test_givenMaximumGraceAndTransitionTimestamp_whenRecoveryRequested() public {
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(type(uint32).max);
         vm.warp(type(uint48).max);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.reEnable, ()),
             abi.encodeWithSelector(
                 SafeCast.SafeCastOverflowedUintDowncast.selector,
@@ -511,14 +531,18 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-REENABLE-P01.
     function test_givenGraceStartAndLastInteriorSecond_whenRecoveryRequested() public {
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(2);
         vm.warp(1);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         uint256 paused = vm.snapshotState();
+        vm.prank(_fixtureAdmin);
         _config.reEnable();
         assertTrue(_config.isEnabled(), "Recovery permitted at grace start");
         assertTrue(vm.revertToState(paused), "Restore disabled state for adjacent seed");
         vm.warp(2);
+        vm.prank(_fixtureAdmin);
         _config.reEnable();
         assertTrue(_config.isEnabled(), "Recovery permitted one second before deadline");
         assertEq(_config.lastTransitionAt(), 2, "Exact last interior recovery timestamp");

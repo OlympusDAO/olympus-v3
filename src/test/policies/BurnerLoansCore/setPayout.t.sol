@@ -48,7 +48,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         address candidate_
     ) public {
         _grantAdmin(caller_);
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -95,7 +95,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         bytes32 ledger = _ledger();
         address previous = _core.payout();
         address operatorBefore = _next.configOperator();
-        if (!enabled_) _core.disable("");
+        _setPolicyLifecycle(_core, true, enabled_);
         vm.expectEmit(true, true, false, true, address(_core));
         emit IBurnerLoansCore.PayoutSet(previous, address(_next));
         vm.prank(caller_);
@@ -117,8 +117,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     ) public {
         vm.assume(!active_ || !enabled_);
         _grantAdmin(caller_);
-        if (!enabled_) _next.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_next));
+        _setPolicyLifecycle(_next, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -165,6 +164,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-CUSTODY-D05.
     function test_givenWrongKernel_whenSelected_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _next.changeKernel(other);
@@ -646,7 +646,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         _next.setCore(address(0));
         _next.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_next));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_next));
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         vm.expectRevert(
@@ -672,6 +672,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
             false
         );
         address before = _core.payout();
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),
@@ -707,6 +708,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setPayout(address(_next));
         }
     }
@@ -726,6 +728,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setPayout(address(_next));
         }
     }
@@ -743,6 +746,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(_next));
     }
 
@@ -766,6 +770,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setPayout(address(_next));
         }
     }
@@ -783,6 +788,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(_next));
     }
 
@@ -810,7 +816,7 @@ contract BurnerLoansCoreSetPayoutTest is BurnerLoansCoreTest {
         _payout.creditFee(address(_asset), 17, address(0), 0);
         vm.prank(address(_core));
         _payout.creditSeizure(address(_asset), _recipient, 3, 5);
-        if (!enabled_) _core.disable("");
+        _setPolicyLifecycle(_core, true, enabled_);
         bytes32 ledger = _ledger();
         uint256 allowance = _asset.allowance(_borrower, address(_core));
         vm.expectEmit(true, true, false, true, address(_core));

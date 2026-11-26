@@ -33,8 +33,9 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
     ) public givenPendingBuckets {
         vm.assume(caller_ != address(0));
         _grantRoleIfMissing(ADMIN_ROLE, caller_);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         bytes32 state = _ledgerDigest();
         vm.warp(2);
         vm.expectEmit(address(_payout));
@@ -52,6 +53,7 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
     function test_givenUnreadableCoreReadiness_whenEnabled(
         bytes memory data_
     ) public givenPendingBuckets {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.mockCall(address(_core), abi.encodeWithSignature("isEnabled()"), data_);
         vm.expectCall(address(_core), abi.encodeWithSignature("isEnabled()"), uint64(0));
@@ -61,10 +63,13 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
             uint64(0)
         );
         bytes32 state = _ledgerDigest();
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Enabled despite unreadable Core lifecycle");
         assertEq(_ledgerDigest(), state, "Obligations and custody preserved");
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Repeated activation remains independent");
         assertEq(_ledgerDigest(), state, "Repeated activation preserves obligations");
@@ -75,6 +80,7 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
         address caller_
     ) public givenPendingBuckets {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _expectEnableRejected(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE),
@@ -85,23 +91,23 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-ENABLE-L02.
     function test_givenInactiveDisabled_whenEnabled_reverts() public givenPendingBuckets {
-        _setState(_payout, false, false);
+        _setPolicyLifecycle(_payout, false, false);
         _expectEnableRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_payout)
             ),
-            address(this),
+            _fixtureAdmin,
             ""
         );
     }
 
     // Scenarios: BLCU-ENABLE-L03, BLCU-ENABLE-L04.
     function test_givenAlreadyEnabled_whenEnabled_reverts(bool active_) public givenPendingBuckets {
-        _setState(_payout, active_, true);
+        _setPolicyLifecycle(_payout, active_, true);
         _expectEnableRejected(
             abi.encodeWithSelector(IEnabler.NotDisabled.selector),
-            address(this),
+            _fixtureAdmin,
             ""
         );
     }
@@ -109,10 +115,11 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
     // Scenarios: BLCU-ENABLE-I01.
     function test_whenNonemptyData_reverts(bytes memory data_) public givenPendingBuckets {
         vm.assume(data_.length > 0 && data_.length <= 256);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _expectEnableRejected(
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector),
-            address(this),
+            _fixtureAdmin,
             data_
         );
     }
@@ -129,6 +136,7 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-ENABLE-C02.
     function test_givenCoreBusy_whenEnabled_reverts() public givenPendingBuckets {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.mockCallRevert(
             address(_core),
@@ -137,7 +145,7 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
         );
         _expectEnableRejected(
             abi.encodeWithSelector(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector),
-            address(this),
+            _fixtureAdmin,
             ""
         );
     }
@@ -160,6 +168,7 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-ENABLE-D06.
     function test_givenMissingCoreInterface_whenActivated_reverts() public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         uint48 transition = _payout.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -174,18 +183,19 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
                 address(_core)
             )
         );
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertFalse(_payout.isEnabled(), "Core incompatibility preserves paused state");
         assertEq(_payout.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored interface permits retry");
     }
 
     // Scenarios: BLCU-ENABLE-D07.
     function test_givenRevertingCoreInterface_whenActivated_reverts() public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         uint48 transition = _payout.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -203,18 +213,19 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
                 address(_core)
             )
         );
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertFalse(_payout.isEnabled(), "Core incompatibility preserves paused state");
         assertEq(_payout.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored interface permits retry");
     }
 
     // Scenarios: BLCU-ENABLE-D08.
     function test_givenMalformedCoreInterface_whenActivated_reverts() public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         uint48 transition = _payout.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -228,12 +239,12 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
                 address(_core)
             )
         );
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertFalse(_payout.isEnabled(), "Core incompatibility preserves paused state");
         assertEq(_payout.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored interface permits retry");
     }
@@ -242,6 +253,7 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
     function test_givenMalformedCoreKernel_whenActivated_revertsThenRestored(
         bytes memory data_
     ) public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.assume(data_.length != 32);
         vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), data_);
@@ -250,16 +262,18 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
                 address(_core)
             ),
-            address(this),
+            _fixtureAdmin,
             ""
         );
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored Core permits activation");
     }
 
     // Scenarios: BLCU-ENABLE-K03.
     function test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored() public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         bytes[6] memory responses = [
             new bytes(0),
@@ -278,18 +292,21 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
                     PolicyDependency.PolicyDependency_InvalidDependency.selector,
                     address(_core)
                 ),
-                address(this),
+                _fixtureAdmin,
                 ""
             );
         }
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored Core permits activation");
     }
 
     // Scenarios: BLCU-ENABLE-K01.
     function test_givenDifferentCoreKernel_whenActivated_revertsThenRestored() public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
+        vm.prank(_fixtureExecutor);
         address otherKernel = address(new Kernel());
         vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), abi.encode(otherKernel));
         _expectEnableRejected(
@@ -299,10 +316,11 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
                 address(_kernel),
                 otherKernel
             ),
-            address(this),
+            _fixtureAdmin,
             ""
         );
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored Core permits activation");
     }
@@ -311,6 +329,7 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
     function test_givenRevertingCoreKernel_whenActivated_revertsThenRestored(
         bytes memory data_
     ) public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), data_);
         _expectEnableRejected(
@@ -318,20 +337,23 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
                 address(_core)
             ),
-            address(this),
+            _fixtureAdmin,
             ""
         );
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored Core permits activation");
     }
 
     // Scenarios: BLCU-ENABLE-K04.
     function test_givenCoreMigrated_whenActivated_revertsThenRestored() public givenPendingBuckets {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _core.changeKernel(next);
         assertTrue(_kernel.isPolicyActive(_core), "Old Kernel still records Core membership");
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _expectEnableRejected(
             abi.encodeWithSelector(
@@ -340,18 +362,19 @@ contract BurnerLoansPayoutEnableTest is BurnerLoansPayoutTest {
                 address(_kernel),
                 address(next)
             ),
-            address(this),
+            _fixtureAdmin,
             ""
         );
         vm.prank(address(next));
         _core.changeKernel(_kernel);
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "Restored Core permits activation");
     }
 
     // Scenarios: BLCU-ENABLE-L01.
     function test_givenExistingAdmin_whenEnabled_thenExactTransition() public {
-        test_givenPaused_whenEnabled_thenExactTransition(address(this), true, true);
+        test_givenPaused_whenEnabled_thenExactTransition(_fixtureAdmin, true, true);
     }
 }
 

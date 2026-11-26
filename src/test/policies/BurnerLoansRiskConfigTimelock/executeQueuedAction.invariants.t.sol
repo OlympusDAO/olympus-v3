@@ -6,7 +6,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansRiskConfigTimelockTest} from "./BurnerLoansRiskConfigTimelockTest.sol";
@@ -25,15 +25,21 @@ contract BurnerLoansRiskConfigTimelockExecuteInvariantTest is BurnerLoansRiskCon
     address internal _selectedOperator;
     address internal _blaProposer;
     address internal _adminProposer;
+    address internal _overlapProposer;
+    address internal _emergencyCanceller;
 
     function setUp() public override {
         super.setUp();
         _selectedOperator = address(_timelock);
         _blaProposer = makeAddr("Invariant BLA proposer");
         _adminProposer = makeAddr("Invariant ADMIN proposer");
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, _blaProposer);
-        _rolesAdmin.grantRole(ADMIN_ROLE, _adminProposer);
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, address(this));
+        _overlapProposer = makeAddr("Invariant overlapping proposer");
+        _emergencyCanceller = makeAddr("Invariant emergency canceller");
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, _blaProposer);
+        _grantFixtureRole(ADMIN_ROLE, _adminProposer);
+        _grantFixtureRole(ADMIN_ROLE, _overlapProposer);
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, _overlapProposer);
+        _grantFixtureRole(EMERGENCY_ROLE, _emergencyCanceller);
         _values[0] = _risk.priceCacheMaxAge();
         // A funded fixed-owner reward must survive every governance/queue sequence.
         _asset.mint(address(_payout), 40);
@@ -87,7 +93,7 @@ contract BurnerLoansRiskConfigTimelockExecuteInvariantTest is BurnerLoansRiskCon
         ITimelockBatchQueue.BatchAction[] memory a = _single(_action(domain, value));
         bool expected = _ready() && _owners[domain] == 0;
         uint256 role = bound(role_, 0, 2);
-        vm.prank(role == 0 ? address(this) : role == 1 ? _blaProposer : _adminProposer);
+        vm.prank(role == 0 ? _overlapProposer : role == 1 ? _blaProposer : _adminProposer);
         (bool ok, bytes memory data) = address(_timelock).call(
             abi.encodeCall(_timelock.queueBatch, (a))
         );
@@ -130,6 +136,7 @@ contract BurnerLoansRiskConfigTimelockExecuteInvariantTest is BurnerLoansRiskCon
     function actionCancel(uint8 domain_) public {
         uint256 domain = bound(domain_, 0, 3);
         uint64 id = _owners[domain];
+        vm.prank(_emergencyCanceller);
         (bool ok, ) = address(_timelock).call(
             abi.encodeCall(ITimelockBatchQueue.cancelQueuedAction, (id))
         );
@@ -141,6 +148,7 @@ contract BurnerLoansRiskConfigTimelockExecuteInvariantTest is BurnerLoansRiskCon
         if (ok) {
             _owners[domain] = 0;
             assertTrue(_timelock.getQueuedAction(id).cancelled, "terminal cancellation recorded");
+            vm.prank(_emergencyCanceller);
             (bool repeated, ) = address(_timelock).call(
                 abi.encodeCall(ITimelockBatchQueue.cancelQueuedAction, (id))
             );
@@ -152,6 +160,7 @@ contract BurnerLoansRiskConfigTimelockExecuteInvariantTest is BurnerLoansRiskCon
         uint256 domain = bound(domain_, 0, 3);
         uint256 value = _boundedValue(domain, value_);
         ITimelockBatchQueue.BatchAction memory a = _action(domain, value);
+        vm.prank(_fixtureAdmin);
         (bool ok, ) = address(_risk).call(abi.encodePacked(a.selector, a.payload));
         assertEq(ok, _riskActive && _riskEnabled, "direct ADMIN mutation respects Risk lifecycle");
         if (ok) _values[domain] = value;
@@ -159,6 +168,7 @@ contract BurnerLoansRiskConfigTimelockExecuteInvariantTest is BurnerLoansRiskCon
 
     function actionOperator(bool selected_) public {
         address candidate = selected_ ? address(_timelock) : _recipient;
+        vm.prank(_fixtureAdmin);
         (bool ok, ) = address(_risk).call(
             abi.encodeWithSignature("setConfigOperator(address)", candidate)
         );
@@ -173,6 +183,7 @@ contract BurnerLoansRiskConfigTimelockExecuteInvariantTest is BurnerLoansRiskCon
             ? _riskActive
             : (_queueActive && _riskActive && _selectedOperator == address(_timelock));
         bool expected = current != enabled_ && (!enabled_ || ready);
+        vm.prank(_fixtureAdmin);
         (bool ok, ) = target.call(
             abi.encodeWithSignature(enabled_ ? "enable(bytes)" : "disable(bytes)", bytes(""))
         );
@@ -186,7 +197,7 @@ contract BurnerLoansRiskConfigTimelockExecuteInvariantTest is BurnerLoansRiskCon
     function actionMembership(bool risk_, bool active_) public {
         bool current = risk_ ? _riskActive : _queueActive;
         if (current != active_) {
-            _kernel.executeAction(
+            _executeFixtureKernelAction(
                 active_ ? Actions.ActivatePolicy : Actions.DeactivatePolicy,
                 risk_ ? address(_risk) : address(_timelock)
             );

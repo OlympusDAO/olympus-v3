@@ -27,6 +27,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
         ITimelockBatchQueue.QueuedAction memory beforeAction = _payoutTimelock.getQueuedAction(
             _pendingId
         );
+        vm.prank(_fixtureAdmin);
         uint64 unrelated = _payoutTimelock.queueSetSendFeesToDistributor(false);
         bytes32 other = _queueDigest(unrelated);
         bytes32 funds = _payoutDigest();
@@ -58,6 +59,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
             0,
             0
         );
+        vm.prank(_fixtureAdmin);
         uint64 replacement = _payoutTimelock.queueRescue(address(_asset), _borrower);
         assertEq(
             _payoutTimelock.pendingActionId(_scopedKey(_rescueAction())),
@@ -70,7 +72,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     function test_givenNoEmergencyRole_whenCancelled_reverts(
         address caller_
     ) public givenPendingRecovery {
-        vm.assume(caller_ != address(this) && !_roles.hasRole(caller_, EMERGENCY_ROLE));
+        vm.assume(caller_ != _fixtureAdmin && !_roles.hasRole(caller_, EMERGENCY_ROLE));
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.cancelQueuedAction, (_pendingId)),
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
@@ -84,7 +86,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(0));
         _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
-        _setState(_payoutTimelock, true, false);
+        _setPolicyLifecycle(_payoutTimelock, true, false);
         bytes32 funds = _payoutDigest();
         vm.expectEmit(address(_payoutTimelock));
         emit ITimelockBatchQueue.TimelockActionCancelled(_pendingId, caller_);
@@ -102,7 +104,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     function test_givenInactiveDisabled_whenCancelled_reverts(
         address caller_
     ) public givenPendingRecovery {
-        _setState(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.cancelQueuedAction, (_pendingId)),
             abi.encodeWithSelector(
@@ -117,7 +119,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     function test_givenInactiveEnabled_whenCancelled_reverts(
         address caller_
     ) public givenPendingRecovery {
-        _setState(_payoutTimelock, false, true);
+        _setPolicyLifecycle(_payoutTimelock, false, true);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.cancelQueuedAction, (_pendingId)),
             abi.encodeWithSelector(
@@ -161,7 +163,9 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     function test_givenCancelled_whenCancelled_reverts(
         address caller_
     ) public givenPendingRecovery {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(this));
+        address emergencyCanceller = makeAddr("emergencyCanceller");
+        _grantFixtureRole(EMERGENCY_ROLE, emergencyCanceller);
+        vm.prank(emergencyCanceller);
         _payoutTimelock.cancelQueuedAction(_pendingId);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.cancelQueuedAction, (_pendingId)),
@@ -180,9 +184,10 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(0));
         _grantRoleIfMissing(EMERGENCY_ROLE, caller_);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
-        _setState(_payout, false, false);
-        if (!enabled_) _payoutTimelock.disable("");
+        _setPolicyLifecycle(_payout, false, false);
+        _setPolicyLifecycle(_payoutTimelock, true, enabled_);
         _rejectTargetReads();
         vm.prank(caller_);
         _payoutTimelock.cancelQueuedAction(_pendingId);
@@ -211,7 +216,7 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
     function test_givenRevokedProposer_whenProposerCancels() public {
         vm.prank(_recipient);
         _pendingId = _payoutTimelock.queueRescue(address(_asset), _borrower);
-        _rolesAdmin.revokeRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
+        _revokeFixtureRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
 
         vm.expectEmit(address(_payoutTimelock));
         emit ITimelockBatchQueue.TimelockActionCancelled(_pendingId, _recipient);
@@ -227,6 +232,6 @@ contract BurnerLoansPayoutConfigTimelockCancelQueuedActionTest is
 
     // Scenarios: BLCUCT-CANCEL-A01, BLCUCT-CANCEL-D01, BLCUCT-CANCEL-L01.
     function test_givenExistingAdmin_whenEmergencyCancels_thenExactCleanup() public {
-        test_givenEmergencyCaller_whenCancelled_thenExactCleanup(address(this), true, 1);
+        test_givenEmergencyCaller_whenCancelled_thenExactCleanup(_fixtureAdmin, true, 1);
     }
 }

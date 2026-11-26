@@ -41,7 +41,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         uint32 markets = _floan.getMarketCount();
         bool registered = _core.isAssetRegistered(address(token_));
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.addAsset, (address(token_), uint128(1), risk_, fee_, shares_)),
             reason_
         );
@@ -108,7 +108,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         bool enabled_
     ) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _mutationReverts(
             caller_,
             abi.encodeCall(
@@ -125,7 +125,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigDisabled {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _mutationReverts(
             caller_,
             abi.encodeCall(
@@ -142,7 +142,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigDisabled givenConfigInactive {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _mutationReverts(
             caller_,
             abi.encodeCall(
@@ -159,7 +159,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         bool enabled_,
         address caller_
     ) public givenListingAdmin(caller_) givenConfigInactive {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _mutationReverts(
             caller_,
             abi.encodeCall(
@@ -174,8 +174,9 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_givenCoreInactiveDisabled_whenAssetAdded_reverts(
         address caller_
     ) public givenListingAdmin(caller_) {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         _mutationReverts(
             caller_,
             abi.encodeCall(
@@ -193,7 +194,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_givenCoreInactiveEnabled_whenAssetAdded_reverts(
         address caller_
     ) public givenListingAdmin(caller_) {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         _mutationReverts(
             caller_,
             abi.encodeCall(
@@ -211,6 +212,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_givenCoreActiveDisabled_whenAssetAdded_reverts(
         address caller_
     ) public givenListingAdmin(caller_) {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         _mutationReverts(
             caller_,
@@ -229,7 +231,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_whenCollateralIsZero_reverts() public {
         address token = address(0);
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(
                 _config.addAsset,
                 (token, uint128(0), _riskConfig(), _feeConfig(), false)
@@ -245,7 +247,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_whenCollateralIsOhm_reverts() public {
         address token = address(_ohm);
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(
                 _config.addAsset,
                 (token, uint128(0), _riskConfig(), _feeConfig(), false)
@@ -348,14 +350,17 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-ADD-ASSET-I07.
     function test_givenCorePeriodAbsent_whenAssetAdded_reverts() public {
         MockERC20 token = _listingToken(6);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(
             IERC20(address(token)),
             IERC4626(address(0)),
             type(uint256).max,
             0
         );
-        _rolesAdmin.grantRole(DEPOSIT_OPERATOR_ROLE, _recipient);
+        _grantFixtureRole(DEPOSIT_OPERATOR_ROLE, _recipient);
+        vm.prank(_fixtureAdmin);
         _depositManager.setOperatorName(_recipient, "oth");
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(address(token)), 1, _recipient);
         _listingReverts(
             token,
@@ -373,6 +378,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-ADD-ASSET-D04.
     function test_givenDepositManagerDisabled_whenAssetAdded_reverts() public {
         MockERC20 token = _prepareCollateral(6);
+        vm.prank(_fixtureAdmin);
         _depositManager.disable("");
         _listingReverts(
             token,
@@ -389,6 +395,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-ADD-ASSET-D05.
     function test_givenCorePeriodDisabled_whenAssetAdded_reverts() public {
         MockERC20 token = _prepareCollateral(6);
+        vm.prank(_fixtureAdmin);
         _depositManager.disableAssetPeriod(IERC20(address(token)), 1, address(_core));
         _listingReverts(
             token,
@@ -791,7 +798,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_whenMaximumRiskListed() public {
         MockERC20 token = _prepareCollateral(6);
         _assertListed(
-            address(this),
+            _fixtureAdmin,
             token,
             1,
             IBurnerLoansRisk.AssetRiskConfigInput(
@@ -811,7 +818,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_whenMinimumRiskListed() public {
         MockERC20 token = _prepareCollateral(6);
         _assertListed(
-            address(this),
+            _fixtureAdmin,
             token,
             1,
             IBurnerLoansRisk.AssetRiskConfigInput(1, 10000, 0, 1, 2, 0),
@@ -825,7 +832,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         base_ = uint16(bound(base_, 0, 10000));
         MockERC20 token = _prepareCollateral(6);
         _assertListed(
-            address(this),
+            _fixtureAdmin,
             token,
             1,
             _riskConfig(),
@@ -838,7 +845,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_whenDecreasingSlopesAtTotalCapListed() public {
         MockERC20 token = _prepareCollateral(6);
         _assertListed(
-            address(this),
+            _fixtureAdmin,
             token,
             1,
             _riskConfig(),
@@ -874,7 +881,9 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-ADD-ASSET-C01.
     function test_givenCoreSelectsOtherConfig_whenAdded() public {
         MockERC20 token = _prepareCollateral(6);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(_recipient);
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(_recipient);
         _listingReverts(
             token,
@@ -931,6 +940,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         MockERC20 token = _listingToken(18);
         MockERC4626 vault = new MockERC4626(OZERC20(address(token)), "Required shares", "RS");
         _registerDepositAsset(token, address(vault));
+        vm.prank(_fixtureAdmin);
         _depositManager.setConfigOperator(_configurationCaller);
         vm.prank(_configurationCaller);
         _depositManager.setAssetShareWithdrawalRequired(IERC20(address(token)), true);
@@ -954,6 +964,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         MockERC20 token = _listingToken(18);
         MockERC4626 vault = new MockERC4626(OZERC20(address(token)), "Required shares", "RS");
         _registerDepositAsset(token, address(vault));
+        vm.prank(_fixtureAdmin);
         _depositManager.setConfigOperator(_configurationCaller);
         vm.prank(_configurationCaller);
         _depositManager.setAssetShareWithdrawalRequired(IERC20(address(token)), true);
@@ -1105,7 +1116,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         uint8[5] memory decimals = [uint8(0), 1, 6, 18, 36];
         for (uint256 i; i < decimals.length; ++i) {
             MockERC20 token = _prepareCollateral(decimals[i]);
-            _assertListed(address(this), token, 1, _riskConfig(), _feeConfig(), false);
+            _assertListed(_fixtureAdmin, token, 1, _riskConfig(), _feeConfig(), false);
             assertEq(
                 _config.getAssetConfig(address(token)).collateralDecimals,
                 decimals[i],
@@ -1116,6 +1127,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ADD-ASSET-I29.
     function test_givenExistingAssetWithOriginationsDisabled_whenAddedAgain_reverts() public {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         _listingReverts(
             _asset,
@@ -1382,7 +1394,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         for (uint256 i; i < values.length; ++i) {
             MockERC20 token = _prepareCollateral(6);
             _assertListed(
-                address(this),
+                _fixtureAdmin,
                 token,
                 1,
                 _riskConfig(),
@@ -1397,7 +1409,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         uint128[3] memory caps = [uint128(0), 1, type(uint128).max];
         for (uint256 i; i < caps.length; ++i) {
             MockERC20 token = _prepareCollateral(6);
-            _assertListed(address(this), token, caps[i], _riskConfig(), _feeConfig(), false);
+            _assertListed(_fixtureAdmin, token, caps[i], _riskConfig(), _feeConfig(), false);
         }
     }
 
@@ -1405,7 +1417,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
     function test_whenSingleSlopeMaximumsSeeded() public {
         MockERC20 first = _prepareCollateral(6);
         _assertListed(
-            address(this),
+            _fixtureAdmin,
             first,
             1,
             _riskConfig(),
@@ -1414,7 +1426,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansConfigTest {
         );
         MockERC20 second = _prepareCollateral(6);
         _assertListed(
-            address(this),
+            _fixtureAdmin,
             second,
             1,
             _riskConfig(),

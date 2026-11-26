@@ -25,7 +25,9 @@ contract BurnerLoansDebtReferralFeesInvariantTest is BurnerLoansModularTest {
 
     function setUp() public override {
         super.setUp();
+        vm.prank(_fixtureAdmin);
         _config.setAssetFeeConfig(address(_asset), IBurnerLoansRisk.AssetFeeConfig(100, 0, 0, 0));
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(
             address(_asset),
             IBurnerLoansRisk.AssetRiskConfigInput(8500, 12500, 100, 1, 90 days, 1000e6)
@@ -44,12 +46,14 @@ contract BurnerLoansDebtReferralFeesInvariantTest is BurnerLoansModularTest {
                 lens: _lens,
                 asset: _asset,
                 borrower: _borrower,
-                governance: address(this)
+                executor: _fixtureExecutor,
+                admin: _fixtureAdmin
             })
         );
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_handler));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, _handler.BLA());
-        _risk.setConfigOperator(_handler.OPERATOR());
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, _handler.BLA());
+        address configOperator = _handler.OPERATOR();
+        vm.prank(_fixtureAdmin);
+        _risk.setConfigOperator(configOperator);
         assertFalse(
             _roles.hasRole(_handler.OPERATOR(), ADMIN_ROLE),
             "Selected operator has no ADMIN role"

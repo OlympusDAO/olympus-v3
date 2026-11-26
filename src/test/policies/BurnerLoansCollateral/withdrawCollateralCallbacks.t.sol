@@ -224,7 +224,7 @@ contract BurnerLoansCollateralWithdrawCollateralCallbacksTest is
     // Scenarios: BLCOL-WITHDRAW-C05.
     function test_givenShareDeliveryCallback_whenCoreReentryCaught() public {
         ReentrantFeeToken shares = _prepareExternalShares();
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(shares));
+        _grantFixtureRole(ADMIN_ROLE, address(shares));
         shares.setCallbackFrom(
             address(_depositManager),
             address(_core),
@@ -236,7 +236,7 @@ contract BurnerLoansCollateralWithdrawCollateralCallbacksTest is
     // Scenarios: BLCOL-WITHDRAW-C06.
     function test_givenShareDeliveryCallback_whenCoreReentryPropagated() public {
         ReentrantFeeToken shares = _prepareExternalShares();
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(shares));
+        _grantFixtureRole(ADMIN_ROLE, address(shares));
         shares.setCallbackFrom(
             address(_depositManager),
             address(_core),

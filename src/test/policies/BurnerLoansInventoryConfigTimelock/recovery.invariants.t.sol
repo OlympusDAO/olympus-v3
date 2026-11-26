@@ -24,8 +24,8 @@ contract BurnerLoansInventoryConfigTimelockRecoveryInvariantsTest is
         _supplyInventory(_borrower, 50e9);
         _ohm.mint(address(_inventory), 1e9);
         _handler = new InventoryTimelockHandler(_timelock, _inventory, _ohm);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_handler));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(_handler));
+        _grantFixtureRole(ADMIN_ROLE, address(_handler));
+        _grantFixtureRole(EMERGENCY_ROLE, address(_handler));
         bytes4[] memory selectors = new bytes4[](8);
         selectors[0] = _handler.queueBurn.selector;
         selectors[1] = _handler.queueRescue.selector;

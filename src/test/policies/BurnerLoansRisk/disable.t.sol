@@ -26,7 +26,7 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
             bytes(""),
             abi.encodeWithSelector(DependencyReadFailed.selector)
         );
-        _transition(address(this));
+        _transition(_riskAdmin);
     }
 
     function _transition(address caller_) private {
@@ -50,7 +50,7 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-DISABLE-A01.
     function test_whenUnauthorizedCaller_reverts(address caller_) public {
-        vm.assume(caller_ != address(this));
+        vm.assume(caller_ != _riskAdmin);
         uint48 beforeTime = _risk.lastTransitionAt();
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
@@ -61,8 +61,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-DISABLE-A02, BLRISK-DISABLE-L02.
     function test_givenAdmin_whenTransition(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         _transition(caller_);
     }
 
@@ -70,8 +70,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
     function test_givenAdminActive_whenAlreadyDisabled_reverts(
         address caller_
     ) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
         _risk.disable("");
@@ -81,8 +81,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
     function test_givenAdminInactive_whenAlreadyDisabled_reverts(
         address caller_
     ) public givenDisabled givenInactive {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
         _risk.disable("");
@@ -90,8 +90,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-DISABLE-L04.
     function test_givenAdminInactive_whenTransition(address caller_) public givenInactive {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         _transition(caller_);
     }
 
@@ -100,8 +100,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
         address caller_,
         bytes memory data_
     ) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         vm.assume(data_.length > 0 && data_.length <= 256);
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
         vm.prank(caller_);
@@ -110,8 +110,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-DISABLE-I01.
     function test_givenAdmin_whenPayloadBoundarySeeds_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(ADMIN_ROLE, caller_);
         bytes[4] memory seeds = [
             bytes(hex"00"),
             bytes(hex"01"),
@@ -127,8 +127,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-DISABLE-A02, BLRISK-DISABLE-L02.
     function test_givenEmergency_whenTransition(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(EMERGENCY_ROLE, caller_);
         _transition(caller_);
     }
 
@@ -136,8 +136,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
     function test_givenEmergencyActive_whenAlreadyDisabled_reverts(
         address caller_
     ) public givenDisabled {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(EMERGENCY_ROLE, caller_);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
         _risk.disable("");
@@ -147,8 +147,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
     function test_givenEmergencyInactive_whenAlreadyDisabled_reverts(
         address caller_
     ) public givenDisabled givenInactive {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(EMERGENCY_ROLE, caller_);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
         _risk.disable("");
@@ -156,8 +156,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-DISABLE-L04.
     function test_givenEmergencyInactive_whenTransition(address caller_) public givenInactive {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(EMERGENCY_ROLE, caller_);
         _transition(caller_);
     }
 
@@ -166,8 +166,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
         address caller_,
         bytes memory data_
     ) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(EMERGENCY_ROLE, caller_);
         vm.assume(data_.length > 0 && data_.length <= 256);
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
         vm.prank(caller_);
@@ -176,8 +176,8 @@ contract BurnerLoansRiskDisableTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-DISABLE-I01.
     function test_givenEmergency_whenPayloadBoundarySeeds_reverts(address caller_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _riskAdmin);
+        _grantRiskRole(EMERGENCY_ROLE, caller_);
         bytes[4] memory seeds = [
             bytes(hex"00"),
             bytes(hex"01"),

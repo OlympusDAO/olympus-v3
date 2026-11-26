@@ -23,28 +23,28 @@ import {BurnerLoansLensTest} from "./BurnerLoansLensTest.sol";
 contract BurnerLoansLensGetAssetCollateralStatusTest is BurnerLoansLensTest {
     // Scenarios: BLLENS-COLLATERAL-STATUS-L03.
     function test_givenActiveEnabledCore_whenStatusRead(address caller_) public {
-        _setCoreLifecycle(true, true);
+        _setPolicyLifecycle(_core, true, true);
         _mockStatus(102, 102, 0, 100, 1);
         _assertStatus(caller_, 102, 102, 0, 100, 1, true);
     }
 
     // Scenarios: BLLENS-COLLATERAL-STATUS-L04.
     function test_givenActiveDisabledCore_whenStatusRead(address caller_) public {
-        _setCoreLifecycle(true, false);
+        _setPolicyLifecycle(_core, true, false);
         _mockStatus(102, 102, 0, 100, 1);
         _assertStatus(caller_, 102, 102, 0, 100, 1, true);
     }
 
     // Scenarios: BLLENS-COLLATERAL-STATUS-L05.
     function test_givenInactiveEnabledCore_whenStatusRead(address caller_) public {
-        _setCoreLifecycle(false, true);
+        _setPolicyLifecycle(_core, false, true);
         _mockStatus(102, 102, 0, 100, 1);
         _assertStatus(caller_, 102, 102, 0, 100, 1, true);
     }
 
     // Scenarios: BLLENS-COLLATERAL-STATUS-L06.
     function test_givenInactiveDisabledCore_whenStatusRead(address caller_) public {
-        _setCoreLifecycle(false, false);
+        _setPolicyLifecycle(_core, false, false);
         _mockStatus(102, 102, 0, 100, 1);
         _assertStatus(caller_, 102, 102, 0, 100, 1, true);
     }
@@ -87,6 +87,7 @@ contract BurnerLoansLensGetAssetCollateralStatusTest is BurnerLoansLensTest {
 
     // Scenarios: BLLENS-COLLATERAL-STATUS-L01.
     function test_givenDisabledCustody_whenStatusRead_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         IEnabler(address(_depositManager)).disable("");
         vm.expectRevert(
             abi.encodeWithSelector(

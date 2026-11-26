@@ -14,7 +14,7 @@ import {BurnerLoansSeizeLifecycleTest} from "src/test/policies/BurnerLoansSeize/
 contract BurnerLoansSeizeChangeKernelTest is BurnerLoansSeizeLifecycleTest {
     // Scenarios: BLLIQ-KERNEL-P01.
     function test_whenKernelChanges_thenOnlyPointerChanges(address next_, bool enabled_) public {
-        _setPolicyState(_liquidation, true, enabled_);
+        _setPolicyLifecycle(_liquidation, true, enabled_);
         uint48 beforeTime = _liquidation.lastTransitionAt();
         vm.prank(address(_kernel));
         _liquidation.changeKernel(Kernel(next_));
@@ -57,6 +57,7 @@ contract BurnerLoansSeizeChangeKernelTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQ-KERNEL-P01.
     function test_givenMigrationToFreshKernel_whenSeized_thenAdmissionUsesNewMembership() public {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         address rolesBefore = address(_liquidation.ROLES());
         vm.prank(address(_kernel));

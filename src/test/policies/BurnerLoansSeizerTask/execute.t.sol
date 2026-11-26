@@ -28,11 +28,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-EXECUTE-P08.
     function test_givenLensExhaustsGas_whenHeartRunsTasks_thenLaterTaskExecutes() public {
         MockPeriodicTaskManager manager = new MockPeriodicTaskManager(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(manager));
-        _rolesAdmin.grantRole(HEART_ROLE, address(manager));
+        _executeSeizerKernelAction(Actions.ActivatePolicy, address(manager));
+        _grantSeizerRole(HEART_ROLE, address(manager));
         MockPeriodicTask later = new MockPeriodicTask();
+        vm.prank(_seizerAdmin);
         manager.addPeriodicTask(address(_task));
+        vm.prank(_seizerAdmin);
         manager.addPeriodicTask(address(later));
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(200_000);
         // INVALID consumes the gas forwarded to Lens after successful task binding.
         vm.etch(address(_lens), hex"fe");
@@ -53,16 +56,19 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
 
     function setUp() public override {
         super.setUp();
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_otherAsset));
     }
 
     // Scenarios: BLSEIZ-EXECUTE-P03.
     function test_givenWholeTaskExhaustsGas_whenExecuted_thenOtherAssetGetsNextHeartbeat() public {
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(1);
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.nextAssetIndex(),
             1,
@@ -78,8 +84,9 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             0,
             "Expected independent unhealthy retry offset"
         );
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(10_000_000);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Next heartbeat visits B before returning to A");
     }
 
@@ -92,7 +99,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), ScanReadFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Failing scan cannot monopolize visits");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -108,6 +115,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-EXECUTE-L01.
     function test_givenDisabled_whenExecuted_thenNoRotation() public {
+        vm.prank(_seizerAdmin);
         _task.disable("");
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(0));
         vm.expectCall(
@@ -115,7 +123,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeWithSelector(_liquidation.seize.selector),
             uint64(0)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Paused task preserves progress");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -141,7 +149,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-EXECUTE-P06, BLSEIZ-SELF-EXECUTE-P01.
     function test_givenSeizerRoleMissing_whenExecuted_thenAssetStillRotates() public {
-        _rolesAdmin.revokeRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
+        _revokeSeizerRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
         vm.mockCallRevert(
             address(_lens),
             abi.encodeWithSelector(_lens.getExpiredBorrowersBoundedFor.selector),
@@ -171,7 +179,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeWithSelector(_liquidation.seize.selector),
             uint64(0)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Missing authority does not monopolize scheduling");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -184,14 +192,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             "Expected independent unhealthy retry offset"
         );
         vm.clearMockedCalls();
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
-        _task.execute();
+        _grantSeizerRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Granting the role restores ordinary scheduling");
     }
 
     // Scenarios: BLSEIZ-EXECUTE-P01.
     function test_givenNoAssets_whenExecuted_thenNoWork() public {
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_otherAsset));
         vm.expectCall(
             address(_lens),
@@ -203,14 +213,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeWithSelector(_liquidation.seize.selector),
             uint64(0)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Empty registry preserves zero iterator");
     }
 
     // Scenarios: BLSEIZ-EXECUTE-A02, BLSEIZ-EXECUTE-P05.
     function test_givenHeartRole_whenExecuted_thenAssetRotates(address caller_) public {
         vm.assume(caller_ != address(0));
-        if (!_roles.hasRole(caller_, HEART_ROLE)) _rolesAdmin.grantRole(HEART_ROLE, caller_);
+        if (!_roles.hasRole(caller_, HEART_ROLE)) _grantSeizerRole(HEART_ROLE, caller_);
         vm.prank(caller_);
         _task.execute();
         assertEq(_task.nextAssetIndex(), 1, "Every permitted Heart caller processes only A");
@@ -226,7 +236,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
                 address(_task)
             )
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Inactive task cannot advance asset progress");
     }
 
@@ -235,14 +245,17 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         public
     {
         MockPeriodicTaskManager manager = new MockPeriodicTaskManager(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(manager));
-        _rolesAdmin.grantRole(HEART_ROLE, address(manager));
+        _executeSeizerKernelAction(Actions.ActivatePolicy, address(manager));
+        _grantSeizerRole(HEART_ROLE, address(manager));
         MockPeriodicTask later = new MockPeriodicTask();
+        vm.prank(_seizerAdmin);
         manager.addPeriodicTask(address(_task));
+        vm.prank(_seizerAdmin);
         manager.addPeriodicTask(address(later));
         _mockCount(10);
         _setBothBorrowerCursors(address(_asset), 9);
         _mockCount(1);
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(200_000);
         address[] memory borrowers = _one(_ALICE);
         vm.mockCallRevert(
@@ -277,7 +290,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         assertEq(_task.nextAssetIndex(), 1, "Outer failure boundary retains one asset rotation");
         assertEq(later.count(), 1, "Helper exhaustion cannot prevent later Heart tasks");
         vm.clearMockedCalls();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.nextAssetIndex(),
             0,
@@ -294,7 +307,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(SettlementFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Custom-error failure rotates assets");
     }
 
@@ -303,7 +316,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.mockCallRevert(address(_task), abi.encodeCall(_task.selfExecuteTask, ()), hex"ab");
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0xab000000));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Short-error failure rotates assets");
     }
 
@@ -317,7 +330,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.mockCallRevert(address(_task), abi.encodeCall(_task.selfExecuteTask, ()), failure);
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0xabcdef01));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Large-error failure rotates assets");
     }
 
@@ -330,8 +343,8 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             new address[](0),
             1
         );
-        _task.execute();
-        _task.execute(); // B's turn.
+        _executeAsHeart(_task);
+        _executeAsHeart(_task); // B's turn.
         vm.mockCallRevert(
             address(_lens),
             abi.encodeCall(_lens.getActiveBorrowerCount, (address(_asset))),
@@ -340,7 +353,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 1), uint64(0));
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), ScanReadFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -372,7 +385,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             4,
             2
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             4,
@@ -402,7 +415,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             4,
             0
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             4,
@@ -413,7 +426,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             new address[](0),
             0
         );
-        _task.execute(); // Other asset receives its turn.
+        _executeAsHeart(_task); // Other asset receives its turn.
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureExecuted(
             address(_asset),
@@ -422,7 +435,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             0,
             0
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             0,
@@ -432,6 +445,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-EXECUTE-P04.
     function test_givenOneAsset_whenExecuted_thenTraversalRemainsZero() public {
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_otherAsset));
         MockSeizerTaskDependency(address(_lens)).setScanResult(
             address(_asset),
@@ -445,7 +459,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeWithSelector(_liquidation.seize.selector),
             uint64(0)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Single managed asset wraps to itself");
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -460,8 +474,11 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         bool enabled_
     ) public {
         vm.assume(!_roles.hasRole(caller_, HEART_ROLE));
-        if (!enabled_) _task.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_task));
+        if (!enabled_) {
+            vm.prank(_seizerAdmin);
+            _task.disable("");
+        }
+        _executeSeizerKernelAction(Actions.DeactivatePolicy, address(_task));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -491,7 +508,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             4,
             2
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             4,
@@ -521,7 +538,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             0,
             2
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -554,7 +571,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _expectNoPricedDiscovery();
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), SettlementFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -586,7 +603,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), ScanReadFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             7,
@@ -613,7 +630,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), ScanReadFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             next,
@@ -643,17 +660,18 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectCall(address(_lens), _expiryScan(0), uint64(1));
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Zero cursor needs no count read");
     }
 
     // Scenarios: BLSEIZ-SELF-EXECUTE-N03.
     function test_givenMaximumLimits_whenExecuted_thenBothStagesReceiveFullWidthInputs() public {
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(type(uint16).max, type(uint8).max);
         _mockCount(1);
         vm.expectCall(address(_lens), _expiryScan(0), uint64(1));
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -672,7 +690,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _expectNoPricedDiscovery();
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -696,7 +714,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.mockCall(address(_lens), _boundedScan(address(_asset), 0), hex"00");
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -717,7 +735,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _expectNoPricedDiscovery();
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), bytes4(0));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -737,6 +755,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
         // Cover cold admission and cleanup; expectCall proves the body reserve still prevents entry.
+        vm.prank(_seizerHeart);
         _task.execute{gas: 60_000}();
         assertEq(_task.nextAssetIndex(), 1, "Cleanup rotates without entering the task body");
         assertEq(
@@ -753,18 +772,23 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-EXECUTE-P18.
     function test_givenEmptyRegistry_givenGasBelowReserve_whenExecuted_thenNoBody() public {
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_otherAsset));
         vm.expectCall(address(_task), abi.encodeCall(_task.selfExecuteTask, ()), uint64(0));
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(bytes4(0));
+        vm.prank(_seizerHeart);
         _task.execute{gas: 50_000}();
         assertEq(_task.nextAssetIndex(), 0, "Empty registry cleanup avoids modulo by zero");
     }
 
     // Scenarios: BLSEIZ-EXECUTE-D21.
     function test_givenEmptyRegistry_givenBodyReverts_whenExecuted_thenFailureIsReported() public {
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_otherAsset));
         vm.mockCallRevert(
             address(_task),
@@ -773,7 +797,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(SettlementFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.nextAssetIndex(),
             0,
@@ -790,19 +814,19 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectCall(address(_task), abi.encodeCall(_task.selfExecuteTask, ()), uint64(0));
         vm.expectRevert(ScanReadFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Admission failure does not consume an asset turn");
     }
 
     // Scenarios: BLSEIZ-EXECUTE-P22.
     function test_givenTaskHeartOnly_whenExecuted_thenSeizerGrantStillRequired() public {
-        _rolesAdmin.grantRole(HEART_ROLE, address(_task));
-        _rolesAdmin.revokeRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
+        _grantSeizerRole(HEART_ROLE, address(_task));
+        _revokeSeizerRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
         vm.expectCall(address(_lens), _expiryScan(0), uint64(0));
         _expectNoPricedDiscovery();
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizerRoleMissing(address(_asset));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "HEART-only Task still rotates without discovery");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -821,12 +845,12 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _setTaskEnabled(enabled_);
         vm.mockCallRevert(
             address(_roles),
-            abi.encodeCall(ROLESv1.requireRole, (HEART_ROLE, address(this))),
+            abi.encodeCall(ROLESv1.requireRole, (HEART_ROLE, _seizerHeart)),
             abi.encodeWithSelector(ScanReadFailed.selector)
         );
         vm.expectCall(address(_task), abi.encodeCall(_task.selfExecuteTask, ()), uint64(0));
         vm.expectRevert(ScanReadFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Role lookup failure propagates before disabled no-op");
     }
 
@@ -840,7 +864,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         vm.expectCall(address(_lens), _expiryScan(0), uint64(0));
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ExecutionFailed(ScanReadFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Body role lookup failure consumes one asset turn");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -870,7 +894,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             0,
             2
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -894,7 +918,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectCall(address(_lens), _expiryScan(2), uint64(1));
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 8), uint64(1));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             4,
@@ -918,7 +942,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             _boundedScan(address(_asset), 8),
             abi.encodeWithSelector(ScanReadFailed.selector)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             4,
@@ -936,7 +960,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _separateLaneCursors();
         _mockExpiryPage(2, _one(_ALICE), 4);
         _expectNoPricedDiscovery();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             3,
@@ -952,6 +976,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-SELF-EXECUTE-D11.
     function test_givenExpiredEndBatch_givenValidUnhealthyCursor_whenExecuted() public {
         _separateLaneCursors();
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(20, 1);
         _mockExpiryPage(2, _one(_ALICE), 0);
         bytes[] memory counts = new bytes[](2);
@@ -962,7 +987,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_lens.getActiveBorrowerCount, (address(_asset))),
             counts
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Executing end sentinel stays zero");
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -980,7 +1005,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             _boundedScan(address(_asset), 8),
             abi.encode(_one(_ALICE), uint256(0), uint256(0))
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             0,
@@ -996,6 +1021,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-SELF-EXECUTE-D12.
     function test_givenUnhealthyBatch_givenValidExpiredCursor_whenExecuted() public {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(2, 1);
         _setBothBorrowerCursors(address(_asset), 2);
         _mockExpiryPage(2, new address[](0), 4);
@@ -1004,8 +1030,8 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             _boundedScan(address(_asset), 2),
             abi.encodeWithSelector(ScanReadFailed.selector)
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         vm.clearMockedCalls();
         _mockExpiryPage(4, new address[](0), 6);
         vm.mockCall(
@@ -1013,7 +1039,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             _boundedScan(address(_asset), 2),
             abi.encode(_one(_ALICE), uint256(4), uint256(0))
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             3,
@@ -1038,7 +1064,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectCall(address(_lens), _expiryScan(2), uint64(1));
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             4,
@@ -1054,18 +1080,22 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-EXECUTE-L01.
     function test_givenUnequalCursors_givenDisabled_whenExecuted_thenBothArePreserved() public {
         _separateLaneCursors();
+        vm.prank(_seizerAdmin);
         _task.disable("");
         vm.expectCall(address(_lens), bytes(""), uint64(0));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Pause retains expiry work");
         assertEq(_task.unhealthyAssetCursor(address(_asset)), 8, "Pause retains unhealthy work");
     }
 
     function _separateLaneCursors() private {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(2, 1);
         // Select offsets without consuming preferred-lane turns during fixture setup.
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(address(_asset), 2);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 8);
         assertEq(_task.expiredAssetCursor(address(_asset)), 2, "Independent expiry setup offset");
         assertEq(
@@ -1084,8 +1114,8 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             _boundedScan(address(_asset), 8),
             abi.encode(new address[](0), uint256(0), uint256(0))
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         vm.clearMockedCalls();
         _mockExpiryPage(4, new address[](0), 6);
         vm.mockCall(
@@ -1093,8 +1123,8 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             _boundedScan(address(_asset), 0),
             abi.encode(new address[](0), uint256(2), uint256(0))
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         vm.clearMockedCalls();
         _mockCount(6);
         _mockExpiryPage(0, new address[](0), 2);
@@ -1103,7 +1133,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             _boundedScan(address(_asset), 2),
             abi.encode(new address[](0), uint256(4), uint256(0))
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             2,
@@ -1119,10 +1149,11 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-SELF-EXECUTE-D11.
     function test_givenEqualCursors_whenExpiryBatchCompacts_thenOtherLaneRevisitsStart() public {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(2, 1);
         _setBothBorrowerCursors(address(_asset), 2);
         _mockExpiryPage(2, _one(_ALICE), 4);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             3,
@@ -1139,7 +1170,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     function test_givenExpiredBatch_whenExecuted_thenEventIdentifiesItsLane() public {
         _mockExpiryPage(0, _one(_ALICE), 2);
         vm.recordLogs();
-        _task.execute();
+        _executeAsHeart(_task);
         _assertProgressEvent(IBurnerLoansLens.Selection.Expired, 0, 1, 1);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
@@ -1156,7 +1187,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encode(_one(_ALICE), uint256(2), uint256(0))
         );
         vm.recordLogs();
-        _task.execute();
+        _executeAsHeart(_task);
         _assertProgressEvent(IBurnerLoansLens.Selection.Unhealthy, 0, 1, 1);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -1201,14 +1232,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_ALICE))),
             abi.encodeWithSelector(SettlementFailed.selector)
         );
-        _task.execute();
-        _task.execute(); // Other asset.
+        _executeAsHeart(_task);
+        _executeAsHeart(_task); // Other asset.
         vm.expectCall(
             address(_liquidation),
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_BOB))),
             uint64(1)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Unhealthy work preserves asset rotation");
     }
 
@@ -1217,22 +1248,24 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _mockCount(2);
         _mockExpiryPage(0, _one(_ALICE), 0);
         vm.mockCall(address(_lens), _boundedScan(address(_asset), 0), abi.encode(_one(_BOB), 0, 0));
-        _task.execute();
-        _task.execute(); // Other asset.
+        _executeAsHeart(_task);
+        _executeAsHeart(_task); // Other asset.
         vm.expectCall(
             address(_liquidation),
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_BOB))),
             uint64(1)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Expired arrivals cannot monopolize this asset");
     }
 
     // Scenarios: BLSEIZ-EXECUTE-F603.
     function test_givenRejectedExpiredPosition_whenCursorAdvances(uint256 start_) public {
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(0);
         uint256 start = bound(start_, 0, type(uint256).max - 1);
         _mockCount(type(uint256).max);
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(address(_asset), start);
         _mockExpiryPage(start, _one(_ALICE), 0);
         vm.mockCallRevert(
@@ -1240,7 +1273,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_ALICE))),
             abi.encodeWithSelector(SettlementFailed.selector)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             start == type(uint256).max - 1 ? 0 : start + 1,
@@ -1263,6 +1296,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-EXECUTE-F604.
     function test_givenRejectedUnhealthyPosition_whenExecuted() public {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 2);
         vm.mockCall(
             address(_lens),
@@ -1274,7 +1308,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_ALICE))),
             abi.encodeWithSelector(SettlementFailed.selector)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             3,
@@ -1298,7 +1332,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_ALICE))),
             uint64(0)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             3,
@@ -1327,7 +1361,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_ALICE))),
             uint64(0)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             3,
@@ -1339,6 +1373,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-EXECUTE-F607.
     function test_givenUnhealthyRefreshUnavailable_whenExecuted() public {
         _mockCount(10);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 2);
         vm.mockCall(
             address(_lens),
@@ -1358,7 +1393,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_ALICE))),
             uint64(0)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             2,
@@ -1371,16 +1406,18 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
         _mockCount(2);
         _mockExpiryPage(0, _one(_ALICE), 0);
         vm.mockCall(address(_lens), _boundedScan(address(_asset), 0), abi.encode(_one(_BOB), 0, 0));
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(1);
-        _task.execute();
+        _executeAsHeart(_task);
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(10_000_000);
-        _task.execute(); // Other asset.
+        _executeAsHeart(_task); // Other asset.
         vm.expectCall(
             address(_liquidation),
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_BOB))),
             uint64(1)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 1, "Failed body does not reset this asset's lane turn");
     }
 
@@ -1388,28 +1425,34 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     function test_givenPausedTask_whenReEnabled() public {
         _mockExpiryPage(0, _one(_ALICE), 0);
         vm.mockCall(address(_lens), _boundedScan(address(_asset), 0), abi.encode(_one(_BOB), 0, 0));
-        _task.execute();
+        _executeAsHeart(_task);
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(0);
+        vm.prank(_seizerAdmin);
         _task.disable("");
-        _task.execute();
+        _executeAsHeart(_task);
+        vm.prank(_seizerAdmin);
         _task.reEnable();
         vm.expectCall(
             address(_liquidation),
             abi.encodeCall(_liquidation.seize, (address(_asset), _one(_BOB))),
             uint64(1)
         );
-        _task.execute();
+        _executeAsHeart(_task);
     }
 
     // Scenarios: BLSEIZ-EXECUTE-F608.
     function test_givenPreviouslyVisitedAsset_whenRemovedAndAdded() public {
         _mockExpiryPage(0, _one(_ALICE), 0);
-        _task.execute();
+        _executeAsHeart(_task);
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1);
         _expectNoPricedDiscovery();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Re-added asset starts a fresh expiry-first schedule");
     }
 
@@ -1426,7 +1469,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_lens.getActiveBorrowerCount, (address(_asset))),
             abi.encodeWithSelector(ScanReadFailed.selector)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -1438,6 +1481,7 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-EXECUTE-F602, BLSEIZ-SELF-EXECUTE-D13.
     function test_givenExpiredBatch_givenOtherCursorBecomesStale_whenExecuted() public {
         _separateLaneCursors();
+        vm.prank(_seizerAdmin);
         _task.setScanLimits(20, 2);
         _mockExpiryPage(2, _two(_ALICE, _BOB), 0);
         bytes[] memory counts = new bytes[](2);
@@ -1448,16 +1492,16 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
             abi.encodeCall(_lens.getActiveBorrowerCount, (address(_asset))),
             counts
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             8,
             "Settlement preserves the other lane's saved offset until its next visit"
         );
         assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Executing end cursor remains zero");
-        _task.execute(); // Other asset.
+        _executeAsHeart(_task); // Other asset.
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.unhealthyAssetCursor(address(_asset)), 0, "Repair precedes next discovery");
     }
 
@@ -1482,11 +1526,14 @@ contract BurnerLoansSeizerTaskExecuteTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-SELF-EXECUTE-P08.
     function test_givenLensExhaustsGas_givenCatchGasSufficient_whenHeartRunsTasks() public {
         MockPeriodicTaskManager manager = new MockPeriodicTaskManager(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(manager));
-        _rolesAdmin.grantRole(HEART_ROLE, address(manager));
+        _executeSeizerKernelAction(Actions.ActivatePolicy, address(manager));
+        _grantSeizerRole(HEART_ROLE, address(manager));
         MockPeriodicTask later = new MockPeriodicTask();
+        vm.prank(_seizerAdmin);
         manager.addPeriodicTask(address(_task));
+        vm.prank(_seizerAdmin);
         manager.addPeriodicTask(address(later));
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(1_000_000);
         vm.etch(address(_lens), hex"fe");
         vm.expectEmit(true, false, false, true, address(_task));

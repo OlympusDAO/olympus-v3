@@ -543,6 +543,7 @@ contract BurnerLoansCompositesExecuteGrantModesTest is BurnerLoansCompositesGran
         _assertAcceptedGrant(false);
         uint256 beforeWallet = _asset.balanceOf(_borrower);
         vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
+        vm.prank(_accountOwner);
         _account.runWithExistingGrant(
             _executor,
             _funding(address(_asset), 1),
@@ -575,6 +576,7 @@ contract BurnerLoansCompositesExecuteGrantModesTest is BurnerLoansCompositesGran
             _single(_deposit(1)),
             new IExecutor.Output[](0)
         );
+        vm.prank(_accountOwner);
         bytes[] memory second = _account.runWithExistingGrant(
             _executor,
             _funding(address(_asset), 1),

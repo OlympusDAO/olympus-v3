@@ -43,10 +43,13 @@ contract BurnerLoansCompositesExternalRoutesForkTest is BurnerLoansCompositesTes
         _price.setPrice(_USDE, 1e18);
         _admit(_USDS);
         _admit(_USDE);
-        _rolesAdmin.grantRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, address(this));
-        deal(_OHM, address(this), 20e9);
+        address inventoryProvider = makeAddr("inventoryProvider");
+        _grantFixtureRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, inventoryProvider);
+        deal(_OHM, inventoryProvider, 20e9);
+        vm.startPrank(inventoryProvider);
         assertTrue(IERC20(_OHM).approve(address(_inventory), 20e9), "Approve supplied OHM");
         _inventory.supply(20e9);
+        vm.stopPrank();
     }
 
     function _fixtureOhm() internal pure override returns (MockERC20) {

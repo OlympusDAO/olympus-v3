@@ -40,6 +40,7 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-CONFIG-OPERATOR-P02.
     function test_whenOperatorCleared() public {
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(address(0));
         assertEq(_config.configOperator(), address(0), "Cleared operator");
         _mutationReverts(
@@ -57,13 +58,14 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-CONFIG-OPERATOR-P01.
     function test_whenSameOperatorSelected_reverts() public {
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.setConfigOperator, (_configurationCaller)),
             abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector)
         );
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(address(0));
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.setConfigOperator, (address(0))),
             abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector)
         );

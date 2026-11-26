@@ -85,11 +85,13 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
     // Scenarios: BLSEIZ-SCAN-LIMITS-G03.
     function test_givenTenMillionGas_whenScanReduced_thenProgressResumes() public {
         _seedBorrowers(500);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(500, 1);
+        vm.prank(_fixtureAdmin);
         _task.setExecutionGasLimit(10_000_000);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.ScanFailed(address(_asset), bytes4(0));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -100,6 +102,7 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
             0,
             "Oversized scan cannot commit progress"
         );
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(100, 1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureExecuted(
@@ -109,7 +112,7 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
             100,
             0
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             100,
@@ -125,7 +128,9 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
     // Scenarios: BLSEIZ-SCAN-LIMITS-G04.
     function test_givenSeparateCursors_whenHealthyPagesDiffer_thenMeasureGas() public {
         _seedBorrowers(200);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(100, 1);
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 100);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureExecuted(
@@ -135,7 +140,7 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
             0,
             0
         );
-        _task.execute();
+        _executeAsHeart(_task);
         uint256 gasUsed = vm.snapshotGasLastFrame(
             "BurnerLoansSeizerTaskGas",
             "healthy-100-disjoint"
@@ -164,7 +169,7 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
     // Scenarios: BLSEIZ-SCAN-LIMITS-G05.
     function test_givenExpiredBatch_givenLateRejection_whenUnhealthyFirst_thenMeasureGas() public {
         _seedBorrowers(100);
-        _task.execute(); // Healthy book consumes the first expiry-first visit without settlement.
+        _executeAsHeart(_task); // Healthy book consumes the first expiry-first visit without settlement.
         _mature();
         _measureLateRejection("late-expired-unhealthy-first-heart", 26, 0);
     }
@@ -181,7 +186,7 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
         public
     {
         _seedBorrowers(100);
-        _task.execute();
+        _executeAsHeart(_task);
         _price.setPrice(address(_asset), 1e16);
         _measureLateRejection("late-unhealthy-unhealthy-first-heart", 25, 26);
     }
@@ -191,7 +196,9 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
         uint256 expectedExpired_,
         uint256 expectedUnhealthy_
     ) private {
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(100, 25);
+        vm.prank(_fixtureAdmin);
         _task.setExecutionGasLimit(10_000_000);
         _setBothBorrowerCursors(address(_asset), 25);
         // Core defaults all 25 selected loans before attempting the aggregate withdrawal.
@@ -231,10 +238,12 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
         vm.expectCall(address(_depositManager), aggregateWithdrawal, uint64(1));
 
         MockPeriodicTaskManager manager = new MockPeriodicTaskManager(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(manager));
-        _rolesAdmin.grantRole(HEART_ROLE, address(manager));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(manager));
+        _grantFixtureRole(HEART_ROLE, address(manager));
         MockPeriodicTask later = new MockPeriodicTask();
+        vm.prank(_fixtureAdmin);
         manager.addPeriodicTask(address(_task));
+        vm.prank(_fixtureAdmin);
         manager.addPeriodicTask(address(later));
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
         vm.expectEmit(true, false, false, true, address(_task));
@@ -284,13 +293,16 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
     }
 
     function _seedBorrowers(uint16 count_) private {
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_fixtureAdmin);
         _task.setExecutionGasLimit(100_000_000);
         for (uint256 i; i < count_; ++i) _seedDebt(address(uint160(0x10000 + i)), 10e6, 1e9);
     }
 
     function _measureHealthy(uint16 count_, string memory name_) private {
         _seedBorrowers(count_);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(count_, 1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureExecuted(
@@ -300,7 +312,7 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
             0,
             0
         );
-        _task.execute();
+        _executeAsHeart(_task);
         uint256 gasUsed = vm.snapshotGasLastFrame("BurnerLoansSeizerTaskGas", name_);
         emit log_named_uint(name_, gasUsed);
         assertEq(
@@ -319,14 +331,15 @@ contract BurnerLoansSeizerTaskScanGasTest is BurnerLoansSeizerTaskProgressTest {
             "Healthy scan reaches end and wraps"
         );
         vm.expectCall(address(_lens), _boundedScan(address(_asset), 0), uint64(1));
-        _task.execute();
+        _executeAsHeart(_task);
     }
 
     function _measureEligible(uint8 count_, string memory name_) private {
         _seedBorrowers(count_);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(count_, count_);
         _mature();
-        _task.execute();
+        _executeAsHeart(_task);
         uint256 gasUsed = vm.snapshotGasLastFrame("BurnerLoansSeizerTaskGas", name_);
         emit log_named_uint(name_, gasUsed);
         assertEq(_inventory.activePrincipalOhm(), 0, "Measured call settles the complete batch");

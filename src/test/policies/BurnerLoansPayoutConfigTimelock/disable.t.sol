@@ -20,10 +20,11 @@ contract BurnerLoansPayoutConfigTimelockDisableTest is BurnerLoansPayoutConfigTi
         bool overlap_,
         bool active_
     ) public givenPendingRecovery {
-        vm.assume(caller_ != address(0) && caller_ != address(this) && caller_ != _recipient);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin && caller_ != _recipient);
         _grantRoleIfMissing(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
         if (overlap_) _grantRoleIfMissing(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
-        _setState(_payoutTimelock, active_, true);
+        _setPolicyLifecycle(_payoutTimelock, active_, true);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
         _rejectTargetReads();
         bytes32 beforeQueue = _queueDigest(_pendingId);
@@ -60,7 +61,7 @@ contract BurnerLoansPayoutConfigTimelockDisableTest is BurnerLoansPayoutConfigTi
         bool active_,
         bytes memory data_
     ) public givenPendingRecovery {
-        _setState(_payoutTimelock, active_, false);
+        _setPolicyLifecycle(_payoutTimelock, active_, false);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.disable, (data_)),
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
@@ -122,6 +123,6 @@ contract BurnerLoansPayoutConfigTimelockDisableTest is BurnerLoansPayoutConfigTi
 
     // Scenarios: BLCUCT-DISABLE-I02.
     function test_givenExistingAdmin_whenNonemptyDisablePayload_reverts() public {
-        test_whenNonemptyPayload_reverts(address(this), false, true, hex"01");
+        test_whenNonemptyPayload_reverts(_fixtureAdmin, false, true, hex"01");
     }
 }

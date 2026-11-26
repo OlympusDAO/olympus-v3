@@ -51,7 +51,7 @@ contract BurnerLoansPayoutConstructorTest is BurnerLoansPayoutTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenPendingBuckets {
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         bytes32 beforeState = _ledgerDigest();
         vm.prank(deployer_);
         BurnerLoansPayout payout = new BurnerLoansPayout(_kernel, address(_core));
@@ -132,6 +132,7 @@ contract BurnerLoansPayoutConstructorTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-CONSTRUCTOR-D04.
     function test_givenDifferentCoreKernel_whenDeployed_reverts(address caller_) public {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _core.changeKernel(next);

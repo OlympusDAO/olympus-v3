@@ -94,7 +94,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         _assertConfigSet(_configurationCaller, cfg);
     }
@@ -107,7 +107,8 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         _assertConfigurationRejected(
@@ -125,8 +126,8 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
     }
@@ -139,9 +140,10 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
     }
@@ -154,7 +156,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         cfg.maxLtvBps = 0;
         _assertConfigurationRejected(
@@ -172,7 +174,8 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         cfg.maxLtvBps = 0;
@@ -191,8 +194,8 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         cfg.maxLtvBps = 0;
         _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
@@ -206,9 +209,10 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         cfg.maxLtvBps = 0;
         _assertConfigurationRejected(address(_asset), cfg, _inactiveError(address(_config)));
@@ -624,7 +628,9 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
+        vm.prank(_fixtureAdmin);
         _config.enable("");
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         _assertConfigSet(_configurationCaller, cfg);
@@ -636,8 +642,8 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_config));
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         _assertConfigSet(_configurationCaller, cfg);
     }
@@ -747,7 +753,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
     function test_whenPermittedCallerClassesSeeded() public {
         address adminOnly = makeAddr("adminOnly");
         address overlap = makeAddr("adminAndOperator");
-        _rolesAdmin.grantRole(ADMIN_ROLE, adminOnly);
+        _grantFixtureRole(ADMIN_ROLE, adminOnly);
         _assertConfigSet(
             adminOnly,
             IBurnerLoansRisk.AssetRiskConfigInput(7500, 12000, 100, 30 days, 90 days, 1e6)
@@ -756,7 +762,8 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
             _configurationCaller,
             IBurnerLoansRisk.AssetRiskConfigInput(7501, 12000, 100, 30 days, 90 days, 1e6)
         );
-        _rolesAdmin.grantRole(ADMIN_ROLE, overlap);
+        _grantFixtureRole(ADMIN_ROLE, overlap);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(overlap);
         _assertConfigSet(
             overlap,
@@ -890,8 +897,10 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
             _kernel,
             IBurnerLoansConfig(address(_config))
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(timelock));
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(address(timelock));
+        vm.prank(_fixtureAdmin);
         timelock.enable("");
         assertFalse(
             _roles.hasRole(address(timelock), ADMIN_ROLE),
@@ -899,6 +908,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansConfigTest {
         );
         IBurnerLoansRisk.AssetRiskConfigInput memory cfg = _riskConfig();
         vm.expectCall(address(_config), _riskValidation(address(_asset), cfg));
+        vm.prank(_fixtureAdmin);
         uint64 id = timelock.queueSetAssetRiskConfig(address(_asset), cfg);
         vm.warp(timelock.getQueuedAction(id).executableAt);
         timelock.executeQueuedAction(id);

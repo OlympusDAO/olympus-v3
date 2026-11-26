@@ -21,6 +21,7 @@ contract BurnerLoansCompositesAccountingInvariantsTest is BurnerLoansCompositesT
 
     function setUp() public override {
         super.setUp();
+        vm.prank(_fixtureAdmin);
         _config.setAssetFeeConfig(address(_asset), IBurnerLoansRisk.AssetFeeConfig(0, 0, 0, 0));
         _asset.mint(address(_executor), 17);
         _ohm.mint(address(_executor), 11);

@@ -63,8 +63,9 @@ contract BurnerLoansSeizeSharesIntegrationTest is BurnerLoansSeizeIntegrationTes
             address(_core),
             2_000_000
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(claimer));
-        _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, address(claimer));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(claimer));
+        _grantFixtureRole(BL_YIELD_CLAIMER_ROLE, address(claimer));
+        vm.prank(_fixtureAdmin);
         claimer.enable("");
         (address output, uint256 claimed) = claimer.claimYield(address(token));
         assertEq(output, address(vault), "Dust claimed in share units");

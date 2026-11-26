@@ -123,7 +123,7 @@ contract BurnerLoansRiskValidatePriceSupportTest is BurnerLoansRiskTest {
     function test_givenPriceReplacement_whenValidated(address caller_) public {
         _risk.validatePriceSupport(address(_asset));
         MockPrice replacement = new MockPrice(_kernel, 18, 8 hours);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeRiskKernelAction(Actions.UpgradeModule, address(replacement));
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         vm.prank(caller_);
         _risk.validatePriceSupport(address(_asset));

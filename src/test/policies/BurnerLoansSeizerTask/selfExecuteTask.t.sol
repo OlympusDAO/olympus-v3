@@ -37,8 +37,11 @@ contract BurnerLoansSeizerTaskSelfExecuteTaskTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-SELF-EXECUTE-L02.
     function test_givenDisabled_whenSelfCalls_thenBodyStillRuns() public {
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_otherAsset));
+        vm.prank(_seizerAdmin);
         _task.disable("");
         vm.expectCall(
             address(_lens),
@@ -76,6 +79,7 @@ contract BurnerLoansSeizerTaskSelfExecuteTaskTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-SELF-EXECUTE-N01.
     function test_givenSingleAsset_whenSelfCalls_thenCursorWraps() public {
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
         vm.prank(address(_task));
         _task.selfExecuteTask();
@@ -85,8 +89,11 @@ contract BurnerLoansSeizerTaskSelfExecuteTaskTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-SELF-EXECUTE-N01.
     function test_givenTwoAssets_whenPendingIndexSelected(uint256 pending_) public {
         uint256 pending = bound(pending_, 0, 1);
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_otherAsset));
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(pending);
         address selected = pending == 0 ? address(_asset) : address(_otherAsset);
         vm.expectCall(
@@ -108,14 +115,20 @@ contract BurnerLoansSeizerTaskSelfExecuteTaskTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-SELF-EXECUTE-N01.
     function test_givenAssetRemoved_whenSelfCalls_thenSurvivorIsVisited(bool removeFirst_) public {
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_otherAsset));
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1);
         address removed = removeFirst_ ? address(_asset) : address(_otherAsset);
         address survivor = removeFirst_ ? address(_otherAsset) : address(_asset);
         MockSeizerTaskDependency(address(_lens)).setPopulation(removed, 3);
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(removed, 1);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(removed, 2);
+        vm.prank(_seizerAdmin);
         _task.removeAsset(removed);
         vm.expectCall(
             address(_lens),
@@ -142,7 +155,9 @@ contract BurnerLoansSeizerTaskSelfExecuteTaskTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-SELF-EXECUTE-N02.
     function test_givenMaximumDefensiveAssetIndex_whenSelfCalls_thenIndexNormalizes() public {
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_otherAsset));
         // Public setters reject this unreachable state. Discover only this getter's slot for injection.
         vm.record();

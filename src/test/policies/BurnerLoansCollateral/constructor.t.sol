@@ -84,6 +84,7 @@ contract BurnerLoansCollateralConstructorTest is BurnerLoansCollateralTest {
 
     // Scenarios: BLCOL-CONSTRUCTOR-I07.
     function test_whenCoreKernelDiffers_reverts(address deployer_) public {
+        vm.prank(_fixtureExecutor);
         Kernel otherKernel = new Kernel();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -99,7 +100,7 @@ contract BurnerLoansCollateralConstructorTest is BurnerLoansCollateralTest {
 
     // Scenarios: BLCOL-CONSTRUCTOR-I08, BLCOL-CONSTRUCTOR-I09, BLCOL-CONSTRUCTOR-I10, BLCOL-CONSTRUCTOR-I11.
     function test_whenValidCoreBinding(address deployer_, bool active_, bool enabled_) public {
-        _setPolicyState(policy, active_, enabled_);
+        _setPolicyLifecycle(policy, active_, enabled_);
         vm.expectEmit();
         emit IGracePeriod.GracePeriodSet(7 days);
         vm.prank(deployer_);

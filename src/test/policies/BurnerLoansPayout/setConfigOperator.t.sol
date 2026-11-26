@@ -26,8 +26,8 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
     ) public givenPendingBuckets {
         vm.assume(caller_ != address(0));
         _grantRoleIfMissing(ADMIN_ROLE, caller_);
-        _setState(_payout, true, enabled_);
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         address next = address(_config);
         vm.mockCallRevert(next, abi.encodeWithSignature("kernel()"), hex"deadbeef");
         vm.mockCallRevert(next, abi.encodeWithSignature("isEnabled()"), hex"deadbeef");
@@ -69,6 +69,7 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
     function test_whenOperatorUnchanged_reverts() public givenPendingBuckets {
         bytes32 state = _ledgerDigest();
         vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_controller);
         assertEq(_ledgerDigest(), state, "Same pointer rejection preserves custody");
     }
@@ -81,6 +82,7 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
         bytes32 state = _ledgerDigest();
         vm.expectEmit(address(_payout));
         emit IConfigOperator.ConfigOperatorSet(address(0));
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(address(0));
         assertEq(_payout.configOperator(), address(0), "Delegation revoked");
         assertEq(_ledgerDigest(), state, "Revocation preserves obligations");
@@ -97,6 +99,7 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
             abi.encodeWithSelector(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector)
         );
         vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_destination);
         assertEq(_payout.configOperator(), _controller, "Busy Core retains authority");
         assertEq(_ledgerDigest(), state, "Busy Core retains custody");
@@ -108,7 +111,7 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
         bool enabled_
     ) public givenPendingBuckets {
         _grantRoleIfMissing(ADMIN_ROLE, caller_);
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
         _expectInactivePayout();
         vm.prank(caller_);
@@ -131,7 +134,7 @@ contract BurnerLoansPayoutSetConfigOperatorTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-CONFIGURATOR-P01, BLCU-CONFIGURATOR-A03.
     function test_givenExistingAdmin_whenControllerInstalled_thenNoReverseReads() public {
-        test_whenAdminInstallsController_thenNoReverseReads(address(this), true, true, true);
+        test_whenAdminInstallsController_thenNoReverseReads(_fixtureAdmin, true, true, true);
     }
 }
 

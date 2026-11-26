@@ -19,7 +19,10 @@ contract BurnerLoansCoreDepositAuthorizationTest is BurnerLoansAuthorizationInte
     function test_givenCapturedOwner_whenAuthRotatesAndReturns_reverts() public {
         IBurnerLoansCore.AuthorizationContext memory original = _ownerAuthContext();
         (address first, ) = _core.authConfig();
-        _core.setAuth(address(new AuthSelectionCandidate(address(_core))));
+        address replacement = address(new AuthSelectionCandidate(address(_core)));
+        vm.prank(_fixtureAdmin);
+        _core.setAuth(replacement);
+        vm.prank(_fixtureAdmin);
         _core.setAuth(first);
         bytes32 before = _ledger();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_InvalidAuthorizationContext.selector);
@@ -42,7 +45,10 @@ contract BurnerLoansCoreDepositAuthorizationTest is BurnerLoansAuthorizationInte
         _acceptBounded(_boundedGrant(1, 100, 0, 0, 0));
         uint256 pairEpoch = _auth.pairEpochs(_borrower, _recipient);
         (address first, ) = _core.authConfig();
-        _core.setAuth(address(new AuthSelectionCandidate(address(_core))));
+        address replacement = address(new AuthSelectionCandidate(address(_core)));
+        vm.prank(_fixtureAdmin);
+        _core.setAuth(replacement);
+        vm.prank(_fixtureAdmin);
         _core.setAuth(first);
         vm.expectRevert(IOperatorAuth.OperatorAuth_InvalidContext.selector);
         _auth.captureAuthorization(_borrower, _recipient, 1);

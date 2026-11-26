@@ -49,7 +49,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         address candidate_
     ) public {
         _grantAdmin(caller_);
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -95,7 +95,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         bytes32 ledger = _ledger();
         address previous = _core.inventory();
         address operatorBefore = _next.configOperator();
-        if (!enabled_) _core.disable("");
+        _setPolicyLifecycle(_core, true, enabled_);
         vm.expectEmit(true, false, false, true, address(_core));
         emit IBurnerLoansCore.InventorySet(address(_next));
         vm.prank(caller_);
@@ -117,8 +117,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
     ) public {
         vm.assume(!active_ || !enabled_);
         _grantAdmin(caller_);
-        if (!enabled_) _next.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_next));
+        _setPolicyLifecycle(_next, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -165,6 +164,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-INVENTORY-D03.
     function test_givenWrongKernel_whenSelected_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _next.changeKernel(other);
@@ -649,7 +649,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         _next.setCore(address(0));
         _next.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_next));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_next));
         bytes32 before = _state();
         uint256 writes = _next.identityWrites();
         vm.expectRevert(
@@ -675,6 +675,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
             false
         );
         address before = _core.inventory();
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),
@@ -689,6 +690,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         stdstore.target(address(_core)).sig(bytes4(keccak256("inventory()"))).checked_write(
             address(0)
         );
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
         assertEq(_core.inventory(), address(_next), "First empty installation supported");
     }
@@ -727,6 +729,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         _next.setLedger(principal_, supplied_, idle_);
         _next.setProviderClaim(_borrower, supplied_);
         uint256 before = _ohm.balanceOf(address(_next));
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
         assertEq(_core.inventory(), address(_next), "Matching nonzero migrated ledgers accepted");
         assertEq(_next.activePrincipalOhm(), principal_, "Principal preserved");
@@ -776,6 +779,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
         assertEq(
             _core.inventory(),
@@ -803,6 +807,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
         assertEq(
             _core.inventory(),
@@ -830,6 +835,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
         assertEq(
             _core.inventory(),
@@ -860,6 +866,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setInventory(address(_next));
         }
     }
@@ -875,6 +882,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setInventory(address(_next));
         }
     }
@@ -892,6 +900,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
     }
 
@@ -911,6 +920,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
                     address(_next)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _core.setInventory(address(_next));
         }
     }
@@ -928,6 +938,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
                 address(_next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
     }
 
@@ -945,6 +956,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         assertEq(_inventory.suppliedIdleOhm(), 0, "Default leaves no idle recapitalization");
         _next.setLedger(0, 100e9, 0);
         _next.setProviderClaim(_borrower, 100e9);
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
         assertEq(_core.inventory(), address(_next), "Prepared Inventory is selected");
         assertEq(
@@ -970,6 +982,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         _next.setProviderClaim(alice, 70e9);
         _next.setProviderClaim(bob, 30e9);
         bytes32 position = keccak256(abi.encode(_position()));
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
         assertEq(_core.inventory(), address(_next), "Prepared Inventory is selected");
         assertEq(_next.activePrincipalOhm(), 60e9, "Migrated principal preserved");
@@ -992,6 +1005,7 @@ contract BurnerLoansCoreSetInventoryTest is BurnerLoansCoreTest {
         _ohm.transfer(address(_next), 100e9);
         _next.setLedger(0, 100e9, 100e9);
         _next.setProviderClaim(_borrower, 100e9);
+        vm.prank(_fixtureAdmin);
         _core.setInventory(address(_next));
         assertEq(_core.inventory(), address(_next), "Prepared Inventory is selected");
         assertEq(_next.providerClaims(_borrower), 100e9, "Idle claim retained");

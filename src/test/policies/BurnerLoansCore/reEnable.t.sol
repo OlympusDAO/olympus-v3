@@ -33,6 +33,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 ledger = _ledger();
         vm.expectEmit(false, false, false, true, address(_core));
@@ -52,6 +53,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
@@ -62,7 +64,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-REENABLE-L01.
     function test_givenAlreadyEnabled_whenEnabled_reverts(address caller_, bool active_) public {
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _setPolicyLifecycle(_core, active_, true);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _core.reEnable();
@@ -75,7 +77,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool overlap_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
-        _setCoreLifecycle(false, false);
+        _setPolicyLifecycle(_core, false, false);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -100,9 +102,9 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         vm.assume(!active_ || !enabled_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) IEnabler(address(_depositManager)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_depositManager));
+        _setPolicyLifecycle(_depositManager, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -113,8 +115,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.reEnable();
         assertEq(_state(), before, "Unavailable dependency preserves Core and loans");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_depositManager));
-        if (!enabled_) IEnabler(address(_depositManager)).enable("");
+        _restorePolicyLifecycle(_depositManager, active_, enabled_);
         bytes32 ledger = _ledger();
         vm.prank(caller_);
         _core.reEnable();
@@ -129,6 +130,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool overlap_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.mockCall(
             address(_depositManager),
@@ -154,9 +156,9 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         vm.assume(!active_ || !enabled_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) IEnabler(address(_inventory)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_inventory));
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -167,8 +169,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.reEnable();
         assertEq(_state(), before, "Unavailable dependency preserves Core and loans");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_inventory));
-        if (!enabled_) IEnabler(address(_inventory)).enable("");
+        _restorePolicyLifecycle(_inventory, active_, enabled_);
         bytes32 ledger = _ledger();
         vm.prank(caller_);
         _core.reEnable();
@@ -183,9 +184,11 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool overlap_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         uint48 transition = _core.lastTransitionAt();
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _inventory.changeKernel(other);
@@ -211,6 +214,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool enabledGetter_
     ) public {
         vm.assume(data_.length != _ABI_WORD_BYTES);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.mockCall(
             address(_inventory),
@@ -226,9 +230,11 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
                 address(_inventory)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.reEnable();
         assertEq(_state(), before, "Malformed status cannot change Core state");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _core.reEnable();
         assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
@@ -245,9 +251,9 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         vm.assume(!active_ || !enabled_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) IEnabler(address(_payout)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -258,8 +264,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.reEnable();
         assertEq(_state(), before, "Unavailable dependency preserves Core and loans");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
-        if (!enabled_) IEnabler(address(_payout)).enable("");
+        _restorePolicyLifecycle(_payout, active_, enabled_);
         bytes32 ledger = _ledger();
         vm.prank(caller_);
         _core.reEnable();
@@ -274,9 +279,11 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool overlap_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         uint48 transition = _core.lastTransitionAt();
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _payout.changeKernel(other);
@@ -302,6 +309,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool enabledGetter_
     ) public {
         vm.assume(data_.length != _ABI_WORD_BYTES);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.mockCall(
             address(_payout),
@@ -317,9 +325,11 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
                 address(_payout)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.reEnable();
         assertEq(_state(), before, "Malformed status cannot change Core state");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _core.reEnable();
         assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
@@ -336,9 +346,9 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         vm.assume(!active_ || !enabled_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) IEnabler(address(_risk)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _setPolicyLifecycle(_risk, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -349,8 +359,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.reEnable();
         assertEq(_state(), before, "Unavailable dependency preserves Core and loans");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
-        if (!enabled_) IEnabler(address(_risk)).enable("");
+        _restorePolicyLifecycle(_risk, active_, enabled_);
         bytes32 ledger = _ledger();
         vm.prank(caller_);
         _core.reEnable();
@@ -365,9 +374,11 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool overlap_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         uint48 transition = _core.lastTransitionAt();
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _risk.changeKernel(other);
@@ -393,6 +404,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool enabledGetter_
     ) public {
         vm.assume(data_.length != _ABI_WORD_BYTES);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.mockCall(
             address(_risk),
@@ -408,9 +420,11 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.reEnable();
         assertEq(_state(), before, "Malformed status cannot change Core state");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _core.reEnable();
         assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
@@ -422,6 +436,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool overlap_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         stdstore.target(address(_core)).sig(bytes4(keccak256("risk()"))).checked_write(address(0));
         vm.expectRevert(
@@ -442,6 +457,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool overlap_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         stdstore.target(address(_core)).sig(bytes4(keccak256("inventory()"))).checked_write(
             address(0)
@@ -464,6 +480,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool overlap_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         stdstore.target(address(_core)).sig(bytes4(keccak256("payout()"))).checked_write(
             address(0)
@@ -489,9 +506,9 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         bool wrongKernel_
     ) public {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) _config.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_config, active_, enabled_);
         if (wrongKernel_)
             vm.mockCall(
                 address(_config),
@@ -506,9 +523,11 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-REENABLE-C01.
     function test_givenBusyCore_whenCaughtEnable_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         CoreCallbackToken token = _armRescue(abi.encodeWithSignature("reEnable()"), false);
         uint48 transition = _core.lastTransitionAt();
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertFalse(_core.isEnabled(), "Callback cannot enable during rescue");
         assertEq(_core.lastTransitionAt(), transition, "No nested transition");
@@ -522,10 +541,12 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-REENABLE-C02.
     function test_givenBusyCore_whenPropagatedEnable_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         CoreCallbackToken token = _armRescue(abi.encodeWithSignature("reEnable()"), true);
         uint48 transition = _core.lastTransitionAt();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertFalse(_core.isEnabled(), "Callback cannot enable during rescue");
         assertEq(_core.lastTransitionAt(), transition, "No nested transition");
@@ -539,7 +560,7 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
             IERC20(address(_ohm)),
             _depositManager
         );
-        if (active_) _kernel.executeAction(Actions.ActivatePolicy, address(fresh));
+        if (active_) _executeFixtureKernelAction(Actions.ActivatePolicy, address(fresh));
         vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(caller_);
         fresh.reEnable();
@@ -552,7 +573,9 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _core.disable("");
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
         vm.warp(uint256(_core.lastTransitionAt()) + _core.gracePeriod() + 1);
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
@@ -572,8 +595,10 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
         period_ = uint32(bound(period_, 1, type(uint32).max));
         last_ = _bounds48(last_, 1, type(uint48).max - period_);
+        vm.prank(_fixtureAdmin);
         _core.setGracePeriod(period_);
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         uint48 deadline = last_ + period_;
         now_ = _bounds48(now_, last_, deadline);
@@ -600,8 +625,10 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
         period_ = uint32(bound(period_, 1, type(uint32).max));
         last_ = _bounds48(last_, 1, type(uint48).max - period_ - 1);
+        vm.prank(_fixtureAdmin);
         _core.setGracePeriod(period_);
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         uint48 deadline = last_ + period_;
         now_ = _bounds48(now_, deadline + 1, type(uint48).max);
@@ -626,8 +653,10 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
         _grantLifecycleCaller(caller_, BURNER_LOANS_ADMIN_ROLE, admin_, overlap_);
         period_ = uint32(bound(period_, 1, type(uint32).max));
         last_ = _bounds48(last_, type(uint48).max - period_ + 1, type(uint48).max);
+        vm.prank(_fixtureAdmin);
         _core.setGracePeriod(period_);
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -643,9 +672,11 @@ contract BurnerLoansCoreReEnableTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-REENABLE-I01.
     function test_givenBusyCoreAndExpiredGrace_whenReEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.warp(uint256(_core.lastTransitionAt()) + _core.gracePeriod() + 1);
         CoreCallbackToken token = _armRescue(abi.encodeWithSignature("reEnable()"), false);
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),

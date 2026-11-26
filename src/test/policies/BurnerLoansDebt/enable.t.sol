@@ -24,7 +24,7 @@ import {BurnerLoansDebtLifecycleTest} from "src/test/policies/BurnerLoansDebt/fi
 contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
     // Scenarios: BLDEBT-ENABLE-L01.
     function test_givenEnabled_whenAnyCallerEnables_reverts(address caller_, bool active_) public {
-        _setPolicyState(_debt, active_, true);
+        _setPolicyLifecycle(_debt, active_, true);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _debt.enable("");
@@ -33,19 +33,21 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBT-ENABLE-L02.
     function test_givenInactive_whenEnabled_reverts() public {
-        _setPolicyState(_debt, false, false);
+        _setPolicyLifecycle(_debt, false, false);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_debt)
             )
         );
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertLoansPreserved();
     }
 
     // Scenarios: BLDEBT-ENABLE-A02.
     function test_givenDisabled_whenUnauthorizedEnables_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
@@ -57,8 +59,9 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
     // Scenarios: BLDEBT-ENABLE-A01.
     function test_givenDisabled_whenAdminEnables_thenExactTransition(address caller_) public {
         vm.assume(caller_ != address(0));
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _grantFixtureRole(ADMIN_ROLE, caller_);
         vm.warp(456);
         vm.expectEmit(address(_debt));
         emit IEnabler.Enabled();
@@ -73,14 +76,16 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBT-ENABLE-A01.
     function test_givenExistingAdmin_whenEnables_thenExactTransition() public {
-        test_givenDisabled_whenAdminEnables_thenExactTransition(address(this));
+        test_givenDisabled_whenAdminEnables_thenExactTransition(_fixtureAdmin);
     }
 
     // Scenarios: BLDEBT-ENABLE-I01.
     function test_whenNonemptyEnableData_reverts(bytes memory data_) public {
         vm.assume(data_.length != 0);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
+        vm.prank(_fixtureAdmin);
         _debt.enable(data_);
         assertFalse(_debt.isEnabled(), "Rejected payload cannot enable");
         _assertLoansPreserved();
@@ -99,6 +104,7 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
         address caller_
     ) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
@@ -108,47 +114,61 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBT-ENABLE-D01.
     function test_givenCoreDisabled_whenEnabled_thenRejectAndRetry() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_core));
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationRejected(last);
+        vm.prank(_fixtureAdmin);
         _core.enable("");
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationSucceeded();
     }
 
     // Scenarios: BLDEBT-ENABLE-D03.
     function test_givenCoreInactiveAndDisabled_whenEnabled_thenRejectAndRetry() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_core));
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationRejected(last);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_core));
+        vm.prank(_fixtureAdmin);
         _core.enable("");
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationSucceeded();
     }
 
     // Scenarios: BLDEBT-ENABLE-D02.
     function test_givenCoreInactive_whenEnabled_thenRejectAndRetry() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_core));
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationRejected(last);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_core));
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationSucceeded();
     }
 
     // Scenarios: BLDEBT-ENABLE-D04.
     function test_givenCoreReportedKernelChanges_whenEnabled_thenKernelMismatch() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.mockCall(
             address(_core),
@@ -163,6 +183,7 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
                 address(0x1234)
             )
         );
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         vm.clearMockedCalls();
         _assertLoansPreserved();
@@ -170,50 +191,65 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBT-ENABLE-D06, BLDEBT-ENABLE-D08.
     function test_givenInventoryDisabled_whenEnabled_thenRejectAndRetry() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
         assertTrue(_core.isEnabled(), "Core remains enabled during independent Inventory drift");
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_inventory));
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationRejected(last);
+        vm.prank(_fixtureAdmin);
         _inventory.enable("");
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationSucceeded();
     }
 
     // Scenarios: BLDEBT-ENABLE-D07, BLDEBT-ENABLE-D08.
     function test_givenInventoryInactiveAndDisabled_whenEnabled_thenRejectAndRetry() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_inventory));
         assertTrue(_core.isEnabled(), "Core remains enabled during independent Inventory drift");
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_inventory));
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationRejected(last);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_inventory));
+        vm.prank(_fixtureAdmin);
         _inventory.enable("");
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationSucceeded();
     }
 
     // Scenarios: BLDEBT-ENABLE-D05, BLDEBT-ENABLE-D08.
     function test_givenInventoryInactive_whenEnabled_thenRejectAndRetry() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_inventory));
         assertTrue(_core.isEnabled(), "Core remains enabled during independent Inventory drift");
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_inventory));
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationRejected(last);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_inventory));
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationSucceeded();
     }
 
     function test_givenInventoryKernelChanged_whenEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.mockCall(
             address(_inventory),
@@ -228,17 +264,20 @@ contract BurnerLoansDebtEnableTest is BurnerLoansDebtLifecycleTest {
                 address(other)
             )
         );
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
     }
 
     // Scenarios: BLDEBT-ENABLE-L03.
     function test_givenSettlementRoleRevoked_whenEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _rolesAdmin.revokeRole(_SETTLEMENT_ROLE, address(_debt));
+        _revokeFixtureRole(_SETTLEMENT_ROLE, address(_debt));
         uint48 last = _debt.lastTransitionAt();
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, _SETTLEMENT_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _debt.enable("");
         _assertActivationRejected(last);
     }

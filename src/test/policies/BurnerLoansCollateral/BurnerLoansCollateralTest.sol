@@ -9,7 +9,6 @@ import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol
 import {BurnerLoansCollateralActionTest} from "./fixtures/BurnerLoansCollateralActionTest.sol";
 import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {BurnerLoansCollateral} from "src/policies/burnerloans/BurnerLoansCollateral.sol";
 import {BurnerLoansCore} from "src/policies/burnerloans/BurnerLoansCore.sol";
 
@@ -22,7 +21,6 @@ abstract contract BurnerLoansCollateralTest is BurnerLoansCollateralActionTest {
     uint48 internal constant START_TIMESTAMP = 1000;
     Kernel internal kernel;
     OlympusRoles internal roles;
-    RolesAdmin internal rolesAdmin;
     BurnerLoansCore internal policy;
     address internal admin;
     address internal emergency = address(0xE911);
@@ -37,20 +35,18 @@ abstract contract BurnerLoansCollateralTest is BurnerLoansCollateralActionTest {
         super.setUp();
         kernel = _kernel;
         roles = _roles;
-        rolesAdmin = _rolesAdmin;
         policy = _core;
-        admin = address(this);
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, emergency);
+        admin = _fixtureAdmin;
+        _grantFixtureRole(EMERGENCY_ROLE, emergency);
         vm.startPrank(_borrower);
         _collateral.depositCollateral(address(_asset), 2000e6, _borrower);
         _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 100e6, address(0));
         vm.stopPrank();
         _depositAsset(_asset, 17, _OTHER_BORROWER);
         _preservedAccounting = _accountingDigest(address(_asset));
-        // A fresh action has no transition history; Core's positions remain in place.
         _collateral = new BurnerLoansCollateral(kernel, _core);
-        kernel.executeAction(Actions.ActivatePolicy, address(_collateral));
-        rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
+        _executeFixtureKernelAction(kernel, Actions.ActivatePolicy, address(_collateral));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
     }
 
     modifier givenCollateralEnabled() {
@@ -68,16 +64,14 @@ abstract contract BurnerLoansCollateralTest is BurnerLoansCollateralActionTest {
     }
 
     modifier givenCollateralInactive() {
-        kernel.executeAction(Actions.DeactivatePolicy, address(_collateral));
+        _executeFixtureKernelAction(kernel, Actions.DeactivatePolicy, address(_collateral));
         _;
     }
 
     /// @dev Grant every selected equivalent caller class; explicit tests seed exclusive/overlap cases.
     function _grantCaller(address caller_, uint8 roleMask_, bytes32 secondRole_) internal {
-        if (roleMask_ & 1 != 0 && !roles.hasRole(caller_, ADMIN_ROLE))
-            rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (roleMask_ & 2 != 0 && !roles.hasRole(caller_, secondRole_))
-            rolesAdmin.grantRole(secondRole_, caller_);
+        if (roleMask_ & 1 != 0) _grantRoleIfMissing(ADMIN_ROLE, caller_);
+        if (roleMask_ & 2 != 0) _grantRoleIfMissing(secondRole_, caller_);
     }
 
     function _assumeUnauthorized(address caller_, bytes32 secondRole_) internal view {
@@ -128,7 +122,7 @@ abstract contract BurnerLoansCollateralTest is BurnerLoansCollateralActionTest {
     }
 
     function _restoreCoreState(bool active_, bool enabled_) internal {
-        if (!active_) kernel.executeAction(Actions.ActivatePolicy, address(policy));
+        if (!active_) _executeFixtureKernelAction(kernel, Actions.ActivatePolicy, address(policy));
         if (!enabled_) {
             vm.prank(admin);
             policy.enable("");

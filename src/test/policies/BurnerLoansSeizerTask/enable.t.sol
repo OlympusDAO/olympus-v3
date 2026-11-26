@@ -22,6 +22,7 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-ENABLE-D08.
     function test_givenKernelDrift_whenEnabled_reverts(address otherKernel_) public {
         vm.assume(otherKernel_ != address(_kernel));
+        vm.prank(_seizerAdmin);
         _task.disable("");
         vm.mockCall(
             address(_liquidation),
@@ -36,9 +37,11 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
                 otherKernel_
             )
         );
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertFalse(_task.isEnabled(), "Kernel mismatch preserves disabled state");
         vm.clearMockedCalls();
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Restoring Kernel identity permits retry");
     }
@@ -46,6 +49,7 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
     // Scenarios: BLSEIZ-ENABLE-D09.
     function test_givenLensCoreDrift_whenEnabled_reverts(address otherCore_) public {
         vm.assume(otherCore_ != address(_core));
+        vm.prank(_seizerAdmin);
         _task.disable("");
         vm.mockCall(
             address(_lens),
@@ -58,9 +62,11 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
                 address(_lens)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertFalse(_task.isEnabled(), "Lens mismatch preserves disabled state");
         vm.clearMockedCalls();
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Restoring Lens binding permits retry");
     }
@@ -71,30 +77,42 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
         bool enabled_
     ) public {
         vm.assume(!active_ || !enabled_);
+        vm.prank(_seizerAdmin);
         _task.disable("");
-        if (!enabled_) _liquidation.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        if (!enabled_) {
+            vm.prank(_seizerAdmin);
+            _liquidation.disable("");
+        }
+        if (!active_) _executeSeizerKernelAction(Actions.DeactivatePolicy, address(_liquidation));
         vm.expectRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_liquidation)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertFalse(_task.isEnabled(), "Unavailable Seize preserves disabled state");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_liquidation));
-        if (!enabled_) _liquidation.enable("");
+        if (!active_) _executeSeizerKernelAction(Actions.ActivatePolicy, address(_liquidation));
+        if (!enabled_) {
+            vm.prank(_seizerAdmin);
+            _liquidation.enable("");
+        }
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Restoring Seize permits retry");
     }
 
     function test_givenSeizeReady_whenAdminEnables() public {
+        vm.prank(_seizerAdmin);
         _task.disable("");
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Ready Seize permits enable");
     }
 
     function test_givenCoreLifecycleUnreadable_whenEnabled_succeeds() public {
+        vm.prank(_seizerAdmin);
         _task.disable("");
         bytes memory kernelRead = abi.encodeCall(_core.kernel, ());
         bytes memory enabledRead = abi.encodeCall(_core.isEnabled, ());
@@ -110,12 +128,14 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
         );
         vm.expectCall(address(_core), kernelRead, uint64(0));
         vm.expectCall(address(_core), enabledRead, uint64(0));
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Activation checks Core compatibility without its lifecycle");
     }
 
     // Scenarios: BLSEIZ-ENABLE-D12.
     function test_givenMissingCoreInterface_whenActivated_reverts() public {
+        vm.prank(_seizerAdmin);
         _task.disable("");
         uint48 transition = _task.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -129,16 +149,19 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
                 address(_core)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertFalse(_task.isEnabled(), "Incompatible Core leaves consumer paused");
         assertEq(_task.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Restored interface permits retry");
     }
 
     // Scenarios: BLSEIZ-ENABLE-D13.
     function test_givenRevertingCoreInterface_whenActivated_reverts() public {
+        vm.prank(_seizerAdmin);
         _task.disable("");
         uint48 transition = _task.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -152,16 +175,19 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
                 address(_core)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertFalse(_task.isEnabled(), "Incompatible Core leaves consumer paused");
         assertEq(_task.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Restored interface permits retry");
     }
 
     // Scenarios: BLSEIZ-ENABLE-D14.
     function test_givenMalformedCoreInterface_whenActivated_reverts() public {
+        vm.prank(_seizerAdmin);
         _task.disable("");
         uint48 transition = _task.lastTransitionAt();
         bytes memory probe = abi.encodeCall(
@@ -175,18 +201,22 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
                 address(_core)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertFalse(_task.isEnabled(), "Incompatible Core leaves consumer paused");
         assertEq(_task.lastTransitionAt(), transition, "Rejection preserves transition time");
         vm.clearMockedCalls();
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Restored interface permits retry");
     }
 
     // Scenarios: BLSEIZ-ENABLE-P10.
     function test_givenCoreLifecycle_whenActivated(bool active_, bool enabled_) public {
+        vm.prank(_seizerAdmin);
         _task.disable("");
         _setCoreLifecycle(active_, enabled_);
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(
             _task.isEnabled(),
@@ -209,9 +239,11 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-ENABLE-D17.
     function test_givenLensInterfaceUnavailable_whenActivated_reverts() public {
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
         _mockCount(3);
         _setBothBorrowerCursors(address(_asset), 1);
+        vm.prank(_seizerAdmin);
         _task.disable("");
         uint48 transition = _task.lastTransitionAt();
         vm.mockCall(
@@ -225,6 +257,7 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
                 address(_lens)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertFalse(_task.isEnabled(), "Unsupported Lens preserves disabled state");
         assertEq(
@@ -243,6 +276,7 @@ contract BurnerLoansSeizerTaskEnableTest is BurnerLoansSeizerTaskTest {
             "Failed activation preserves unhealthy progress"
         );
         vm.clearMockedCalls();
+        vm.prank(_seizerAdmin);
         _task.enable("");
         assertTrue(_task.isEnabled(), "Restoring Lens capability permits activation retry");
     }

@@ -25,9 +25,12 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
     // Scenarios: BLCUCT-BATCH-P03.
     function test_whenFeeAndYieldFlagsAreDisabledInOneBatch_thenKeysAreIndependent() public {
         _distributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
         vm.expectRevert(IBurnerLoansPayout.BurnerLoans_RevenueDistributorRequired.selector);
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(0));
 
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
@@ -45,6 +48,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
         _payoutTimelock.executeQueuedAction(id);
         assertFalse(_payout.sendFeesToDistributor(), "Fee flag remains false");
         assertFalse(_payout.sendYieldToDistributor(), "Yield flag changes to false");
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(0));
         assertEq(
             _payout.revenueDistributor(),
@@ -63,7 +67,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
     ) public {
         _grantProposer(caller_, bl_, overlap_);
         _distributor();
-        _setState(_payout, false, payoutEnabled_);
+        _setPolicyLifecycle(_payout, false, payoutEnabled_);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _action(
             IBurnerLoansPayout.setSendFeesToDistributor.selector,
@@ -149,9 +153,9 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
         _assertBounds(id, invalidIndex_, stateIndex_, length_, reader_);
         _assertBounds(id, length_, 1, length_, reader_);
         _assertBounds(id, type(uint256).max, type(uint256).max, length_, reader_);
-        _setState(_payoutTimelock, false, false);
-        _setState(_core, false, false);
-        _setState(_payout, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_core, false, false);
+        _setPolicyLifecycle(_payout, false, false);
         _rejectTargetReads();
         vm.prank(reader_);
         assertEq(
@@ -235,7 +239,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
 
     // Scenarios: BLCUCT-BATCH-L02.
     function test_givenActiveDisabled_whenBatchQueued_reverts(address caller_) public {
-        _setState(_payoutTimelock, true, false);
+        _setPolicyLifecycle(_payoutTimelock, true, false);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueBatch, (_single(_rescueAction()))),
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
@@ -245,7 +249,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
 
     // Scenarios: BLCUCT-BATCH-L04.
     function test_givenInactiveDisabled_whenBatchQueued_reverts(address caller_) public {
-        _setState(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueBatch, (_single(_rescueAction()))),
             abi.encodeWithSelector(
@@ -258,7 +262,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
 
     // Scenarios: BLCUCT-BATCH-L03.
     function test_givenInactive_whenBatchQueued_reverts(address caller_) public {
-        _setState(_payoutTimelock, false, true);
+        _setPolicyLifecycle(_payoutTimelock, false, true);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueBatch, (_single(_rescueAction()))),
             abi.encodeWithSelector(
@@ -291,6 +295,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
         bool overlap_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueBatch, (_single(_rescueAction()))),
@@ -330,11 +335,13 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
     ) public {
         _grantProposer(caller_, bl_, overlap_);
         BurnerLoansPayout replacement = new BurnerLoansPayout(_kernel, address(_core));
-        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(replacement));
+        vm.prank(_fixtureAdmin);
         replacement.enable("");
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(replacement));
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, true, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, payoutEnabled_);
         vm.prank(caller_);
         uint64 id = _payoutTimelock.queueBatch(_single(_rescueAction()));
         _assertQueued(id, _single(_rescueAction()), caller_, _borrower);
@@ -497,6 +504,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
         bool expired_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueRescue(address(_asset), _borrower);
         bytes32 queue = _queueDigest(id);
         if (expired_) vm.warp(_payoutTimelock.getQueuedAction(id).expiresAt + 1);
@@ -557,7 +565,9 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
     ) public {
         _grantProposer(caller_, bl_, overlap_);
         _distributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[reverse_ ? 1 : 0] = _action(
@@ -711,7 +721,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
         address caller_,
         bool enabled_
     ) public {
-        _setState(_payoutTimelock, false, enabled_);
+        _setPolicyLifecycle(_payoutTimelock, false, enabled_);
         vm.etch(address(_payoutTimelock.ROLES()), hex"fe");
         uint64 next = _payoutTimelock.nextActionId();
         vm.recordLogs();
@@ -736,7 +746,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
     function test_givenActiveDisabled_givenBrokenRoles_whenQueueRequested_reverts(
         address caller_
     ) public {
-        _setState(_payoutTimelock, true, false);
+        _setPolicyLifecycle(_payoutTimelock, true, false);
         vm.etch(address(_payoutTimelock.ROLES()), hex"fe");
         uint64 next = _payoutTimelock.nextActionId();
         vm.recordLogs();
@@ -785,7 +795,7 @@ contract BurnerLoansPayoutConfigTimelockQueueBatchTest is BurnerLoansPayoutConfi
         bool payoutEnabled_
     ) public {
         _grantProposer(caller_, false, false);
-        _setState(_payout, false, payoutEnabled_);
+        _setPolicyLifecycle(_payout, false, payoutEnabled_);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueBatch, (_single(_rescueAction()))),
             abi.encodeWithSelector(

@@ -8,7 +8,7 @@ import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerT
 
 contract BurnerLoansSeizerTaskConfigureDependenciesTest is BurnerLoansSeizerTaskTest {
     function test_givenSeizeInactive_whenKernelActivatesTask() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        _executeSeizerKernelAction(Actions.DeactivatePolicy, address(_liquidation));
         BurnerLoansSeizerTask fresh = new BurnerLoansSeizerTask(
             _kernel,
             _liquidation,
@@ -17,7 +17,7 @@ contract BurnerLoansSeizerTaskConfigureDependenciesTest is BurnerLoansSeizerTask
             5,
             _EXECUTION_GAS_LIMIT
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(fresh));
+        _executeSeizerKernelAction(Actions.ActivatePolicy, address(fresh));
         assertTrue(
             _kernel.isPolicyActive(fresh),
             "Task activation resolves ROLES without Seize readiness"

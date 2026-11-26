@@ -42,6 +42,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-AUTH-L03.
     function test_givenAuthUnset_whenCoreEnabled_reverts(bool recovery_) public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         stdstore
             .target(address(_core))
@@ -54,8 +55,13 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
                 address(0)
             )
         );
-        if (recovery_) _core.reEnable();
-        else _core.enable("");
+        if (recovery_) {
+            vm.prank(_fixtureAdmin);
+            _core.reEnable();
+        } else {
+            vm.prank(_fixtureAdmin);
+            _core.enable("");
+        }
         assertFalse(
             _core.isEnabled(),
             "Unset authorization prevents both normal and recovery admission"
@@ -77,6 +83,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
         AuthSelectionCandidate next = new AuthSelectionCandidate(address(_core));
         uint256 epoch = _currentAuthEpoch();
         bytes32 ledger = _ledger();
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         (address selected, ) = _core.authConfig();
         assertEq(selected, address(next), "Auth pointer selects the compatible replacement");
@@ -86,9 +93,11 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-AUTH-L01.
     function test_givenCoreDisabled_whenAuthReplaced() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         AuthSelectionCandidate next = new AuthSelectionCandidate(address(_core));
         uint256 epoch = _currentAuthEpoch();
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         assertEq(_currentAuthEpoch(), epoch + 1, "Disabled Core permits Auth recovery");
         assertFalse(_core.isEnabled(), "Replacement does not enable Core");
@@ -99,7 +108,9 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
         (address original, ) = _core.authConfig();
         AuthSelectionCandidate next = new AuthSelectionCandidate(address(_core));
         uint256 epoch = _currentAuthEpoch();
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
+        vm.prank(_fixtureAdmin);
         _core.setAuth(original);
         (address selected, ) = _core.authConfig();
         assertEq(selected, original, "Returning to the prior Auth is allowed");
@@ -109,7 +120,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-AUTH-L02.
     function test_givenCoreInactive_whenAuthReplaced_reverts(bool enabled_) public {
         AuthSelectionCandidate next = new AuthSelectionCandidate(address(_core));
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         uint256 epoch = _currentAuthEpoch();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -117,6 +128,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
                 address(_core)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         assertEq(_currentAuthEpoch(), epoch, "Inactive Core does not alter Auth generation");
     }
@@ -129,6 +141,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
                 address(0)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(0));
     }
 
@@ -141,6 +154,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
                 candidate_
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(candidate_);
     }
 
@@ -156,6 +170,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
                 address(next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         (address selected, ) = _core.authConfig();
         assertEq(selected, current, "Wrong binding leaves the original selection intact");
@@ -177,6 +192,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
                 current
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(current);
         assertEq(_currentAuthEpoch(), epoch, "Unchanged selection rejects before candidate probes");
     }
@@ -193,6 +209,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
                 address(next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
     }
 
@@ -213,6 +230,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
                 address(next)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
     }
 
@@ -233,6 +251,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
         );
         uint256 epoch = _currentAuthEpoch();
         bytes32 ledger = _ledger();
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         (address selected, ) = _core.authConfig();
         assertEq(selected, address(next), "Consumed interfaces and Core binding admit Auth");
@@ -246,6 +265,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
         vm.mockCall(address(next), abi.encodeWithSignature("VERSION()"), new bytes(4096));
         uint256 epoch = _currentAuthEpoch();
         bytes32 ledger = _ledger();
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         (address selected, ) = _core.authConfig();
         assertEq(selected, address(next), "Unconsumed version metadata does not gate Auth");
@@ -263,6 +283,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
             abi.encodeCall(IERC165.supportsInterface, (type(IERC165).interfaceId)),
             abi.encode(uint256(2))
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         (address selected, ) = _core.authConfig();
         assertEq(selected, address(next), "Standard ERC165 checker accepts nonzero words");
@@ -280,6 +301,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
             abi.encodeCall(IERC165.supportsInterface, (bytes4(0xffffffff))),
             abi.encode(uint256(0), uint256(0))
         );
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         (address selected, ) = _core.authConfig();
         assertEq(selected, address(next), "Standard ERC165 checker permits trailing data");
@@ -301,6 +323,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
             abi.encode(false)
         );
         _expectInvalidAuth(next);
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
     }
 
@@ -313,6 +336,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
             abi.encode(true)
         );
         _expectInvalidAuth(next);
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
     }
 
@@ -325,6 +349,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
             new bytes(bound(length_, 0, 31))
         );
         _expectInvalidAuth(next);
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
     }
 
@@ -337,6 +362,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         _expectInvalidAuth(next);
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
     }
 
@@ -359,6 +385,7 @@ contract BurnerLoansCoreSetAuthTest is BurnerLoansCoreTest {
             .checked_write(type(uint256).max);
         (address current, ) = _core.authConfig();
         vm.expectRevert(IBurnerLoansCore.BurnerLoansCore_AuthEpochExhausted.selector);
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(next));
         assertEq(_currentAuthEpoch(), type(uint256).max, "Global epoch never wraps");
         (address selected, ) = _core.authConfig();

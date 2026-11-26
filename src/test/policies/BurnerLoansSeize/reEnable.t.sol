@@ -36,7 +36,7 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
         uint48 now_
     ) public givenRecoveryWindow(last_, grace_, now_) {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
-        _setPolicyState(_liquidation, false, true);
+        _setPolicyLifecycle(_liquidation, false, true);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -80,7 +80,9 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
         uint48 deadline = last_ + grace_;
         now_ = uint48(bound(now_, uint256(deadline) + 1, type(uint48).max));
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _liquidation.setGracePeriod(grace_);
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.warp(now_);
         vm.expectRevert(
@@ -105,7 +107,9 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
         grace_ = uint32(bound(grace_, 1, type(uint32).max));
         last_ = uint48(bound(last_, uint256(type(uint48).max) - grace_ + 1, type(uint48).max));
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _liquidation.setGracePeriod(grace_);
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -126,6 +130,7 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
@@ -141,7 +146,7 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
     ) public {
         _setEnabledHistory(zeroHistory_);
         _mockUnavailableCoreViews();
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_liquidation));
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _liquidation.reEnable();
@@ -156,7 +161,9 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.warp(uint256(_liquidation.lastTransitionAt()) + _liquidation.gracePeriod() + 1);
         vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
@@ -195,7 +202,9 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
     }
 
     function test_givenInventoryKernelChanged_whenReEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.mockCall(
             address(_inventory),
@@ -210,6 +219,7 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
                 address(other)
             )
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.reEnable();
     }
 
@@ -223,7 +233,7 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
         uint48 now_
     ) public givenRecoveryWindow(last_, grace_, now_) {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
-        _rolesAdmin.revokeRole(_SETTLEMENT_ROLE, address(_liquidation));
+        _revokeFixtureRole(_SETTLEMENT_ROLE, address(_liquidation));
         uint48 last = _liquidation.lastTransitionAt();
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, _SETTLEMENT_ROLE)
@@ -401,13 +411,13 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
     ) public givenRecoveryWindow(last_, grace_, now_) {
         vm.assume(!active_ || !enabled_);
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
-        _setPolicyState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         uint48 last = _liquidation.lastTransitionAt();
         _expectDependencyUnavailable(_payout);
         vm.prank(caller_);
         _liquidation.reEnable();
         _assertActivationRejected(last);
-        _restorePolicyState(_payout, active_, enabled_);
+        _restorePolicyLifecycle(_payout, active_, enabled_);
         _expectEnabledTransition(caller_);
         vm.prank(caller_);
         _liquidation.reEnable();
@@ -456,7 +466,7 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
         address caller_
     ) public {
         _liquidation = new BurnerLoansSeize(_kernel, _core);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_liquidation));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_liquidation));
         _mockUnavailableCoreViews();
         vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(caller_);
@@ -505,14 +515,14 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
     ) public givenRecoveryWindow(last_, grace_, now_) {
         vm.assume(!active_ || !enabled_);
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
 
         uint48 last = _liquidation.lastTransitionAt();
         _expectDependencyUnavailable(_core);
         vm.prank(caller_);
         _liquidation.reEnable();
         _assertActivationRejected(last);
-        _restorePolicyState(_core, active_, enabled_);
+        _restorePolicyLifecycle(_core, active_, enabled_);
         _expectEnabledTransition(caller_);
         vm.prank(caller_);
         _liquidation.reEnable();
@@ -559,14 +569,14 @@ contract BurnerLoansSeizeReEnableTest is BurnerLoansSeizeLifecycleTest {
     ) public givenRecoveryWindow(last_, grace_, now_) {
         vm.assume(!active_ || !enabled_);
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
-        _setPolicyState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         assertTrue(_core.isEnabled(), "Core remains enabled during independent Inventory drift");
         uint48 last = _liquidation.lastTransitionAt();
         _expectDependencyUnavailable(_inventory);
         vm.prank(caller_);
         _liquidation.reEnable();
         _assertActivationRejected(last);
-        _restorePolicyState(_inventory, active_, enabled_);
+        _restorePolicyLifecycle(_inventory, active_, enabled_);
         _expectEnabledTransition(caller_);
         vm.prank(caller_);
         _liquidation.reEnable();

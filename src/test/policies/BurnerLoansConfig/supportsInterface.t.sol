@@ -18,7 +18,7 @@ import {BurnerLoansConfigTest} from "./BurnerLoansConfigTest.sol";
 contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-ERC165-P01.
     function test_whenConfigInterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IBurnerLoansConfig).interfaceId),
@@ -32,7 +32,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IConfigOperator).interfaceId),
@@ -42,7 +42,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ERC165-P03.
     function test_whenVersionInterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IVersioned).interfaceId),
@@ -52,7 +52,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ERC165-P04.
     function test_whenERC165InterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IERC165).interfaceId),
@@ -62,7 +62,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ERC165-P05.
     function test_whenEnablerInterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IEnabler).interfaceId),
@@ -76,7 +76,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IEnablerV2).interfaceId),
@@ -90,7 +90,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IReEnabler).interfaceId),
@@ -100,7 +100,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ERC165-P08.
     function test_whenGraceInterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IGracePeriod).interfaceId),
@@ -114,7 +114,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertTrue(
             _config.supportsInterface(type(IBurnerLoansCoreBound).interfaceId),
@@ -124,14 +124,14 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCFG-ERC165-P09.
     function test_whenInvalidInterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertFalse(_config.supportsInterface(0xffffffff), "Unsupported interface");
     }
 
     // Scenarios: BLCFG-ERC165-P10.
     function test_whenZeroInterfaceQueried(address caller_, bool active_, bool enabled_) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.prank(caller_);
         assertFalse(_config.supportsInterface(0x00000000), "Unsupported interface");
     }
@@ -143,7 +143,7 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansConfigTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.assume(id_ != type(IBurnerLoansConfig).interfaceId);
         vm.assume(id_ != type(IConfigOperator).interfaceId);
         vm.assume(id_ != type(IVersioned).interfaceId);

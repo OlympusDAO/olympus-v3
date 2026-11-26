@@ -38,7 +38,7 @@ contract BurnerLoansPayoutAccountingInvariantsTest is BurnerLoansPayoutTest {
             IBurnerLoansRisk(address(_risk)),
             address(_otherPayout)
         );
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_handler));
+        _grantFixtureRole(ADMIN_ROLE, address(_handler));
         bytes4[] memory selectors = new bytes4[](14);
         selectors[0] = _handler.creditFee.selector;
         selectors[1] = _handler.creditSeizure.selector;

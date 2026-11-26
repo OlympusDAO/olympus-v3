@@ -179,6 +179,7 @@ contract BurnerLoansCompositesExecuteCallbacksTest is BurnerLoansCompositesGrant
     }
 
     function pauseExecutor() external {
+        vm.prank(_compositesOwner);
         _executor.disable("");
     }
 
@@ -502,7 +503,9 @@ contract BurnerLoansCompositesExecuteCallbacksTest is BurnerLoansCompositesGrant
 
     /// @dev Called only as a test-token callback; this fixture already holds governance ADMIN.
     function rotateAuth() external {
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(_replacement));
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(_auth));
     }
 
@@ -536,6 +539,7 @@ contract BurnerLoansCompositesExecuteCallbacksTest is BurnerLoansCompositesGrant
 
     /// @dev The account owner requests cancellation and Auth sees the original borrower.
     function cancelGrant() external {
+        vm.prank(_accountOwner);
         _account.cancelGrant(_auth, address(_executor));
     }
 }

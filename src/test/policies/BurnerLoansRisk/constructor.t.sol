@@ -424,7 +424,8 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
             caller_
         );
         _assertDeployment(deployed, address(token), address(0), 0);
-        _kernel.executeAction(Actions.ActivatePolicy, address(deployed));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(deployed));
+        vm.prank(_riskAdmin);
         deployed.enable("");
         _market.debtToken = address(token);
         _market.debtDecimals = decimals_;
@@ -563,6 +564,7 @@ contract BurnerLoansRiskConstructorTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CONSTRUCTOR-K01.
     function test_givenDifferentCoreKernel_whenDeployed_reverts(address caller_) public {
+        vm.prank(_riskKernelExecutor);
         address otherKernel = address(new Kernel());
         vm.mockCall(address(this), abi.encodeWithSignature("kernel()"), abi.encode(otherKernel));
         vm.expectRevert(

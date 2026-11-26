@@ -11,10 +11,11 @@ contract BurnerLoansConfigTimelockRequestPermissionsTest is BurnerLoansConfigTim
     function test_givenEachLifecycleState_whenPermissionsRead_thenEmpty(address caller_) public {
         vm.prank(caller_);
         assertEq(_timelock.requestPermissions().length, 0, "Active permissions empty");
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.prank(caller_);
         assertEq(_timelock.requestPermissions().length, 0, "Disabled permissions empty");
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         vm.prank(caller_);
         assertEq(_timelock.requestPermissions().length, 0, "Inactive permissions empty");
         BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);

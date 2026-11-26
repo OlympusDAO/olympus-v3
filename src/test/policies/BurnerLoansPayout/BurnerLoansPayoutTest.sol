@@ -8,7 +8,6 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IBurnerLoansErrors} from "src/policies/interfaces/burnerloans/IBurnerLoansErrors.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 
 // Libraries
@@ -17,7 +16,7 @@ import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol
 
 // Contracts
 import {BurnerLoansPayoutHarness} from "./fixtures/BurnerLoansPayoutHarness.sol";
-import {Actions, Policy, toKeycode} from "src/Kernel.sol";
+import {Actions, toKeycode} from "src/Kernel.sol";
 import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
 import {BurnerLoansPayout} from "src/policies/burnerloans/BurnerLoansPayout.sol";
 import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
@@ -48,9 +47,12 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
         _otherPayout = _payout;
         _subject = new BurnerLoansPayoutHarness(_kernel, address(_core));
         _payout = _subject;
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(_payout));
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_controller);
         _token = new MockRevertingTransferToken(6);
         _otherToken = new MockRevertingTransferToken(6);
@@ -68,7 +70,7 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
     function _deactivatePayoutWithBrokenRoles(address caller_, bool enabled_) internal {
         vm.assume(caller_ != address(_core));
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE) && caller_ != _payout.configOperator());
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         vm.mockCallRevert(address(_roles), bytes(""), hex"deadbeef");
     }
 
@@ -87,17 +89,20 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
 
     function _installDistributor() internal returns (RevenueDistributor distributor) {
         distributor = new RevenueDistributor(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(distributor));
+        vm.prank(_fixtureAdmin);
         distributor.enable("");
     }
 
     function _bindDistributor() internal {
         _distributor = _installDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(_distributor));
     }
 
     function _useDistributor() internal {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
     }
 
@@ -178,15 +183,10 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
         _deferSeizure(_token, keeper_, reward_, seized_);
     }
 
-    function _setState(Policy policy_, bool active_, bool enabled_) internal {
-        if (!enabled_) IEnabler(address(policy_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(policy_));
-    }
-
     function _grantPauseCaller(address caller_, bool emergency_, bool overlap_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_) _rolesAdmin.grantRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantFixtureRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
     }
 
     function _recoveryCallers() internal pure returns (RecoveryCaller[3] memory) {
@@ -200,7 +200,7 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
     function _grantRecoveryCaller(address caller_, bool operatorOnly_, bool overlap_) internal {
         vm.assume(
             caller_ != address(0) &&
-                caller_ != address(this) &&
+                caller_ != _fixtureAdmin &&
                 caller_ != _controller &&
                 caller_ != _destination &&
                 caller_ != _keeper &&
@@ -209,8 +209,11 @@ abstract contract BurnerLoansPayoutTest is BurnerLoansModularTest {
                 caller_ != _treasury() &&
                 caller_ != address(_distributor)
         );
-        if (operatorOnly_ || overlap_) _payout.setConfigOperator(caller_);
-        if (!operatorOnly_ || overlap_) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        if (operatorOnly_ || overlap_) {
+            vm.prank(_fixtureAdmin);
+            _payout.setConfigOperator(caller_);
+        }
+        if (!operatorOnly_ || overlap_) _grantFixtureRole(ADMIN_ROLE, caller_);
     }
 
     function _ledgerDigest() internal view returns (bytes32) {

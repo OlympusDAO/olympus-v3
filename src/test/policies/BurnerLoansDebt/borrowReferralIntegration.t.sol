@@ -20,8 +20,11 @@ contract BurnerLoansDebtBorrowReferralIntegrationTest is BurnerLoansDebtIntegrat
     address internal _secondReferrer = address(0xBEEF);
 
     modifier givenReferralConfigured() {
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(2500);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_referrer, true);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_secondReferrer, true);
         _depositCollateral(2000e6);
         _;
@@ -32,7 +35,9 @@ contract BurnerLoansDebtBorrowReferralIntegrationTest is BurnerLoansDebtIntegrat
         public
         givenReferralConfigured
     {
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(address(_payout), true);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(10000);
         bytes32 beforeState = _stateDigest(_borrower);
         bytes memory reason = abi.encodeWithSelector(
@@ -53,7 +58,9 @@ contract BurnerLoansDebtBorrowReferralIntegrationTest is BurnerLoansDebtIntegrat
 
     // Scenarios: BLDEBT-BORROW-P24.
     function test_givenWhitelistedPayout_whenReferralShareZero() public givenReferralConfigured {
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(address(_payout), true);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(0);
         uint256 payerBefore = _asset.balanceOf(_borrower);
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
@@ -155,6 +162,7 @@ contract BurnerLoansDebtBorrowReferralIntegrationTest is BurnerLoansDebtIntegrat
         givenReferralConfigured
     {
         _debt.previewBorrow(address(_asset), 100e9, _borrower, _borrower, 312500, _referrer);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_referrer, false);
         bytes32 beforeState = _stateDigest(_borrower);
         bytes memory reason = abi.encodeWithSelector(
@@ -217,6 +225,7 @@ contract BurnerLoansDebtBorrowReferralIntegrationTest is BurnerLoansDebtIntegrat
         );
         assertEq(oldQuote.fee, 314063, "Old quote returns total fee only");
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(10000);
         vm.expectEmit(address(_debt));
         emit IBurnerLoansDebt.Borrowed(
@@ -396,6 +405,7 @@ contract BurnerLoansDebtBorrowReferralIntegrationTest is BurnerLoansDebtIntegrat
 
     // Scenarios: BLDEBT-BORROW-D12.
     function test_givenRiskOperatorChanged_whenBorrowed() public givenReferralConfigured {
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(0xD00D));
         vm.prank(_borrower);
         IBurnerLoansDebt.BorrowPreview memory result = _debt.borrow(
@@ -416,7 +426,9 @@ contract BurnerLoansDebtBorrowReferralIntegrationTest is BurnerLoansDebtIntegrat
 
     // Scenarios: BLDEBT-BORROW-P20.
     function test_givenZeroGrossFee_whenAllowedReferrerBorrowed() public givenReferralConfigured {
+        vm.prank(_fixtureAdmin);
         _config.setAssetFeeConfig(address(_asset), IBurnerLoansRisk.AssetFeeConfig(0, 0, 0, 0));
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.prank(_borrower);
         _asset.approve(address(_core), 0);
@@ -473,11 +485,12 @@ contract BurnerLoansDebtBorrowReferralIntegrationTest is BurnerLoansDebtIntegrat
             _kernel,
             IBurnerLoansRisk(address(_risk))
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(queue));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(queue));
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(queue));
+        vm.prank(_fixtureAdmin);
         queue.enable("");
-        if (!enabled_) queue.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(queue));
+        _setPolicyLifecycle(queue, active_, enabled_);
         assertEq(
             _kernel.isPolicyActive(queue),
             active_,

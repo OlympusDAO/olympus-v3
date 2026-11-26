@@ -33,7 +33,7 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
-        _setPolicyState(_debt, false, false);
+        _setPolicyLifecycle(_debt, false, false);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -61,7 +61,9 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         _grantRoleIfMissing(blAdmin_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
         if (overlap_) _grantRoleIfMissing(blAdmin_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _debt.setGracePeriod(grace_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.warp(now_);
         vm.expectEmit(address(_debt));
@@ -82,7 +84,7 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
             3284,
             392188,
             31536001,
-            address(this),
+            _fixtureAdmin,
             true,
             true
         );
@@ -116,7 +118,9 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         uint48 deadline = last_ + grace_;
         now_ = uint48(bound(now_, uint256(deadline) + 1, type(uint48).max));
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _debt.setGracePeriod(grace_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.warp(now_);
         vm.expectRevert(
@@ -141,7 +145,9 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         grace_ = uint32(bound(grace_, 1, type(uint32).max));
         last_ = uint48(bound(last_, uint256(type(uint48).max) - grace_ + 1, type(uint48).max));
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _debt.setGracePeriod(grace_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -162,6 +168,7 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
@@ -174,7 +181,7 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         address caller_,
         bool active_
     ) public {
-        _setPolicyState(_debt, active_, true);
+        _setPolicyLifecycle(_debt, active_, true);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _debt.reEnable();
@@ -210,7 +217,9 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.warp(uint256(_debt.lastTransitionAt()) + _debt.gracePeriod() + 1);
         vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
@@ -226,13 +235,16 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_core));
         vm.prank(caller_);
         _debt.reEnable();
         _assertActivationRejected(last);
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         vm.prank(caller_);
         _debt.reEnable();
@@ -246,15 +258,18 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_core));
         vm.prank(caller_);
         _debt.reEnable();
         _assertActivationRejected(last);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_core));
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         vm.prank(caller_);
         _debt.reEnable();
@@ -268,14 +283,15 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_core));
         vm.prank(caller_);
         _debt.reEnable();
         _assertActivationRejected(last);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_core));
         vm.prank(caller_);
         _debt.reEnable();
         _assertActivationSucceeded();
@@ -288,6 +304,7 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.mockCall(
             address(_core),
@@ -315,7 +332,9 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
         assertTrue(_core.isEnabled(), "Core remains enabled during independent Inventory drift");
         uint48 last = _debt.lastTransitionAt();
@@ -323,6 +342,7 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         vm.prank(caller_);
         _debt.reEnable();
         _assertActivationRejected(last);
+        vm.prank(_fixtureAdmin);
         _inventory.enable("");
         vm.prank(caller_);
         _debt.reEnable();
@@ -336,16 +356,19 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_inventory));
         assertTrue(_core.isEnabled(), "Core remains enabled during independent Inventory drift");
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_inventory));
         vm.prank(caller_);
         _debt.reEnable();
         _assertActivationRejected(last);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_inventory));
+        vm.prank(_fixtureAdmin);
         _inventory.enable("");
         vm.prank(caller_);
         _debt.reEnable();
@@ -359,22 +382,25 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_inventory));
         assertTrue(_core.isEnabled(), "Core remains enabled during independent Inventory drift");
         uint48 last = _debt.lastTransitionAt();
         _expectDependencyNotActive(address(_inventory));
         vm.prank(caller_);
         _debt.reEnable();
         _assertActivationRejected(last);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_inventory));
         vm.prank(caller_);
         _debt.reEnable();
         _assertActivationSucceeded();
     }
 
     function test_givenInventoryKernelChanged_whenReEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.mockCall(
             address(_inventory),
@@ -389,6 +415,7 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
                 address(other)
             )
         );
+        vm.prank(_fixtureAdmin);
         _debt.reEnable();
     }
 
@@ -399,8 +426,9 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
         bool overlap_
     ) public {
         _grantReEnableCaller(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _rolesAdmin.revokeRole(_SETTLEMENT_ROLE, address(_debt));
+        _revokeFixtureRole(_SETTLEMENT_ROLE, address(_debt));
         uint48 last = _debt.lastTransitionAt();
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, _SETTLEMENT_ROLE)
@@ -637,7 +665,7 @@ contract BurnerLoansDebtReEnableTest is BurnerLoansDebtLifecycleTest {
             281474976710654,
             3334,
             1,
-            address(this),
+            _fixtureAdmin,
             false,
             true
         );

@@ -28,7 +28,7 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
     function setUp() public override {
         super.setUp();
         _actor = _service();
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_actor));
     }
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-I03.
@@ -120,7 +120,7 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-SETTLE-WITHDRAW-A03.
     function test_givenOnlySiblingRole_whenSettled_reverts() public {
         CoreService sibling = _service();
-        _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(sibling));
+        _grantFixtureRole(BL_DEBT_POLICY_ROLE, address(sibling));
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
         );
@@ -139,6 +139,7 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-A04.
     function test_givenWrongKernelCaller_whenSettled() public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _actor.changeKernel(other);
@@ -153,6 +154,7 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-L01.
     function test_givenCoreDisabled_whenSettled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -172,7 +174,7 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-L02, BLCORE-SETTLE-WITHDRAW-L03.
     function test_givenCoreInactive_whenSettled_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -196,7 +198,7 @@ contract BurnerLoansCoreSettleWithdrawTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-WITHDRAW-D01.
     function test_givenCallerInactive_whenSettled() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_actor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_actor));
         test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer(false, address(_core));
     }
 

@@ -170,8 +170,12 @@ contract BurnerLoansSeizerTaskConstructorTest is BurnerLoansSeizerTaskTest {
         bool seizeActive_,
         bool seizeEnabled_
     ) public {
-        if (!seizeEnabled_) _liquidation.disable("");
-        if (!seizeActive_) _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        if (!seizeEnabled_) {
+            vm.prank(_seizerAdmin);
+            _liquidation.disable("");
+        }
+        if (!seizeActive_)
+            _executeSeizerKernelAction(Actions.DeactivatePolicy, address(_liquidation));
         vm.prank(caller_);
         BurnerLoansSeizerTask task = new BurnerLoansSeizerTask(
             _kernel,

@@ -14,8 +14,10 @@ import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures
 abstract contract BurnerLoansPayoutGasTest is BurnerLoansModularTest {
     function _distributor() internal returns (RevenueDistributor distributor) {
         distributor = new RevenueDistributor(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(distributor));
+        vm.prank(_fixtureAdmin);
         distributor.enable("");
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(distributor));
     }
 
@@ -34,6 +36,7 @@ abstract contract BurnerLoansPayoutGasTest is BurnerLoansModularTest {
 contract BurnerLoansTransferPendingPayoutTest is BurnerLoansPayoutGasTest {
     function test_givenPendingFee_whenDistributorChanges_thenRetryPaysNewDistributor() public {
         RevenueDistributor former = _distributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
         vm.mockCallRevert(
             address(_asset),

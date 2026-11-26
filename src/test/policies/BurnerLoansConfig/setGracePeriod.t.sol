@@ -32,7 +32,7 @@ contract BurnerLoansConfigSetGracePeriodTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigDisabled {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _mutationReverts(
             caller_,
             abi.encodeCall(_config.setGracePeriod, (period_)),
@@ -47,7 +47,7 @@ contract BurnerLoansConfigSetGracePeriodTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigDisabled givenConfigInactive {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _mutationReverts(
             caller_,
             abi.encodeCall(_config.setGracePeriod, (period_)),
@@ -60,9 +60,9 @@ contract BurnerLoansConfigSetGracePeriodTest is BurnerLoansConfigTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigInactive {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.setGracePeriod, (uint32(1))),
             _inactiveError(address(_config))
         );
@@ -71,7 +71,7 @@ contract BurnerLoansConfigSetGracePeriodTest is BurnerLoansConfigTest {
     // Scenarios: BLCFGGR-I01.
     function test_whenGraceIsZero_reverts() public {
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.setGracePeriod, (uint32(0))),
             abi.encodeWithSelector(IGracePeriod.GracePeriod_ZeroPeriod.selector)
         );
@@ -84,11 +84,12 @@ contract BurnerLoansConfigSetGracePeriodTest is BurnerLoansConfigTest {
         bool coreEnabled_
     ) public {
         period_ = uint32(bound(period_, 1, type(uint32).max));
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         uint48 last = _config.lastTransitionAt();
         bytes32 funds = _economicDigest();
         vm.expectEmit(address(_config));
         emit IGracePeriod.GracePeriodSet(period_);
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(period_);
         assertEq(_config.gracePeriod(), period_, "Exact grace duration");
         assertEq(
@@ -119,14 +120,17 @@ contract BurnerLoansConfigSetGracePeriodTest is BurnerLoansConfigTest {
     function test_whenGraceBoundariesAreSeeded() public {
         vm.expectEmit(address(_config));
         emit IGracePeriod.GracePeriodSet(1);
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(1);
         assertEq(_config.gracePeriod(), 1, "Minimum nonzero grace");
         vm.expectEmit(address(_config));
         emit IGracePeriod.GracePeriodSet(type(uint32).max);
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(type(uint32).max);
         assertEq(_config.gracePeriod(), type(uint32).max, "Maximum representable grace");
         vm.expectEmit(address(_config));
         emit IGracePeriod.GracePeriodSet(type(uint32).max);
+        vm.prank(_fixtureAdmin);
         _config.setGracePeriod(type(uint32).max);
     }
 }

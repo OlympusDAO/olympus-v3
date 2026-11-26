@@ -75,11 +75,13 @@ contract BurnerLoansCompositesExecuteDependencyLifecycleTest is
         bool multiple_
     ) private {
         IExecutor.SignedGrant memory signed = _prepareGrantMode(inlineGrant_, _grant(multiple_));
+        vm.prank(_fixtureAdmin);
         IEnabler(dependency_).disable("");
         bytes memory reason = dependency_ == address(_core)
             ? _coreError()
             : abi.encodeWithSelector(IEnabler.NotEnabled.selector);
         _assertPausedExecution(reason, op_, inlineGrant_, signed);
+        vm.prank(_fixtureAdmin);
         IEnabler(dependency_).enable("");
         _retry(op_, inlineGrant_, signed);
     }
@@ -91,7 +93,7 @@ contract BurnerLoansCompositesExecuteDependencyLifecycleTest is
         bool multiple_
     ) private {
         IExecutor.SignedGrant memory signed = _prepareGrantMode(inlineGrant_, _grant(multiple_));
-        _kernel.executeAction(Actions.DeactivatePolicy, dependency_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, dependency_);
         bytes memory reason = dependency_ == address(_core)
             ? _coreError()
             : abi.encodeWithSelector(
@@ -99,7 +101,7 @@ contract BurnerLoansCompositesExecuteDependencyLifecycleTest is
                 dependency_
             );
         _assertPausedExecution(reason, op_, inlineGrant_, signed);
-        _kernel.executeAction(Actions.ActivatePolicy, dependency_);
+        _executeFixtureKernelAction(Actions.ActivatePolicy, dependency_);
         _retry(op_, inlineGrant_, signed);
     }
 

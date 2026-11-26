@@ -29,22 +29,24 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
 
     // Scenarios: BLRCT-QUEUE-REFERRER-L01, BLRCT-QUEUE-REFERRER-L02.
     function test_givenInactive_whenQueued_reverts(bool enabled_) public {
-        if (!enabled_) _timelock.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
+        _setPolicyLifecycle(_timelock, false, enabled_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
     }
 
     // Scenarios: BLRCT-QUEUE-REFERRER-L03.
     function test_givenDisabled_whenQueued_reverts() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
     }
@@ -52,13 +54,14 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
     // Scenarios: BLRCT-QUEUE-REFERRER-D01, BLRCT-QUEUE-REFERRER-D02, BLRCT-QUEUE-REFERRER-D03.
     function test_givenRiskUnavailable_whenQueued_reverts(bool active_, bool enabled_) public {
         vm.assume(!active_ || !enabled_);
-        _setState(_risk, active_, enabled_);
+        _setPolicyLifecycle(_risk, active_, enabled_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
     }
@@ -66,19 +69,21 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
     // Scenarios: BLRCT-QUEUE-REFERRER-D04.
     function test_givenOperatorChanged_whenQueued_reverts(address operator_) public {
         vm.assume(operator_ != address(_timelock));
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(operator_);
         _expectRejectedQueue(
             abi.encodeWithSelector(
                 IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_NotController.selector
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
     }
 
     // Scenarios: BLRCT-QUEUE-REFERRER-D05.
     function test_givenForeignKernel_whenQueued_reverts() public {
-        _setState(_risk, false, false);
+        _setPolicyLifecycle(_risk, false, false);
         vm.mockCall(address(_risk), abi.encodeWithSignature("kernel()"), abi.encode(address(0xF0)));
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -88,6 +93,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(0xF0)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
     }
@@ -105,6 +111,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
     }
@@ -118,6 +125,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
     }
@@ -135,6 +143,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
     }
@@ -153,17 +162,19 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         assertEq(_timelock.nextActionId(), next, "invalid metadata consumes no ID");
     }
 
     // Scenarios: BLRCT-QUEUE-REFERRER-D08.
     function test_givenUpstreamUnavailable_whenQueued(bool active_, bool enabled_) public {
-        _setState(_config, active_, enabled_);
-        _setState(_core, active_, enabled_);
-        _expectQueue(_single(_referrerAction(_recipient, true)), address(this));
+        _setPolicyLifecycle(_config, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
+        _expectQueue(_single(_referrerAction(_recipient, true)), _fixtureAdmin);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferrerAllowed(_recipient, true);
-        _assertQueued(id, _single(_referrerAction(_recipient, true)), address(this));
+        _assertQueued(id, _single(_referrerAction(_recipient, true)), _fixtureAdmin);
     }
 
     // Scenarios: BLRCT-QUEUE-REFERRER-L04, BLRCT-QUEUE-REFERRER-N01.
@@ -177,10 +188,13 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
 
     // Scenarios: BLRCT-QUEUE-REFERRER-L04.
     function test_givenReEnabled_whenQueued() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_timelock));
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferrerAllowed(_recipient, true);
         assertEq(id, 1, "reenabled and reactivated queue accepts intent");
     }
@@ -190,6 +204,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
         _expectRejectedQueue(
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_ZeroAddress.selector)
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(address(0), allowed_);
         _assertRejectedQueue(_single(_referrerAction(address(0), allowed_)));
     }
@@ -197,25 +212,33 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
     // Scenarios: BLRCT-QUEUE-REFERRER-N01, BLRCT-QUEUE-REFERRER-P01.
     function test_whenMembershipIntent(address referrer_, bool allowed_, bool old_) public {
         vm.assume(referrer_ != address(0));
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(referrer_, old_);
-        _expectQueue(_single(_referrerAction(referrer_, allowed_)), address(this));
+        _expectQueue(_single(_referrerAction(referrer_, allowed_)), _fixtureAdmin);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferrerAllowed(referrer_, allowed_);
-        _assertQueued(id, _single(_referrerAction(referrer_, allowed_)), address(this));
+        _assertQueued(id, _single(_referrerAction(referrer_, allowed_)), _fixtureAdmin);
     }
 
     // Scenarios: BLRCT-QUEUE-REFERRER-P02, BLRCT-QUEUE-REFERRER-P05.
     function test_givenPendingMembership_whenOppositeQueued_reverts(bool first_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferrerAllowed(_recipient, first_);
         _expectRejectedQueue(_pending(_referrerAction(_recipient, !first_), id));
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, !first_);
         _assertRejectedQueue(_single(_referrerAction(_recipient, !first_)));
     }
 
     // Scenarios: BLRCT-QUEUE-REFERRER-P03, BLRCT-QUEUE-REFERRER-P06.
     function test_givenOtherDomainsPending_whenQueued() public {
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetPriceCacheMaxAge(3600);
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferralFeeBps(2500);
+        vm.prank(_fixtureAdmin);
         uint64 first = _timelock.queueSetReferrerAllowed(_recipient, true);
+        vm.prank(_fixtureAdmin);
         uint64 second = _timelock.queueSetReferrerAllowed(_borrower, false);
         assertEq(first, 3, "three independent domains");
         assertEq(second, 4, "per-address membership independent");
@@ -243,6 +266,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
@@ -273,6 +297,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
@@ -300,14 +325,15 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
         bool coreActive_,
         bool coreEnabled_
     ) private {
-        _setState(_config, configActive_, configEnabled_);
-        _setState(_core, coreActive_, coreEnabled_);
-        _expectQueue(_single(_referrerAction(_recipient, true)), address(this));
+        _setPolicyLifecycle(_config, configActive_, configEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _expectQueue(_single(_referrerAction(_recipient, true)), _fixtureAdmin);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("facility()"), hex"deadbeef");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("risk()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferrerAllowed(_recipient, true);
         vm.clearMockedCalls();
-        _assertQueued(id, _single(_referrerAction(_recipient, true)), address(this));
+        _assertQueued(id, _single(_referrerAction(_recipient, true)), _fixtureAdmin);
     }
 
     function _expectNoUpstreamDiscoveryCalls() private {
@@ -345,6 +371,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));
@@ -367,6 +394,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetReferrerAllowedTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetReferrerAllowed(_recipient, true);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_referrerAction(_recipient, true)));

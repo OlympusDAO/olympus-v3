@@ -36,7 +36,9 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     function setUp() public override {
         super.setUp();
         _depositCollateral(type(uint128).max);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(type(uint128).max);
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), type(uint128).max);
         _mockRisk(0);
     }
@@ -358,6 +360,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     ) public {
         room_ = uint128(bound(room_, 0, type(uint128).max - 1));
         amount_ = uint128(bound(amount_, uint256(room_) + 1, type(uint128).max));
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(room_);
         _expectBorrowRevert(
             abi.encodeWithSelector(
@@ -374,7 +377,9 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-BORROW-P03.
     function test_givenBothCapsInsufficient_whenBorrowed_reverts() public {
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(100e9);
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), 80e9);
         // 101 OHM exceeds Inventory's 100 OHM and the asset's 80 OHM room.
         // Inventory capacity is checked first by both the preview and the action.
@@ -420,6 +425,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     ) public {
         room_ = uint128(bound(room_, 0, type(uint128).max - 1));
         amount_ = uint128(bound(amount_, uint256(room_) + 1, type(uint128).max));
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), room_);
         _expectBorrowRevert(
             abi.encodeWithSelector(
@@ -442,7 +448,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     ) public {
         vm.assume(!active_ || !enabled_);
         _ohm.mint(address(_inventory), 1); // Sufficient idle OHM must not bypass readiness.
-        _setPolicyState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         _expectBorrowRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -838,7 +844,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-BORROW-A09.
     function test_givenActionRoleRevoked_whenBorrowed_reverts() public {
-        _rolesAdmin.revokeRole(BL_DEBT_POLICY_ROLE, address(_debt));
+        _revokeFixtureRole(BL_DEBT_POLICY_ROLE, address(_debt));
         _expectBorrowRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE),
             1,
@@ -1037,8 +1043,8 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         address caller_,
         bool validInput_
     ) public {
-        _setPolicyState(_debt, false, enabled_);
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_debt, false, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectBorrowRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -1058,8 +1064,9 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         address caller_,
         bool validInput_
     ) public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectBorrowRevert(
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
             validInput_ ? 1 : 0,
@@ -1077,7 +1084,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
         bool validInput_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _expectBorrowRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -1092,6 +1099,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-BORROW-D04.
     function test_givenOriginationsDisabled_whenBorrowed_reverts() public {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         _expectBorrowRevert(
             abi.encodeWithSelector(
@@ -1249,7 +1257,7 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
     ) public {
         vm.assume(!active_ || !enabled_);
         _mockRisk(7);
-        _setPolicyState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes memory reason = abi.encodeWithSelector(
             PolicyDependency.PolicyDependency_NotActive.selector,
             address(_payout)
@@ -1338,14 +1346,16 @@ contract BurnerLoansDebtBorrowTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-BORROW-L01.
     function test_givenPolicyReactivated_whenBorrowExecuted_thenSucceeds() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_debt));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_debt));
         test_whenBorrowed_thenPrincipalAndMaturityAreCanonical(1);
     }
 
     // Scenarios: BLDEBT-BORROW-L01.
     function test_givenReEnabled_whenBorrowExecuted_thenSucceeds() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _debt.reEnable();
         test_whenBorrowed_thenPrincipalAndMaturityAreCanonical(1);
     }

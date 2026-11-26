@@ -31,6 +31,7 @@ contract BurnerLoansInventoryConfigTimelockChangeKernelTest is
         address caller_
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(_kernel));
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         bytes32 state = _queueDigest(_pendingId);
         vm.expectRevert(
@@ -48,7 +49,7 @@ contract BurnerLoansInventoryConfigTimelockChangeKernelTest is
         bool active_,
         bool enabled_
     ) public givenPendingRecovery {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 state = _queueDigest(_pendingId);
         uint48 last = _timelock.lastTransitionAt();
         uint32 grace = _timelock.gracePeriod();
@@ -76,6 +77,7 @@ contract BurnerLoansInventoryConfigTimelockChangeKernelTest is
 
     // Scenarios: BLINCT-KERNEL-A03.
     function test_givenKernelChanged_whenFormerKernelCalls_reverts() public givenPendingRecovery {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _timelock.changeKernel(next);
@@ -96,6 +98,7 @@ contract BurnerLoansInventoryConfigTimelockChangeKernelTest is
     function test_givenNewKernelNotActivated_whenExecuted_reverts(
         address caller_
     ) public givenPendingRecovery {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _timelock.changeKernel(next);
@@ -120,7 +123,7 @@ contract BurnerLoansInventoryConfigTimelockChangeKernelTest is
         Kernel next = _newKernel();
         vm.prank(address(_kernel));
         _timelock.changeKernel(next);
-        next.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(_timelock));
         _makeReady(_pendingId);
         bytes32 state = _queueDigest(_pendingId);
         assertTrue(_timelock.isActive(), "Timelock admitted on new Kernel");
@@ -147,8 +150,8 @@ contract BurnerLoansInventoryConfigTimelockChangeKernelTest is
         _timelock.changeKernel(next);
         vm.prank(address(_kernel));
         _inventory.changeKernel(next);
-        next.executeAction(Actions.ActivatePolicy, address(_timelock));
-        next.executeAction(Actions.ActivatePolicy, address(_inventory));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(_inventory));
         assertTrue(_timelock.isActive(), "Timelock active on destination Kernel");
         assertEq(
             address(_timelock.ROLES()),
@@ -167,14 +170,24 @@ contract BurnerLoansInventoryConfigTimelockChangeKernelTest is
     }
 
     function _newKernel() internal returns (Kernel next) {
+        vm.prank(_fixtureExecutor);
         next = new Kernel();
-        next.executeAction(Actions.InstallModule, address(new OlympusRoles(next)));
-        next.executeAction(Actions.InstallModule, address(new OlympusMinter(next, address(_ohm))));
-        next.executeAction(Actions.InstallModule, address(new OlympusTreasury(next)));
+        _executeFixtureKernelAction(next, Actions.InstallModule, address(new OlympusRoles(next)));
+        _executeFixtureKernelAction(
+            next,
+            Actions.InstallModule,
+            address(new OlympusMinter(next, address(_ohm)))
+        );
+        _executeFixtureKernelAction(
+            next,
+            Actions.InstallModule,
+            address(new OlympusTreasury(next))
+        );
     }
 
     // Scenarios: BLINCT-KERNEL-A02, BLINCT-KERNEL-L01, BLINCT-KERNEL-L02, BLINCT-KERNEL-L03, BLINCT-KERNEL-L04.
     function test_givenEachLifecyclePair_whenMigrated_thenOnlyPointerChanges() public {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         uint256 checkpoint = vm.snapshotState();
         for (uint256 active; active < 2; ++active) {
@@ -215,7 +228,7 @@ contract BurnerLoansInventoryConfigTimelockChangeKernelTest is
         uint256 checkpoint = vm.snapshotState();
         test_whenCallerIsNotCurrentKernel_reverts(address(this));
         _restore(checkpoint);
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, _recipient);
+        _grantFixtureRole(EMERGENCY_ROLE, _recipient);
         test_whenCallerIsNotCurrentKernel_reverts(_recipient);
     }
 }

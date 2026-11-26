@@ -27,6 +27,7 @@ abstract contract BurnerLoansPriceCacheTest is BurnerLoansModularTest {
             abi.encodeCall(_kernel.isPolicyActive, (Policy(address(_cache)))),
             abi.encode(true)
         );
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCache(address(_cache));
         _cache.cachePrice(address(_ohm), address(_asset));
         vm.mockCall(

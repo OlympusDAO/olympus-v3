@@ -16,9 +16,9 @@ abstract contract BurnerLoansRiskUpstreamTest is BurnerLoansRiskConfigTimelockTe
     }
 
     function _setUpstreamState(UpstreamState memory state_) internal {
-        _setState(_timelock, state_.controllerActive, state_.controllerEnabled);
-        _setState(_config, state_.configActive, state_.configEnabled);
-        _setState(_core, state_.coreActive, state_.coreEnabled);
+        _setPolicyLifecycle(_timelock, state_.controllerActive, state_.controllerEnabled);
+        _setPolicyLifecycle(_config, state_.configActive, state_.configEnabled);
+        _setPolicyLifecycle(_core, state_.coreActive, state_.coreEnabled);
         _forbidMetadata(address(_timelock), abi.encodeWithSignature("kernel()"));
         _forbidMetadata(address(_timelock), abi.encodeWithSignature("isEnabled()"));
         _forbidMetadata(address(_config), abi.encodeWithSignature("kernel()"));

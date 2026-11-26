@@ -55,9 +55,8 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
         _keeper = keeper_;
         _configure(address(_asset), 9999);
         _open(address(_asset), _borrower, 2, 1);
-        _rolesAdmin.grantRole(heart_ ? HEART_ROLE : BURNER_LOANS_SEIZER_ROLE, _keeper);
-        if (overlap_)
-            _rolesAdmin.grantRole(heart_ ? BURNER_LOANS_SEIZER_ROLE : HEART_ROLE, _keeper);
+        _grantFixtureRole(heart_ ? HEART_ROLE : BURNER_LOANS_SEIZER_ROLE, _keeper);
+        if (overlap_) _grantFixtureRole(heart_ ? BURNER_LOANS_SEIZER_ROLE : HEART_ROLE, _keeper);
         _expire();
         vm.prank(viewCaller_);
         IBurnerLoansCore.SeizePreview memory quote = _liquidation.previewSeizeFor(
@@ -121,6 +120,13 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
             true,
             address(0x103),
             address(this)
+        );
+        assertTrue(vm.revertToState(checkpoint), "Restore for custodian keeper");
+        test_givenProtocolKeeper_whenSeized_thenNoReward(
+            false,
+            false,
+            address(_depositManager),
+            address(0)
         );
     }
 
@@ -198,6 +204,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
     // Scenarios: BLLIQ-SEIZE-R05.
     function test_givenOriginationsDisabled_whenSeized_thenDefaultStillSucceeds() public {
         _open(address(_asset), _borrower, 2000e6, 100e9);
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         _expire();
         _assertSeizure(address(_asset), address(_asset), 20e6, 1980e6);
@@ -205,6 +212,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
 
     // Scenarios: BLLIQ-SEIZE-P18.
     function test_givenRealUnhealthyUnexpiredDebt_whenSeized_thenHealthAndBalancesMatch() public {
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(
             address(_asset),
             IBurnerLoansRisk.AssetRiskConfigInput(10000, 10000, 100, 30 days, 90 days, 1000e6)
@@ -293,6 +301,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
         uint256 config = bound(configSeed_, 0, 2);
         address[] memory borrowers = _prepareHealthyExpired(KeeperClass.Ordinary, false);
         // Seed 0: zero BPS; seed 1: zero cap; seed 2: both zero. Admission remains priced.
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(
             address(_asset),
             IBurnerLoansRisk.AssetRiskConfigInput(
@@ -730,7 +739,7 @@ contract BurnerLoansSeizeIntegrationTest is BurnerLoansSeizeIntegrationTestBase 
             "Only selected debt releases cap room"
         );
         assertEq(
-            _inventory.providerClaimOhm(address(this)),
+            _inventory.providerClaimOhm(_oracleInventoryProvider),
             200e9,
             "Provider claim survives subset default"
         );

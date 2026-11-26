@@ -26,7 +26,7 @@ contract BurnerLoansPayoutSupportsInterfaceTest is BurnerLoansPayoutTest {
         bool enabled_,
         bytes4 candidate_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 state = _ledgerDigest();
         vm.mockCallRevert(
             address(_core),

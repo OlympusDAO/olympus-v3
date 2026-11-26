@@ -35,7 +35,8 @@ contract BurnerLoansReferralHandler is Test {
         BurnerLoansLens lens;
         MockERC20 asset;
         address borrower;
-        address governance;
+        address executor;
+        address admin;
     }
 
     Services internal _services;
@@ -164,7 +165,7 @@ contract BurnerLoansReferralHandler is Test {
     // Fuzz bounds and the controlled fixture clock keep these values within their target widths.
     // forge-lint: disable-start(unsafe-typecast)
     function setShare(uint16 share_, bool operator_) external {
-        address caller = operator_ ? OPERATOR : address(this);
+        address caller = operator_ ? OPERATOR : _services.admin;
         uint16 share = uint16(bound(share_, 0, 10000));
         bytes memory failure = _riskFailure();
         if (failure.length != 0) {
@@ -184,7 +185,7 @@ contract BurnerLoansReferralHandler is Test {
     // forge-lint: disable-end(unsafe-typecast)
 
     function setAllowed(uint8 recipient_, bool allowed_, bool operator_) external {
-        address caller = operator_ ? OPERATOR : address(this);
+        address caller = operator_ ? OPERATOR : _services.admin;
         uint256 k = bound(recipient_, 0, 1);
         bytes memory failure = _riskFailure();
         if (failure.length != 0) {
@@ -321,7 +322,7 @@ contract BurnerLoansReferralHandler is Test {
     function setActive(uint8 policy_, bool active_) public {
         uint256 p = bound(policy_, 0, 3);
         if (active[p] == active_) return;
-        vm.prank(_services.governance);
+        vm.prank(_services.executor);
         _services.kernel.executeAction(
             active_ ? Actions.ActivatePolicy : Actions.DeactivatePolicy,
             _policy(p)
@@ -340,8 +341,12 @@ contract BurnerLoansReferralHandler is Test {
             if (!active[p]) return;
             if (p == 1 && (!active[0] || !enabled[0] || !active[2] || !enabled[2])) return;
             if (p == 3 && (!active[1] || !enabled[1])) return;
+            vm.prank(_services.admin);
             IEnabler(_policy(p)).enable("");
-        } else IEnabler(_policy(p)).disable("");
+        } else {
+            vm.prank(_services.admin);
+            IEnabler(_policy(p)).disable("");
+        }
         enabled[p] = enabled_;
     }
 

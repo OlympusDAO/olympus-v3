@@ -40,6 +40,7 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
     // Scenarios: BLLIQGR-I01.
     function test_whenGraceIsZero_reverts() public {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
+        vm.prank(_fixtureAdmin);
         _liquidation.setGracePeriod(0);
         _assertLoansPreserved();
     }
@@ -58,6 +59,7 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQGR-L01, BLLIQGR-L02.
     function test_givenDisabled_whenGraceSet_thenPauseWins(address caller_, bool zero_) public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
@@ -72,10 +74,11 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
         uint32 period_
     ) public {
         period_ = uint32(bound(period_, 1, type(uint32).max));
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         uint48 last = _liquidation.lastTransitionAt();
         vm.expectEmit(address(_liquidation));
         emit IGracePeriod.GracePeriodSet(period_);
+        vm.prank(_fixtureAdmin);
         _liquidation.setGracePeriod(period_);
         assertEq(_liquidation.gracePeriod(), period_, "Full width grace stored");
         assertEq(
@@ -90,7 +93,7 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
     function test_givenInactiveSubject_whenGraceSet_reverts(address caller_) public {
         vm.assume(caller_ != address(0));
         _grantRoleIfMissing(ADMIN_ROLE, caller_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_liquidation));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -134,8 +137,9 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQGR-L07.
     function test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_liquidation));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -148,7 +152,7 @@ contract BurnerLoansSeizeSetGracePeriodTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQGR-P01.
     function test_givenExistingAdmin_whenGraceSetToSameValue_thenStillEmits() public {
-        test_whenGraceSetToSameValue_thenStillEmits(1, address(this));
+        test_whenGraceSetToSameValue_thenStillEmits(1, _fixtureAdmin);
     }
 }
 

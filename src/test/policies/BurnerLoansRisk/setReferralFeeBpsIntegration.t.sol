@@ -23,7 +23,7 @@ contract BurnerLoansRiskSetReferralFeeBpsIntegrationTest is BurnerLoansRiskUpstr
     ) private {
         _setUpstreamState(state_);
         bytes32 beforeAccounting = _unaffectedAccounting();
-        address caller = operator_ ? address(_timelock) : address(this);
+        address caller = operator_ ? address(_timelock) : _fixtureAdmin;
         vm.expectEmit(address(_risk));
         emit IBurnerLoansRisk.ReferralFeeBpsSet(2500);
         vm.prank(caller);

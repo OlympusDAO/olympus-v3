@@ -29,8 +29,8 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
         bool payoutEnabled_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, true, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, payoutEnabled_);
         bytes32 funds = _payoutDigest();
         ITimelockBatchQueue.BatchAction[] memory actions = _single(
             _action(IBurnerLoansPayout.setSendYieldToDistributor.selector, abi.encode(false))
@@ -54,8 +54,8 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
     ) public {
         _grantProposer(caller_, bl_, overlap_);
         _distributor();
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, false, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, false, payoutEnabled_);
         vm.recordLogs();
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueSetSendYieldToDistributor, (flag_)),
@@ -122,7 +122,7 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
         bool overlap_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_payoutTimelock, true, false);
+        _setPolicyLifecycle(_payoutTimelock, true, false);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueSetSendYieldToDistributor, (false)),
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
@@ -137,7 +137,7 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
         bool overlap_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueSetSendYieldToDistributor, (false)),
             abi.encodeWithSelector(
@@ -155,7 +155,7 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
         bool overlap_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
-        _setState(_payoutTimelock, false, true);
+        _setPolicyLifecycle(_payoutTimelock, false, true);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueSetSendYieldToDistributor, (false)),
             abi.encodeWithSelector(
@@ -177,9 +177,10 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
         bool payoutEnabled_
     ) public {
         _grantProposer(caller_, bl_, overlap_);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, payoutActive_, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, payoutActive_, payoutEnabled_);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueSetSendYieldToDistributor, (false)),
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
@@ -225,6 +226,7 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
     ) public {
         _grantProposer(caller_, bl_, overlap_);
         RevenueDistributor rd = _distributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(old_);
         bytes32 funds = _payoutDigest();
         vm.expectCall(
@@ -252,6 +254,7 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
         _grantProposer(caller_, bl_, overlap_);
         if (old_) {
             _distributor();
+            vm.prank(_fixtureAdmin);
             _payout.setSendYieldToDistributor(true);
             vm.mockCall(
                 address(_payout),
@@ -280,8 +283,9 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
         vm.assume(!active_ || !enabled_);
         _grantProposer(caller_, bl_, overlap_);
         RevenueDistributor rd = _distributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(old_);
-        _setState(rd, active_, enabled_);
+        _setPolicyLifecycle(rd, active_, enabled_);
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueSetSendYieldToDistributor, (true)),
             abi.encodeWithSelector(
@@ -301,6 +305,7 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
     ) public {
         _grantProposer(caller_, bl_, overlap_);
         RevenueDistributor rd = _distributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(old_);
         vm.mockCall(address(rd), abi.encodeWithSignature("kernel()"), abi.encode(address(0x1234)));
         _expectQueueRejected(
@@ -324,6 +329,7 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
     ) public {
         _grantProposer(caller_, bl_, overlap_);
         RevenueDistributor rd = _distributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(old_);
         bytes memory reason = abi.encodeWithSelector(
             IBurnerLoansPayout.BurnerLoans_InvalidRevenueDistributor.selector,
@@ -354,8 +360,9 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
         _grantProposer(caller_, bl_, overlap_);
         if (configured_ || old_) {
             RevenueDistributor rd = _distributor();
+            vm.prank(_fixtureAdmin);
             _payout.setSendYieldToDistributor(old_);
-            _setState(rd, active_, enabled_);
+            _setPolicyLifecycle(rd, active_, enabled_);
         }
         vm.mockCallRevert(
             address(_payout),
@@ -396,7 +403,7 @@ contract BurnerLoansPayoutConfigTimelockQueueSetSendYieldToDistributorTest is
                         address(0x112),
                         true,
                         false,
-                        address(this),
+                        _fixtureAdmin,
                         ca != 0,
                         ce != 0,
                         pe != 0

@@ -20,6 +20,7 @@ contract BurnerLoansYieldClaimerTaskExecuteIntegrationTest is YieldClaimerModula
     // Scenarios: BLYC-EXECUTE-L02.
     function test_givenCoreDisabled_whenExecuted() public {
         _yieldAsset.mint(address(_yieldVault), 100e6);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         uint256 custody = _yieldAsset.balanceOf(address(_depositManager));
         vm.recordLogs();
@@ -37,6 +38,7 @@ contract BurnerLoansYieldClaimerTaskExecuteIntegrationTest is YieldClaimerModula
     // Scenarios: BLYC-EXECUTE-P03.
     function test_givenInsufficientPeriodicBudget_whenClaimedDirectly() public {
         _yieldAsset.mint(address(_yieldVault), 100e6);
+        vm.prank(_fixtureAdmin);
         _claimer.setExecutionGasLimit(1);
         vm.expectEmit(false, false, false, true, address(_claimer));
         emit IBurnerLoansYieldClaimerTask.ExecutionFailed(bytes4(0));
@@ -56,13 +58,14 @@ contract BurnerLoansYieldClaimerTaskExecuteIntegrationTest is YieldClaimerModula
     // Scenarios: BLYC-EXECUTE-A02, BLYC-EXECUTE-L01, BLYC-EXECUTE-P01.
     function test_givenMultipleYieldAssets_whenHeartExecutes(address caller_) public {
         vm.assume(caller_ != address(0));
-        if (!_roles.hasRole(caller_, HEART_ROLE)) _rolesAdmin.grantRole(HEART_ROLE, caller_);
+        if (!_roles.hasRole(caller_, HEART_ROLE)) _grantFixtureRole(HEART_ROLE, caller_);
         (MockERC20 later, MockERC4626 vault) = _newVault(false);
         _deposit(address(later), 2000e6);
         _yieldAsset.mint(address(_yieldVault), 100e6);
         later.mint(address(vault), 100e6);
         uint256 firstBefore = _yieldAsset.balanceOf(_payout.treasury());
         uint256 laterBefore = later.balanceOf(_payout.treasury());
+        vm.prank(_fixtureAdmin);
         _claimer.setExecutionGasLimit(1_500_000);
         for (uint256 beat; beat < 3; ++beat) {
             vm.prank(caller_);

@@ -298,6 +298,7 @@ contract BurnerLoansDebtBorrowReferralTest is BurnerLoansReferralTest {
                 caller_ != address(_payout)
         );
         _referrer = caller_;
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_referrer, true);
         _authorizeOperator(_recipient, type(uint48).max);
         _mockFeeComponents(76, 25);

@@ -20,9 +20,10 @@ contract BurnerLoansPayoutEnableCallbackTest is BurnerLoansPayoutCallbackTest {
         public
         givenPendingBuckets
     {
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_callbackToken));
+        _grantFixtureRole(ADMIN_ROLE, address(_callbackToken));
         _deferCallbackFee(5);
         _callbackToken.mint(address(_payout), 7);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _callbackToken.armOutgoing(
             address(_payout),
@@ -30,6 +31,7 @@ contract BurnerLoansPayoutEnableCallbackTest is BurnerLoansPayoutCallbackTest {
             abi.encodeCall(IEnabler.enable, (bytes(""))),
             false
         );
+        vm.prank(_fixtureAdmin);
         _payout.rescue(address(_callbackToken), _destination);
         _assertCallbackRejected();
         assertEq(_payout.isEnabled(), false, "Nested transition rejected");
@@ -41,7 +43,8 @@ contract BurnerLoansPayoutEnableCallbackTest is BurnerLoansPayoutCallbackTest {
         public
         givenPendingBuckets
     {
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_callbackToken));
+        _grantFixtureRole(ADMIN_ROLE, address(_callbackToken));
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _prepareIncoming(abi.encodeCall(IEnabler.enable, (bytes(""))), false);
         vm.prank(_borrower);

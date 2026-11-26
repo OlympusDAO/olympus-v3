@@ -24,6 +24,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
         outer_ = uint128(bound(outer_, 1, 800e9));
         room_ = uint128(bound(room_, 0, uint256(outer_) - 1));
 
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(nested_ + room_);
         _cache.arm(
             address(_debt),
@@ -71,6 +72,7 @@ contract BurnerLoansDebtBorrowPriceCallbacksTest is BurnerLoansDebtPriceCallback
         outer_ = uint128(bound(outer_, 1, 800e9));
         room_ = uint128(bound(room_, 0, uint256(outer_) - 1));
 
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), nested_ + room_);
         _cache.arm(
             address(_debt),

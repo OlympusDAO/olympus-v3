@@ -23,10 +23,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, true, false);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, true, true);
         _executeReverts(
             id,
             caller_,
@@ -41,10 +42,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, false, true);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, true, true);
         _executeReverts(
             id,
             caller_,
@@ -59,10 +61,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveTrue_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, false, false);
-        _setState(_timelock, true, true);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, true, true);
         _executeReverts(
             id,
             caller_,
@@ -77,10 +80,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, true, true);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, true, false);
         _executeReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
@@ -88,10 +92,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, true, false);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, true, false);
         _executeReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
@@ -99,10 +104,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, false, true);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, true, false);
         _executeReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
@@ -110,10 +116,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveTrue_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, false, false);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, true, false);
         _executeReverts(id, caller_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
@@ -121,10 +128,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledTrue_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, true, true);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, false, true);
         _executeReverts(
             id,
             caller_,
@@ -139,10 +147,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveTrue_givenConfigEnabledFalse_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, true, false);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, false, true);
         _executeReverts(
             id,
             caller_,
@@ -157,10 +166,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledTrue_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, false, true);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         _executeReverts(
             id,
             caller_,
@@ -175,10 +185,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveFalse_givenTimelockEnabledTrue_givenConfigActiveFalse_givenConfigEnabledFalse_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, false, false);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, false, true);
         _executeReverts(
             id,
             caller_,
@@ -193,10 +204,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledTrue_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, true, true);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, true, true);
+        _setPolicyLifecycle(_timelock, false, false);
         _executeReverts(
             id,
             caller_,
@@ -211,10 +223,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveTrue_givenConfigEnabledFalse_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, true, false);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, true, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _executeReverts(
             id,
             caller_,
@@ -229,10 +242,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledTrue_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, false, true);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, false, true);
+        _setPolicyLifecycle(_timelock, false, false);
         _executeReverts(
             id,
             caller_,
@@ -247,10 +261,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenTimelockActiveFalse_givenTimelockEnabledFalse_givenConfigActiveFalse_givenConfigEnabledFalse_whenExecute_reverts(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, false, false);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_config, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _executeReverts(
             id,
             caller_,
@@ -288,6 +303,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-A01.
     function test_givenReadyAction_whenExecute_thenComplete(address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
         _executeAndAssert(id, caller_);
@@ -295,7 +311,9 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-P01.
     function test_givenCancelled_whenExecuted_reverts(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
         _executeReverts(
             id,
@@ -309,6 +327,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-P04.
     function test_givenExecuted_whenExecuted_reverts(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
         _executeAndAssert(id, address(this));
@@ -324,6 +343,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-P05.
     function test_givenOneSecondBeforeReady_whenExecuted_reverts(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         vm.warp(uint256(_timelock.getQueuedAction(id).executableAt) - 1);
         _executeReverts(
@@ -339,6 +359,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-P08.
     function test_givenOneSecondAfterExpiry_whenExecuted_reverts(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         vm.warp(uint256(_timelock.getQueuedAction(id).expiresAt) + 1);
         _executeReverts(
@@ -354,6 +375,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-P06.
     function test_givenExactReadyTime_whenExecuted_thenInclusiveSuccess(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(
             _pair(_capAction(address(_asset), 200000e9), _feeAction(address(_asset), _fees()))
         );
@@ -363,6 +385,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-P07.
     function test_givenExactExpiryTime_whenExecuted_thenInclusiveSuccess(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(
             _pair(_capAction(address(_asset), 200000e9), _feeAction(address(_asset), _fees()))
         );
@@ -379,12 +402,14 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         );
         proposal.maxLtvBps = 7500;
         ITimelockBatchQueue.BatchAction memory a = _riskAction(address(_asset), proposal);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(a));
         bytes32 expected = _hash(a);
         IBurnerLoansRisk.AssetRiskConfigInput memory live = _riskFields(
             _config.getAssetConfig(address(_asset))
         );
         live.maxKeeperReward += 1;
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(address(_asset), live);
         _makeReady(id);
         _executeReverts(id, executor_, _stateChanged(id, 0, a, expected));
@@ -399,10 +424,12 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         );
         proposal.baseFeeBps = 100;
         ITimelockBatchQueue.BatchAction memory a = _feeAction(address(_asset), proposal);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(a));
         bytes32 expected = _hash(a);
         IBurnerLoansRisk.AssetFeeConfig memory live = _config.getAssetFeeConfig(address(_asset));
         live.postKinkSlopeBps += 1;
+        vm.prank(_fixtureAdmin);
         _config.setAssetFeeConfig(address(_asset), live);
         _makeReady(id);
         _executeReverts(id, executor_, _stateChanged(id, 0, a, expected));
@@ -412,6 +439,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenDebtGrowsAboveQueuedCap_whenExecuted_thenEarlierWriteRollsBack(
         address executor_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(
             _pair(_feeAction(address(_asset), _fees()), _capAction(address(_asset), 50e9))
         );
@@ -427,6 +455,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     // Scenarios: BLCT-EXECUTE-P09.
     function test_givenEmptyTargetRevert_whenExecuted_thenBoundedWrapper(address executor_) public {
         ITimelockBatchQueue.BatchAction memory a = _capAction(address(_asset), 200000e9);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_pair(_feeAction(address(_asset), _fees()), a));
         _makeReady(id);
         bytes memory injected = new bytes(0);
@@ -448,6 +477,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         uint256 length_
     ) public {
         ITimelockBatchQueue.BatchAction memory a = _capAction(address(_asset), 200000e9);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_pair(_feeAction(address(_asset), _fees()), a));
         _makeReady(id);
         bytes memory injected = new bytes(bound(length_, 1, 255));
@@ -460,6 +490,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         address executor_
     ) public {
         ITimelockBatchQueue.BatchAction memory a = _capAction(address(_asset), 200000e9);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_pair(_feeAction(address(_asset), _fees()), a));
         _makeReady(id);
         bytes memory injected = new bytes(256);
@@ -481,6 +512,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         uint256 length_
     ) public {
         ITimelockBatchQueue.BatchAction memory a = _capAction(address(_asset), 200000e9);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_pair(_feeAction(address(_asset), _fees()), a));
         _makeReady(id);
         bytes memory injected = new bytes(bound(length_, 257, 65536));
@@ -501,6 +533,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         address executor_
     ) public {
         ITimelockBatchQueue.BatchAction memory a = _capAction(address(_asset), 200000e9);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(a));
         _installCallback(id, true);
         _makeReady(id);
@@ -512,6 +545,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         address executor_
     ) public {
         ITimelockBatchQueue.BatchAction memory a = _capAction(address(_asset), 200000e9);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_pair(_feeAction(address(_asset), _fees()), a));
         _installCallback(id, false);
         _makeReady(id);
@@ -537,6 +571,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
                     _capAction(address(_asset), 200000e9),
                     _feeAction(address(_asset), _fees())
                 );
+            vm.prank(_fixtureAdmin);
             uint64 id = _timelock.queueBatch(batch);
             _makeReady(id);
             _executeAndAssert(id, executor_);
@@ -555,6 +590,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
             ITimelockBatchQueue.BatchAction[] memory batch = order == 0
                 ? _pair(configAction, riskAction)
                 : _pair(riskAction, configAction);
+            vm.prank(_fixtureAdmin);
             uint64 id = _timelock.queueBatch(batch);
             _makeReady(id);
             vm.mockCallRevert(
@@ -573,9 +609,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         address executor_,
         bool zero_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(
             _pair(_riskAction(address(_asset), _riskInput()), _feeAction(address(_asset), _fees()))
         );
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(zero_ ? address(0) : _recipient);
         _makeReady(id);
         _executeAndAssert(id, executor_);
@@ -585,9 +623,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenConfigOperatorRevoked_whenIndependentBatchExecuted_reverts(
         address executor_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(
             _pair(_feeAction(address(_asset), _fees()), _capAction(address(_asset), 200000e9))
         );
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(_recipient);
         _makeReady(id);
         _executeReverts(
@@ -605,11 +645,13 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         address executor_,
         uint48 elapsed_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(
             _pair(_feeAction(address(_asset), _fees()), _capAction(address(_asset), 200000e9))
         );
         ITimelockBatchQueue.QueuedAction memory original = _timelock.getQueuedAction(id);
         bytes32 commitment = _queueDigest(id);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(_recipient);
         vm.warp(bound(elapsed_, original.executableAt, original.expiresAt));
         _executeReverts(
@@ -625,12 +667,14 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
             commitment,
             "Lost authority preserves original intent and deadlines"
         );
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(address(_timelock));
         _executeAndAssert(id, executor_);
     }
 
     // Scenarios: BLCT-EXECUTE-D11.
     function test_givenConfigOperatorReadReverts_whenExecuted_reverts(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
         vm.mockCallRevert(
@@ -656,6 +700,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         bytes memory data_
     ) public {
         vm.assume(data_.length != 32);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
         vm.mockCall(address(_config), abi.encodeWithSignature("configOperator()"), data_);
@@ -673,6 +718,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-D11.
     function test_givenNoncanonicalConfigOperator_whenExecuted_reverts(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
         vm.mockCall(
@@ -711,6 +757,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_givenEachEstablishedActionState_whenMetadataRead_thenFlagsAndPayloadsAgree(
         address caller_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         ITimelockBatchQueue.QueuedAction memory original = _timelock.getQueuedAction(id);
         uint256 checkpoint = vm.snapshotState();
@@ -718,6 +765,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
         _executeAndAssert(id, caller_);
         _assertMetadata(id, original, true, false, caller_);
         assertTrue(vm.revertToState(checkpoint), "Restore pending metadata");
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
         _assertMetadata(id, original, false, true, caller_);
         assertTrue(vm.revertToState(checkpoint), "Restore expired metadata");
@@ -732,6 +780,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-QUEUED-ACTION-P02.
     function test_givenExecutedAction_whenPayloadRead_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
         _executeAndAssert(id, caller_);
@@ -749,7 +798,9 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-QUEUED-ACTION-I02.
     function test_givenCancelledAction_whenPayloadRead_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
         bytes memory reason = abi.encodeWithSelector(
             ITimelockBatchQueue.ITimelockBatchQueue_ActionCancelled.selector,
@@ -829,6 +880,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
             20,
             30
         );
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetAssetFeeConfig(address(_asset), proposed);
         assertEq(
             _config.getAssetFeeConfig(address(_asset)).baseFeeBps,
@@ -850,6 +902,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
     function test_whenCompleteRiskConfigIsQueued_thenMaximumKeeperRewardIsPreserved() public {
         IBurnerLoansRisk.AssetRiskConfigInput memory proposed = IBurnerLoansRisk
             .AssetRiskConfigInput(8000, 13000, 25, 20 days, 80 days, type(uint128).max);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetAssetRiskConfig(address(_asset), proposed);
         vm.warp(block.timestamp + 1 days);
         _timelock.executeQueuedAction(id);
@@ -862,9 +915,10 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionTest is BurnerLoansConfigTi
 
     // Scenarios: BLCT-EXECUTE-D12.
     function test_givenForeignKernelAndPausedConfig_whenExecuted_reverts(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_capAction(address(_asset), 200000e9)));
         _makeReady(id);
-        _setState(_config, true, false);
+        _setPolicyLifecycle(_config, true, false);
         address foreignKernel = makeAddr("foreignKernel");
         vm.mockCall(
             address(_config),

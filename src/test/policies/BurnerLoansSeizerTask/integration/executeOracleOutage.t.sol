@@ -59,7 +59,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             address(_asset),
             IBurnerLoansSeize.BurnerLoans_PriceSnapshotUnavailable.selector
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             1,
@@ -74,7 +74,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         vm.mockCallRevert(address(_core), abi.encodePacked(_core.settleSeize.selector), bytes(""));
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), bytes4(0));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             2,
@@ -88,6 +88,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _seedDebt(_BOB, 10e6, 1e9);
         _seedDebt(_CAROL, 10e6, 1e9);
         _price.setPrice(address(_asset), 1e16);
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 1);
     }
 
@@ -117,25 +118,34 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeCall(_floan.defaultPosition, (poisonedId)),
             abi.encodeWithSelector(CanonicalReadFailed.selector)
         );
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(3, 2);
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(address(_asset), 1);
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 5);
     }
 
     function _assertGoodDebtDrainsAroundPoison() private {
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
         uint256 now_ = vm.getBlockTimestamp();
+        vm.startPrank(_seizerHeart);
         for (uint256 i; i < 64; ++i) _task.execute();
+        vm.stopPrank();
         assertEq(
             _inventory.activePrincipalOhm(),
             2e9,
             "A rejected tail can keep one good loan in a failing batch"
         );
         // Cursor setters and a one-result limit recover good debt without hidden retries.
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(3, 1);
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(address(_asset), 0);
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 0);
-        for (uint256 i; i < 64 && _inventory.activePrincipalOhm() > 1e9; ++i) _task.execute();
+        for (uint256 i; i < 64 && _inventory.activePrincipalOhm() > 1e9; ++i)
+            _executeAsHeart(_task);
         assertEq(vm.getBlockTimestamp(), now_, "Drain cannot rely on further maturation");
         for (uint256 i; i < 8; ++i) {
             assertEq(
@@ -174,14 +184,14 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeWithSelector(CustodyFailed.selector)
         );
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _inventory.activePrincipalOhm(),
             3e9,
             "Rejected expiry attempt settles no principal"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             1e9,
@@ -220,10 +230,11 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _seedDebt(_CAROL, 10e6, 1e9);
         _seedDebt(_DAVE, 10e6, 1e9);
         _markMixedDebtUnderwater();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(500, 1);
-        _task.execute();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _DAVE).debtOhm,
             0,
@@ -257,10 +268,11 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _seedDebt(unhealthy, 10e6, 1e9);
         _repay(_BOB, 1e9); // Swap the future borrower into index1, behind the expired prefix.
         _price.setPrice(address(_asset), 1e16);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         for (uint256 i; i < 4; ++i) {
-            _task.execute();
-            _task.execute();
+            _executeAsHeart(_task);
+            _executeAsHeart(_task);
         }
         assertEq(
             _lens.getPosition(address(_asset), unhealthy).debtOhm,
@@ -293,7 +305,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeWithSelector(CustodyFailed.selector)
         );
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_inventory.activePrincipalOhm(), 2e9, "Rejected batch rolls back all principal");
         assertEq(
             _asset.balanceOf(_payout.treasury()),
@@ -301,10 +313,13 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Rejected batch transfers no collateral"
         );
         // Governance isolates the good prefix rather than adding an automatic retry.
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(2, 1);
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(address(_asset), 0);
+        vm.prank(_fixtureAdmin);
         _task.setNextAssetIndex(0);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _ALICE).debtOhm,
             0,
@@ -346,14 +361,14 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeCall(_core.settleSeize, (address(_asset), _one(_ALICE), address(_task))),
             abi.encodeWithSelector(CustodyFailed.selector)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
             "Rejected first position advances one"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             0,
@@ -390,7 +405,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeWithSelector(CustodyFailed.selector)
         );
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             1,
@@ -401,8 +416,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             2e9,
             "Rejected batch and singleton settle no debt"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             0,
@@ -440,7 +455,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeWithSelector(CustodyFailed.selector)
         );
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_inventory.activePrincipalOhm(), 2e9, "Rejected batch rolls back all principal");
         assertEq(
             _asset.balanceOf(_payout.treasury()),
@@ -448,10 +463,13 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Rejected batch transfers no collateral"
         );
         // Governance isolates the good prefix rather than adding an automatic retry.
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(2, 1);
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 0);
+        vm.prank(_fixtureAdmin);
         _task.setNextAssetIndex(0);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _ALICE).debtOhm,
             0,
@@ -527,13 +545,14 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _seedDebt(_ALICE, 10e6, 1e9);
         _seedDebt(_BOB, 10e6, 1e9);
         _price.setPrice(address(_asset), 1e16);
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), 1);
         vm.mockCallRevert(
             address(_risk),
             abi.encodeCall(_risk.refreshSnapshot, (address(_asset))),
             abi.encodeWithSelector(OracleUnavailable.selector)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.unhealthyAssetCursor(address(_asset)),
             1,
@@ -541,8 +560,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         assertEq(_inventory.activePrincipalOhm(), 2e9, "Refresh failure settles no debt");
         vm.clearMockedCalls();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             0,
@@ -552,7 +571,9 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
 
     function setUp() public override {
         super.setUp();
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_otherAsset));
     }
 
@@ -562,9 +583,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         bytes memory reason = _outage(
             OracleFault(bound(fault_, 0, uint256(OracleFault.CacheReverts)))
         );
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _expectScanFailure(reason);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -575,9 +597,9 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             0,
             "Expected independent unhealthy scan or retry offset"
         );
-        _task.execute(); // Other asset keeps its turn.
+        _executeAsHeart(_task); // Other asset keeps its turn.
         assertEq(_task.nextAssetIndex(), 0, "Asset rotation wraps before the second A visit");
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -589,8 +611,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Expected independent unhealthy scan or retry offset"
         );
         _assertSettledExpired();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -608,7 +630,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _mixedDebt();
         _outage(OracleFault(bound(fault_, 0, uint256(OracleFault.CacheReverts))));
         _expectNoPricedScan();
-        _task.execute();
+        _executeAsHeart(_task);
         _assertSettledExpired();
         assertEq(_task.expiredAssetCursor(address(_asset)), 0, "Mixed suffix reaches wraparound");
         assertEq(
@@ -626,7 +648,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _outage(OracleFault(bound(fault_, 0, uint256(OracleFault.CacheReverts))));
         _expectNoPricedScan();
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_inventory.activePrincipalOhm(), 0, "Expired principal settled without prices");
         assertEq(
             _floan.getActiveBorrowerCount(_core.marketId(address(_asset))),
@@ -650,9 +672,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         bytes memory reason = _outage(
             OracleFault(bound(fault_, 0, uint256(OracleFault.CacheReverts)))
         );
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _expectScanFailure(reason);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -663,8 +686,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             0,
             "Expected independent unhealthy scan or retry offset"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -687,9 +710,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         for (uint256 i; i < 5; ++i) _seedDebt(address(uint160(0x1000 + i)), 10e6, 1e9);
         _mature();
         _outage(OracleFault.PriceReverts);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(3, 1);
         for (uint256 i; i < 5; ++i) {
-            _task.execute();
+            _executeAsHeart(_task);
             assertEq(
                 _floan.getActiveBorrowerCount(_core.marketId(address(_asset))),
                 4 - i,
@@ -700,7 +724,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
                 (4 - i) * 1e9,
                 "FLOAN and Inventory principal agree after each batch"
             );
-            _task.execute();
+            _executeAsHeart(_task);
         }
         assertEq(
             _floan.getMarketCollateral(_core.marketId(address(_asset))),
@@ -740,7 +764,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Stale cursor equals live count"
         );
         _outage(OracleFault.PriceReverts);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             0,
@@ -762,11 +786,13 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     // Scenarios: BLSEIZ-EXECUTE-D09, BLSEIZ-SELF-EXECUTE-D06.
     function test_givenStaleCursor_givenSettlementPaused_whenExecuted() public {
         _prepareStaleCursorServiceFailure();
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), IEnabler.NotEnabled.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         _assertStaleCursorServiceFailure(1);
+        vm.prank(_fixtureAdmin);
         _liquidation.reEnable();
         _assertStaleCursorServiceRecovery();
     }
@@ -774,10 +800,12 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     // Scenarios: BLSEIZ-EXECUTE-D09, BLSEIZ-SELF-EXECUTE-D06.
     function test_givenStaleCursor_givenRiskPaused_whenExecuted() public {
         _prepareStaleCursorServiceFailure();
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
         _expectScanFailure(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        _task.execute();
+        _executeAsHeart(_task);
         _assertStaleCursorServiceFailure(0);
+        vm.prank(_fixtureAdmin);
         _risk.reEnable();
         _assertStaleCursorServiceRecovery();
     }
@@ -810,8 +838,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     }
 
     function _assertStaleCursorServiceRecovery() private {
-        _task.execute(); // B keeps its turn.
-        _task.execute();
+        _executeAsHeart(_task); // B keeps its turn.
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             0,
@@ -823,11 +851,12 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     // Scenarios: BLSEIZ-EXECUTE-P16.
     function test_givenExpiryEmptySuffix_givenOutage_whenHeartBeatsRepeat() public {
         _mixedDebt();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _setBothBorrowerCursors(address(_asset), 2);
         _outage(OracleFault.PriceReverts);
         _expectScanFailure(abi.encodeWithSelector(OracleUnavailable.selector));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -843,8 +872,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             3e9,
             "An expiry-empty suffix makes no health classification"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -855,8 +884,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             2,
             "Expected independent unhealthy scan or retry offset"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
@@ -872,7 +901,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         _expectNoPricedScan();
         _expectScanFailure(abi.encodeWithSelector(CanonicalReadFailed.selector));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -909,7 +938,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), CustodyFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             2,
@@ -938,20 +967,22 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         vm.clearMockedCalls();
         _outage(OracleFault.PriceReverts);
-        _task.execute();
-        _task.execute();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
     // Scenarios: BLSEIZ-EXECUTE-D11.
     function test_givenRiskPaused_whenExecuted() public {
         _mixedDebt();
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
         _expectRiskServiceFailure(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        _task.execute();
+        _executeAsHeart(_task);
         _assertRiskServiceFailure();
+        vm.prank(_fixtureAdmin);
         _risk.reEnable();
         _assertRiskServiceRecovery();
     }
@@ -959,16 +990,16 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     // Scenarios: BLSEIZ-EXECUTE-D12.
     function test_givenRiskInactive_whenExecuted() public {
         _mixedDebt();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_risk));
         _expectRiskServiceFailure(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_risk)
             )
         );
-        _task.execute();
+        _executeAsHeart(_task);
         _assertRiskServiceFailure();
-        _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_risk));
         _assertRiskServiceRecovery();
     }
 
@@ -1003,8 +1034,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     }
 
     function _assertRiskServiceRecovery() private {
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
@@ -1012,11 +1043,12 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     function test_givenSeizePaused_givenOutage_whenExecuted() public {
         _mixedDebt();
         _outage(OracleFault.PriceReverts);
+        vm.prank(_fixtureAdmin);
         _liquidation.disable("");
         _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), IEnabler.NotEnabled.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_inventory.activePrincipalOhm(), 3e9, "Paused Seize retains all debt");
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
@@ -1028,9 +1060,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             0,
             "Expected independent unhealthy scan or retry offset"
         );
+        vm.prank(_fixtureAdmin);
         _liquidation.reEnable();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
@@ -1038,15 +1071,17 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     function test_givenCoreUnavailable_givenOutage_whenExecuted(bool active_) public {
         _mixedDebt();
         _outage(OracleFault.PriceReverts);
-        if (active_) _core.disable("");
-        else _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        if (active_) {
+            vm.prank(_fixtureAdmin);
+            _core.disable("");
+        } else _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(
             address(_asset),
             PolicyDependency.PolicyDependency_NotActive.selector
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _inventory.activePrincipalOhm(),
             3e9,
@@ -1062,16 +1097,19 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             0,
             "Expected independent unhealthy scan or retry offset"
         );
-        if (active_) _core.reEnable();
-        else _kernel.executeAction(Actions.ActivatePolicy, address(_core));
-        _task.execute();
-        _task.execute();
+        if (active_) {
+            vm.prank(_fixtureAdmin);
+            _core.reEnable();
+        } else _executeFixtureKernelAction(Actions.ActivatePolicy, address(_core));
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
     // Scenarios: BLSEIZ-EXECUTE-D05.
     function test_givenHealthConfigurationFailure_whenExecuted() public {
         _mixedDebt();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         vm.mockCallRevert(
             address(_risk),
@@ -1079,7 +1117,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeWithSelector(ConfigurationFailed.selector)
         );
         _expectScanFailure(abi.encodeWithSelector(ConfigurationFailed.selector));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -1090,8 +1128,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             0,
             "Expected independent unhealthy scan or retry offset"
         );
-        _task.execute(); // B keeps its turn.
-        _task.execute(); // The expired suffix needs no health read.
+        _executeAsHeart(_task); // B keeps its turn.
+        _executeAsHeart(_task); // The expired suffix needs no health read.
         _assertSettledExpired();
     }
 
@@ -1112,7 +1150,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeWithSelector(_liquidation.seize.selector),
             uint64(1)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _inventory.activePrincipalOhm(),
             3e9,
@@ -1129,8 +1167,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Expected independent unhealthy scan or retry offset"
         );
         vm.clearMockedCalls();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
@@ -1147,10 +1185,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             ),
             uint64(1)
         );
-        _task.execute();
+        _executeAsHeart(_task);
         _assertSettledExpired();
-        _task.execute(); // B keeps its turn.
-        _task.execute(); // An expiry-empty page now permits priced unhealthy discovery.
+        _executeAsHeart(_task); // B keeps its turn.
+        _executeAsHeart(_task); // An expiry-empty page now permits priced unhealthy discovery.
         assertEq(
             _inventory.activePrincipalOhm(),
             0,
@@ -1188,7 +1226,9 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     // Scenarios: BLSEIZ-EXECUTE-D08.
     function test_givenUnexpiredPrefix_givenPriceConsumesGas_whenHeartRunsTasks() public {
         _mixedDebt();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
+        vm.prank(_fixtureAdmin);
         _task.setExecutionGasLimit(200_000);
         (MockPeriodicTaskManager manager, MockPeriodicTask later) = _managerWithLaterTask();
         vm.etch(address(_price), hex"fe");
@@ -1223,6 +1263,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _outage(OracleFault.PriceReverts);
         vm.expectRevert(OracleUnavailable.selector);
         _lens.getExpiredBorrowersBoundedFor(_BOB, address(_asset), 0, 3, 3);
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(
             address(_asset),
             IBurnerLoansRisk.AssetRiskConfigInput(
@@ -1370,15 +1411,14 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     function test_givenSeizeInactive_givenOutage_whenExecuted(bool enabled_) public {
         _mixedDebt();
         _outage(OracleFault.PriceReverts);
-        if (!enabled_) _liquidation.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        _setPolicyLifecycle(_liquidation, false, enabled_);
         _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(
             address(_asset),
             IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -1391,10 +1431,13 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         assertEq(_inventory.activePrincipalOhm(), 3e9, "Inactive Seize preserves principal");
         assertEq(_task.nextAssetIndex(), 1, "Inactive Seize still rotates assets");
-        _kernel.executeAction(Actions.ActivatePolicy, address(_liquidation));
-        if (!enabled_) _liquidation.reEnable();
-        _task.execute();
-        _task.execute();
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_liquidation));
+        if (!enabled_) {
+            vm.prank(_fixtureAdmin);
+            _liquidation.reEnable();
+        }
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
@@ -1402,11 +1445,13 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     function test_givenExpiryEmptyPage_givenRiskPaused_whenExecuted() public {
         _seedDebt(_ALICE, 10e6, 1e9);
         _seedDebt(_BOB, 10e6, 1e9);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
         _expectScanFailure(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         _expectNoSettlement();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -1424,9 +1469,9 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     function test_givenExpiryEmptyPage_givenRiskInactive_whenExecuted(bool enabled_) public {
         _seedDebt(_ALICE, 10e6, 1e9);
         _seedDebt(_BOB, 10e6, 1e9);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
-        if (!enabled_) _risk.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _setPolicyLifecycle(_risk, false, enabled_);
         _expectScanFailure(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -1434,7 +1479,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             )
         );
         _expectNoSettlement();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -1462,7 +1507,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         _expectScanFailure(abi.encodeWithSelector(CustodyFailed.selector));
         _expectNoSettlement();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -1490,7 +1535,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         _expectScanFailure(abi.encodeWithSelector(ConfigurationFailed.selector));
         _expectNoSettlement();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -1511,6 +1556,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     // Scenarios: BLSEIZ-SELF-EXECUTE-N03.
     function test_givenMaximumLimits_givenOneUnexpiredBorrower_whenExecuted() public {
         _seedDebt(_ALICE, 10e6, 1e9);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(type(uint16).max, type(uint8).max);
         vm.expectCall(
             address(_lens),
@@ -1533,7 +1579,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             uint64(1)
         );
         _expectNoSettlement();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -1554,7 +1600,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         vm.assume(caller_ != address(0) && !_roles.hasRole(caller_, BURNER_LOANS_SEIZER_ROLE));
         _mixedDebt();
         _outage(OracleFault.PriceReverts);
-        if (!_roles.hasRole(caller_, HEART_ROLE)) _rolesAdmin.grantRole(HEART_ROLE, caller_);
+        if (!_roles.hasRole(caller_, HEART_ROLE)) _grantFixtureRole(HEART_ROLE, caller_);
         assertFalse(_roles.hasRole(address(_task), HEART_ROLE), "Task has only seizer role");
         _expectNoPricedScan();
         vm.expectCall(
@@ -1576,15 +1622,16 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     {
         _mixedDebt();
         _markMixedDebtUnderwater();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _outage(OracleFault.PriceReverts);
-        _task.execute();
-        _task.execute();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
         _restoreOracleReads();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _DAVE).debtOhm,
             0,
@@ -1610,6 +1657,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         uint8 results = uint8(
             bound(results_, 1, checks < type(uint8).max ? checks : type(uint8).max)
         );
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(checks, results);
         bytes memory reason = _outage(
             OracleFault(bound(fault_, 0, uint8(OracleFault.CacheReverts)))
@@ -1657,13 +1705,14 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _seedDebt(_CAROL, 10e6, 1e9);
         _seedDebt(_DAVE, 10e6, 1e9);
         _markMixedDebtUnderwater();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(3, 1);
         _outage(OracleFault.BackingReverts);
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
-        _task.execute();
-        _task.execute(); // B retains its turn.
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task); // B retains its turn.
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _ALICE).debtOhm,
             0,
@@ -1714,6 +1763,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Expected independent unhealthy scan or retry offset"
         );
         _markMixedDebtUnderwater();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _outage(OracleFault.PriceReverts);
         _settleExpiredWithoutSeizingUnderwater();
@@ -1730,6 +1780,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _repay(_CAROL, 1e9);
         _price.setPrice(address(_asset), 1e16);
         _assertUnexpiredUnderwater(_DAVE);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _outage(OracleFault.BackingReverts);
         assertEq(
@@ -1747,7 +1798,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             2,
             "Repayment shrank the population to the saved offset"
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -1758,8 +1809,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             0,
             "Expected independent unhealthy scan or retry offset"
         );
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
             0,
@@ -1782,8 +1833,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         _restoreOracleReads();
         _assertUnexpiredUnderwater(_DAVE);
-        _task.execute(); // B turn.
-        _task.execute();
+        _executeAsHeart(_task); // B turn.
+        _executeAsHeart(_task);
         assertEq(
             _lens.getPosition(address(_asset), _DAVE).debtOhm,
             0,
@@ -1801,6 +1852,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     function test_givenFailedExpiredBatch_givenUnderwaterDebt_whenServicesRecover() public {
         _mixedDebt();
         _markMixedDebtUnderwater();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _setBothBorrowerCursors(address(_asset), 1);
         _outage(OracleFault.PriceReverts);
@@ -1811,7 +1863,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(address(_asset), CustodyFailed.selector);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             2,
@@ -1828,8 +1880,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _assertUnexpiredUnderwater(_DAVE);
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
         for (uint256 i; i < 5; ++i) {
-            _task.execute();
-            _task.execute();
+            _executeAsHeart(_task);
+            _executeAsHeart(_task);
         }
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
@@ -1856,9 +1908,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _seedDebt(_CAROL, 10e6, 1e9);
         _seedDebt(_DAVE, 10e6, 1e9);
         _markMixedDebtUnderwater();
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _outage(OracleFault.PriceReverts);
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -1869,9 +1922,9 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             0,
             "Expected independent unhealthy scan or retry offset"
         );
-        _task.execute();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -1903,12 +1956,13 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             8e18,
             "Healthy borrower remains above liquidation threshold"
         );
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _setBothBorrowerCursors(address(_asset), 3);
         _outage(OracleFault.PriceReverts);
         for (uint256 i; i < 3; ++i) {
-            _task.execute();
-            _task.execute();
+            _executeAsHeart(_task);
+            _executeAsHeart(_task);
         }
         assertEq(
             _lens.getPosition(address(_asset), _BOB).debtOhm,
@@ -1932,8 +1986,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         );
         _restoreOracleReads();
         for (uint256 i; i < 3; ++i) {
-            _task.execute();
-            _task.execute();
+            _executeAsHeart(_task);
+            _executeAsHeart(_task);
         }
         assertEq(
             _lens.getPosition(address(_asset), _CAROL).debtOhm,
@@ -2028,8 +2082,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
         // Three entries and check>=1: at most one complete forward sweep reaches expired Bob.
         for (uint256 i; i < 3 && _lens.getPosition(address(_asset), _BOB).debtOhm != 0; ++i) {
-            _task.execute();
-            _task.execute(); // Preserve the other asset's normal turn.
+            _executeAsHeart(_task);
+            _executeAsHeart(_task); // Preserve the other asset's normal turn.
             assertEq(
                 _lens.getPosition(address(_asset), _CAROL).debtOhm,
                 1e9,
@@ -2053,7 +2107,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         vm.clearMockedCalls();
         MockBackingOracle(_risk.backingOracle()).setEnabled(true);
         _price.setTimestamp(uint48(vm.getBlockTimestamp()));
-        if (_risk.priceCache() != address(0)) _risk.setPriceCache(address(0));
+        if (_risk.priceCache() != address(0)) {
+            vm.prank(_fixtureAdmin);
+            _risk.setPriceCache(address(0));
+        }
     }
 
     function _drainRecoveredUnderwater(uint256 expectedDefaults_) private {
@@ -2062,8 +2119,8 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
         // Both remaining positions are underwater: each A visit can settle at least one.
         for (uint256 i; i < 2; ++i) {
-            _task.execute();
-            _task.execute();
+            _executeAsHeart(_task);
+            _executeAsHeart(_task);
         }
         assertEq(
             _lens.getPosition(address(_asset), _CAROL).debtOhm,
@@ -2110,6 +2167,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     function _unexpiredUnhealthyDebt() private {
         _seedDebt(_ALICE, 10e6, 1e9);
         _seedDebt(_BOB, 10e6, 1e9);
+        vm.prank(_fixtureAdmin);
         _task.setScanLimits(1, 1);
         _price.setPrice(address(_asset), 1e16);
     }
@@ -2117,8 +2175,9 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     // Scenarios: BLSEIZ-EXECUTE-D12.
     function test_givenRiskInactivePaused_whenExecuted() public {
         _mixedDebt();
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_risk));
         _expectPricedScans(1);
         _expectScanFailure(
             abi.encodeWithSelector(
@@ -2126,7 +2185,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
                 address(_risk)
             )
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             0,
@@ -2138,10 +2197,11 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Expected independent unhealthy scan or retry offset"
         );
         assertEq(_inventory.activePrincipalOhm(), 3e9, "Inactive paused Risk retains all debt");
-        _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_risk));
+        vm.prank(_fixtureAdmin);
         _risk.reEnable();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
@@ -2159,15 +2219,16 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
     function test_givenCoreInactivePaused_givenOutage_whenExecuted() public {
         _mixedDebt();
         _outage(OracleFault.PriceReverts);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         _expectPricedScans(1);
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.SeizureFailed(
             address(_asset),
             PolicyDependency.PolicyDependency_NotActive.selector
         );
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _task.expiredAssetCursor(address(_asset)),
             1,
@@ -2179,10 +2240,11 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             "Expected independent unhealthy scan or retry offset"
         );
         assertEq(_inventory.activePrincipalOhm(), 3e9, "Inactive paused Core retains debt");
-        _kernel.executeAction(Actions.ActivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_core));
+        vm.prank(_fixtureAdmin);
         _core.reEnable();
-        _task.execute();
-        _task.execute();
+        _executeAsHeart(_task);
+        _executeAsHeart(_task);
         _assertSettledExpired();
     }
 
@@ -2198,7 +2260,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             uint64(1)
         );
         _expectNoSettlement();
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             _inventory.activePrincipalOhm(),
             1e9,
@@ -2220,7 +2282,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _outage(OracleFault.PriceReverts);
         _expectNoPricedScan();
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
-        _task.execute();
+        _executeAsHeart(_task);
         uint32 market = _core.marketId(address(_asset));
         assertEq(_inventory.activePrincipalOhm(), 0, "Post-maturity debt settles without prices");
         assertEq(
@@ -2252,7 +2314,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeCall(_task.execute, ())
         );
         uint256 treasuryBefore = token.balanceOf(_payout.treasury());
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             token.callbackRevertData(),
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, HEART_ROLE),
@@ -2272,7 +2334,7 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             abi.encodeCall(_task.selfExecuteTask, ())
         );
         uint256 treasuryBefore = token.balanceOf(_payout.treasury());
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(
             token.callbackRevertData(),
             abi.encodeWithSelector(IBurnerLoansSeizerTask.BurnerLoansSeizer_OnlySelf.selector),
@@ -2292,9 +2354,13 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         _debt.borrow(address(token), 1e9, _ALICE, _ALICE, type(uint256).max, address(0));
         vm.stopPrank();
         _mature();
+        vm.prank(_fixtureAdmin);
         _task.removeAsset(address(_asset));
+        vm.prank(_fixtureAdmin);
         _task.removeAsset(address(_otherAsset));
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(token));
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_otherAsset));
     }
 
@@ -2366,10 +2432,12 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
         returns (MockPeriodicTaskManager manager, MockPeriodicTask later)
     {
         manager = new MockPeriodicTaskManager(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(manager));
-        _rolesAdmin.grantRole(HEART_ROLE, address(manager));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(manager));
+        _grantFixtureRole(HEART_ROLE, address(manager));
         later = new MockPeriodicTask();
+        vm.prank(_fixtureAdmin);
         manager.addPeriodicTask(address(_task));
+        vm.prank(_fixtureAdmin);
         manager.addPeriodicTask(address(later));
     }
 
@@ -2456,8 +2524,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             reason = abi.encodeWithSelector(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         } else {
             PriceCache cache = new PriceCache(_kernel, 18, "USD");
-            _kernel.executeAction(Actions.ActivatePolicy, address(cache));
+            _executeFixtureKernelAction(Actions.ActivatePolicy, address(cache));
+            vm.prank(_fixtureAdmin);
             cache.enable("");
+            vm.prank(_fixtureAdmin);
             _risk.setPriceCache(address(cache));
             vm.mockCallRevert(
                 address(cache),
@@ -2481,8 +2551,10 @@ contract BurnerLoansSeizerTaskExecuteOracleOutageTest is BurnerLoansSeizerTaskPr
             uint256(3)
         );
         vm.expectRevert(error);
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(address(_asset), index_);
         vm.expectRevert(error);
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(address(_asset), index_);
     }
 }

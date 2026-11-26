@@ -31,6 +31,7 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
     function test_givenDisabledInventory_whenRescueExecutes_thenProviderIdleIsProtected() public {
         _supplyInventory(_borrower, 50e9);
         _ohm.mint(address(_inventory), 1e9);
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
         vm.prank(_recipient);
         uint64 id = _timelock.queueRescueSurplus();
@@ -52,6 +53,8 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
         bool blAdmin_,
         bool overlap_
     ) public givenProviderSurplus {
+        // The forwarding timelock must lack ADMIN. It can still propose as Burner Loans admin only.
+        vm.assume(caller_ != address(_timelock) || (blAdmin_ && !overlap_));
         _grantRecoveryAdmin(caller_, blAdmin_, overlap_);
         _assertRecoveryQueued(
             _timelock.queueRescueSurplus,
@@ -93,61 +96,63 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
 
     // Scenarios: BLINCT-RESCUE-A03.
     function test_givenAnotherController_whenQueued_reverts() public {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(_inventoryConfigurator);
         _expectQueueRejected(
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-RESCUE-A04.
     function test_givenClearedController_whenQueued_reverts() public {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(0));
         _expectQueueRejected(
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-RESCUE-L03.
     function test_givenActiveDisabledTimelock_whenQueued_reverts() public {
-        _setState(_timelock, true, false);
-        _expectQueueRejected(abi.encodeWithSelector(IEnabler.NotEnabled.selector), address(this));
+        _setPolicyLifecycle(_timelock, true, false);
+        _expectQueueRejected(abi.encodeWithSelector(IEnabler.NotEnabled.selector), _fixtureAdmin);
     }
 
     // Scenarios: BLINCT-RESCUE-L04.
     function test_givenInactiveDisabledTimelock_whenQueued_reverts() public {
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _expectQueueRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-RESCUE-L05.
     function test_givenInactiveTimelock_whenQueued_reverts() public {
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         _expectQueueRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-RESCUE-L02, BLINCT-RESCUE-L07.
     function test_givenInactiveTarget_whenQueued_reverts(bool enabled_) public {
-        _setState(_inventory, false, enabled_);
+        _setPolicyLifecycle(_inventory, false, enabled_);
         _expectQueueRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_inventory)
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -161,20 +166,24 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
                 address(_kernel),
                 address(0xbeef)
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-RESCUE-L08.
     function test_givenReEnabled_whenQueued_thenOneAction() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _timelock.reEnable();
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
-        _assertQueued(id, IBurnerLoansInventory.rescueSurplus.selector, address(this));
+        _assertQueued(id, IBurnerLoansInventory.rescueSurplus.selector, _fixtureAdmin);
     }
 
     // Scenarios: BLINCT-RESCUE-P03.
     function test_givenSameActionPending_whenQueued_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
         _expectQueueRejected(
             abi.encodeWithSelector(
@@ -182,12 +191,13 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
                 _key(),
                 id
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-BURN-P01, BLINCT-RESCUE-P01.
     function test_givenBurnPending_whenRescueQueued_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBurnSurplus();
         _expectQueueRejected(
             abi.encodeWithSelector(
@@ -195,7 +205,7 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
                 _key(),
                 id
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -204,9 +214,10 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
         bool active_,
         bool enabled_
     ) public {
-        _setState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
-        _assertQueued(id, IBurnerLoansInventory.rescueSurplus.selector, address(this));
+        _assertQueued(id, IBurnerLoansInventory.rescueSurplus.selector, _fixtureAdmin);
     }
 
     // Scenarios: BLINCT-RESCUE-P04.
@@ -222,6 +233,7 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
 
     // Scenarios: BLINCT-RESCUE-P05.
     function test_givenNoSurplus_whenExecuted_thenNoInventoryEventAndKeyReleased() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
         _makeReady(id);
         bytes32 beforeFunds = _inventoryDigest();
@@ -242,6 +254,7 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
         public
         givenProviderSurplus
     {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
         _ohm.mint(address(_inventory), 2e9);
         uint256 beforeSupply = _ohm.totalSupply();
@@ -263,23 +276,25 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
         _setNextId(type(uint64).max);
         _expectQueueRejected(
             abi.encodeWithSignature("Panic(uint256)", uint256(0x11)),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-RESCUE-N04.
     function test_givenLastAvailableId_whenQueued_thenMaximumCounter() public {
         _setNextId(type(uint64).max - 1);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
         assertEq(id, type(uint64).max - 1, "Final representable action ID");
-        _assertQueued(id, IBurnerLoansInventory.rescueSurplus.selector, address(this));
+        _assertQueued(id, IBurnerLoansInventory.rescueSurplus.selector, _fixtureAdmin);
     }
 
     // Scenarios: BLINCT-RESCUE-N02.
     function test_givenMaximumExpiry_whenQueued_thenNoTruncation() public {
         vm.warp(uint256(type(uint48).max) - 4 days);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
-        _assertQueued(id, IBurnerLoansInventory.rescueSurplus.selector, address(this));
+        _assertQueued(id, IBurnerLoansInventory.rescueSurplus.selector, _fixtureAdmin);
         assertEq(
             _timelock.getQueuedAction(id).expiresAt,
             type(uint48).max,
@@ -292,7 +307,7 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
         vm.warp(uint256(type(uint48).max) - 4 days + 1);
         _expectQueueRejected(
             abi.encodeWithSignature("Panic(uint256)", uint256(0x11)),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -308,8 +323,9 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
         bool enabled_
     ) public {
         index_ = bound(index_, 1, type(uint256).max);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         _expectSubActionIndexRejected(id, index_, caller_);
     }
 
@@ -344,8 +360,9 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
         bool enabled_
     ) public {
         index_ = bound(index_, 1, type(uint256).max);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         _expectConfigStateIndexRejected(id, index_, caller_);
     }
 
@@ -380,8 +397,9 @@ contract BurnerLoansInventoryConfigTimelockQueueRescueSurplusTest is
         bool enabled_
     ) public {
         index_ = bound(index_, 1, type(uint256).max);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         _expectSubActionStateIndexRejected(id, index_, caller_);
     }
 

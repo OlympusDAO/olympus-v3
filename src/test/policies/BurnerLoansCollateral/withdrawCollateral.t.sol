@@ -32,7 +32,7 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
         public
         givenDebtFreeCollateral
     {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_depositManager));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_depositManager));
         _expectWithdrawRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -45,6 +45,7 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
 
     // Scenarios: BLCOL-WITHDRAW-D05.
     function test_givenDepositManagerPaused_whenWithdrawn_reverts() public givenDebtFreeCollateral {
+        vm.prank(_fixtureAdmin);
         _depositManager.disable("");
         _expectWithdrawRevert(
             abi.encodeWithSelector(
@@ -61,6 +62,7 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
         public
         givenDebtFreeCollateral
     {
+        vm.prank(_fixtureAdmin);
         _depositManager.disableAssetPeriod(IERC20(address(_asset)), 1, address(_core));
         IBurnerLoansCollateral.WithdrawPreview memory quote = _collateral.previewWithdrawCollateral(
             address(_asset),
@@ -267,13 +269,13 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
 
     // Scenarios: BLCOL-WITHDRAW-L02.
     function test_givenCollateral_whenActionIsDisabled_reverts() public givenDebtFreeCollateral {
-        _setPolicyState(_collateral, true, false);
+        _setPolicyLifecycle(_collateral, true, false);
         _expectWithdrawRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector), _borrower, 1);
     }
 
     // Scenarios: BLCOL-WITHDRAW-L06.
     function test_givenCollateral_whenActionIsInactive_reverts() public givenDebtFreeCollateral {
-        _setPolicyState(_collateral, false, true);
+        _setPolicyLifecycle(_collateral, false, true);
         _expectWithdrawRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -286,7 +288,7 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
 
     // Scenarios: BLCOL-WITHDRAW-D01.
     function test_givenCollateral_whenCoreIsDisabled_reverts() public givenDebtFreeCollateral {
-        _setPolicyState(_core, true, false);
+        _setPolicyLifecycle(_core, true, false);
         _expectWithdrawRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -299,7 +301,7 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
 
     // Scenarios: BLCOL-WITHDRAW-D02.
     function test_givenCollateral_whenCoreIsInactive_reverts() public givenDebtFreeCollateral {
-        _setPolicyState(_core, false, true);
+        _setPolicyLifecycle(_core, false, true);
         _expectWithdrawRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -436,8 +438,8 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
         bool coreEnabled_
     ) public {
         _depositAsset(_asset, 7, _borrower);
-        _setPolicyState(_collateral, false, enabled_);
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_collateral, false, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         bytes memory reason = abi.encodeWithSelector(
             IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
             address(_collateral)
@@ -453,8 +455,9 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
         bool coreEnabled_
     ) public {
         _depositAsset(_asset, 7, _borrower);
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectWithdrawRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_, 1);
         _expectWithdrawRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_, 0);
     }
@@ -467,7 +470,7 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
     ) public {
         _depositAsset(_asset, 7, _borrower);
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _expectWithdrawRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -587,7 +590,9 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
         public
         givenDebtBearingPosition
     {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
         vm.prank(_borrower);
         IBurnerLoansCollateral.WithdrawPreview memory quote = _collateral.previewWithdrawCollateral(
@@ -651,7 +656,7 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
         public
         givenDebtFreeCollateral
     {
-        _rolesAdmin.revokeRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
+        _revokeFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
         _expectWithdrawRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE),
             _borrower,
@@ -762,7 +767,9 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
         public
         givenDebtFreeCollateral
     {
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
+        vm.prank(_fixtureAdmin);
         _collateral.reEnable();
         _assertDirectWithdrawal(_borrower, 1, 100e6);
     }
@@ -772,8 +779,8 @@ contract BurnerLoansCollateralWithdrawCollateralTest is BurnerLoansCollateralAct
         public
         givenDebtFreeCollateral
     {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_collateral));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_collateral));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_collateral));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_collateral));
         _assertDirectWithdrawal(_borrower, 1, 100e6);
     }
 

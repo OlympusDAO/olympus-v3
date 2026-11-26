@@ -27,7 +27,7 @@ contract BurnerLoansPayoutDisableTest is BurnerLoansPayoutTest {
         bool active_
     ) public givenPendingBuckets {
         _grantPauseCaller(caller_, emergency_, overlap_);
-        _setState(_payout, active_, true);
+        _setPolicyLifecycle(_payout, active_, true);
         bytes32 state = _ledgerDigest();
         vm.warp(2);
         vm.expectEmit(address(_payout));
@@ -60,7 +60,7 @@ contract BurnerLoansPayoutDisableTest is BurnerLoansPayoutTest {
         bool overlap_
     ) public givenPendingBuckets {
         _grantPauseCaller(caller_, emergency_, overlap_);
-        _setState(_payout, active_, false);
+        _setPolicyLifecycle(_payout, active_, false);
         _expectDisableRejected(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_, "");
     }
 

@@ -15,6 +15,8 @@ import {BurnerLoansLensTest} from "src/test/policies/BurnerLoansLens/BurnerLoans
 
 /// @dev Real Core/FLOAN/Seize deployment, independent of the legacy task fixture.
 abstract contract BurnerLoansSeizerTaskProgressTest is BurnerLoansLensTest {
+    address internal _seizerHeart;
+
     BurnerLoansSeizerTask internal _task;
     MockERC20 internal _otherAsset;
 
@@ -23,7 +25,8 @@ abstract contract BurnerLoansSeizerTaskProgressTest is BurnerLoansLensTest {
         _otherAsset = new MockERC20("Other", "OTH", 6);
         _price.setPrice(address(_otherAsset), 1e18);
         _admit(address(_otherAsset));
-        _rolesAdmin.grantRole(HEART_ROLE, address(this));
+        _seizerHeart = makeAddr("seizerHeart");
+        _grantFixtureRole(HEART_ROLE, _seizerHeart);
         _task = _newTask();
     }
 
@@ -36,8 +39,9 @@ abstract contract BurnerLoansSeizerTaskProgressTest is BurnerLoansLensTest {
             25,
             10_000_000
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(task));
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(task));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(task));
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, address(task));
+        vm.prank(_fixtureAdmin);
         task.enable("");
     }
 
@@ -63,7 +67,14 @@ abstract contract BurnerLoansSeizerTaskProgressTest is BurnerLoansLensTest {
     }
 
     function _setBothBorrowerCursors(address asset_, uint256 index_) internal {
+        vm.prank(_fixtureAdmin);
         _task.setExpiredAssetCursor(asset_, index_);
+        vm.prank(_fixtureAdmin);
         _task.setUnhealthyAssetCursor(asset_, index_);
+    }
+
+    function _executeAsHeart(BurnerLoansSeizerTask task_) internal {
+        vm.prank(_seizerHeart);
+        task_.execute();
     }
 }

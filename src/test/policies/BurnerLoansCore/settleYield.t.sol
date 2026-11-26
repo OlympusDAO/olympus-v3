@@ -34,7 +34,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
     function setUp() public override {
         super.setUp();
         _actor = _service();
-        _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, address(_actor));
+        _grantFixtureRole(BL_YIELD_CLAIMER_ROLE, address(_actor));
     }
 
     // Scenarios: BLCORE-SETTLE-YIELD-A02.
@@ -52,7 +52,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-SETTLE-YIELD-A03.
     function test_givenOnlySiblingRole_whenSettled_reverts() public {
         CoreService sibling = _service();
-        _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(sibling));
+        _grantFixtureRole(BL_DEBT_POLICY_ROLE, address(sibling));
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_YIELD_CLAIMER_ROLE)
         );
@@ -62,6 +62,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-YIELD-A04.
     function test_givenWrongKernelCaller_whenSettled() public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _actor.changeKernel(other);
@@ -76,6 +77,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-YIELD-L01.
     function test_givenCoreDisabled_whenSettled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -86,7 +88,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-YIELD-L02, BLCORE-SETTLE-YIELD-L03.
     function test_givenCoreInactive_whenSettled_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -101,7 +103,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-YIELD-D01.
     function test_givenCallerInactive_whenSettled() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_actor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_actor));
         test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer(false, address(_core));
     }
 
@@ -136,7 +138,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-YIELD-A05.
     function test_givenNoOperatorRole_whenYieldSettled_reverts() public {
-        _rolesAdmin.revokeRole(DEPOSIT_OPERATOR_ROLE, address(_core));
+        _revokeFixtureRole(DEPOSIT_OPERATOR_ROLE, address(_core));
         bytes32 before = _ledger();
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, DEPOSIT_OPERATOR_ROLE)
@@ -148,6 +150,7 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-YIELD-D03.
     function test_givenDepositManagerPaused_whenYieldSettled_reverts() public {
+        vm.prank(_fixtureAdmin);
         IEnabler(address(_depositManager)).disable("");
         bytes32 before = _ledger();
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -381,13 +384,16 @@ contract BurnerLoansCoreSettleYieldTest is BurnerLoansCoreTest {
         _asset = token;
         vault = new MockERC4626(OZERC20(address(token)), "Yield vault", "YLD");
         _price.setPrice(address(token), 1e18);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(
             IERC20(address(token)),
             IERC4626(address(vault)),
             type(uint256).max,
             0
         );
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(address(token)), 1, address(_core));
+        vm.prank(_fixtureAdmin);
         _config.addAsset(
             address(token),
             100000e9,

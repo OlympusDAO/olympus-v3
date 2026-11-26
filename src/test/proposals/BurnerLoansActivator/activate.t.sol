@@ -182,23 +182,24 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-H01.
     function test_givenMissingHeartTask_whenTimelockActivates_reverts(uint8 index_) public {
+        vm.prank(_launchAdmin);
         _heart.removePeriodicTaskAtIndex(bound(index_, 0, 5));
         _assertHeartDriftRejected();
     }
 
     // Scenarios: BLAUNCH-H01.
     function test_givenEmptyHeartTasks_whenTimelockActivates_reverts() public {
+        vm.startPrank(_launchAdmin);
         for (uint256 i; i < 6; ++i) _heart.removePeriodicTaskAtIndex(0);
+        vm.stopPrank();
         _assertHeartDriftRejected();
     }
 
     // Scenarios: BLAUNCH-H02.
     function test_givenExtraHeartTask_whenTimelockActivates_reverts(uint8 index_) public {
-        _heart.addPeriodicTaskAtIndex(
-            address(new MockPeriodicTask()),
-            bytes4(0),
-            bound(index_, 0, 6)
-        );
+        address extraTask = address(new MockPeriodicTask());
+        vm.prank(_launchAdmin);
+        _heart.addPeriodicTaskAtIndex(extraTask, bytes4(0), bound(index_, 0, 6));
         _assertHeartDriftRejected();
     }
 
@@ -206,7 +207,9 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     function test_givenReorderedHeartTasks_whenTimelockActivates_reverts(uint8 index_) public {
         uint256 index = bound(index_, 0, 4);
         address task = _reviewedHeartTasks[index];
+        vm.prank(_launchAdmin);
         _heart.removePeriodicTask(task);
+        vm.prank(_launchAdmin);
         _heart.addPeriodicTaskAtIndex(task, _reviewedSelector(index), index + 1);
         _assertHeartDriftRejected();
     }
@@ -214,12 +217,11 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     // Scenarios: BLAUNCH-H04.
     function test_givenReplacedHeartTask_whenTimelockActivates_reverts(uint8 index_) public {
         uint256 index = bound(index_, 0, 5);
+        vm.prank(_launchAdmin);
         _heart.removePeriodicTaskAtIndex(index);
-        _heart.addPeriodicTaskAtIndex(
-            address(new MockPeriodicTask()),
-            _reviewedSelector(index),
-            index
-        );
+        address extraTask = address(new MockPeriodicTask());
+        vm.prank(_launchAdmin);
+        _heart.addPeriodicTaskAtIndex(extraTask, _reviewedSelector(index), index);
         _assertHeartDriftRejected();
     }
 
@@ -230,7 +232,9 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     ) public {
         uint256 index = bound(index_, 0, 5);
         vm.assume(selector_ != _reviewedSelector(index));
+        vm.prank(_launchAdmin);
         _heart.removePeriodicTaskAtIndex(index);
+        vm.prank(_launchAdmin);
         _heart.addPeriodicTaskAtIndex(_reviewedHeartTasks[index], selector_, index);
         _assertHeartDriftRejected();
     }
@@ -244,7 +248,9 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             _graph.yieldClaimerTask,
             _graph.revenueDistributorTask
         ];
+        vm.prank(_launchAdmin);
         _heart.removePeriodicTaskAtIndex(3);
+        vm.prank(_launchAdmin);
         _heart.addPeriodicTaskAtIndex(tasks[bound(task_, 0, 2)], bytes4(0), 3);
         _assertHeartDriftRejected();
     }
@@ -257,6 +263,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             _graph.revenueDistributorTask
         ];
         uint256 index = bound(task_, 0, 2);
+        vm.prank(_launchAdmin);
         _heart.addPeriodicTaskAtIndex(tasks[index], bytes4(0), index + 3);
         _assertHeartDriftRejected();
     }
@@ -300,17 +307,22 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-H07.
     function test_givenHeartDriftBeforeDeployment_whenTimelockActivates_reverts() public {
+        vm.prank(_launchAdmin);
         _heart.removePeriodicTaskAtIndex(3);
+        vm.prank(_launchAdmin);
         _heart.addPeriodicTaskAtIndex(_reviewedHeartTasks[3], bytes4(0x12345678), 3);
         _activator = new BurnerLoansActivator(_timelock, _graph);
+        vm.prank(_launchRolesAdministrator);
         _rolesAdmin.grantRole(ADMIN_ROLE, address(_activator));
         _assertHeartDriftRejected();
     }
 
     // Scenarios: BLAUNCH-H08.
     function test_givenRestoredHeartBaseline_whenTimelockActivates() public {
+        vm.prank(_launchAdmin);
         _heart.removePeriodicTaskAtIndex(3);
         _assertHeartDriftRejected();
+        vm.prank(_launchAdmin);
         _heart.addPeriodicTaskAtIndex(_reviewedHeartTasks[3], _reviewedSelector(3), 3);
         _activate();
         _assertLaunchedHeartTasks();
@@ -375,7 +387,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     function test_givenInactivePolicy_whenTimelockActivates_reverts(uint8 index_) public {
         address[] memory targets = _deployer.policies();
         address target = targets[bound(index_, 0, targets.length - 1)];
-        _kernel.executeAction(Actions.DeactivatePolicy, target);
+        _executeLaunchKernelAction(Actions.DeactivatePolicy, target);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
@@ -409,6 +421,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
             HEART_ROLE
         ];
         uint256 index = bound(index_, 0, holders.length - 1);
+        vm.prank(_launchRolesAdministrator);
         _rolesAdmin.revokeRole(roles[index], holders[index]);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -522,7 +535,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-O02.
     function test_givenBackingOracleInactive_whenPreparationValidated_reverts() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, _graph.backingOracle);
+        _executeLaunchKernelAction(Actions.DeactivatePolicy, _graph.backingOracle);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
@@ -537,9 +550,13 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
     function test_givenRiskPreviouslyEnabled_givenReferrerAllowed_whenTimelockActivates_reverts()
         public
     {
+        vm.prank(_launchAdmin);
         _oracle.enable(abi.encode(uint256(1199e16)));
+        vm.prank(_launchAdmin);
         IEnabler(_graph.risk).enable("");
+        vm.prank(_launchAdmin);
         IBurnerLoansRisk(_graph.risk).setReferrerAllowed(address(0xFEE), true);
+        vm.prank(_launchAdmin);
         IEnabler(_graph.risk).disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -615,7 +632,9 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-S06.
     function test_givenBackingOraclePreviouslyEnabled_whenTimelockActivates_reverts() public {
+        vm.prank(_launchAdmin);
         _oracle.enable(abi.encode(uint256(12e18)));
+        vm.prank(_launchAdmin);
         _oracle.disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -630,7 +649,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-S07.
     function test_givenPriceConfigInactive_whenTimelockActivates_reverts() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, _graph.priceConfig);
+        _executeLaunchKernelAction(Actions.DeactivatePolicy, _graph.priceConfig);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
@@ -643,7 +662,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-O03.
     function test_givenBackingQueueInactive_whenTimelockActivates_reverts() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, _graph.backingOracleTimelock);
+        _executeLaunchKernelAction(Actions.DeactivatePolicy, _graph.backingOracleTimelock);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,
@@ -656,6 +675,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-S08.
     function test_givenPriceConfigDisabled_whenTimelockActivates_reverts() public {
+        vm.prank(_launchAdmin);
         IEnabler(_graph.priceConfig).disable("");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -731,12 +751,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
                 abi.encodeCall(IDepositManagerConfigTimelock.depositManager, ()),
                 abi.encode(_graph.core)
             );
-        else
-            vm.mockCall(
-                queue,
-                abi.encodeCall(IBurnerLoansAuthTarget.kernel, ()),
-                abi.encode(address(new Kernel()))
-            );
+        else _mockForeignQueueKernel(queue);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansActivator.BurnerLoansActivator_InvalidDeployment.selector,
@@ -751,12 +766,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
         bool foreignKernel_
     ) public {
         address queue = _graph.depositManagerTimelock;
-        if (foreignKernel_)
-            vm.mockCall(
-                queue,
-                abi.encodeCall(IBurnerLoansAuthTarget.kernel, ()),
-                abi.encode(address(new Kernel()))
-            );
+        if (foreignKernel_) _mockForeignQueueKernel(queue);
         else
             vm.mockCall(
                 queue,
@@ -776,13 +786,29 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
         assertTrue(_activator.isActivated(), "Restored binding permits retry");
     }
 
+    function _mockForeignQueueKernel(address queue_) internal {
+        vm.prank(_launchExecutor);
+        Kernel foreignKernel = new Kernel();
+        vm.mockCall(
+            queue_,
+            abi.encodeCall(IBurnerLoansAuthTarget.kernel, ()),
+            abi.encode(address(foreignKernel))
+        );
+    }
+
     // Scenarios: BLAUNCH-S02.
     function test_givenManagerQueueNotFresh_whenActivated_reverts(bool currentlyEnabled_) public {
         address queue = _graph.depositManagerTimelock;
+        vm.prank(_launchAdmin);
         IEnabler(_graph.depositManager).enable("");
+        vm.prank(_launchAdmin);
         IConfigOperator(_graph.depositManager).setConfigOperator(queue);
+        vm.prank(_launchAdmin);
         IEnabler(queue).enable("");
-        if (!currentlyEnabled_) IEnabler(queue).disable("");
+        if (!currentlyEnabled_) {
+            vm.prank(_launchAdmin);
+            IEnabler(queue).disable("");
+        }
         // Remove the earlier manager prerequisite fault without changing queue history.
         vm.mockCall(
             _graph.depositManager,
@@ -811,7 +837,7 @@ contract BurnerLoansActivatorActivateTest is BurnerLoansActivatorTest {
 
     // Scenarios: BLAUNCH-S02.
     function test_givenManagerQueueInactive_whenActivated_reverts() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, _graph.depositManagerTimelock);
+        _executeLaunchKernelAction(Actions.DeactivatePolicy, _graph.depositManagerTimelock);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansActivator.BurnerLoansActivator_InvalidPrerequisite.selector,

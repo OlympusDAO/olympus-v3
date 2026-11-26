@@ -91,7 +91,7 @@ contract BurnerLoansConfigConfigureDependenciesTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-DEPENDENCIES-P01.
     function test_givenCompatibleReplacement_whenDependenciesConfigured(address caller_) public {
         OlympusFixedTermLoan replacement = new OlympusFixedTermLoan(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(replacement));
         vm.prank(caller_);
         _config.configureDependencies();
         assertEq(

@@ -3,17 +3,16 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Vm} from "@forge-std-1.16.2/Vm.sol";
-import {Actions, Policy} from "src/Kernel.sol";
+import {Actions} from "src/Kernel.sol";
 import {BurnerLoansRisk} from "src/policies/burnerloans/BurnerLoansRisk.sol";
 import {BurnerLoansRiskConfigTimelock} from "src/policies/burnerloans/BurnerLoansRiskConfigTimelock.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
@@ -26,10 +25,11 @@ abstract contract BurnerLoansRiskConfigTimelockTest is BurnerLoansModularTest {
     function setUp() public virtual override {
         super.setUp();
         _timelock = new BurnerLoansRiskConfigTimelock(_kernel, _risk);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(_timelock));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_timelock));
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(this));
     }
 
     function _ageAction(
@@ -112,16 +112,11 @@ abstract contract BurnerLoansRiskConfigTimelockTest is BurnerLoansModularTest {
         }
     }
 
-    function _setState(Policy policy_, bool active_, bool enabled_) internal {
-        if (!enabled_) IEnabler(address(policy_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(policy_));
-    }
-
     function _proposer(address caller_, uint8 role_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
         role_ = uint8(bound(role_, 0, 2));
-        if (role_ != 1) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (role_ != 0) _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        if (role_ != 1) _grantFixtureRole(ADMIN_ROLE, caller_);
+        if (role_ != 0) _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, caller_);
     }
 
     function _outsider(address caller_) internal view {
@@ -407,7 +402,8 @@ abstract contract BurnerLoansRiskConfigTimelockTest is BurnerLoansModularTest {
             0,
             address(_core)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(candidate));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(candidate));
+        vm.prank(_fixtureAdmin);
         candidate.enable("");
     }
 }

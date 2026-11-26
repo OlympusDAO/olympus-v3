@@ -24,9 +24,9 @@ contract BurnerLoansPayoutSetGracePeriodTest is BurnerLoansPayoutTest {
         uint32 period_,
         bool overlap_
     ) public givenPendingBuckets {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (overlap_) _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(ADMIN_ROLE, caller_);
+        if (overlap_) _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, caller_);
         uint32 period = uint32(bound(period_, 1, type(uint32).max));
         bytes32 ledger = _ledgerDigest();
         bytes32 configuration = _configurationDigest();
@@ -82,8 +82,8 @@ contract BurnerLoansPayoutSetGracePeriodTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-GRACE-A01.
     function test_whenUnauthorizedClassesSeeded_reverts() public {
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, address(0x111));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(0x112));
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, address(0x111));
+        _grantFixtureRole(EMERGENCY_ROLE, address(0x112));
         uint256 checkpoint = vm.snapshotState();
         test_givenUnauthorized_whenPeriodSet_reverts(address(0), 0);
         _restore(checkpoint);
@@ -97,7 +97,7 @@ contract BurnerLoansPayoutSetGracePeriodTest is BurnerLoansPayoutTest {
     // Scenarios: BLCU-GRACE-N01.
     function test_whenPeriodZero_reverts() public givenPendingBuckets {
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             0,
             abi.encodeWithSelector(IGracePeriod.GracePeriod_ZeroPeriod.selector)
         );
@@ -108,6 +108,7 @@ contract BurnerLoansPayoutSetGracePeriodTest is BurnerLoansPayoutTest {
         address caller_,
         uint32 period_
     ) public givenPendingBuckets {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _expectRejected(caller_, period_, abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
@@ -118,7 +119,7 @@ contract BurnerLoansPayoutSetGracePeriodTest is BurnerLoansPayoutTest {
         uint32 period_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         vm.mockCallRevert(address(_roles), bytes(""), hex"deadbeef");
         _expectRejected(
             caller_,
@@ -132,15 +133,20 @@ contract BurnerLoansPayoutSetGracePeriodTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-GRACE-L03.
     function test_givenPolicyReactivated_givenReEnabled_whenPeriodSet() public givenPendingBuckets {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
+        vm.prank(_fixtureAdmin);
         _payout.reEnable();
         uint48 last = _payout.lastTransitionAt();
+        vm.prank(_fixtureAdmin);
         _payout.setGracePeriod(type(uint32).max);
         assertEq(_payout.lastTransitionAt(), last, "Changing grace is not a transition");
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.warp(uint256(_payout.lastTransitionAt()) + type(uint32).max);
+        vm.prank(_fixtureAdmin);
         _payout.reEnable();
         assertTrue(_payout.isEnabled(), "New period governs future disable");
     }

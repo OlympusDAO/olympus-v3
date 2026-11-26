@@ -22,7 +22,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-BACKING-ORACLE-I06.
     function test_whenOnlyCurrentInterfaceSupported() public {
         MockBackingOracle next = new MockBackingOracle(_kernel, 1e18);
-        _kernel.executeAction(Actions.ActivatePolicy, address(next));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(next));
         bytes4 removedInterface = bytes4(keccak256("backing()")) ^
             bytes4(keccak256("setBacking(uint256)"));
         vm.mockCall(
@@ -35,7 +35,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
             abi.encodeCall(IERC165.supportsInterface, (type(IBackingOracle).interfaceId)),
             abi.encode(true)
         );
-        _select(address(next));
+        _select(_riskAdmin, address(next));
         assertEq(
             _risk.snapshot(address(_asset)).backingPerOhmUsd,
             1e18,
@@ -43,14 +43,15 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
         );
     }
 
-    function _select(address candidate_) private {
+    function _select(address caller_, address candidate_) private {
         vm.expectEmit(true, false, false, true, address(_risk));
         emit IBurnerLoansRisk.BackingOracleSet(candidate_);
+        vm.prank(caller_);
         _risk.setBackingOracle(candidate_);
         assertEq(_risk.backingOracle(), candidate_, "exact replacement");
     }
 
-    function _reject(address candidate_) private {
+    function _reject(address caller_, address candidate_) private {
         address previous = _risk.backingOracle();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -58,20 +59,21 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
                 candidate_
             )
         );
+        vm.prank(caller_);
         _risk.setBackingOracle(candidate_);
         assertEq(_risk.backingOracle(), previous, "failed setter preserves binding");
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-L01.
     function test_givenEnabled_whenDependencyChanges(address caller_) public givenAdmin(caller_) {
-        _select(address(new MockBackingOracle(_kernel, 0)));
+        _select(caller_, address(new MockBackingOracle(_kernel, 0)));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-L02.
     function test_givenDisabled_whenDependencyChanges(
         address caller_
     ) public givenDisabled givenAdmin(caller_) {
-        _select(address(new MockBackingOracle(_kernel, 0)));
+        _select(caller_, address(new MockBackingOracle(_kernel, 0)));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-L03.
@@ -79,6 +81,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
         address caller_
     ) public givenInactive givenAdmin(caller_) {
         _expectInactive();
+        vm.prank(caller_);
         _risk.setBackingOracle(address(_cache));
     }
 
@@ -87,12 +90,13 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
         address caller_
     ) public givenDisabled givenInactive givenAdmin(caller_) {
         _expectInactive();
+        vm.prank(caller_);
         _risk.setBackingOracle(address(_cache));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-A01.
     function test_whenUnauthorizedCaller_reverts(address caller_) public givenOperator {
-        vm.assume(caller_ != address(this));
+        vm.assume(caller_ != _riskAdmin);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
         _risk.setBackingOracle(address(_cache));
@@ -100,17 +104,17 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-BACKING-ORACLE-I01.
     function test_whenZero_reverts(address caller_) public givenAdmin(caller_) {
-        _reject(address(0));
+        _reject(caller_, address(0));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-I02.
     function test_whenEoa_reverts(address caller_) public givenAdmin(caller_) {
-        _reject(address(0xBEEF));
+        _reject(caller_, address(0xBEEF));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-I03.
     function test_whenMissingInterface_reverts(address caller_) public givenAdmin(caller_) {
-        _reject(address(_cache));
+        _reject(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-D02.
@@ -121,7 +125,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
             abi.encodeCall(IERC165.supportsInterface, (type(IEnabler).interfaceId)),
             abi.encode(false)
         );
-        _reject(address(_oracle));
+        _reject(caller_, address(_oracle));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-I04.
@@ -132,7 +136,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
             abi.encodeWithSelector(IERC165.supportsInterface.selector),
             abi.encodeWithSelector(DependencyReadFailed.selector)
         );
-        _reject(address(_oracle));
+        _reject(caller_, address(_oracle));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-I05.
@@ -143,7 +147,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
             abi.encodeWithSelector(IERC165.supportsInterface.selector),
             hex"01"
         );
-        _reject(address(_oracle));
+        _reject(caller_, address(_oracle));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-P02.
@@ -159,16 +163,15 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
                 address(_oracle)
             )
         );
+        vm.prank(caller_);
         _risk.setBackingOracle(address(_oracle));
     }
 
     // Scenarios: BLRISK-BACKING-ORACLE-P01.
     function test_whenZeroBackingOracleSelected(address caller_) public givenAdmin(caller_) {
         MockBackingOracle next = new MockBackingOracle(_kernel, 0);
-        vm.stopPrank();
-        _kernel.executeAction(Actions.ActivatePolicy, address(next));
-        vm.startPrank(caller_);
-        _select(address(next));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(next));
+        _select(caller_, address(next));
         vm.expectRevert(IBurnerLoansRisk.BurnerLoans_InvalidPrice.selector);
         _risk.snapshot(address(_asset));
     }
@@ -189,6 +192,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
                 address(0xBAD)
             )
         );
+        vm.prank(_riskAdmin);
         _risk.setBackingOracle(address(candidate));
     }
 
@@ -206,6 +210,7 @@ contract BurnerLoansRiskSetBackingOracleTest is BurnerLoansRiskTest {
                 address(candidate)
             )
         );
+        vm.prank(_riskAdmin);
         _risk.setBackingOracle(address(candidate));
     }
 }

@@ -28,7 +28,7 @@ contract BurnerLoansCollateralDepositCollateralPriceCallbacksTest is
         vm.prank(operator);
         _asset.approve(address(_core), type(uint256).max);
         CollateralPreparationAuthRotation callback = new CollateralPreparationAuthRotation();
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(callback));
+        _grantFixtureRole(ADMIN_ROLE, address(callback));
         BurnerLoansAuth next = new BurnerLoansAuth(address(_kernel), address(_core));
         _cache.arm(
             address(callback),

@@ -22,7 +22,7 @@ import {BurnerLoansRiskConfigTimelock} from "src/policies/burnerloans/BurnerLoan
 contract BurnerLoansRiskConfigTimelockConstructorTest is BurnerLoansRiskConfigTimelockTest {
     // Scenarios: BLRCT-CONSTRUCTOR-P01, BLRCT-CONSTRUCTOR-P03.
     function test_whenCompatibleTarget(bool active_, bool enabled_, address caller_) public {
-        _setState(_risk, active_, enabled_);
+        _setPolicyLifecycle(_risk, active_, enabled_);
         vm.prank(caller_);
         BurnerLoansRiskConfigTimelock fresh = new BurnerLoansRiskConfigTimelock(_kernel, _risk);
         assertEq(address(fresh.risk()), address(_risk), "immutable Risk binding");
@@ -127,16 +127,20 @@ contract BurnerLoansRiskConfigTimelockConstructorTest is BurnerLoansRiskConfigTi
             address(_core)
         );
         BurnerLoansRiskConfigTimelock queue = new BurnerLoansRiskConfigTimelock(_kernel, candidate);
-        _kernel.executeAction(Actions.ActivatePolicy, address(candidate));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(candidate));
+        vm.prank(_fixtureAdmin);
         candidate.setConfigOperator(address(queue));
         assertFalse(queue.isEnabled(), "operator can be bound before queue enablement");
+        vm.prank(_fixtureAdmin);
         candidate.enable("");
-        _kernel.executeAction(Actions.ActivatePolicy, address(queue));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(queue));
+        vm.prank(_fixtureAdmin);
         queue.enable("");
         assertEq(candidate.configOperator(), address(queue), "queue delegated authority");
         assertTrue(queue.isEnabled(), "startup completed");
         assertEq(queue.requestPermissions().length, 0, "queue requests no FLOAN writes");
         assertFalse(_roles.hasRole(address(queue), ADMIN_ROLE), "queue no ADMIN grant");
+        vm.prank(_fixtureAdmin);
         queue.queueSetReferralFeeBps(2500);
     }
 

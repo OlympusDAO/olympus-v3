@@ -29,7 +29,7 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
         uint48 now_
     ) public givenProviderSurplus givenPendingRecovery {
         vm.assume(caller_ != address(0));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        _grantFixtureRole(EMERGENCY_ROLE, caller_);
         ITimelockBatchQueue.QueuedAction memory beforeAction = _timelock.getQueuedAction(
             _pendingId
         );
@@ -53,7 +53,7 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
 
     // Scenarios: BLINCT-CANCEL-A02.
     function test_whenCallerLacksEmergency_reverts(address caller_) public givenPendingRecovery {
-        vm.assume(caller_ != address(this) && !_roles.hasRole(caller_, EMERGENCY_ROLE));
+        vm.assume(caller_ != _fixtureAdmin && !_roles.hasRole(caller_, EMERGENCY_ROLE));
         _expectCancelRejected(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector), caller_);
     }
 
@@ -62,8 +62,8 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
         public
         givenPendingRecovery
     {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, _recipient);
-        _setState(_timelock, true, false);
+        _grantFixtureRole(EMERGENCY_ROLE, _recipient);
+        _setPolicyLifecycle(_timelock, true, false);
         bytes32 funds = _inventoryDigest();
         vm.prank(_recipient);
         _timelock.cancelQueuedAction(_pendingId);
@@ -77,8 +77,8 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
         public
         givenPendingRecovery
     {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, _recipient);
-        _setState(_timelock, false, false);
+        _grantFixtureRole(EMERGENCY_ROLE, _recipient);
+        _setPolicyLifecycle(_timelock, false, false);
         _expectCancelRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -90,8 +90,8 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
 
     // Scenarios: BLINCT-CANCEL-L02.
     function test_givenInactiveTimelock_whenCancelled_reverts() public givenPendingRecovery {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, _recipient);
-        _setState(_timelock, false, true);
+        _grantFixtureRole(EMERGENCY_ROLE, _recipient);
+        _setPolicyLifecycle(_timelock, false, true);
         _expectCancelRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -106,11 +106,13 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
         public
         givenPendingRecovery
     {
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(_pendingId);
         _assertCleared(_pendingId);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBurnSurplus();
         assertEq(id, uint256(_pendingId) + 1, "Fresh ID after cancellation");
-        _assertQueued(id, IBurnerLoansInventory.burnSurplus.selector, address(this));
+        _assertQueued(id, IBurnerLoansInventory.burnSurplus.selector, _fixtureAdmin);
         assertTrue(_timelock.getQueuedAction(_pendingId).cancelled, "Old tombstone retained");
     }
 
@@ -130,8 +132,8 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     function test_givenInactiveInventory_whenCancelled_thenNoReadinessCalls(
         bool enabled_
     ) public givenProviderSurplus givenPendingRecovery {
-        _setState(_inventory, false, true);
-        if (!enabled_) _timelock.disable("");
+        _setPolicyLifecycle(_inventory, false, true);
+        _setPolicyLifecycle(_timelock, true, enabled_);
         _cancelWithoutReadiness();
     }
 
@@ -139,8 +141,9 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     function test_givenPausedInventory_whenCancelled_thenNoReadinessCalls(
         bool enabled_
     ) public givenProviderSurplus givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
-        if (!enabled_) _timelock.disable("");
+        _setPolicyLifecycle(_timelock, true, enabled_);
         _cancelWithoutReadiness();
     }
 
@@ -149,7 +152,7 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
         bool enabled_
     ) public givenProviderSurplus givenPendingRecovery {
         _mockInventoryKernel(address(0xbeef));
-        if (!enabled_) _timelock.disable("");
+        _setPolicyLifecycle(_timelock, true, enabled_);
         _cancelWithoutReadiness();
     }
 
@@ -157,8 +160,9 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     function test_givenControllerReplaced_whenCancelled_thenNoReadinessCalls(
         bool enabled_
     ) public givenProviderSurplus givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(_inventoryConfigurator);
-        if (!enabled_) _timelock.disable("");
+        _setPolicyLifecycle(_timelock, true, enabled_);
         _cancelWithoutReadiness();
     }
 
@@ -206,7 +210,9 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     function test_givenCancelledAction_whenCalled_revertsBeforeAuthorization(
         address caller_
     ) public givenPendingRecovery {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(this));
+        address emergencyCanceller = makeAddr("emergencyCanceller");
+        _grantFixtureRole(EMERGENCY_ROLE, emergencyCanceller);
+        vm.prank(emergencyCanceller);
         _timelock.cancelQueuedAction(_pendingId);
         bytes32 funds = _inventoryDigest();
         bytes memory reason = abi.encodeWithSelector(
@@ -284,14 +290,14 @@ contract BurnerLoansInventoryConfigTimelockCancelQueuedActionTest is
     function test_givenOtherAdministrativeRoles_whenCancelled_reverts() public {
         uint256 checkpoint = vm.snapshotState();
         address otherAdmin = makeAddr("otherAdmin");
-        _rolesAdmin.grantRole(ADMIN_ROLE, otherAdmin);
+        _grantFixtureRole(ADMIN_ROLE, otherAdmin);
         test_whenCallerLacksEmergency_reverts(otherAdmin);
         _restore(checkpoint);
         test_whenCallerLacksEmergency_reverts(_recipient);
     }
 
     function _cancelWithoutReadiness() internal {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, _recipient);
+        _grantFixtureRole(EMERGENCY_ROLE, _recipient);
         _rejectInventoryReadinessReads();
         bytes32 funds = _inventoryDigest();
         vm.prank(_recipient);

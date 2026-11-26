@@ -18,8 +18,11 @@ contract BurnerLoansDebtExtendReferralIntegrationTest is BurnerLoansDebtIntegrat
     address internal _secondReferrer = address(0xBEEF);
 
     modifier givenReferralDebt() {
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(2500);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_referrer, true);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_secondReferrer, true);
         _depositCollateral(2000e6);
         vm.mockCall(
@@ -34,7 +37,9 @@ contract BurnerLoansDebtExtendReferralIntegrationTest is BurnerLoansDebtIntegrat
 
     // Scenarios: BLEXT-EXTEND-I09.
     function test_givenWhitelistedPayout_whenPositiveReferral_reverts() public givenReferralDebt {
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(address(_payout), true);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(10000);
         bytes32 beforeState = _stateDigest(_borrower);
         bytes memory reason = abi.encodeWithSelector(
@@ -55,7 +60,9 @@ contract BurnerLoansDebtExtendReferralIntegrationTest is BurnerLoansDebtIntegrat
 
     // Scenarios: BLEXT-EXTEND-P17.
     function test_givenWhitelistedPayout_whenReferralShareZero() public givenReferralDebt {
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(address(_payout), true);
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(0);
         uint256 payerBefore = _asset.balanceOf(_borrower);
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
@@ -185,6 +192,7 @@ contract BurnerLoansDebtExtendReferralIntegrationTest is BurnerLoansDebtIntegrat
     // Scenarios: BLEXT-EXTEND-I08.
     function test_givenReferrerRemovedAfterQuote_whenExtended_reverts() public givenReferralDebt {
         _debt.previewExtend(address(_asset), _borrower, 1, 314063, _secondReferrer);
+        vm.prank(_fixtureAdmin);
         _risk.setReferrerAllowed(_secondReferrer, false);
         bytes32 beforeState = _stateDigest(_borrower);
         bytes memory reason = abi.encodeWithSelector(
@@ -219,6 +227,7 @@ contract BurnerLoansDebtExtendReferralIntegrationTest is BurnerLoansDebtIntegrat
         );
         assertEq(oldQuote.fee, 314063, "Original quote returns total fee only");
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
+        vm.prank(_fixtureAdmin);
         _risk.setReferralFeeBps(10000);
         vm.expectEmit(address(_debt));
         emit IBurnerLoansDebt.Extended(
@@ -323,6 +332,7 @@ contract BurnerLoansDebtExtendReferralIntegrationTest is BurnerLoansDebtIntegrat
 
     // Scenarios: BLEXT-EXTEND-D06.
     function test_givenRiskOperatorChanged_whenExtended() public givenReferralDebt {
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(0xD00D));
         vm.prank(_borrower);
         IBurnerLoansDebt.ExtendPreview memory result = _debt.extend(
@@ -347,7 +357,9 @@ contract BurnerLoansDebtExtendReferralIntegrationTest is BurnerLoansDebtIntegrat
 
     // Scenarios: BLEXT-EXTEND-P12.
     function test_givenZeroGrossFee_whenAllowedReferrerExtended() public givenReferralDebt {
+        vm.prank(_fixtureAdmin);
         _config.setAssetFeeConfig(address(_asset), IBurnerLoansRisk.AssetFeeConfig(0, 0, 0, 0));
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.prank(_borrower);
         _asset.approve(address(_core), 0);
@@ -407,11 +419,12 @@ contract BurnerLoansDebtExtendReferralIntegrationTest is BurnerLoansDebtIntegrat
             _kernel,
             IBurnerLoansRisk(address(_risk))
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(queue));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(queue));
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(queue));
+        vm.prank(_fixtureAdmin);
         queue.enable("");
-        if (!enabled_) queue.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(queue));
+        _setPolicyLifecycle(queue, active_, enabled_);
         assertEq(
             _kernel.isPolicyActive(queue),
             active_,

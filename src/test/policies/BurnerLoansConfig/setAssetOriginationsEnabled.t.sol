@@ -68,7 +68,7 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _assertOriginationsSet(_configurationCaller, false);
     }
 
@@ -80,7 +80,8 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         _mutationReverts(
             _configurationCaller,
@@ -97,8 +98,8 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _mutationReverts(
             _configurationCaller,
             abi.encodeCall(_config.setAssetOriginationsEnabled, (address(_asset), false)),
@@ -114,9 +115,10 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
         bool coreActive_,
         bool coreEnabled_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _mutationReverts(
             _configurationCaller,
             abi.encodeCall(_config.setAssetOriginationsEnabled, (address(_asset), false)),
@@ -130,6 +132,7 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         vm.mockCallRevert(
             address(_risk),
@@ -149,7 +152,9 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
+        vm.prank(_fixtureAdmin);
         _depositManager.disableAssetPeriod(IERC20(address(_asset)), 1, address(_core));
         _mutationReverts(
             _configurationCaller,
@@ -272,7 +277,9 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
+        vm.prank(_fixtureAdmin);
         _config.enable("");
         _assertOriginationsSet(_configurationCaller, false);
     }
@@ -283,8 +290,8 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) givenDebtBearingPosition {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_config));
         _assertOriginationsSet(_configurationCaller, false);
     }
 
@@ -322,10 +329,11 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansConfigTe
     function test_whenPermittedCallerClassesSeeded() public {
         address adminOnly = makeAddr("adminOnly");
         address overlap = makeAddr("adminAndOperator");
-        _rolesAdmin.grantRole(ADMIN_ROLE, adminOnly);
+        _grantFixtureRole(ADMIN_ROLE, adminOnly);
         _assertOriginationsSet(adminOnly, false);
         _assertOriginationsSet(_configurationCaller, true);
-        _rolesAdmin.grantRole(ADMIN_ROLE, overlap);
+        _grantFixtureRole(ADMIN_ROLE, overlap);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(overlap);
         _assertOriginationsSet(overlap, false);
     }

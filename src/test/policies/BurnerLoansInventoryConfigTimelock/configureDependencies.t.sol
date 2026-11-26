@@ -22,7 +22,7 @@ contract BurnerLoansInventoryConfigTimelockConfigureDependenciesTest is
         bool active_,
         bool enabled_
     ) public givenPendingRecovery {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 state = _queueDigest(_pendingId);
         vm.prank(caller_);
         Keycode[] memory dependencies = _timelock.configureDependencies();
@@ -46,6 +46,7 @@ contract BurnerLoansInventoryConfigTimelockConfigureDependenciesTest is
     function test_givenRolesAbsent_whenConfigured_reverts(
         address caller_
     ) public givenPendingRecovery {
+        vm.prank(_fixtureExecutor);
         Kernel empty = new Kernel();
         vm.prank(address(_kernel));
         _timelock.changeKernel(empty);
@@ -88,9 +89,10 @@ contract BurnerLoansInventoryConfigTimelockConfigureDependenciesTest is
     function test_givenKernelMigration_whenConfigured_thenFreshRolesResolved(
         address caller_
     ) public givenPendingRecovery {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         OlympusRoles replacement = new OlympusRoles(next);
-        next.executeAction(Actions.InstallModule, address(replacement));
+        _executeFixtureKernelAction(next, Actions.InstallModule, address(replacement));
         vm.prank(address(_kernel));
         _timelock.changeKernel(next);
         bytes32 state = _queueDigest(_pendingId);

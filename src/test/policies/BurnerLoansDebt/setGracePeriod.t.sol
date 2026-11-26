@@ -22,10 +22,12 @@ contract BurnerLoansDebtSetGracePeriodTest is BurnerLoansDebtLifecycleTest {
     // Scenarios: BLDEBTGR-P01.
     function test_whenGraceSetToSameValue_thenStillEmits(uint32 grace_) public {
         grace_ = uint32(bound(grace_, 1, type(uint32).max));
+        vm.prank(_fixtureAdmin);
         _debt.setGracePeriod(grace_);
         uint48 last = _debt.lastTransitionAt();
         vm.expectEmit(address(_debt));
         emit IGracePeriod.GracePeriodSet(grace_);
+        vm.prank(_fixtureAdmin);
         _debt.setGracePeriod(grace_);
         assertEq(_debt.gracePeriod(), grace_, "Same period retained");
         assertEq(_debt.lastTransitionAt(), last, "Setter is not a transition");
@@ -35,6 +37,7 @@ contract BurnerLoansDebtSetGracePeriodTest is BurnerLoansDebtLifecycleTest {
     // Scenarios: BLDEBTGR-I01.
     function test_whenGraceIsZero_reverts() public {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
+        vm.prank(_fixtureAdmin);
         _debt.setGracePeriod(0);
         _assertLoansPreserved();
     }
@@ -53,6 +56,7 @@ contract BurnerLoansDebtSetGracePeriodTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBTGR-L01, BLDEBTGR-L02.
     function test_givenDisabled_whenGraceSet_thenPauseWins(address caller_, bool zero_) public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
@@ -67,10 +71,11 @@ contract BurnerLoansDebtSetGracePeriodTest is BurnerLoansDebtLifecycleTest {
         uint32 period_
     ) public {
         period_ = uint32(bound(period_, 1, type(uint32).max));
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         uint48 last = _debt.lastTransitionAt();
         vm.expectEmit(address(_debt));
         emit IGracePeriod.GracePeriodSet(period_);
+        vm.prank(_fixtureAdmin);
         _debt.setGracePeriod(period_);
         assertEq(_debt.gracePeriod(), period_, "Full width grace stored");
         assertEq(_debt.lastTransitionAt(), last, "Grace setter leaves transition time unchanged");
@@ -79,13 +84,14 @@ contract BurnerLoansDebtSetGracePeriodTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBTGR-L07.
     function test_givenInactiveSubject_whenGraceSet_reverts() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_debt));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_debt)
             )
         );
+        vm.prank(_fixtureAdmin);
         _debt.setGracePeriod(1);
         _assertLoansPreserved();
     }
@@ -102,8 +108,9 @@ contract BurnerLoansDebtSetGracePeriodTest is BurnerLoansDebtLifecycleTest {
 
     // Scenarios: BLDEBTGR-L07.
     function test_givenInactiveAndDisabled_whenAnyCallerSetsGrace_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_debt));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,

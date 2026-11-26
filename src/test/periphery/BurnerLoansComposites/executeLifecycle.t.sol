@@ -28,6 +28,7 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
 
     // Scenarios: BLREX-L02.
     function test_givenDisabled_whenNotOwnerEnables_reverts(address caller_) public {
+        vm.prank(_compositesOwner);
         _executor.disable("");
         uint48 transitionAt = _executor.lastTransitionAt();
         vm.assume(caller_ != _executor.owner());
@@ -43,15 +44,18 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
     function test_givenEnabled_whenOwnerEnablesAgain_reverts() public {
         uint48 transitionAt = _executor.lastTransitionAt();
         vm.expectRevert(IEnabler.NotDisabled.selector);
+        vm.prank(_compositesOwner);
         _executor.enable("");
         _assertLifecycle(_executor, true, transitionAt);
     }
 
     // Scenarios: BLCDIS-L01.
     function test_givenDisabled_whenOwnerDisablesAgain_reverts() public {
+        vm.prank(_compositesOwner);
         _executor.disable("");
         uint48 transitionAt = _executor.lastTransitionAt();
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(_compositesOwner);
         _executor.disable("");
         _assertLifecycle(_executor, false, transitionAt);
     }
@@ -60,15 +64,18 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
     function test_givenEnabled_whenDisableDataIsNonempty_reverts() public {
         uint48 transitionAt = _executor.lastTransitionAt();
         vm.expectRevert(IExecutor.BurnerLoansComposites_InvalidEnablerData.selector);
+        vm.prank(_compositesOwner);
         _executor.disable(hex"01");
         _assertLifecycle(_executor, true, transitionAt);
     }
 
     // Scenarios: BLREX-L04.
     function test_givenDisabled_whenEnableDataIsNonempty_reverts() public {
+        vm.prank(_compositesOwner);
         _executor.disable("");
         uint48 transitionAt = _executor.lastTransitionAt();
         vm.expectRevert(IExecutor.BurnerLoansComposites_InvalidEnablerData.selector);
+        vm.prank(_compositesOwner);
         _executor.enable(hex"01");
         _assertLifecycle(_executor, false, transitionAt);
     }
@@ -78,7 +85,8 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
         vm.mockCallRevert(address(_core), bytes(""), hex"deadbeef");
         uint48 pauseAt = _executor.lastTransitionAt() + 1;
         vm.warp(pauseAt);
-        _expectTransition(_executor, address(this), false, pauseAt);
+        _expectTransition(_executor, _compositesOwner, false, pauseAt);
+        vm.prank(_compositesOwner);
         _executor.disable("");
         _assertLifecycle(_executor, false, pauseAt);
     }
@@ -87,6 +95,7 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
     function test_givenReusableGrant_whenOwnerPausesAndResumes() public givenReusableGrant {
         vm.expectEmit(address(_executor));
         emit IEnabler.Disabled();
+        vm.prank(_compositesOwner);
         _executor.disable("");
         assertFalse(_executor.isEnabled(), "Owner paused execution");
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -106,6 +115,7 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
     // Scenarios: BLREX-L06.
     function test_givenSignedGrant_givenPaused_whenExecuted_reverts() public {
         IExecutor.SignedGrant memory signed = _fundSignedDeposit();
+        vm.prank(_compositesOwner);
         _executor.disable("");
         vm.expectCall(
             address(_auth),
@@ -124,6 +134,7 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
     // Scenarios: BLREX-L06, BLCEN-P02.
     function test_givenSignedGrant_whenOwnerPausesAndResumes() public {
         IExecutor.SignedGrant memory signed = _fundSignedDeposit();
+        vm.prank(_compositesOwner);
         _executor.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
         _executeDepositWithGrant(signed);
@@ -142,7 +153,8 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
     function _resume() private {
         uint48 resumeAt = _executor.lastTransitionAt() + 1;
         vm.warp(resumeAt);
-        _expectTransition(_executor, address(this), true, resumeAt);
+        _expectTransition(_executor, _compositesOwner, true, resumeAt);
+        vm.prank(_compositesOwner);
         _executor.enable("");
         _assertLifecycle(_executor, true, resumeAt);
     }
@@ -244,17 +256,19 @@ contract BurnerLoansCompositesExecuteLifecycleTest is BurnerLoansCompositesTest 
 
     // Scenarios: BLREX-L10.
     function test_whenOwnershipIsAccepted() public {
+        vm.prank(_compositesOwner);
         _executor.transferOwnership(_borrower);
         assertEq(
             _executor.owner(),
-            address(this),
+            _compositesOwner,
             "Current owner retains control until acceptance"
         );
         vm.prank(_borrower);
         _executor.acceptOwnership();
         vm.expectRevert(
-            abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this))
+            abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, _compositesOwner)
         );
+        vm.prank(_compositesOwner);
         _executor.disable("");
         vm.prank(_borrower);
         _executor.disable("");

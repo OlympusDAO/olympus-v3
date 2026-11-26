@@ -7,7 +7,6 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
@@ -20,7 +19,7 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansModularTest} from "./fixtures/BurnerLoansModularTest.sol";
 import {CoreCallbackToken} from "./fixtures/CoreCallbackToken.sol";
 import {CoreService} from "./fixtures/CoreService.sol";
-import {Actions, Policy} from "src/Kernel.sol";
+import {Actions} from "src/Kernel.sol";
 
 abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
     using stdStorage for StdStorage;
@@ -29,12 +28,12 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
 
     function _service() internal returns (CoreService service) {
         service = new CoreService(_kernel, address(_core), address(_ohm), address(_config));
-        _kernel.executeAction(Actions.ActivatePolicy, address(service));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(service));
     }
 
     function _grantRole(bytes32 role_, address caller_) internal {
         vm.assume(caller_ != address(0));
-        if (!_roles.hasRole(caller_, role_)) _rolesAdmin.grantRole(role_, caller_);
+        if (!_roles.hasRole(caller_, role_)) _grantFixtureRole(role_, caller_);
     }
 
     function _grantAdmin(address caller_) internal {
@@ -63,21 +62,6 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
                 reported_
             )
         );
-    }
-
-    function _setCoreLifecycle(bool active_, bool enabled_) internal {
-        _setPolicyLifecycle(_core, active_, enabled_);
-    }
-
-    /// @dev Starts from an active, enabled policy prepared by this fixture.
-    function _setPolicyLifecycle(Policy policy_, bool active_, bool enabled_) internal {
-        if (!enabled_) IEnabler(address(policy_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(policy_));
-    }
-
-    function _restoreCore(bool active_, bool enabled_) internal {
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_core));
-        if (!enabled_) _core.enable("");
     }
 
     function _deposit(uint128 amount_) internal {
@@ -269,7 +253,7 @@ abstract contract BurnerLoansCoreTest is BurnerLoansModularTest {
     ) internal returns (CoreCallbackToken token) {
         token = new CoreCallbackToken();
         token.mint(address(_core), 1);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(token));
+        _grantFixtureRole(ADMIN_ROLE, address(token));
         token.setCallbackFrom(address(_core), address(_core), data_);
         token.setCallbackPhases(true, false);
         token.setBubbleCallbackFailure(propagate_);

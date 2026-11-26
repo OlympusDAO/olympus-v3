@@ -64,13 +64,16 @@ contract BurnerLoansSeizerTaskSetExecutionGasLimitTest is BurnerLoansSeizerTaskT
     // Scenarios: BLSEIZ-EXECUTION-GAS-P01.
     function test_whenGasLimitZero_reverts() public {
         vm.expectRevert(IBurnerLoansSeizerTask.BurnerLoansSeizer_InvalidExecutionGasLimit.selector);
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(0);
     }
 
     // Scenarios: BLSEIZ-EXECUTION-GAS-P04.
     function test_whenGasLimitUnchanged_thenNoEvent() public {
+        uint32 gasLimit = _task.executionGasLimit();
         vm.recordLogs();
-        _task.setExecutionGasLimit(_task.executionGasLimit());
+        vm.prank(_seizerAdmin);
+        _task.setExecutionGasLimit(gasLimit);
         assertEq(vm.getRecordedLogs().length, 0, "Unchanged gas budget is an event-free no-op");
     }
 
@@ -84,6 +87,7 @@ contract BurnerLoansSeizerTaskSetExecutionGasLimitTest is BurnerLoansSeizerTaskT
                 address(_task)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.setExecutionGasLimit(1);
     }
 }

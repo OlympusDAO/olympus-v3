@@ -15,7 +15,7 @@ contract BurnerLoansConfigChangeKernelTest is BurnerLoansConfigTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         bytes32 state = _stateDigest();
         vm.prank(address(_kernel));
         _config.changeKernel(Kernel(next_));

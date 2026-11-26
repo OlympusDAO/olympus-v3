@@ -205,6 +205,7 @@ contract BurnerLoansConfigConstructorTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCC-L02.
     function test_givenCoreActiveDisabled_whenDeployed(address deployer_) public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 beforeState = _stateDigest();
         vm.expectEmit();
@@ -216,7 +217,7 @@ contract BurnerLoansConfigConstructorTest is BurnerLoansConfigTest {
 
     // Scenarios: BLCC-L03.
     function test_givenCoreInactiveEnabled_whenDeployed(address deployer_) public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         bytes32 beforeState = _stateDigest();
         vm.expectEmit();
         emit IGracePeriod.GracePeriodSet(7 days);
@@ -231,8 +232,9 @@ contract BurnerLoansConfigConstructorTest is BurnerLoansConfigTest {
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("inventory()"), hex"deadbeef");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("payout()"), hex"deadbeef");
 
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_core));
         bytes32 beforeState = _stateDigest();
         vm.expectEmit();
         emit IGracePeriod.GracePeriodSet(7 days);

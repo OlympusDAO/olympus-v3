@@ -287,6 +287,7 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
             1e18,
             "Original fixed quote"
         );
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(
             address(_healthAsset),
             IBurnerLoansRisk.AssetRiskConfigInput(5000, 12_500, 100, 30 days, 90 days, 1000e6)
@@ -309,7 +310,8 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
             "Original fixed quote"
         );
         MockBackingOracle replacement = new MockBackingOracle(_kernel, 20e18);
-        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(replacement));
+        vm.prank(_fixtureAdmin);
         _risk.setBackingOracle(address(replacement));
         vm.expectCall(address(_oracle), abi.encodeWithSignature("backing()"), uint64(0));
         vm.prank(caller_);
@@ -370,7 +372,7 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
         MockPrice replacement = new MockPrice(_kernel, 18, 8 hours);
         replacement.setPrice(address(_ohm), 10e18);
         replacement.setPrice(address(_healthAsset), 1e18);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(replacement));
         vm.expectCall(
             address(_price),
             abi.encodeWithSignature("getPrice(address,uint8)"),
@@ -398,7 +400,9 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
             abi.encodeCall(_kernel.isPolicyActive, (Policy(address(cache)))),
             abi.encode(true)
         );
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCache(address(cache));
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(1 hours);
         vm.expectCall(
             address(cache),
@@ -421,10 +425,10 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
         MockPrice price = new MockPrice(_kernel, priceDecimals_, 8 hours);
         price.setPrice(address(_ohm), 10 * 10 ** uint256(priceDecimals_));
         price.setPrice(address(_asset), 10 ** uint256(priceDecimals_));
-        _kernel.executeAction(Actions.UpgradeModule, address(price));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(price));
         _price = price;
         _oracle = new MockBackingOracle(_kernel, 10e18);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_oracle));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_oracle));
         BurnerLoansRisk evaluator = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
@@ -433,9 +437,12 @@ contract BurnerLoansLensPositionHealthFactorIntegrationTest is BurnerLoansLensTe
             0,
             address(_core)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(evaluator));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(evaluator));
+        vm.prank(_fixtureAdmin);
         evaluator.setConfigOperator(address(_config));
+        vm.prank(_fixtureAdmin);
         evaluator.enable("");
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(evaluator));
         _risk = evaluator;
         _healthAsset = new MockERC20("Health asset", "H", assetDecimals_);

@@ -17,7 +17,7 @@ contract BurnerLoansPayoutValidatePayoutRecipientTest is BurnerLoansPayoutTest {
         bool enabled_
     ) public givenPendingBuckets {
         vm.assume(recipient_ != address(0) && recipient_ != address(_payout));
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 beforeState = _ledgerDigest();
         vm.prank(caller_);
         _payout.validatePayoutRecipient(recipient_);
@@ -30,7 +30,7 @@ contract BurnerLoansPayoutValidatePayoutRecipientTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 beforeState = _ledgerDigest();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -49,7 +49,7 @@ contract BurnerLoansPayoutValidatePayoutRecipientTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 beforeState = _ledgerDigest();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -74,14 +74,16 @@ contract BurnerLoansPayoutValidatePayoutRecipientTest is BurnerLoansPayoutTest {
     function test_givenLifecycleTransitions_whenRecipientValidated() public givenPendingBuckets {
         bytes32 beforeState = _ledgerDigest();
         _assertDestinations();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
         _assertDestinations();
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _assertDestinations();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
         _assertDestinations();
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         _assertDestinations();
         assertEq(

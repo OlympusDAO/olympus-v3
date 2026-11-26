@@ -28,7 +28,7 @@ contract BurnerLoansSeizerTaskSetGracePeriodTest is BurnerLoansSeizerTaskTest {
     }
 
     function test_givenBurnerLoansAdminCaller_reverts() public {
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, _BOB);
+        _grantSeizerRole(BURNER_LOANS_ADMIN_ROLE, _BOB);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(_BOB);
         _task.setGracePeriod(_ONE_DAY);
@@ -36,25 +36,30 @@ contract BurnerLoansSeizerTaskSetGracePeriodTest is BurnerLoansSeizerTaskTest {
 
     function test_givenZeroPeriod_reverts() public {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
+        vm.prank(_seizerAdmin);
         _task.setGracePeriod(0);
     }
 
     function test_givenDisabled_reverts() public {
+        vm.prank(_seizerAdmin);
         _task.disable("");
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(_seizerAdmin);
         _task.setGracePeriod(_ONE_DAY);
     }
 
     function test_givenValidPeriod_setsPeriod(uint32 period_) public {
         period_ = uint32(bound(period_, 1, type(uint32).max));
 
+        vm.prank(_seizerAdmin);
         _task.setGracePeriod(period_);
 
         assertEq(_task.gracePeriod(), period_, "grace period should be updated");
     }
 
     function test_givenMaximumPeriod_setsPeriod() public {
+        vm.prank(_seizerAdmin);
         _task.setGracePeriod(type(uint32).max);
 
         assertEq(_task.gracePeriod(), type(uint32).max, "maximum grace period");

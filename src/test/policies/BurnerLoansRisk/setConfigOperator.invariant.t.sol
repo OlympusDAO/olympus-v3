@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 // Libraries
 import {PolicyDependency} from "src/libraries/PolicyDependency.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansRiskHandler} from "src/test/policies/BurnerLoansRisk/fixtures/BurnerLoansRiskHandler.sol";
@@ -14,8 +13,7 @@ contract BurnerLoansRiskOperatorInvariantTest is BurnerLoansRiskTest {
 
     function setUp() public override {
         super.setUp();
-        _handler = new BurnerLoansRiskHandler(_risk, address(this));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_handler));
+        _handler = new BurnerLoansRiskHandler(_risk, _riskAdmin, _riskKernelExecutor);
         bytes4[] memory selectors = new bytes4[](8);
         selectors[0] = _handler.selectOperator.selector;
         selectors[1] = _handler.setAgeAsAdmin.selector;

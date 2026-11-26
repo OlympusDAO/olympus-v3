@@ -58,6 +58,7 @@ contract BurnerLoansInventoryBurnSurplusIntegrationTest is BurnerLoansInventoryM
         uint256 supplyBefore = _ohm.totalSupply();
         vm.expectEmit(false, false, false, true, address(_inventory));
         emit IBurnerLoansInventory.SurplusBurned(50e9);
+        vm.prank(_fixtureAdmin);
         _inventory.burnSurplus();
         assertEq(_ohm.totalSupply(), supplyBefore - 50e9, "Only failed minted principal is burned");
         assertEq(_ohm.balanceOf(address(_inventory)), 50e9, "Provider idle stays backed");
@@ -93,7 +94,7 @@ contract BurnerLoansInventoryBurnSurplusIntegrationTest is BurnerLoansInventoryM
 
     // Scenarios: BLINV-BURN-SURPLUS-A04.
     function test_givenSelectedConfigWithAdmin_whenSurplusBurned_thenBurnedOnce() public {
-        _rolesAdmin.grantRole(ADMIN_ROLE, _inventoryConfigurator);
+        _grantFixtureRole(ADMIN_ROLE, _inventoryConfigurator);
         _burnAndAssert(_inventoryConfigurator);
     }
 
@@ -109,6 +110,7 @@ contract BurnerLoansInventoryBurnSurplusIntegrationTest is BurnerLoansInventoryM
     }
 
     function test_givenConfiguratorReplaced_whenPreviousConfigBurns_reverts() public {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(0xC0FFEE));
         _expectNotAuthorised();
         vm.prank(_inventoryConfigurator);
@@ -119,6 +121,7 @@ contract BurnerLoansInventoryBurnSurplusIntegrationTest is BurnerLoansInventoryM
         _ohm.mint(address(_inventory), 1e9);
         _disableInventory();
         _expectNotEnabled();
+        vm.prank(_fixtureAdmin);
         _inventory.burnSurplus();
         assertEq(_ohm.balanceOf(address(_inventory)), 51e9, "Disabled burn preserves surplus");
         assertEq(_inventory.suppliedIdleOhm(), 50e9, "Disabled burn preserves idle funding");

@@ -157,6 +157,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-REPAY-N05.
     function test_givenOriginationsDisabled_whenRepaid_thenAllowed() public {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         test_givenFullDebt_whenAnyPayerRepays_thenNoPricing(_borrower);
     }
@@ -251,7 +252,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
     // Scenarios: BLDEBT-REPAY-I03, BLDEBT-REPAY-D08, BLDEBT-REPAY-D09.
     function test_givenInventoryUnavailable_whenRepaid_reverts(bool active_, bool enabled_) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_inventory, active_, enabled_);
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         _expectRepayRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -417,7 +418,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-REPAY-A02.
     function test_givenActionRoleRevoked_whenRepaid_reverts() public {
-        _rolesAdmin.revokeRole(BL_DEBT_POLICY_ROLE, address(_debt));
+        _revokeFixtureRole(BL_DEBT_POLICY_ROLE, address(_debt));
         _expectRepayRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE),
             1,
@@ -456,8 +457,8 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         address caller_,
         bool validInput_
     ) public {
-        _setPolicyState(_debt, false, enabled_);
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_debt, false, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectRepayRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -476,8 +477,9 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         address caller_,
         bool validInput_
     ) public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectRepayRevert(
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
             validInput_ ? 1 : 0,
@@ -494,7 +496,7 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         bool validInput_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _expectRepayRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -511,7 +513,9 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
         _ohm.approve(address(_core), _PRINCIPAL);
         vm.prank(_borrower);
         _debt.repay(address(_asset), _PRINCIPAL, _borrower);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(type(uint128).max);
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), type(uint128).max);
         vm.prank(_borrower);
         _debt.borrow(address(_asset), principal_, _borrower, _borrower, 0, address(0));
@@ -764,21 +768,23 @@ contract BurnerLoansDebtRepayTest is BurnerLoansDebtTest {
 
     // Scenarios: BLDEBT-REPAY-L01.
     function test_givenPolicyReactivated_whenRepayExecuted_thenSucceeds() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_debt));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_debt));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_debt));
         test_givenFullDebt_whenAnyPayerRepays_thenNoPricing(_recipient);
     }
 
     // Scenarios: BLDEBT-REPAY-L01.
     function test_givenReEnabled_whenRepayExecuted_thenSucceeds() public {
+        vm.prank(_fixtureAdmin);
         _debt.disable("");
+        vm.prank(_fixtureAdmin);
         _debt.reEnable();
         test_givenFullDebt_whenAnyPayerRepays_thenNoPricing(_recipient);
     }
 
     // Scenarios: BLDEBT-REPAY-D12, BLDEBT-REPAY-D13, BLDEBT-REPAY-D14, BLDEBT-REPAY-D15.
     function test_givenRiskLifecycleDrift_whenPartiallyRepaid(bool active_, bool enabled_) public {
-        _setPolicyState(_risk, active_, enabled_);
+        _setPolicyLifecycle(_risk, active_, enabled_);
         _expectNoRepaymentPricing();
         _fundRepayer(_recipient, 50e9);
         bytes32 beforeQuote = _stateDigest(_recipient);

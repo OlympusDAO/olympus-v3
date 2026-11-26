@@ -16,7 +16,8 @@ import {BurnerLoansPayoutCallbackTest} from "./fixtures/BurnerLoansPayoutCallbac
 
 contract BurnerLoansPayoutReEnableCallbackTest is BurnerLoansPayoutCallbackTest {
     modifier givenAuthorizedPausedPayout() {
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_callbackToken));
+        _grantFixtureRole(ADMIN_ROLE, address(_callbackToken));
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _;
     }
@@ -35,6 +36,7 @@ contract BurnerLoansPayoutReEnableCallbackTest is BurnerLoansPayoutCallbackTest 
             false
         );
         uint48 last = _payout.lastTransitionAt();
+        vm.prank(_fixtureAdmin);
         _payout.rescue(address(_callbackToken), _destination);
         _assertCallbackRejected();
         assertFalse(_payout.isEnabled(), "Nested re-enable rejected");
@@ -61,6 +63,7 @@ contract BurnerLoansPayoutReEnableCallbackTest is BurnerLoansPayoutCallbackTest 
         uint48 last = _payout.lastTransitionAt();
         // LoanPayouts' strict recovery transfer preserves the underlying token revert bytes.
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+        vm.prank(_fixtureAdmin);
         _payout.rescue(address(_callbackToken), _destination);
         assertFalse(_payout.isEnabled(), "Failed recovery cannot re-enable");
         assertEq(_payout.lastTransitionAt(), last, "History rolled back");

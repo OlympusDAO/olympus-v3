@@ -55,22 +55,31 @@ abstract contract BurnerLoansRiskTest is Test, IERC165 {
         return _kernel;
     }
 
+    address internal _riskAdmin;
+    address internal _riskKernelExecutor;
+    address internal _riskRolesAdministrator;
+
     function setUp() public virtual {
+        _riskAdmin = makeAddr("riskAdmin");
+        _riskKernelExecutor = makeAddr("riskKernelExecutor");
+        _riskRolesAdministrator = makeAddr("riskRolesAdministrator");
         vm.warp(100 days);
+        vm.prank(_riskKernelExecutor);
         _kernel = new Kernel();
         _roles = new OlympusRoles(_kernel);
         _floan = new OlympusFixedTermLoan(_kernel);
         _price = new MockPrice(_kernel, 18, 8 hours);
+        vm.prank(_riskRolesAdministrator);
         _rolesAdmin = new RolesAdmin(_kernel);
-        _kernel.executeAction(Actions.InstallModule, address(_roles));
-        _kernel.executeAction(Actions.InstallModule, address(_floan));
-        _kernel.executeAction(Actions.InstallModule, address(_price));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_rolesAdmin));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(this));
+        _executeRiskKernelAction(Actions.InstallModule, address(_roles));
+        _executeRiskKernelAction(Actions.InstallModule, address(_floan));
+        _executeRiskKernelAction(Actions.InstallModule, address(_price));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(_rolesAdmin));
+        _grantRiskRole(ADMIN_ROLE, _riskAdmin);
         _ohm = new MockERC20("OHM", "OHM", 9);
         _asset = new MockERC20("Collateral", "COL", 6);
         _oracle = new MockBackingOracle(_kernel, 1e18);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_oracle));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(_oracle));
         _cache = new MockPriceCache(address(_kernel));
         _cache.setUsdPrice(address(_ohm), 3e18);
         _cache.setUsdPrice(address(_asset), 4e18);
@@ -84,7 +93,8 @@ abstract contract BurnerLoansRiskTest is Test, IERC165 {
             60,
             address(this)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(_risk));
+        vm.prank(_riskAdmin);
         _risk.enable("");
         _market.debtToken = address(_ohm);
         _market.collateralToken = address(_asset);
@@ -103,27 +113,29 @@ abstract contract BurnerLoansRiskTest is Test, IERC165 {
     }
 
     modifier givenDisabled() {
+        vm.prank(_riskAdmin);
         _risk.disable("");
         _;
     }
     modifier givenInactive() {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _executeRiskKernelAction(Actions.DeactivatePolicy, address(_risk));
         _;
     }
     modifier givenReEnabled() {
+        vm.prank(_riskAdmin);
         _risk.disable("");
+        vm.prank(_riskAdmin);
         _risk.reEnable();
         _;
     }
     modifier givenOperator() {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(_operator);
         _;
     }
     modifier givenAdmin(address caller_) {
         _grantAdmin(caller_);
-        vm.startPrank(caller_);
         _;
-        vm.stopPrank();
     }
 
     function _mockCoreReadiness(bool active_, bool enabled_) internal {
@@ -146,10 +158,11 @@ abstract contract BurnerLoansRiskTest is Test, IERC165 {
 
     function _grantAdmin(address caller_) internal {
         vm.assume(caller_ != address(0));
-        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _grantRiskRole(ADMIN_ROLE, caller_);
     }
 
     modifier givenCache() {
+        vm.prank(_riskAdmin);
         _risk.setPriceCache(address(_cache));
         _cache.cachePrice(address(_ohm), address(_asset));
         // This mock is not a Kernel Policy. Inject only authoritative membership at the boundary.
@@ -227,5 +240,20 @@ abstract contract BurnerLoansRiskTest is Test, IERC165 {
                     _asset.totalSupply()
                 )
             );
+    }
+
+    function _executeRiskKernelAction(Actions action_, address target_) internal {
+        vm.prank(_riskKernelExecutor);
+        _kernel.executeAction(action_, target_);
+    }
+
+    function _grantRiskRole(bytes32 role_, address account_) internal {
+        vm.prank(_riskRolesAdministrator);
+        _rolesAdmin.grantRole(role_, account_);
+    }
+
+    function _revokeRiskRole(bytes32 role_, address account_) internal {
+        vm.prank(_riskRolesAdministrator);
+        _rolesAdmin.revokeRole(role_, account_);
     }
 }

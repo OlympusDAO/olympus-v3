@@ -42,13 +42,13 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
 
     // Scenarios: BLINV-RESCUE-SURPLUS-L02.
     function test_givenActiveEnabledInventory_whenSurplusRescued_thenIdleRemainsBacked() public {
-        _rescueAndAssert(address(this));
+        _rescueAndAssert(_fixtureAdmin);
     }
 
     // Scenarios: BLINV-RESCUE-SURPLUS-L01.
     function test_givenActiveDisabledInventory_whenSurplusRescued_thenIdleRemainsBacked() public {
         _disableInventory();
-        _rescueAndAssert(address(this));
+        _rescueAndAssert(_fixtureAdmin);
         assertFalse(_inventory.isEnabled(), "Rescue does not re-enable Inventory");
     }
 
@@ -57,6 +57,7 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
         _disableInventory();
         _setPolicyActive(address(_inventory), false);
         _expectInventoryNotActive();
+        vm.prank(_fixtureAdmin);
         _inventory.rescueSurplus();
     }
 
@@ -64,6 +65,7 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
     function test_givenInactiveEnabledInventory_whenSurplusRescued_reverts() public {
         _setPolicyActive(address(_inventory), false);
         _expectInventoryNotActive();
+        vm.prank(_fixtureAdmin);
         _inventory.rescueSurplus();
     }
 
@@ -87,7 +89,7 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
 
     // Scenarios: BLINV-RESCUE-SURPLUS-A04.
     function test_givenSelectedConfigWithAdmin_whenSurplusRescued_thenTransferredOnce() public {
-        _rolesAdmin.grantRole(ADMIN_ROLE, _inventoryConfigurator);
+        _grantFixtureRole(ADMIN_ROLE, _inventoryConfigurator);
         _rescueAndAssert(_inventoryConfigurator);
     }
 
@@ -104,6 +106,7 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
 
     // Scenarios: BLINV-RESCUE-SURPLUS-A05.
     function test_givenConfiguratorReplaced_whenPreviousConfigRescues_reverts() public {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(0xC0FFEE));
         _expectNotAuthorised();
         vm.prank(_inventoryConfigurator);
@@ -112,6 +115,7 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
 
     // Scenarios: BLINV-RESCUE-SURPLUS-A06.
     function test_givenConfiguratorCleared_whenZeroAddressRescues_reverts() public {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(0));
         _expectNotAuthorised();
         vm.prank(address(0));
@@ -129,6 +133,7 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
         uint256 expected = uint256(donation_) + 1e9;
         vm.expectEmit(false, false, false, true, address(_inventory));
         emit IBurnerLoansInventory.SurplusRescued(expected);
+        vm.prank(_fixtureAdmin);
         _inventory.rescueSurplus();
         assertEq(_ohm.balanceOf(treasury), beforeBalance + expected, "Entire donation rescued");
         assertEq(_ohm.balanceOf(address(_inventory)), 50e9, "Provider backing preserved");
@@ -137,8 +142,10 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
     }
 
     function test_givenNoSurplus_noOp() public {
+        vm.prank(_fixtureAdmin);
         _inventory.burnSurplus();
         vm.recordLogs();
+        vm.prank(_fixtureAdmin);
         _inventory.rescueSurplus();
         assertEq(vm.getRecordedLogs().length, 0, "No events when surplus is zero");
         assertEq(_ohm.balanceOf(address(_inventory)), 50e9, "Provider backing untouched");
@@ -156,6 +163,7 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
             abi.encodeWithSelector(TransferUnavailable.selector)
         );
         vm.expectRevert(TransferUnavailable.selector);
+        vm.prank(_fixtureAdmin);
         _inventory.rescueSurplus();
         assertEq(_inventory.surplusOhm(), 1e9, "Failed transfer preserves surplus");
         assertEq(
@@ -175,6 +183,7 @@ contract BurnerLoansInventoryRescueSurplusIntegrationTest is BurnerLoansInventor
         _disableInventory();
         address treasury = address(_kernel.getModuleForKeycode(toKeycode("TRSRY")));
         uint256 beforeBalance = _ohm.balanceOf(treasury);
+        vm.prank(_fixtureAdmin);
         _inventory.rescueSurplus();
         assertEq(
             _ohm.balanceOf(treasury),

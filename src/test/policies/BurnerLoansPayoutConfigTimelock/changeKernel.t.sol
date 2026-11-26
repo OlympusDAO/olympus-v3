@@ -23,7 +23,7 @@ contract BurnerLoansPayoutConfigTimelockChangeKernelTest is BurnerLoansPayoutCon
         bool active_,
         bool enabled_
     ) public givenPendingRecovery {
-        _setState(_payoutTimelock, active_, enabled_);
+        _setPolicyLifecycle(_payoutTimelock, active_, enabled_);
         bytes32 queue = _queueDigest(_pendingId);
         uint48 last = _payoutTimelock.lastTransitionAt();
         uint32 grace = _payoutTimelock.gracePeriod();
@@ -47,7 +47,7 @@ contract BurnerLoansPayoutConfigTimelockChangeKernelTest is BurnerLoansPayoutCon
         bool enabled_
     ) public givenPendingRecovery {
         vm.assume(caller_ != address(_kernel));
-        _setState(_payoutTimelock, active_, enabled_);
+        _setPolicyLifecycle(_payoutTimelock, active_, enabled_);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.changeKernel, (Kernel(candidate_))),
             abi.encodeWithSelector(KernelAdapter.KernelAdapter_OnlyKernel.selector, caller_),
@@ -64,7 +64,7 @@ contract BurnerLoansPayoutConfigTimelockChangeKernelTest is BurnerLoansPayoutCon
         Kernel next = _newKernel();
         vm.prank(address(_kernel));
         _payoutTimelock.changeKernel(next);
-        next.executeAction(Actions.ActivatePolicy, address(_payoutTimelock));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(_payoutTimelock));
         bytes memory reason = abi.encodeWithSelector(
             PolicyDependency.PolicyDependency_KernelMismatch.selector,
             address(_payout),
@@ -74,22 +74,24 @@ contract BurnerLoansPayoutConfigTimelockChangeKernelTest is BurnerLoansPayoutCon
         _expectQueueRejected(
             abi.encodeCall(_payoutTimelock.queueRescue, (address(_asset), _borrower)),
             reason,
-            address(this)
+            _fixtureAdmin
         );
         bytes32 queue = _queueDigest(_pendingId);
         _makeReady(_pendingId);
         vm.expectRevert(reason);
         _payoutTimelock.executeQueuedAction(_pendingId);
         assertEq(_queueDigest(_pendingId), queue, "Migration mismatch preserves pending work");
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.cancelQueuedAction(_pendingId);
         _assertCleared(_pendingId, _single(_rescueAction()));
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.enable, (bytes(""))),
             reason,
-            address(this)
+            _fixtureAdmin
         );
-        _expectLocalRejected(abi.encodeCall(_payoutTimelock.reEnable, ()), reason, address(this));
+        _expectLocalRejected(abi.encodeCall(_payoutTimelock.reEnable, ()), reason, _fixtureAdmin);
     }
 
     // Scenarios: BLCUCT-KERNEL-D02.
@@ -103,8 +105,8 @@ contract BurnerLoansPayoutConfigTimelockChangeKernelTest is BurnerLoansPayoutCon
         _payout.changeKernel(next);
         vm.prank(address(_kernel));
         _payoutTimelock.changeKernel(next);
-        next.executeAction(Actions.ActivatePolicy, address(_payout));
-        next.executeAction(Actions.ActivatePolicy, address(_payoutTimelock));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(_payoutTimelock));
         assertEq(_queueDigest(_pendingId), queue, "Migration preserves recorded commitments");
         uint256 beforeBalance = _asset.balanceOf(_borrower);
         _makeReady(_pendingId);
@@ -115,19 +117,28 @@ contract BurnerLoansPayoutConfigTimelockChangeKernelTest is BurnerLoansPayoutCon
     }
 
     function _newKernel() internal returns (Kernel next) {
+        vm.prank(_fixtureExecutor);
         next = new Kernel();
         OlympusRoles roles = new OlympusRoles(next);
-        next.executeAction(Actions.InstallModule, address(roles));
-        next.executeAction(Actions.InstallModule, address(new OlympusTreasury(next)));
+        _executeFixtureKernelAction(next, Actions.InstallModule, address(roles));
+        _executeFixtureKernelAction(
+            next,
+            Actions.InstallModule,
+            address(new OlympusTreasury(next))
+        );
+        vm.prank(_fixtureRolesAdministrator);
         RolesAdmin admin = new RolesAdmin(next);
-        next.executeAction(Actions.ActivatePolicy, address(admin));
-        admin.grantRole(ADMIN_ROLE, address(this));
-        admin.grantRole(EMERGENCY_ROLE, address(this));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(admin));
+        vm.prank(_fixtureRolesAdministrator);
+        admin.grantRole(ADMIN_ROLE, _fixtureAdmin);
+        vm.prank(_fixtureRolesAdministrator);
+        admin.grantRole(EMERGENCY_ROLE, _fixtureAdmin);
     }
 
     // Scenarios: BLCUCT-KERNEL-A01, BLCUCT-KERNEL-A02, BLCUCT-KERNEL-I01, BLCUCT-KERNEL-I02, BLCUCT-KERNEL-I03.
     function test_whenPointerBoundarySeedsUsed_thenOnlyPointerChanges() public {
         uint256 checkpoint = vm.snapshotState();
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         for (uint256 a; a < 2; ++a)
             for (uint256 e; e < 2; ++e) {

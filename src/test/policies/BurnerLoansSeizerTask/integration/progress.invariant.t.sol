@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 // Libraries
-import {BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansSeizerTaskProgressTest} from "../fixtures/BurnerLoansSeizerTaskProgressTest.sol";
@@ -22,7 +22,9 @@ contract BurnerLoansSeizerTaskProgressInvariantTest is BurnerLoansSeizerTaskProg
 
     function setUp() public virtual override {
         super.setUp();
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_fixtureAdmin);
         _task.addAsset(address(_otherAsset));
         for (uint256 i; i < 8; ++i) {
             // Eight deterministic, nonzero borrower identities.
@@ -30,10 +32,11 @@ contract BurnerLoansSeizerTaskProgressInvariantTest is BurnerLoansSeizerTaskProg
             _seedDebt(address(uint160(0x10000 + i)), 10e6, 1e9);
         }
         _mature();
-        _handler = new SeizerTaskProgressHandler(_task);
-        _rolesAdmin.grantRole(HEART_ROLE, address(_handler));
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, address(_handler));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(_handler));
+        address taskAdmin = makeAddr("seizerTaskAdmin");
+        address emergency = makeAddr("seizerTaskEmergency");
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, taskAdmin);
+        _grantFixtureRole(EMERGENCY_ROLE, emergency);
+        _handler = new SeizerTaskProgressHandler(_task, _seizerHeart, taskAdmin, emergency);
         bytes4[] memory selectors = new bytes4[](3);
         selectors[0] = _handler.beat.selector;
         selectors[1] = _handler.pause.selector;

@@ -11,7 +11,9 @@ import {Actions, Kernel} from "src/Kernel.sol";
 contract BurnerLoansRiskConfigTimelockChangeKernelTest is BurnerLoansRiskConfigTimelockTest {
     // Scenarios: BLRCT-KERNEL-P01.
     function test_givenQueueMigratesAlone_whenPendingIntentExecuted_reverts() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _timelock.changeKernel(next);
@@ -44,14 +46,16 @@ contract BurnerLoansRiskConfigTimelockChangeKernelTest is BurnerLoansRiskConfigT
 
     // Scenarios: BLRCT-KERNEL-P02.
     function test_givenCompatibleKernelMigration_whenPendingIntentExecuted() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
-        _kernel.executeAction(Actions.MigrateKernel, address(next));
-        next.executeAction(Actions.InstallModule, address(_roles));
-        next.executeAction(Actions.InstallModule, address(_floan));
-        next.executeAction(Actions.InstallModule, address(_price));
-        next.executeAction(Actions.ActivatePolicy, address(_risk));
-        next.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.MigrateKernel, address(next));
+        _executeFixtureKernelAction(next, Actions.InstallModule, address(_roles));
+        _executeFixtureKernelAction(next, Actions.InstallModule, address(_floan));
+        _executeFixtureKernelAction(next, Actions.InstallModule, address(_price));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(_risk));
+        _executeFixtureKernelAction(next, Actions.ActivatePolicy, address(_timelock));
         assertEq(address(_risk.kernel()), address(next), "target Kernel migrated");
         assertEq(address(_timelock.kernel()), address(next), "queue Kernel migrated");
         _makeReady(id);

@@ -17,13 +17,14 @@ import {Actions} from "src/Kernel.sol";
 contract BurnerLoansRiskConfigTimelockDisableTest is BurnerLoansRiskConfigTimelockTest {
     // Scenarios: BLRCT-DISABLE-P01.
     function test_whenAdminOrEmergencyDisables(address caller_, uint8 role_, bool active_) public {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
         uint8 role = uint8(bound(role_, 0, 2));
-        if (role != 1) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (role != 0) _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        if (role != 1) _grantFixtureRole(ADMIN_ROLE, caller_);
+        if (role != 0) _grantFixtureRole(EMERGENCY_ROLE, caller_);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
         bytes32 queued = _queueDigest(id);
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_timelock));
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_timelock));
         vm.mockCallRevert(address(_risk), abi.encodeWithSignature("kernel()"), hex"ff");
         vm.expectEmit(address(_timelock));
         emit IEnabler.Disabled();
@@ -46,6 +47,7 @@ contract BurnerLoansRiskConfigTimelockDisableTest is BurnerLoansRiskConfigTimelo
 
     // Scenarios: BLRCT-DISABLE-L01.
     function test_givenDisabled_whenDisabledAgain_reverts(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
@@ -56,13 +58,17 @@ contract BurnerLoansRiskConfigTimelockDisableTest is BurnerLoansRiskConfigTimelo
     function test_whenNonemptyPayload_reverts(bytes memory data_) public {
         vm.assume(data_.length > 0);
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
+        vm.prank(_fixtureAdmin);
         _timelock.disable(data_);
     }
 
     // Scenarios: BLRCT-DISABLE-P02.
     function test_givenDisabled_whenPendingCancelled() public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetReferralFeeBps(2500);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _timelock.cancelQueuedAction(id);
         assertTrue(_timelock.getQueuedAction(id).cancelled, "pause permits cancellation");
     }

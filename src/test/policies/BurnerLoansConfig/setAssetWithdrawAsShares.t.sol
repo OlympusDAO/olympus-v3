@@ -32,6 +32,7 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         _vaultAsset = _listingToken(18);
         _vault = new MockERC4626(OZERC20(address(_vaultAsset)), "Vault", "V");
         _registerDepositAsset(_vaultAsset, address(_vault));
+        vm.prank(_fixtureAdmin);
         _config.addAsset(address(_vaultAsset), 1, _riskConfig(), _feeConfig(), false);
     }
 
@@ -92,6 +93,7 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         _mutationReverts(
             _configurationCaller,
@@ -107,8 +109,7 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        if (!enabled_) _core.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _setPolicyLifecycle(_core, false, enabled_);
         _mutationReverts(
             _configurationCaller,
             abi.encodeCall(_config.setAssetWithdrawAsShares, (address(_vaultAsset), true)),
@@ -124,8 +125,9 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _mutationReverts(
             _configurationCaller,
             abi.encodeCall(_config.setAssetWithdrawAsShares, (address(_vaultAsset), true)),
@@ -141,8 +143,8 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _mutationReverts(
             _configurationCaller,
             abi.encodeCall(_config.setAssetWithdrawAsShares, (address(_vaultAsset), true)),
@@ -158,9 +160,10 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _config.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _mutationReverts(
             _configurationCaller,
             abi.encodeCall(_config.setAssetWithdrawAsShares, (address(_vaultAsset), true)),
@@ -200,6 +203,7 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool admin_,
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
+        vm.prank(_fixtureAdmin);
         _depositManager.setConfigOperator(_configurationCaller);
         vm.prank(_configurationCaller);
         _depositManager.setAssetShareWithdrawalRequired(IERC20(address(_vaultAsset)), true);
@@ -213,6 +217,7 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
         _assertModeSet(_configurationCaller, true);
+        vm.prank(_fixtureAdmin);
         _depositManager.setConfigOperator(_configurationCaller);
         vm.prank(_configurationCaller);
         _depositManager.setAssetShareWithdrawalRequired(IERC20(address(_vaultAsset)), true);
@@ -239,6 +244,7 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
         (MockERC20 token, MockERC7540ExternalShareVault vault) = _asyncVault();
         vault.setCapabilities(false, false, true, true);
+        vm.prank(_fixtureAdmin);
         _config.addAsset(address(token), 1, _riskConfig(), _feeConfig(), false);
         vault.setCapabilities(false, true, true, true);
         vm.prank(_configurationCaller);
@@ -256,6 +262,7 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
         (MockERC20 token, MockERC7540ExternalShareVault vault) = _asyncVault();
+        vm.prank(_fixtureAdmin);
         _config.addAsset(address(token), 1, _riskConfig(), _feeConfig(), true);
         _mutationReverts(
             _configurationCaller,
@@ -275,6 +282,7 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
         bool operator_
     ) public givenConfigurationCaller(caller_, admin_, operator_) {
         (MockERC20 token, MockERC7540ExternalShareVault vault) = _asyncVault();
+        vm.prank(_fixtureAdmin);
         _config.addAsset(address(token), 1, _riskConfig(), _feeConfig(), true);
         vault.setCapabilities(false, false, true, true);
         vm.prank(_configurationCaller);
@@ -428,10 +436,11 @@ contract BurnerLoansConfigSetAssetWithdrawAsSharesTest is BurnerLoansConfigTest 
     function test_whenPermittedCallerClassesSeeded() public {
         address adminOnly = makeAddr("adminOnly");
         address overlap = makeAddr("adminAndOperator");
-        _rolesAdmin.grantRole(ADMIN_ROLE, adminOnly);
+        _grantFixtureRole(ADMIN_ROLE, adminOnly);
         _assertModeSet(adminOnly, true);
         _assertModeSet(_configurationCaller, false);
-        _rolesAdmin.grantRole(ADMIN_ROLE, overlap);
+        _grantFixtureRole(ADMIN_ROLE, overlap);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(overlap);
         _assertModeSet(overlap, true);
     }

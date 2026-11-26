@@ -50,7 +50,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
     ) public {
         if (configOnly_) caller_ = address(_config);
         else _grantAdmin(caller_);
-        if (!enabled_) _core.disable("");
+        _setPolicyLifecycle(_core, true, enabled_);
         MockERC20 token = new MockERC20("Surplus", "SUR", 18);
         token.mint(address(_core), balance_);
         bytes32 ledger = _ledger();
@@ -90,7 +90,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-RESCUE-L03, BLCORE-RESCUE-L04.
     function test_givenCoreInactive_whenRescued_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -104,6 +104,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
                 address(_core)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(_asset), _recipient);
     }
 
@@ -122,6 +123,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
                 address(0)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(_asset), address(0));
     }
 
@@ -140,6 +142,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
                 address(_core)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(_asset), address(_core));
     }
 
@@ -158,6 +161,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
                 address(_asset)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(_asset), address(_asset));
     }
 
@@ -176,6 +180,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
                 address(_payout)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(_asset), address(_payout));
     }
 
@@ -194,6 +199,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
                 address(_config)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(_asset), address(_config));
     }
 
@@ -212,6 +218,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
                 address(_kernel)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(_asset), address(_kernel));
     }
 
@@ -225,6 +232,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidAsset.selector, token_)
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(token_, _recipient);
     }
 
@@ -240,6 +248,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
             abi.encodeWithSelector(DependencyFailed.selector)
         );
         vm.expectRevert(DependencyFailed.selector);
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(token.balanceOf(address(_core)), 1, "Mandatory transfer rolls back");
     }
@@ -250,6 +259,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
             abi.encodeWithSignature("rescue(address,address)", address(_asset), _recipient),
             false
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),
@@ -266,6 +276,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
             true
         );
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(token.balanceOf(address(_core)), 1, "Propagated callback rolls back transfer");
     }
@@ -276,6 +287,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
             abi.encodeWithSignature("previewRescue(address,address)", address(_asset), _recipient),
             false
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),
@@ -310,6 +322,7 @@ contract BurnerLoansCoreRescueTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-RESCUE-A03.
     function test_givenPausedCore_whenAnyViewerQuotesRecovery(address viewer_) public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         _asset.mint(address(_core), 7);
         vm.prank(viewer_);

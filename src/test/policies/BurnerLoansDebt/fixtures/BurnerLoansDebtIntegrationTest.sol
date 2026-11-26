@@ -61,9 +61,12 @@ abstract contract BurnerLoansDebtIntegrationTest is BurnerLoansDebtTest {
 
     function _installPriceCache() internal returns (PriceCache cache) {
         cache = new PriceCache(_kernel, 18, "USD");
-        _kernel.executeAction(Actions.ActivatePolicy, address(cache));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(cache));
+        vm.prank(_fixtureAdmin);
         cache.enable("");
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCache(address(cache));
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(60);
         cache.cachePrice(address(_ohm), address(_asset));
     }

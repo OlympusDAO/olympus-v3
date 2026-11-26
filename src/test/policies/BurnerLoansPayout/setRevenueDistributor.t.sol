@@ -32,11 +32,13 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         vm.assume(caller_ != address(0));
         _grantRoleIfMissing(ADMIN_ROLE, caller_);
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(fee_);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(yield_);
         RevenueDistributor replacement = _installDistributor();
-        _setState(_payout, true, enabled_);
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         bytes32 state = _ledgerDigest();
         vm.prank(caller_);
         _payout.validateRevenueDistributor(address(replacement));
@@ -99,6 +101,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits(_controller);
         _restore(checkpoint);
         address former = _controller;
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
         test_whenCallerLacksAdmin_thenSetterRejectsAndValidatorPermits(former);
         _restore(checkpoint);
@@ -117,7 +120,9 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         bool yield_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(fee_);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(yield_);
         _payout.validateRevenueDistributor(address(_distributor));
         vm.mockCallRevert(
@@ -145,6 +150,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         _payout.validateRevenueDistributor(address(0));
         vm.expectEmit(address(_payout));
         emit IBurnerLoansPayout.RevenueDistributorSet(address(0));
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(0));
         assertEq(_payout.revenueDistributor(), address(0), "Optional pointer cleared");
         assertEq(_ledgerDigest(), state, "Clearing pointer retains all obligations");
@@ -159,6 +165,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
     // Scenarios: BLCRD-I06.
     function test_givenYieldRouting_whenDistributorCleared_reverts() public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
         _expectClearingRequiredDistributor();
     }
@@ -166,6 +173,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
     // Scenarios: BLCRD-I07.
     function test_givenBothRoutes_whenDistributorCleared_reverts() public givenPendingBuckets {
         _useDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
         _expectClearingRequiredDistributor();
     }
@@ -210,6 +218,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         bool fee = _payout.sendFeesToDistributor();
         bool yield = _payout.sendYieldToDistributor();
         vm.expectRevert(reason_);
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(candidate_);
         assertEq(_payout.revenueDistributor(), old, "Rejected distributor preserves pointer");
         assertEq(_payout.sendFeesToDistributor(), fee, "Rejected distributor preserves fee route");
@@ -275,6 +284,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
     // Scenarios: BLCRD-D01.
     function test_givenWrongKernel_whenValidatedAndSelected_reverts() public givenPendingBuckets {
         _distributor = _installDistributor();
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _distributor.changeKernel(next);
@@ -295,7 +305,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         givenPendingBuckets
     {
         _distributor = _installDistributor();
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_distributor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_distributor));
         bytes memory reason = abi.encodeWithSelector(
             PolicyDependency.PolicyDependency_NotActive.selector,
             address(_distributor)
@@ -308,6 +318,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
     // Scenarios: BLCRD-D03.
     function test_givenActivePaused_whenValidatedAndSelected_reverts() public givenPendingBuckets {
         _distributor = _installDistributor();
+        vm.prank(_fixtureAdmin);
         _distributor.disable("");
         bytes memory reason = abi.encodeWithSelector(
             PolicyDependency.PolicyDependency_NotActive.selector,
@@ -324,7 +335,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         givenPendingBuckets
     {
         _distributor = _installDistributor();
-        _setState(_distributor, false, false);
+        _setPolicyLifecycle(_distributor, false, false);
         bytes memory reason = abi.encodeWithSelector(
             PolicyDependency.PolicyDependency_NotActive.selector,
             address(_distributor)
@@ -340,7 +351,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
         bool enabled_
     ) public givenPendingBuckets {
         _grantRoleIfMissing(ADMIN_ROLE, caller_);
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
         _expectInactivePayout();
         vm.prank(caller_);
@@ -364,7 +375,7 @@ contract BurnerLoansPayoutSetRevenueDistributorTest is BurnerLoansPayoutTest {
     // Scenarios: BLCRD-A01, BLCRD-L01, BLCRD-L02, BLCRD-P01.
     function test_givenExistingAdmin_whenDistributorSelected_thenOnlyPointerChanges() public {
         test_givenValidDistributor_whenSelected_thenOnlyPointerChanges(
-            address(this),
+            _fixtureAdmin,
             true,
             true,
             true,

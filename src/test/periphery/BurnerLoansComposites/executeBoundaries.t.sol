@@ -116,10 +116,12 @@ contract BurnerLoansCompositesExecuteBoundariesTest is BurnerLoansCompositesGran
             abi.encode(uint256(0), uint256(0))
         );
         if (limitType_ == 1) {
+            vm.prank(_fixtureAdmin);
             _config.setAssetDebtCap(address(_asset), 500e9);
             return 500e9;
         }
         if (limitType_ == 2) {
+            vm.prank(_fixtureAdmin);
             _inventory.setGlobalDebtCap(500e9);
             return 500e9;
         }

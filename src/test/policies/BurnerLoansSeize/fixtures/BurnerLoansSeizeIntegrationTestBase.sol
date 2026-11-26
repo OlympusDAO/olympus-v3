@@ -46,6 +46,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
     error BackingUnavailable();
 
     address internal _keeper = address(0xfee);
+    address internal _oracleInventoryProvider;
 
     function _open(
         address asset_,
@@ -76,12 +77,15 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
         bool shares_
     ) internal {
         _price.setPrice(asset_, 1e18);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(IERC20(asset_), IERC4626(vault_), type(uint256).max, 0);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(
             IERC20(asset_),
             LoanParameters._DEPOSIT_PERIOD,
             address(_core)
         );
+        vm.prank(_fixtureAdmin);
         _config.addAsset(
             asset_,
             100_000e9,
@@ -92,6 +96,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
     }
 
     function _configure(address asset_, uint16 rewardBps_) internal {
+        vm.prank(_fixtureAdmin);
         _config.setAssetRiskConfig(
             asset_,
             IBurnerLoansRisk.AssetRiskConfigInput(10000, 10000, rewardBps_, 30 days, 90 days, 1000)
@@ -136,10 +141,19 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
         assertEq(output, token_, "Underlying/share output identity");
         assertEq(reward, expectedReward_, "Settled fixed reward");
         assertEq(treasury, expectedTreasury_, "Settled fixed Treasury remainder");
+        uint256 keeperAfter = keeperBefore +
+            reward +
+            (_keeper == _payout.treasury() ? treasury : 0);
+        // DepositManager also sends the redeemed amount when it holds the output token directly.
+        if (
+            _keeper == address(_depositManager) &&
+            (token_ != asset_ ||
+                _depositManager.getAssetConfiguration(IERC20(asset_)).vault == address(0))
+        ) keeperAfter -= expectedReward_ + expectedTreasury_;
         assertEq(
             IERC20(token_).balanceOf(_keeper),
-            keeperBefore + reward + (_keeper == _payout.treasury() ? treasury : 0),
-            "Exact keeper payment"
+            keeperAfter,
+            "Exact keeper balance after redemption and payment"
         );
         assertEq(
             IERC20(token_).balanceOf(_payout.treasury()),
@@ -166,17 +180,20 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
     }
 
     function _supplyOracleTestInventory(uint128 principal_) internal {
-        _rolesAdmin.grantRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, address(this));
-        _ohm.mint(address(this), principal_);
+        _oracleInventoryProvider = makeAddr("oracleInventoryProvider");
+        _grantFixtureRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, _oracleInventoryProvider);
+        _ohm.mint(_oracleInventoryProvider, principal_);
+        vm.startPrank(_oracleInventoryProvider);
         assertTrue(_ohm.approve(address(_inventory), principal_), "Provider approves its supply");
         _inventory.supply(principal_);
+        vm.stopPrank();
     }
 
     function _setKeeperClass(KeeperClass keeperClass_) internal {
         if (keeperClass_ == KeeperClass.Heart || keeperClass_ == KeeperClass.Both)
-            _rolesAdmin.grantRole(HEART_ROLE, _keeper);
+            _grantFixtureRole(HEART_ROLE, _keeper);
         if (keeperClass_ == KeeperClass.Seizer || keeperClass_ == KeeperClass.Both)
-            _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, _keeper);
+            _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, _keeper);
     }
 
     function _prepareHealthyExpired(
@@ -330,9 +347,12 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
 
     function _installSeizurePriceCache() internal returns (PriceCache cache) {
         cache = new PriceCache(_kernel, 18, "USD");
-        _kernel.executeAction(Actions.ActivatePolicy, address(cache));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(cache));
+        vm.prank(_fixtureAdmin);
         cache.enable("");
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCache(address(cache));
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(60);
         cache.cachePrice(address(_ohm), address(_asset));
     }
@@ -367,7 +387,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
         uint256 treasuryBefore = _asset.balanceOf(_payout.treasury());
         uint256 keeperBefore = _asset.balanceOf(_keeper);
         uint256 capacityBefore = _inventory.availableCapacity();
-        uint256 claimBefore = _inventory.providerClaimOhm(address(this));
+        uint256 claimBefore = _inventory.providerClaimOhm(_oracleInventoryProvider);
         uint256 suppliedBefore = _inventory.suppliedOhm();
         uint256 idleBefore = _inventory.suppliedIdleOhm();
         for (uint256 i; i < borrowers_.length; ++i) {
@@ -421,7 +441,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
         );
         assertEq(_inventory.availableCapacity(), capacityBefore + debt_, "Debt cap room released");
         assertEq(
-            _inventory.providerClaimOhm(address(this)),
+            _inventory.providerClaimOhm(_oracleInventoryProvider),
             claimBefore,
             "Default preserves the nonzero provider claim"
         );
@@ -499,7 +519,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
     }
 
     function _assertPricedBatch(address[] memory borrowers_, uint256 expectedReward_) internal {
-        uint256 claimBefore = _inventory.providerClaimOhm(address(this));
+        uint256 claimBefore = _inventory.providerClaimOhm(_oracleInventoryProvider);
         uint256 suppliedBefore = _inventory.suppliedOhm();
         uint256 idleBefore = _inventory.suppliedIdleOhm();
         bytes32 beforeState = _oracleBatchDigest(borrowers_);
@@ -561,7 +581,7 @@ abstract contract BurnerLoansSeizeIntegrationTestBase is BurnerLoansDebtTest {
             "Both principals release debt-cap room"
         );
         assertEq(
-            _inventory.providerClaimOhm(address(this)),
+            _inventory.providerClaimOhm(_oracleInventoryProvider),
             claimBefore,
             "Default preserves the provider claim"
         );

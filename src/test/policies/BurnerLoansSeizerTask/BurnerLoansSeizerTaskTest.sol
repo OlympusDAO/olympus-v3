@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 import {IBurnerLoansLens} from "src/policies/interfaces/burnerloans/IBurnerLoansLens.sol";
 
 // Libraries
-import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, EMERGENCY_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {MockSeizerTaskDependency} from "./fixtures/MockSeizerTaskDependency.sol";
@@ -18,6 +18,8 @@ import {BurnerLoansSeizerTask} from "src/policies/burnerloans/BurnerLoansSeizerT
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 
 abstract contract BurnerLoansSeizerTaskTest is Test {
+    address internal _seizerHeart;
+
     address internal constant _ALICE = address(0xA11CE);
     address internal constant _BOB = address(0xB0B);
     address internal constant _DAVE = address(0xDA9E);
@@ -26,6 +28,9 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
 
     Kernel internal _kernel;
     OlympusRoles internal _roles;
+    address internal _seizerExecutor = makeAddr("seizer executor");
+    address internal _seizerRolesAdministrator = makeAddr("seizer roles administrator");
+    address internal _seizerAdmin = makeAddr("seizer admin");
     RolesAdmin internal _rolesAdmin;
     MockSeizerTaskDependency internal _core;
     BurnerLoansSeize internal _liquidation;
@@ -35,8 +40,10 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
     MockERC20 internal _otherAsset;
 
     function setUp() public virtual {
+        vm.prank(_seizerExecutor);
         _kernel = new Kernel();
         _roles = new OlympusRoles(_kernel);
+        vm.prank(_seizerRolesAdministrator);
         _rolesAdmin = new RolesAdmin(_kernel);
         _core = new MockSeizerTaskDependency(_kernel, address(0));
         _liquidation = BurnerLoansSeize(
@@ -47,13 +54,13 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
         _otherAsset = new MockERC20("Other", "OTH", 6);
         _core.setAssetRegistered(address(_asset), true);
         _core.setAssetRegistered(address(_otherAsset), true);
-        _kernel.executeAction(Actions.InstallModule, address(_roles));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_rolesAdmin));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_core));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_liquidation));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(this));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(this));
-        _rolesAdmin.grantRole(HEART_ROLE, address(this));
+        _executeSeizerKernelAction(Actions.InstallModule, address(_roles));
+        _executeSeizerKernelAction(Actions.ActivatePolicy, address(_rolesAdmin));
+        _executeSeizerKernelAction(Actions.ActivatePolicy, address(_core));
+        _executeSeizerKernelAction(Actions.ActivatePolicy, address(_liquidation));
+        _grantSeizerRole(ADMIN_ROLE, _seizerAdmin);
+        _seizerHeart = makeAddr("seizerHeart");
+        _grantSeizerRole(HEART_ROLE, _seizerHeart);
         _task = new BurnerLoansSeizerTask(
             _kernel,
             _liquidation,
@@ -62,8 +69,9 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
             25,
             _EXECUTION_GAS_LIMIT
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(_task));
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
+        _executeSeizerKernelAction(Actions.ActivatePolicy, address(_task));
+        _grantSeizerRole(BURNER_LOANS_SEIZER_ROLE, address(_task));
+        vm.prank(_seizerAdmin);
         _task.enable("");
     }
 
@@ -74,19 +82,28 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
 
     modifier givenTaskReEnabled() {
         _setTaskEnabled(false);
+        vm.prank(_seizerAdmin);
         _task.reEnable();
         _;
     }
 
     function _setTaskEnabled(bool enabled_) internal {
         if (_task.isEnabled() == enabled_) return;
-        if (enabled_) _task.enable("");
-        else _task.disable("");
+        if (enabled_) {
+            vm.prank(_seizerAdmin);
+            _task.enable("");
+        } else {
+            vm.prank(_seizerAdmin);
+            _task.disable("");
+        }
     }
 
     function _setPolicyActive(address policy_, bool active_) internal {
         if (_kernel.isPolicyActive(Policy(policy_)) == active_) return;
-        _kernel.executeAction(active_ ? Actions.ActivatePolicy : Actions.DeactivatePolicy, policy_);
+        _executeSeizerKernelAction(
+            active_ ? Actions.ActivatePolicy : Actions.DeactivatePolicy,
+            policy_
+        );
     }
 
     function _grantTaskAdmin(address caller_, uint8 roleClass_) internal {
@@ -95,13 +112,13 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
-        if (roleClass_ != 1) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (roleClass_ != 0) _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        if (roleClass_ != 1) _grantSeizerRole(ADMIN_ROLE, caller_);
+        if (roleClass_ != 0) _grantSeizerRole(BURNER_LOANS_ADMIN_ROLE, caller_);
     }
 
     function _setCoreLifecycle(bool active_, bool enabled_) internal {
         if (!enabled_) _core.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        if (!active_) _executeSeizerKernelAction(Actions.DeactivatePolicy, address(_core));
     }
 
     function _mockCount(uint256 population_) internal {
@@ -137,7 +154,29 @@ abstract contract BurnerLoansSeizerTaskTest is Test {
     }
 
     function _setBothBorrowerCursors(address asset_, uint256 index_) internal {
+        vm.prank(_seizerAdmin);
         _task.setExpiredAssetCursor(asset_, index_);
+        vm.prank(_seizerAdmin);
         _task.setUnhealthyAssetCursor(asset_, index_);
+    }
+
+    function _executeAsHeart(BurnerLoansSeizerTask task_) internal {
+        vm.prank(_seizerHeart);
+        task_.execute();
+    }
+
+    function _executeSeizerKernelAction(Actions action_, address target_) internal {
+        vm.prank(_seizerExecutor);
+        _kernel.executeAction(action_, target_);
+    }
+
+    function _grantSeizerRole(bytes32 role_, address account_) internal {
+        vm.prank(_seizerRolesAdministrator);
+        _rolesAdmin.grantRole(role_, account_);
+    }
+
+    function _revokeSeizerRole(bytes32 role_, address account_) internal {
+        vm.prank(_seizerRolesAdministrator);
+        _rolesAdmin.revokeRole(role_, account_);
     }
 }

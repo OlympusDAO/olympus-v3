@@ -51,6 +51,7 @@ contract BurnerLoansCollateralChangeKernelTest is BurnerLoansCollateralTest {
                 address(kernel)
             )
         );
+        vm.prank(_fixtureAdmin);
         _collateral.enable("");
         _assertRejection(false, 0);
     }
@@ -81,6 +82,7 @@ contract BurnerLoansCollateralChangeKernelTest is BurnerLoansCollateralTest {
     }
 
     function _migrateToEmptyKernel() internal returns (Kernel next) {
+        vm.prank(_fixtureExecutor);
         next = new Kernel();
         vm.prank(address(kernel));
         _collateral.changeKernel(next);
@@ -97,7 +99,7 @@ contract BurnerLoansCollateralChangeKernelTest is BurnerLoansCollateralTest {
         address next_,
         bool enabled_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, true, enabled_);
+        _setPolicyLifecycle(_collateral, true, enabled_);
         uint48 beforeTime = _collateral.lastTransitionAt();
         vm.prank(address(_kernel));
         _collateral.changeKernel(Kernel(next_));
@@ -138,6 +140,7 @@ contract BurnerLoansCollateralChangeKernelTest is BurnerLoansCollateralTest {
         assertTrue(vm.revertToState(checkpoint), "Restore initial Kernel");
         test_whenKernelChanges_thenOnlyPointerChanges(address(_kernel), true);
         assertTrue(vm.revertToState(checkpoint), "Restore before distinct Kernel");
+        vm.prank(_fixtureExecutor);
         test_whenKernelChanges_thenOnlyPointerChanges(address(new Kernel()), true);
     }
 }

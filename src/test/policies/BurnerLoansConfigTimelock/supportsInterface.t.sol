@@ -22,7 +22,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(
@@ -38,7 +38,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(
@@ -54,7 +54,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(
@@ -70,7 +70,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(
@@ -86,7 +86,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(
@@ -102,7 +102,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(
@@ -118,7 +118,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(
@@ -134,7 +134,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(
@@ -150,7 +150,7 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         assertTrue(

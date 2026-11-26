@@ -21,7 +21,7 @@ import {ADMIN_ROLE, DEPOSIT_OPERATOR_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE}
 
 // Contracts
 import {Test} from "@forge-std-1.16.2/Test.sol";
-import {Actions, Kernel} from "src/Kernel.sol";
+import {Actions, Kernel, Policy} from "src/Kernel.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -49,6 +49,9 @@ abstract contract BurnerLoansModularTest is Test {
     Kernel internal _kernel;
     RolesAdmin internal _rolesAdmin;
     OlympusRoles internal _roles;
+    address internal _fixtureExecutor = makeAddr("burnerLoansExecutor");
+    address internal _fixtureRolesAdministrator = makeAddr("burnerLoansRolesAdministrator");
+    address internal _fixtureAdmin = makeAddr("burnerLoansAdmin");
     address internal _inventoryConfigurator = address(0x1C0F1C);
     OlympusFixedTermLoan internal _floan;
     BurnerLoansCore internal _core;
@@ -71,12 +74,14 @@ abstract contract BurnerLoansModularTest is Test {
     // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
     // forge-lint: disable-start(reentrancy-no-eth)
     function setUp() public virtual {
+        vm.prank(_fixtureExecutor);
         _kernel = new Kernel();
         _ohm = _fixtureOhm();
         _asset = new MockERC20("USDS", "USDS", 6);
         _floan = new OlympusFixedTermLoan(_kernel);
         _roles = new OlympusRoles(_kernel);
         _price = new MockPrice(_kernel, 18, 8 hours);
+        vm.prank(_fixtureRolesAdministrator);
         _rolesAdmin = new RolesAdmin(_kernel);
         _depositManager = new DepositManager(address(_kernel), address(new ReceiptTokenManager()));
         _core = new BurnerLoansCore(_kernel, IERC20(address(_ohm)), _depositManager);
@@ -85,7 +90,7 @@ abstract contract BurnerLoansModularTest is Test {
         _inventory = new BurnerLoansInventory(_kernel, IERC20(address(_ohm)), address(_core));
         _config = new BurnerLoansConfig(_kernel, IBurnerLoansCore(address(_core)));
         MockBackingOracle oracle = new MockBackingOracle(_kernel, 1e18);
-        _kernel.executeAction(Actions.ActivatePolicy, address(oracle));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(oracle));
         _risk = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
@@ -98,13 +103,14 @@ abstract contract BurnerLoansModularTest is Test {
         _collateral = new BurnerLoansCollateral(_kernel, _core);
         _debt = new BurnerLoansDebt(_kernel, _core);
         _liquidation = new BurnerLoansSeize(_kernel, _core);
-        _kernel.executeAction(Actions.InstallModule, address(_floan));
-        _kernel.executeAction(
+        _executeFixtureKernelAction(Actions.InstallModule, address(_floan));
+        _executeFixtureKernelAction(
             Actions.InstallModule,
             address(new OlympusMinter(_kernel, address(_ohm)))
         );
-        _kernel.executeAction(Actions.InstallModule, address(_roles));
-        _kernel.executeAction(Actions.InstallModule, address(new OlympusTreasury(_kernel)));
+        _executeFixtureKernelAction(Actions.InstallModule, address(_roles));
+        _executeFixtureKernelAction(Actions.InstallModule, address(new OlympusTreasury(_kernel)));
+        vm.startPrank(_fixtureExecutor);
         _kernel.executeAction(Actions.InstallModule, address(_price));
         _kernel.executeAction(Actions.ActivatePolicy, address(_rolesAdmin));
         _kernel.executeAction(Actions.ActivatePolicy, address(_depositManager));
@@ -116,12 +122,17 @@ abstract contract BurnerLoansModularTest is Test {
         _kernel.executeAction(Actions.ActivatePolicy, address(_collateral));
         _kernel.executeAction(Actions.ActivatePolicy, address(_debt));
         _kernel.executeAction(Actions.ActivatePolicy, address(_liquidation));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(this));
-        _rolesAdmin.grantRole("manager", address(this));
+        vm.stopPrank();
+
+        vm.startPrank(_fixtureRolesAdministrator);
+        _rolesAdmin.grantRole(ADMIN_ROLE, _fixtureAdmin);
         _rolesAdmin.grantRole(DEPOSIT_OPERATOR_ROLE, address(_core));
         _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
         _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(_debt));
         _rolesAdmin.grantRole(BL_LIQUIDATION_POLICY_ROLE, address(_liquidation));
+        vm.stopPrank();
+
+        vm.startPrank(_fixtureAdmin);
         _core.setAuth(address(_auth));
         _core.setConfigOperator(address(_config));
         _inventory.enable("");
@@ -139,9 +150,11 @@ abstract contract BurnerLoansModularTest is Test {
         _debt.enable("");
         _liquidation.enable("");
         _depositManager.setOperatorName(address(_core), "brn");
+        vm.stopPrank();
         _price.setPrice(address(_ohm), 1e18);
         _price.setPrice(address(_asset), 1e18);
         _admit(address(_asset));
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(100_000e9);
         _asset.mint(_borrower, 10_000e6);
         vm.prank(_borrower);
@@ -274,6 +287,7 @@ abstract contract BurnerLoansModularTest is Test {
     // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
     // forge-lint: disable-start(reentrancy-no-eth)
     function _admit(address token_) internal {
+        vm.startPrank(_fixtureAdmin);
         _depositManager.addAsset(IERC20(token_), IERC4626(address(0)), type(uint256).max, 0);
         _depositManager.addAssetPeriod(
             IERC20(token_),
@@ -287,6 +301,7 @@ abstract contract BurnerLoansModularTest is Test {
             IBurnerLoansRisk.AssetFeeConfig(25, 8000, 100, 900),
             false
         );
+        vm.stopPrank();
     }
 
     // forge-lint: disable-end(reentrancy-no-eth)
@@ -304,7 +319,7 @@ abstract contract BurnerLoansModularTest is Test {
     // Fixture/cheatcode calls deliberately interleave effects to exercise callbacks and model transitions.
     // forge-lint: disable-start(calls-loop, reentrancy-no-eth)
     function _supplyInventory(address provider_, uint128 amount_) internal {
-        _rolesAdmin.grantRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, provider_);
+        _grantFixtureRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, provider_);
         _ohm.mint(provider_, amount_);
         vm.startPrank(provider_);
         _ohm.approve(address(_inventory), amount_);
@@ -328,7 +343,47 @@ abstract contract BurnerLoansModularTest is Test {
     // forge-lint: disable-end(calls-loop)
 
     function _grantRoleIfMissing(bytes32 role_, address caller_) internal {
-        if (!_roles.hasRole(caller_, role_)) _rolesAdmin.grantRole(role_, caller_);
+        if (!_roles.hasRole(caller_, role_)) _grantFixtureRole(role_, caller_);
+    }
+
+    /// @dev Starts from an active, enabled policy prepared by this fixture.
+    function _setPolicyLifecycle(Policy policy_, bool active_, bool enabled_) internal {
+        if (!enabled_) {
+            vm.prank(_fixtureAdmin);
+            IEnabler(address(policy_)).disable("");
+        }
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(policy_));
+    }
+
+    function _restorePolicyLifecycle(Policy policy_, bool wasActive_, bool wasEnabled_) internal {
+        if (!wasActive_) _executeFixtureKernelAction(Actions.ActivatePolicy, address(policy_));
+        if (!wasEnabled_) {
+            vm.prank(_fixtureAdmin);
+            IEnabler(address(policy_)).enable("");
+        }
+    }
+
+    function _executeFixtureKernelAction(Actions action_, address target_) internal {
+        _executeFixtureKernelAction(_kernel, action_, target_);
+    }
+
+    function _executeFixtureKernelAction(
+        Kernel kernel_,
+        Actions action_,
+        address target_
+    ) internal {
+        vm.prank(_fixtureExecutor);
+        kernel_.executeAction(action_, target_);
+    }
+
+    function _grantFixtureRole(bytes32 role_, address account_) internal {
+        vm.prank(_fixtureRolesAdministrator);
+        _rolesAdmin.grantRole(role_, account_);
+    }
+
+    function _revokeFixtureRole(bytes32 role_, address account_) internal {
+        vm.prank(_fixtureRolesAdministrator);
+        _rolesAdmin.revokeRole(role_, account_);
     }
 }
 // forge-lint: disable-end(unused-return)

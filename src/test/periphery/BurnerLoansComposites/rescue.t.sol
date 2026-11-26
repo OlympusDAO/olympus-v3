@@ -22,36 +22,41 @@ contract BurnerLoansCompositesRescueTest is BurnerLoansCompositesTest {
         token.mint(address(_executor), balance);
 
         vm.expectEmit(address(_executor));
-        emit IExecutor.TokenRescued(address(token), address(this), balance);
+        emit IExecutor.TokenRescued(address(token), _compositesOwner, balance);
+        vm.prank(_compositesOwner);
         _executor.rescue(address(token));
 
-        assertEq(token.balanceOf(address(this)), balance, "Owner receives the full balance");
+        assertEq(token.balanceOf(_compositesOwner), balance, "Owner receives the full balance");
         assertEq(token.balanceOf(address(_executor)), 0, "Composites retains no rescued token");
     }
 
     // Scenarios: BLCRSC-P02.
     function test_givenDisabled_whenOwnerRescues() public {
         _asset.mint(address(_executor), 1);
-        uint256 beforeBalance = _asset.balanceOf(address(this));
+        uint256 beforeBalance = _asset.balanceOf(_compositesOwner);
+        vm.startPrank(_compositesOwner);
         _executor.disable("");
 
         _executor.rescue(address(_asset));
+        vm.stopPrank();
 
-        assertEq(_asset.balanceOf(address(this)), beforeBalance + 1, "Owner recovers the token");
+        assertEq(_asset.balanceOf(_compositesOwner), beforeBalance + 1, "Owner recovers the token");
         assertFalse(_executor.isEnabled(), "Rescue leaves execution disabled");
     }
 
     // Scenarios: BLCRSC-P03, BLCRSC-A02.
     function test_givenNewOwner_whenRescuing() public {
         address newOwner = makeAddr("newOwner");
+        vm.prank(_compositesOwner);
         _executor.transferOwnership(newOwner);
         vm.prank(newOwner);
         _executor.acceptOwnership();
         _asset.mint(address(_executor), 1);
 
         vm.expectRevert(
-            abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this))
+            abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, _compositesOwner)
         );
+        vm.prank(_compositesOwner);
         _executor.rescue(address(_asset));
         vm.prank(newOwner);
         _executor.rescue(address(_asset));
@@ -62,6 +67,7 @@ contract BurnerLoansCompositesRescueTest is BurnerLoansCompositesTest {
     // Scenarios: BLCRSC-P04.
     function test_givenEmptyBalance_whenOwnerRescues() public {
         vm.expectCall(address(_asset), abi.encodePacked(IERC20.transfer.selector), 0);
+        vm.prank(_compositesOwner);
         _executor.rescue(address(_asset));
         assertEq(_asset.balanceOf(address(_executor)), 0, "Empty balance stays empty");
     }
@@ -86,6 +92,7 @@ contract BurnerLoansCompositesRescueTest is BurnerLoansCompositesTest {
         vm.expectRevert(
             abi.encodeWithSelector(IExecutor.BurnerLoansComposites_InvalidToken.selector, token_)
         );
+        vm.prank(_compositesOwner);
         _executor.rescue(token_);
     }
 
@@ -94,12 +101,13 @@ contract BurnerLoansCompositesRescueTest is BurnerLoansCompositesTest {
         _asset.mint(address(_executor), 1);
         vm.mockCall(
             address(_asset),
-            abi.encodeCall(IERC20.transfer, (address(this), 1)),
+            abi.encodeCall(IERC20.transfer, (_compositesOwner, 1)),
             abi.encode(false)
         );
         vm.expectRevert(
             abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(_asset))
         );
+        vm.prank(_compositesOwner);
         _executor.rescue(address(_asset));
         assertEq(_asset.balanceOf(address(_executor)), 1, "Failed transfer retains the balance");
     }
@@ -117,6 +125,7 @@ contract BurnerLoansCompositesRescueTest is BurnerLoansCompositesTest {
         token.setBubbleCallbackFailure(true);
 
         vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
+        vm.prank(_compositesOwner);
         _executor.rescue(address(token));
 
         assertEq(token.balanceOf(address(_executor)), 1, "Outer transfer rolled back");
@@ -140,9 +149,10 @@ contract BurnerLoansCompositesRescueTest is BurnerLoansCompositesTest {
         IExecutor.Funding[] memory funding = new IExecutor.Funding[](2);
         funding[0] = IExecutor.Funding(address(_asset), 1);
         funding[1] = IExecutor.Funding(address(token), 1);
-        vm.startPrank(_borrower);
+        vm.prank(_borrower);
         token.approve(address(_executor), 1);
 
+        vm.prank(_borrower);
         _executor.execute(
             funding,
             _single(_deposit(1)),
@@ -150,8 +160,6 @@ contract BurnerLoansCompositesRescueTest is BurnerLoansCompositesTest {
             IExecutor.FlashLoan(0, 0),
             type(uint48).max
         );
-        vm.stopPrank();
-
         assertEq(
             token.callbackRevertSelector(),
             ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector,
@@ -163,6 +171,7 @@ contract BurnerLoansCompositesRescueTest is BurnerLoansCompositesTest {
     }
 
     function rescueAsset() external {
+        vm.prank(_compositesOwner);
         _executor.rescue(address(_asset));
     }
 }

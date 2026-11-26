@@ -12,7 +12,7 @@ contract BurnerLoansConfigTimelockChangeKernelTest is BurnerLoansConfigTimelockT
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         address roles = address(_timelock.ROLES());
         vm.prank(address(_kernel));

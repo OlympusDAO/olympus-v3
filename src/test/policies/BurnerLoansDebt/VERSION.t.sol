@@ -15,7 +15,7 @@ contract BurnerLoansDebtVERSIONTest is BurnerLoansDebtLifecycleTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_debt, active_, enabled_);
+        _setPolicyLifecycle(_debt, active_, enabled_);
         vm.prank(caller_);
         (uint8 major, uint8 minor) = _debt.VERSION();
         assertEq(major, 1, "Major version");

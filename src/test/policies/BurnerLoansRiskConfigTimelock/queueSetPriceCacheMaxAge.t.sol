@@ -26,8 +26,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -39,8 +38,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -52,8 +50,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -64,11 +61,11 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint48 age_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(age_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(age_);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -78,11 +75,11 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(1);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(0);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -96,8 +93,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         age_ = uint48(bound(age_, 1, type(uint48).max));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(age_);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -106,8 +102,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         _outsider(caller_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -117,6 +112,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(_recipient);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
@@ -124,8 +120,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_NotController.selector
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -135,6 +130,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(address(0));
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
@@ -142,8 +138,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 IBurnerLoansRiskConfigTimelock.BurnerLoansRiskTimelock_NotController.selector
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -153,11 +148,10 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_timelock, true, false);
+        _setPolicyLifecycle(_timelock, true, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -167,7 +161,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -175,8 +169,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -186,7 +179,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -194,8 +187,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_timelock)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -205,7 +197,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_risk, false, true);
+        _setPolicyLifecycle(_risk, false, true);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -213,8 +205,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -224,7 +215,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_risk, true, false);
+        _setPolicyLifecycle(_risk, true, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -232,8 +223,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -243,7 +233,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         uint8 role_
     ) public {
         _proposer(caller_, role_);
-        _setState(_risk, false, false);
+        _setPolicyLifecycle(_risk, false, false);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectRejectedQueue(
             abi.encodeWithSelector(
@@ -251,8 +241,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -276,8 +265,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(0x1234)
             )
         );
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
     }
 
@@ -289,12 +277,12 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         bool enabled_
     ) public {
         _proposer(caller_, role_);
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(_recipient);
-        _setState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -306,11 +294,10 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         bool enabled_
     ) public {
         _proposer(caller_, role_);
-        _setState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
     }
 
@@ -322,14 +309,12 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         _proposer(caller_, role_);
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
         _expectQueue(_single(a), caller_);
-        vm.prank(caller_);
-        uint64 id = _queue(a);
+        uint64 id = _queue(caller_, a);
         _assertQueued(id, _single(a), caller_);
         bytes32 original = _queueDigest(id);
         a.payload = abi.encode(uint48(7200));
         _expectRejectedQueue(_pending(a, id));
-        vm.prank(caller_);
-        _queue(a);
+        _queue(caller_, a);
         _assertRejectedQueue(_single(a));
         assertEq(_queueDigest(id), original, "Original Risk action preserved");
     }
@@ -403,7 +388,11 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         _restore(checkpoint);
     }
 
-    function _queue(ITimelockBatchQueue.BatchAction memory a_) internal returns (uint64) {
+    function _queue(
+        address caller_,
+        ITimelockBatchQueue.BatchAction memory a_
+    ) internal returns (uint64) {
+        vm.prank(caller_);
         return _timelock.queueSetPriceCacheMaxAge(abi.decode(a_.payload, (uint48)));
     }
 
@@ -411,7 +400,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
     function test_givenInactiveDisabled_givenBrokenFacility_whenPriceAgeQueued_reverts(
         address caller_
     ) public {
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         vm.mockCallRevert(
             address(_config),
             abi.encodeWithSignature("facility()"),
@@ -442,6 +431,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetPriceCacheMaxAge(3600);
         assertEq(_timelock.nextActionId(), 1, "status failure consumes no ID");
     }
@@ -461,6 +451,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetPriceCacheMaxAge(3600);
         assertEq(_timelock.nextActionId(), 1, "setting failure consumes no ID");
     }
@@ -485,6 +476,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetPriceCacheMaxAge(3600);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_ageAction(3600)));
@@ -515,6 +507,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetPriceCacheMaxAge(3600);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_ageAction(3600)));
@@ -542,14 +535,15 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
         bool coreActive_,
         bool coreEnabled_
     ) private {
-        _setState(_config, configActive_, configEnabled_);
-        _setState(_core, coreActive_, coreEnabled_);
-        _expectQueue(_single(_ageAction(3600)), address(this));
+        _setPolicyLifecycle(_config, configActive_, configEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _expectQueue(_single(_ageAction(3600)), _fixtureAdmin);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("facility()"), hex"deadbeef");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("risk()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueSetPriceCacheMaxAge(3600);
         vm.clearMockedCalls();
-        _assertQueued(id, _single(_ageAction(3600)), address(this));
+        _assertQueued(id, _single(_ageAction(3600)), _fixtureAdmin);
     }
 
     function _expectNoUpstreamDiscoveryCalls() private {
@@ -587,6 +581,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetPriceCacheMaxAge(3600);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_ageAction(3600)));
@@ -609,6 +604,7 @@ contract BurnerLoansRiskConfigTimelockQueueSetPriceCacheMaxAgeTest is
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _timelock.queueSetPriceCacheMaxAge(3600);
         vm.clearMockedCalls();
         _assertRejectedQueue(_single(_ageAction(3600)));

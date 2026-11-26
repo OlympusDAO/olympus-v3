@@ -35,7 +35,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     function setUp() public override {
         super.setUp();
         _actor = _service();
-        _rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(_actor));
+        _grantFixtureRole(BL_DEBT_POLICY_ROLE, address(_actor));
     }
 
     // Scenarios: BLCORE-SETTLE-BORROW-A05.
@@ -145,7 +145,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-SETTLE-BORROW-A03.
     function test_givenOnlySiblingRole_whenSettled_reverts() public {
         CoreService sibling = _service();
-        _rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(sibling));
+        _grantFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(sibling));
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_DEBT_POLICY_ROLE)
         );
@@ -169,6 +169,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-BORROW-A04.
     function test_givenWrongKernelCaller_whenSettled() public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _actor.changeKernel(other);
@@ -183,6 +184,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-BORROW-L01.
     function test_givenCoreDisabled_whenSettled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -207,7 +209,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-BORROW-L02, BLCORE-SETTLE-BORROW-L03.
     function test_givenCoreInactive_whenSettled_reverts(bool enabled_) public {
-        _setCoreLifecycle(false, enabled_);
+        _setPolicyLifecycle(_core, false, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -236,7 +238,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-SETTLE-BORROW-D01.
     function test_givenCallerInactive_whenSettled() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_actor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_actor));
         test_givenAdmittedAction_whenLocalPauseAndCoreBindingDiffer(false, address(_core));
     }
 
@@ -287,6 +289,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     // forge-lint: disable-start(unsafe-typecast)
     function test_givenOriginationsDisabled_whenBorrowed_reverts() public {
         _deposit(2000e6);
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         bytes32 before = _ledger();
         vm.expectRevert(
@@ -422,6 +425,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     // forge-lint: disable-start(unsafe-typecast)
     function test_givenCapExceeded_whenBorrowed_reverts() public {
         _deposit(2000e6);
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), 1);
         bytes32 before = _ledger();
         vm.expectRevert(
@@ -527,7 +531,9 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     function test_givenZeroFee_whenBorrowed(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         _deposit(1);
+        vm.prank(_fixtureAdmin);
         _config.setAssetDebtCap(address(_asset), type(uint128).max);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(type(uint128).max);
         uint256 before = _ohm.balanceOf(_recipient);
         vm.expectCall(
@@ -695,7 +701,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     function test_givenAdminMutationCallback_whenCaught() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_core),
             address(_actor),
@@ -731,7 +737,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     function test_givenAdminMutationCallback_whenPropagated() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_core),
             address(_actor),
@@ -766,7 +772,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     function test_givenPayoutRecoveryCallback_whenCaught() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_core),
             address(_actor),
@@ -806,7 +812,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     function test_givenPayoutRecoveryCallback_whenPropagated() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_core),
             address(_actor),
@@ -845,7 +851,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     function test_givenOptionalFeeCallback_whenCaught() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_payout),
             address(_actor),
@@ -886,7 +892,7 @@ contract BurnerLoansCoreSettleBorrowTest is BurnerLoansCoreTest {
     function test_givenOptionalFeeCallback_whenPropagated() public {
         CoreCallbackToken token = _callbackAsset();
         _deposit(100);
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_actor));
+        _grantFixtureRole(ADMIN_ROLE, address(_actor));
         token.setCallbackFrom(
             address(_payout),
             address(_actor),

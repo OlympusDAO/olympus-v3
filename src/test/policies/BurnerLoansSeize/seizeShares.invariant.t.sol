@@ -49,13 +49,16 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
         );
         _share = IERC20(_vault.share());
         _price.setPrice(address(_shareAsset), 1e18);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(
             IERC20(address(_shareAsset)),
             IERC4626(address(_vault)),
             type(uint256).max,
             0
         );
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(address(_shareAsset)), 1, address(_core));
+        vm.prank(_fixtureAdmin);
         _config.addAsset(
             address(_shareAsset),
             100_000e9,
@@ -65,12 +68,15 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
         );
         _seizer = new BurnerLoansSeizerTask(_kernel, _liquidation, _lens, 3, 3, 10_000_000);
         _claimer = new BurnerLoansYieldClaimerTask(_kernel, address(_core), 2_000_000);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_seizer));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_claimer));
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(_seizer));
-        _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_seizer));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_claimer));
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, address(_seizer));
+        _grantFixtureRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
+        vm.prank(_fixtureAdmin);
         _seizer.addAsset(address(_shareAsset));
+        vm.prank(_fixtureAdmin);
         _seizer.enable("");
+        vm.prank(_fixtureAdmin);
         _claimer.enable("");
         _handler = new BurnerLoansShareHandler(
             BurnerLoansShareHandler.Services({
@@ -86,9 +92,9 @@ contract BurnerLoansSeizeSharesInvariantTest is BurnerLoansModularTest {
             _price,
             _payout.treasury()
         );
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_handler));
-        _rolesAdmin.grantRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, address(_handler));
-        _rolesAdmin.grantRole(HEART_ROLE, address(_handler));
+        _grantFixtureRole(ADMIN_ROLE, address(_handler));
+        _grantFixtureRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, address(_handler));
+        _grantFixtureRole(HEART_ROLE, address(_handler));
 
         // Deterministic setup proves each restored path runs before randomized interleavings.
         _handler.supplyInventory(50e9);

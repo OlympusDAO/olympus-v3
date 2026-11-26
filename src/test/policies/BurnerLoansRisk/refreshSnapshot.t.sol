@@ -493,7 +493,7 @@ contract BurnerLoansRiskRefreshSnapshotTest is BurnerLoansRiskTest {
         MockPrice replacement = new MockPrice(_kernel, 18, 8 hours);
         replacement.setPrice(address(_ohm), 7e18);
         replacement.setPrice(address(_asset), 8e18);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeRiskKernelAction(Actions.UpgradeModule, address(replacement));
         vm.prank(caller_);
         _assertSnapshot(_risk.refreshSnapshot(address(_asset)), 7e18, 8e18, 1e18);
     }
@@ -503,6 +503,7 @@ contract BurnerLoansRiskRefreshSnapshotTest is BurnerLoansRiskTest {
         BurnerLoansCallbackCache callback = new BurnerLoansCallbackCache(address(_kernel));
         callback.setUsdPrice(address(_ohm), 3e18);
         callback.setUsdPrice(address(_asset), 4e18);
+        vm.prank(_riskAdmin);
         _risk.setPriceCache(address(callback));
         vm.mockCall(
             address(_kernel),
@@ -566,7 +567,7 @@ contract BurnerLoansRiskRefreshSnapshotTest is BurnerLoansRiskTest {
     function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
         vm.assume(!active_ || !enabled_);
         _oracle.setEnabled(enabled_);
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        if (!active_) _executeRiskKernelAction(Actions.DeactivatePolicy, address(_oracle));
         vm.expectRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -626,6 +627,7 @@ contract BurnerLoansRiskRefreshSnapshotTest is BurnerLoansRiskTest {
         BurnerLoansCallbackCache callback = new BurnerLoansCallbackCache(address(_kernel));
         callback.setUsdPrice(address(_ohm), 3e18);
         callback.setUsdPrice(address(_asset), 4e18);
+        vm.prank(_riskAdmin);
         _risk.setPriceCache(address(callback));
         vm.mockCall(
             address(_kernel),

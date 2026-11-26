@@ -15,7 +15,6 @@ import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol
 import {BurnerLoansCoreTest} from "./BurnerLoansCoreTest.sol";
 import {CoreCallbackToken} from "./fixtures/CoreCallbackToken.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
-import {Actions} from "src/Kernel.sol";
 import {BurnerLoansCore} from "src/policies/burnerloans/BurnerLoansCore.sol";
 
 contract BurnerLoansCoreDisableTest is BurnerLoansCoreTest {
@@ -38,7 +37,7 @@ contract BurnerLoansCoreDisableTest is BurnerLoansCoreTest {
         bool active_
     ) public {
         _grantLifecycleCaller(caller_, EMERGENCY_ROLE, admin_, overlap_);
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _setPolicyLifecycle(_core, active_, true);
         bytes32 ledger = _ledger();
         vm.expectEmit(false, false, false, true, address(_core));
         emit IEnabler.Disabled();
@@ -66,7 +65,7 @@ contract BurnerLoansCoreDisableTest is BurnerLoansCoreTest {
         bool active_,
         bool payload_
     ) public {
-        _setCoreLifecycle(active_, false);
+        _setPolicyLifecycle(_core, active_, false);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(caller_);
         _core.disable(payload_ ? bytes(hex"01") : bytes(""));
@@ -76,6 +75,7 @@ contract BurnerLoansCoreDisableTest is BurnerLoansCoreTest {
     function test_givenPayload_whenDisabled_reverts(bytes memory payload_) public {
         vm.assume(payload_.length > 0);
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
+        vm.prank(_fixtureAdmin);
         _core.disable(payload_);
         assertTrue(_core.isEnabled(), "Invalid payload cannot pause");
     }
@@ -88,6 +88,7 @@ contract BurnerLoansCoreDisableTest is BurnerLoansCoreTest {
             _depositManager
         );
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(_fixtureAdmin);
         fresh.disable("");
     }
 
@@ -97,6 +98,7 @@ contract BurnerLoansCoreDisableTest is BurnerLoansCoreTest {
             abi.encodeWithSignature("disable(bytes)", bytes("")),
             false
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),
@@ -112,8 +114,9 @@ contract BurnerLoansCoreDisableTest is BurnerLoansCoreTest {
             abi.encodeWithSignature("disable(bytes)", bytes("")),
             false
         );
-        _rolesAdmin.revokeRole(ADMIN_ROLE, address(token));
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(token));
+        _revokeFixtureRole(ADMIN_ROLE, address(token));
+        _grantFixtureRole(EMERGENCY_ROLE, address(token));
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),
@@ -129,6 +132,7 @@ contract BurnerLoansCoreDisableTest is BurnerLoansCoreTest {
             abi.encodeWithSignature("disable(bytes)", hex"01"),
             false
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),

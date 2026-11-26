@@ -497,7 +497,8 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
             0,
             address(this)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(evaluator));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(evaluator));
+        vm.prank(_riskAdmin);
         evaluator.enable("");
         _market.debtToken = address(ohm18);
         _market.debtDecimals = 18;
@@ -611,6 +612,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         uint256 protocol_,
         uint256 referral_
     ) private {
+        vm.prank(_riskAdmin);
         _risk.setReferralFeeBps(bps_);
         // Identity conversion: debt USD unit=1e9, collateral USD unit=1e6. At 100% gross
         // fee, one raw principal unit costs one raw collateral unit. No decimal rescaling.
@@ -629,6 +631,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-SPLIT-N01, BLRISK-SPLIT-N02, BLRISK-SPLIT-N03, BLRISK-SPLIT-N04, BLRISK-SPLIT-N05, BLRISK-SPLIT-N06, BLRISK-SPLIT-N07.
     function test_whenReferralRoundingBoundaries() public {
         _identityFeeMarket();
+        vm.prank(_riskAdmin);
         _risk.setReferrerAllowed(_operator, true);
         _assertSplit(0, 10000, 0, 0);
         _assertSplit(1, 9999, 1, 0);
@@ -647,6 +650,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-SPLIT-P01.
     function test_whenZeroReferrer(uint256 total_, uint16 share_, address caller_) public {
         _identityFeeMarket();
+        vm.prank(_riskAdmin);
         _risk.setReferralFeeBps(uint16(bound(share_, 0, 10000)));
         vm.prank(caller_);
         (uint256 p, uint256 r) = _risk.fee(
@@ -668,7 +672,9 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
     ) public {
         _identityFeeMarket();
         uint16 bps = uint16(bound(share_, 0, 10000));
+        vm.prank(_riskAdmin);
         _risk.setReferralFeeBps(bps);
+        vm.prank(_riskAdmin);
         _risk.setReferrerAllowed(_operator, true);
         // Independent quotient/remainder decomposition avoids multiplying the full-width total.
         uint256 expected = (total_ / 10000) * bps + ((total_ % 10000) * bps) / 10000;
@@ -693,9 +699,12 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
         bool removed_
     ) public {
         _identityFeeMarket();
+        vm.prank(_riskAdmin);
         _risk.setReferralFeeBps(uint16(bound(share_, 0, 10000)));
         if (removed_) {
+            vm.prank(_riskAdmin);
             _risk.setReferrerAllowed(_operator, true);
+            vm.prank(_riskAdmin);
             _risk.setReferrerAllowed(_operator, false);
         }
         vm.expectRevert(
@@ -719,7 +728,7 @@ contract BurnerLoansRiskFeeTest is BurnerLoansRiskTest {
     function test_givenBackingUnavailable_whenConsumed_reverts(bool active_, bool enabled_) public {
         vm.assume(!active_ || !enabled_);
         _oracle.setEnabled(enabled_);
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_oracle));
+        if (!active_) _executeRiskKernelAction(Actions.DeactivatePolicy, address(_oracle));
         vm.expectRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,

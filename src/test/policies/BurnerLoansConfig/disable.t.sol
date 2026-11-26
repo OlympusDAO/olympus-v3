@@ -22,8 +22,8 @@ contract BurnerLoansConfigDisableTest is BurnerLoansConfigTest {
         vm.assume(caller_ != address(0));
         vm.assume(admin_ || emergency_);
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE) && !_roles.hasRole(caller_, EMERGENCY_ROLE));
-        if (admin_) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (emergency_) _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        if (admin_) _grantFixtureRole(ADMIN_ROLE, caller_);
+        if (emergency_) _grantFixtureRole(EMERGENCY_ROLE, caller_);
     }
 
     // Scenarios: BLCFG-DISABLE-A03, BLCFG-DISABLE-I04.
@@ -48,9 +48,9 @@ contract BurnerLoansConfigDisableTest is BurnerLoansConfigTest {
         bool inventoryEnabled_
     ) public {
         _grantPauseCaller(caller_, admin_, emergency_);
-        _setPolicyState(_core, coreActive_, coreEnabled_);
-        if (!localActive_) _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
-        _setPolicyState(_inventory, inventoryActive_, inventoryEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        if (!localActive_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_inventory, inventoryActive_, inventoryEnabled_);
         bytes32 economics = _economicDigest();
         vm.expectEmit(address(_config));
         emit IEnabler.Disabled();
@@ -69,7 +69,7 @@ contract BurnerLoansConfigDisableTest is BurnerLoansConfigTest {
         bool active_,
         bytes memory data_
     ) public givenConfigDisabled {
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_config));
         _mutationReverts(
             caller_,
             abi.encodeCall(_config.disable, (data_)),
@@ -118,6 +118,7 @@ contract BurnerLoansConfigDisableTest is BurnerLoansConfigTest {
             hex"deadbeef"
         );
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("inventory()"), hex"deadbeef");
+        vm.prank(_fixtureAdmin);
         _config.disable("");
         assertFalse(_config.isEnabled(), "Broken metadata cannot prevent pause");
     }
@@ -125,22 +126,22 @@ contract BurnerLoansConfigDisableTest is BurnerLoansConfigTest {
     // Scenarios: BLCFG-DISABLE-I01.
     function test_whenNonemptyPayloadBoundariesSeeded_reverts() public {
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.disable, (hex"00")),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.disable, (hex"01")),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.disable, (abi.encode(uint256(0)))),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );
         _mutationReverts(
-            address(this),
+            _fixtureAdmin,
             abi.encodeCall(_config.disable, (new bytes(256))),
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector)
         );

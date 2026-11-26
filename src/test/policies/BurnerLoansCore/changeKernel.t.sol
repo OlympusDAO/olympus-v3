@@ -23,8 +23,9 @@ contract BurnerLoansCoreChangeKernelTest is BurnerLoansCoreTest {
     function test_givenKernelMigration_whenAuthReplaced_newKernelAdmitsGrants() public {
         bytes32 ledger = _ledger();
         uint256 epoch = _currentAuthEpoch();
+        vm.prank(_fixtureExecutor);
         Kernel nextKernel = new Kernel();
-        _kernel.executeAction(Actions.MigrateKernel, address(nextKernel));
+        _executeFixtureKernelAction(Actions.MigrateKernel, address(nextKernel));
         assertEq(address(_core.kernel()), address(nextKernel), "Core follows the actual migration");
         assertTrue(
             _kernel.isPolicyActive(_core),
@@ -40,19 +41,22 @@ contract BurnerLoansCoreChangeKernelTest is BurnerLoansCoreTest {
         );
         _auth.captureAuthorization(_borrower, _borrower, 1);
 
-        nextKernel.executeAction(Actions.InstallModule, address(_roles));
-        nextKernel.executeAction(Actions.InstallModule, address(_floan));
-        nextKernel.executeAction(
+        _executeFixtureKernelAction(nextKernel, Actions.InstallModule, address(_roles));
+        _executeFixtureKernelAction(nextKernel, Actions.InstallModule, address(_floan));
+        _executeFixtureKernelAction(
+            nextKernel,
             Actions.InstallModule,
             address(_kernel.getModuleForKeycode(toKeycode("TRSRY")))
         );
-        nextKernel.executeAction(
+        _executeFixtureKernelAction(
+            nextKernel,
             Actions.InstallModule,
             address(_kernel.getModuleForKeycode(toKeycode("MINTR")))
         );
-        nextKernel.executeAction(Actions.InstallModule, address(_price));
-        nextKernel.executeAction(Actions.ActivatePolicy, address(_core));
+        _executeFixtureKernelAction(nextKernel, Actions.InstallModule, address(_price));
+        _executeFixtureKernelAction(nextKernel, Actions.ActivatePolicy, address(_core));
         BurnerLoansAuth nextAuth = new BurnerLoansAuth(address(nextKernel), address(_core));
+        vm.prank(_fixtureAdmin);
         _core.setAuth(address(nextAuth));
         assertEq(_currentAuthEpoch(), epoch + 1, "Replacement advances the same monotonic epoch");
         assertEq(
@@ -99,7 +103,7 @@ contract BurnerLoansCoreChangeKernelTest is BurnerLoansCoreTest {
         bool active_,
         bool enabled_
     ) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 ledger = _ledger();
         address roles = address(_core.ROLES());
         address floan = _core.floan();
@@ -136,6 +140,7 @@ contract BurnerLoansCoreChangeKernelTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-KERNEL-P01.
     function test_givenNewKernel_whenChanged_thenMembershipIsIndependent() public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _core.changeKernel(other);

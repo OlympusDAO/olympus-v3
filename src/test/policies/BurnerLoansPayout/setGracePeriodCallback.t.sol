@@ -16,7 +16,7 @@ import {BurnerLoansPayoutCallbackTest} from "./fixtures/BurnerLoansPayoutCallbac
 contract BurnerLoansPayoutSetGracePeriodCallbackTest is BurnerLoansPayoutCallbackTest {
     // Scenarios: BLCU-GRACE-C01.
     function test_givenOutgoingCallback_whenGraceSet_thenGuardRejects() public {
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_callbackToken));
+        _grantFixtureRole(ADMIN_ROLE, address(_callbackToken));
         _callbackToken.mint(address(_payout), 5);
         _callbackToken.armOutgoing(
             address(_payout),
@@ -36,7 +36,7 @@ contract BurnerLoansPayoutSetGracePeriodCallbackTest is BurnerLoansPayoutCallbac
 
     // Scenarios: BLCU-GRACE-C02.
     function test_givenIncomingCallback_whenGraceSet_thenCoreGuardRejects() public {
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_callbackToken));
+        _grantFixtureRole(ADMIN_ROLE, address(_callbackToken));
         _prepareIncoming(abi.encodeCall(IGracePeriod.setGracePeriod, (uint32(1))), false);
         uint32 grace = _payout.gracePeriod();
         vm.prank(_borrower);

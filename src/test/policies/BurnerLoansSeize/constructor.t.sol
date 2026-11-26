@@ -106,6 +106,7 @@ contract BurnerLoansSeizeConstructorTest is BurnerLoansSeizeLifecycleTest {
 
     // Scenarios: BLLIQ-CONSTRUCTOR-I07.
     function test_givenDifferentKernel_whenDeployed_reverts(address deployer_) public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -125,7 +126,7 @@ contract BurnerLoansSeizeConstructorTest is BurnerLoansSeizeLifecycleTest {
         bool coreActive_,
         bool coreEnabled_
     ) public {
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         vm.expectEmit();
         emit IGracePeriod.GracePeriodSet(7 days);
         vm.prank(deployer_);

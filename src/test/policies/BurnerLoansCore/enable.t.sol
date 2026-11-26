@@ -17,7 +17,7 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansCoreTest} from "./BurnerLoansCoreTest.sol";
 import {CoreCallbackToken} from "./fixtures/CoreCallbackToken.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
-import {Actions, Kernel} from "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BurnerLoansCore} from "src/policies/burnerloans/BurnerLoansCore.sol";
 
@@ -30,6 +30,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         _grantAdmin(caller_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 ledger = _ledger();
         vm.expectEmit(false, false, false, true, address(_core));
@@ -46,6 +47,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-A02.
     function test_givenUnauthorized_whenEnabled_reverts(address caller_) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
@@ -56,7 +58,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ENABLE-L01.
     function test_givenAlreadyEnabled_whenEnabled_reverts(address caller_, bool active_) public {
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_core));
+        _setPolicyLifecycle(_core, active_, true);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _core.enable("");
@@ -65,7 +67,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-L02.
     function test_givenCoreInactive_whenEnabled_reverts(address caller_) public {
         _grantAdmin(caller_);
-        _setCoreLifecycle(false, false);
+        _setPolicyLifecycle(_core, false, false);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -88,9 +90,9 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         vm.assume(!active_ || !enabled_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) IEnabler(address(_depositManager)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_depositManager));
+        _setPolicyLifecycle(_depositManager, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -101,8 +103,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.enable("");
         assertEq(_state(), before, "Unavailable dependency preserves Core and loans");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_depositManager));
-        if (!enabled_) IEnabler(address(_depositManager)).enable("");
+        _restorePolicyLifecycle(_depositManager, active_, enabled_);
         bytes32 ledger = _ledger();
         vm.prank(caller_);
         _core.enable("");
@@ -113,6 +114,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-D08.
     function test_givenDepositManagerWrongKernel_whenEnabled_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.mockCall(
             address(_depositManager),
@@ -136,9 +138,9 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         vm.assume(!active_ || !enabled_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) IEnabler(address(_inventory)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_inventory));
+        _setPolicyLifecycle(_inventory, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -149,8 +151,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.enable("");
         assertEq(_state(), before, "Unavailable dependency preserves Core and loans");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_inventory));
-        if (!enabled_) IEnabler(address(_inventory)).enable("");
+        _restorePolicyLifecycle(_inventory, active_, enabled_);
         bytes32 ledger = _ledger();
         vm.prank(caller_);
         _core.enable("");
@@ -161,9 +162,11 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-D09.
     function test_givenInventoryWrongKernel_whenEnabled_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         uint48 transition = _core.lastTransitionAt();
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _inventory.changeKernel(other);
@@ -189,6 +192,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         bool enabledGetter_
     ) public {
         vm.assume(data_.length != _ABI_WORD_BYTES);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.mockCall(
             address(_inventory),
@@ -204,9 +208,11 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
                 address(_inventory)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         assertEq(_state(), before, "Malformed status cannot change Core state");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
@@ -221,9 +227,9 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         vm.assume(!active_ || !enabled_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) IEnabler(address(_payout)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -234,8 +240,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.enable("");
         assertEq(_state(), before, "Unavailable dependency preserves Core and loans");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
-        if (!enabled_) IEnabler(address(_payout)).enable("");
+        _restorePolicyLifecycle(_payout, active_, enabled_);
         bytes32 ledger = _ledger();
         vm.prank(caller_);
         _core.enable("");
@@ -246,9 +251,11 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-D10.
     function test_givenPayoutWrongKernel_whenEnabled_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         uint48 transition = _core.lastTransitionAt();
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _payout.changeKernel(other);
@@ -274,6 +281,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         bool enabledGetter_
     ) public {
         vm.assume(data_.length != _ABI_WORD_BYTES);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.mockCall(
             address(_payout),
@@ -289,9 +297,11 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
                 address(_payout)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         assertEq(_state(), before, "Malformed status cannot change Core state");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
@@ -306,9 +316,9 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         vm.assume(!active_ || !enabled_);
         _deposit(2000e6);
         _borrow(100e9);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) IEnabler(address(_risk)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _setPolicyLifecycle(_risk, active_, enabled_);
         bytes32 before = _state();
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -319,8 +329,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         vm.prank(caller_);
         _core.enable("");
         assertEq(_state(), before, "Unavailable dependency preserves Core and loans");
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
-        if (!enabled_) IEnabler(address(_risk)).enable("");
+        _restorePolicyLifecycle(_risk, active_, enabled_);
         bytes32 ledger = _ledger();
         vm.prank(caller_);
         _core.enable("");
@@ -331,9 +340,11 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-D32.
     function test_givenRiskWrongKernel_whenEnabled_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         bytes32 before = _state();
         uint48 transition = _core.lastTransitionAt();
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.prank(address(_kernel));
         _risk.changeKernel(other);
@@ -359,6 +370,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         bool enabledGetter_
     ) public {
         vm.assume(data_.length != _ABI_WORD_BYTES);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.mockCall(
             address(_risk),
@@ -374,9 +386,11 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
                 address(_risk)
             )
         );
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         assertEq(_state(), before, "Malformed status cannot change Core state");
         vm.clearMockedCalls();
+        vm.prank(_fixtureAdmin);
         _core.enable("");
         assertTrue(_core.isEnabled(), "Restored status permits retry");
     }
@@ -384,6 +398,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-D11.
     function test_givenRiskUnset_whenEnabled_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         stdstore.target(address(_core)).sig(bytes4(keccak256("risk()"))).checked_write(address(0));
         vm.expectRevert(
@@ -400,6 +415,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-D33.
     function test_givenInventoryUnset_whenEnabled_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         stdstore.target(address(_core)).sig(bytes4(keccak256("inventory()"))).checked_write(
             address(0)
@@ -418,6 +434,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-D34.
     function test_givenPayoutUnset_whenEnabled_reverts(address caller_) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         stdstore.target(address(_core)).sig(bytes4(keccak256("payout()"))).checked_write(
             address(0)
@@ -441,9 +458,9 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         bool wrongKernel_
     ) public {
         _grantAdmin(caller_);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
-        if (!enabled_) _config.disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(_config));
+        _setPolicyLifecycle(_config, active_, enabled_);
         if (wrongKernel_)
             vm.mockCall(
                 address(_config),
@@ -458,12 +475,14 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ENABLE-C01.
     function test_givenBusyCore_whenCaughtEnable_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         CoreCallbackToken token = _armRescue(
             abi.encodeWithSignature("enable(bytes)", bytes("")),
             false
         );
         uint48 transition = _core.lastTransitionAt();
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertFalse(_core.isEnabled(), "Callback cannot enable during rescue");
         assertEq(_core.lastTransitionAt(), transition, "No nested transition");
@@ -477,6 +496,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ENABLE-C02.
     function test_givenBusyCore_whenPropagatedEnable_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         CoreCallbackToken token = _armRescue(
             abi.encodeWithSignature("enable(bytes)", bytes("")),
@@ -484,6 +504,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
         );
         uint48 transition = _core.lastTransitionAt();
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertFalse(_core.isEnabled(), "Callback cannot enable during rescue");
         assertEq(_core.lastTransitionAt(), transition, "No nested transition");
@@ -493,8 +514,10 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-I01.
     function test_givenPayload_whenEnabled_reverts(bytes memory payload_) public {
         vm.assume(payload_.length > 0);
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
+        vm.prank(_fixtureAdmin);
         _core.enable(payload_);
         assertFalse(_core.isEnabled(), "Invalid payload cannot transition");
     }
@@ -502,12 +525,14 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-ENABLE-I02.
     function test_givenEnabledCoreAndPayload_whenEnabled_reverts() public {
         vm.expectRevert(IEnabler.NotDisabled.selector);
+        vm.prank(_fixtureAdmin);
         _core.enable(hex"01");
     }
 
     // Scenarios: BLCORE-ENABLE-I03.
     function test_givenUnauthorizedAndPayload_whenEnabled_reverts(address caller_) public {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
@@ -516,11 +541,13 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
 
     // Scenarios: BLCORE-ENABLE-I04.
     function test_givenBusyCoreAndPayload_whenEnabled_reverts() public {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         CoreCallbackToken token = _armRescue(
             abi.encodeWithSignature("enable(bytes)", hex"01"),
             false
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),
@@ -537,6 +564,7 @@ contract BurnerLoansCoreEnableTest is BurnerLoansCoreTest {
             _depositManager
         );
         vm.expectRevert(bytes(""));
+        vm.prank(_fixtureAdmin);
         fresh.enable("");
         assertFalse(fresh.isEnabled(), "Uninitialized role dependency has no ABI result");
     }

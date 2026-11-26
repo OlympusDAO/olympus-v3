@@ -36,6 +36,7 @@ contract BurnerLoansConfigTimelockSetGracePeriodTest is BurnerLoansConfigTimeloc
 
     // Scenarios: BLCTLGR-L01.
     function test_givenDisabled_whenPeriodOne_thenStateError(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _transitionReverts(
             abi.encodeCall(_timelock.setGracePeriod, (uint32(1))),
@@ -46,6 +47,7 @@ contract BurnerLoansConfigTimelockSetGracePeriodTest is BurnerLoansConfigTimeloc
 
     // Scenarios: BLCTLGR-L02.
     function test_givenDisabled_whenPeriodZero_thenStateError(address caller_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _transitionReverts(
             abi.encodeCall(_timelock.setGracePeriod, (uint32(0))),
@@ -67,7 +69,7 @@ contract BurnerLoansConfigTimelockSetGracePeriodTest is BurnerLoansConfigTimeloc
     // Scenarios: BLCTLGR-L03.
     function test_givenOwnPolicyInactive_whenPeriodSet_reverts(address caller_) public {
         _admin(caller_);
-        _setState(_timelock, false, true);
+        _setPolicyLifecycle(_timelock, false, true);
         _transitionReverts(
             abi.encodeCall(_timelock.setGracePeriod, (uint32(1))),
             caller_,
@@ -103,6 +105,7 @@ contract BurnerLoansConfigTimelockSetGracePeriodTest is BurnerLoansConfigTimeloc
     ) public {
         _admin(caller_);
         period_ = uint32(bound(period_, 1, type(uint32).max));
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(period_);
         uint48 last = _timelock.lastTransitionAt();
         bytes32 funds = _economicDigest();
@@ -143,7 +146,7 @@ contract BurnerLoansConfigTimelockSetGracePeriodTest is BurnerLoansConfigTimeloc
         bool enabled_,
         uint32 period_
     ) public {
-        _setState(_timelock, false, enabled_);
+        _setPolicyLifecycle(_timelock, false, enabled_);
         vm.etch(address(_timelock.ROLES()), hex"fe");
         uint32 beforePeriod = _timelock.gracePeriod();
         uint48 beforeAt = _timelock.lastTransitionAt();

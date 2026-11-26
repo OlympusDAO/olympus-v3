@@ -12,7 +12,7 @@ contract BurnerLoansPayoutRequestPermissionsTest is BurnerLoansPayoutTest {
         bool active_,
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         bytes32 state = _ledgerDigest();
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("payout()"), hex"deadbeef");
         vm.prank(caller_);

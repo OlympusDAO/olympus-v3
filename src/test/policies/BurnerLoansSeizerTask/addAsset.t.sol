@@ -36,6 +36,7 @@ contract BurnerLoansSeizerTaskAddAssetTest is BurnerLoansSeizerTaskTest {
 
     // Scenarios: BLSEIZ-ADD-ASSET-P01.
     function test_givenDuplicateAsset_whenAdded_reverts() public {
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
         vm.expectCall(
             address(_core),
@@ -48,6 +49,7 @@ contract BurnerLoansSeizerTaskAddAssetTest is BurnerLoansSeizerTaskTest {
                 address(_asset)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
         assertEq(
             _task.getAssets(),
@@ -73,6 +75,7 @@ contract BurnerLoansSeizerTaskAddAssetTest is BurnerLoansSeizerTaskTest {
                 address(0)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(0));
         assertEq(_task.getAssets().length, 0, "Zero rejection preserves registry");
     }
@@ -86,6 +89,7 @@ contract BurnerLoansSeizerTaskAddAssetTest is BurnerLoansSeizerTaskTest {
                 asset_
             )
         );
+        vm.prank(_seizerAdmin);
         _task.addAsset(asset_);
         assertFalse(_task.isAssetManaged(asset_), "Unsupported asset is not admitted");
         assertEq(_task.getAssets().length, 0, "Unsupported asset creates no registry entry");
@@ -124,6 +128,7 @@ contract BurnerLoansSeizerTaskAddAssetTest is BurnerLoansSeizerTaskTest {
         bool enabled_
     ) public {
         _setCoreLifecycle(active_, enabled_);
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
         assertTrue(
             _task.isAssetManaged(address(_asset)),
@@ -141,16 +146,18 @@ contract BurnerLoansSeizerTaskAddAssetTest is BurnerLoansSeizerTaskTest {
                 address(_task)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
         assertEq(_task.getAssets().length, 0, "Inactive admission preserves registry");
         _setPolicyActive(address(_task), true);
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
         assertTrue(_task.isAssetManaged(address(_asset)), "Admission recovers after reactivation");
     }
 
     function _assertRegisteredAssetAdded(address caller_, bool enabled_) private {
         vm.assume(caller_ != address(0));
-        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _grantSeizerRole(ADMIN_ROLE, caller_);
         uint48 transition = _task.lastTransitionAt();
         vm.expectEmit(true, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.AssetAdded(address(_asset));

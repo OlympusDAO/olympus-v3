@@ -16,7 +16,6 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 // Contracts
 import {BurnerLoansPayoutTest} from "./BurnerLoansPayoutTest.sol";
 import {NoReturnPayoutToken} from "./fixtures/NoReturnPayoutToken.sol";
-import {Actions} from "src/Kernel.sol";
 
 contract BurnerLoansPayoutCreditFeeTest is BurnerLoansPayoutTest {
     // Scenarios: BLCU-CREDIT-FEE-P12.
@@ -57,10 +56,9 @@ contract BurnerLoansPayoutCreditFeeTest is BurnerLoansPayoutTest {
         _token.setTransferReverts(_keeper, true);
         _creditReferral(_token, 0, _keeper, 25);
         _seedBuckets(11, 13, 7, _keeper);
-        _setState(_payout, active_, enabled_);
+        _setPolicyLifecycle(_payout, active_, enabled_);
         _assertLifecyclePendingClaims(caller_);
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
-        if (!enabled_) _payout.enable("");
+        _restorePolicyLifecycle(_payout, active_, enabled_);
         _assertLifecyclePendingClaims(caller_);
     }
 
@@ -699,7 +697,7 @@ contract BurnerLoansPayoutCreditFeeTest is BurnerLoansPayoutTest {
     function test_givenInactivePayout_whenCoreCredits_reverts(
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         _expectCreditRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -712,6 +710,7 @@ contract BurnerLoansPayoutCreditFeeTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-CREDIT-FEE-L02.
     function test_givenPausedPayout_whenCoreCredits_reverts() public givenPendingBuckets {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _expectCreditRejected(
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
@@ -739,7 +738,9 @@ contract BurnerLoansPayoutCreditFeeTest is BurnerLoansPayoutTest {
         _bindDistributor();
         _deferFee(_token, oldFee_);
         _token.setTransferReverts(_treasury(), false);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         _token.mint(address(_payout), amount_);
         _expectPayoutTransferred(_treasury(), IBurnerLoansPayout.PayoutKind.Fee, oldFee_ + amount_);
@@ -965,6 +966,7 @@ contract BurnerLoansPayoutCreditFeeTest is BurnerLoansPayoutTest {
         public
         givenPendingBuckets
     {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         bytes32 state = _ledgerDigest();
         vm.expectRevert(IEnabler.NotEnabled.selector);

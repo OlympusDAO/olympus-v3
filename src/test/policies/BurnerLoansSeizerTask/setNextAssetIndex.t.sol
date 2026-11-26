@@ -19,7 +19,9 @@ import {BurnerLoansSeizerTaskTest} from "./BurnerLoansSeizerTaskTest.sol";
 contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest {
     function setUp() public override {
         super.setUp();
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.addAsset(address(_otherAsset));
     }
 
@@ -108,13 +110,16 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
                 uint256(2)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(index_);
         assertEq(_task.nextAssetIndex(), 0, "Rejected index preserves traversal");
     }
 
     // Scenarios: BLSEIZ-ASSET-INDEX-I02.
     function test_givenEmptyRegistry_whenNonzeroIndexSet_reverts(uint256 index_) public {
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_otherAsset));
         index_ = bound(index_, 1, type(uint256).max);
         vm.expectRevert(
@@ -124,6 +129,7 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
                 uint256(0)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(index_);
         assertEq(_task.nextAssetIndex(), 0, "Empty registry preserves zero traversal");
     }
@@ -140,6 +146,7 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
 
     // Scenarios: BLSEIZ-ASSET-INDEX-I03.
     function test_givenSingleAsset_whenIndexEqualsCount_reverts() public {
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_otherAsset));
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -148,14 +155,18 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
                 uint256(1)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1);
     }
 
     // Scenarios: BLSEIZ-ASSET-INDEX-P02.
     function test_givenEmptyRegistry_whenReset_thenEventFreeNoOp() public {
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_asset));
+        vm.prank(_seizerAdmin);
         _task.removeAsset(address(_otherAsset));
         vm.recordLogs();
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(0);
         assertEq(vm.getRecordedLogs().length, 0, "Empty reset is an event-free no-op");
         assertEq(_task.nextAssetIndex(), 0, "Empty registry remains at zero");
@@ -163,8 +174,10 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
 
     // Scenarios: BLSEIZ-ASSET-INDEX-P03.
     function test_whenIndexUnchanged_thenEventFreeNoOp() public {
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1);
         vm.recordLogs();
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1);
         assertEq(vm.getRecordedLogs().length, 0, "Unchanged cursor emits no setter event");
         assertEq(_task.nextAssetIndex(), 1, "Unchanged cursor remains exact");
@@ -172,6 +185,7 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
 
     // Scenarios: BLSEIZ-ASSET-INDEX-P04.
     function test_givenDownstreamUnavailable_whenReset_thenNoDownstreamReads() public {
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1);
         vm.mockCallRevert(
             address(_liquidation),
@@ -185,6 +199,7 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
         );
         vm.expectEmit(false, false, false, true, address(_task));
         emit IBurnerLoansSeizerTask.NextAssetIndexSet(0);
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(0);
         assertEq(
             _task.nextAssetIndex(),
@@ -218,9 +233,10 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
 
     // Scenarios: BLSEIZ-ASSET-INDEX-P05.
     function test_whenSecondAssetSelected_thenNextExecutionScansIt() public {
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1);
         vm.expectCall(address(_lens), _boundedScan(address(_otherAsset), 0), uint64(1));
-        _task.execute();
+        _executeAsHeart(_task);
         assertEq(_task.nextAssetIndex(), 0, "Selected last asset wraps to first");
     }
 
@@ -233,6 +249,7 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
         roleClass_ = uint8(bound(roleClass_, 0, 2));
         index_ = bound(index_, 0, 1);
         _grantTaskAdmin(caller_, roleClass_);
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1 - index_);
         uint48 transition = _task.lastTransitionAt();
         address[] memory assets = _task.getAssets();
@@ -274,9 +291,11 @@ contract BurnerLoansSeizerTaskSetNextAssetIndexTest is BurnerLoansSeizerTaskTest
                 address(_task)
             )
         );
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(index_);
         assertEq(_task.nextAssetIndex(), 0, "Inactive recovery preserves traversal");
         _setPolicyActive(address(_task), true);
+        vm.prank(_seizerAdmin);
         _task.setNextAssetIndex(1);
         assertEq(_task.nextAssetIndex(), 1, "Recovery works after Kernel reactivation");
     }

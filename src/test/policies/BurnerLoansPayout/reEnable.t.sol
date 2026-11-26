@@ -48,14 +48,14 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         else vm.mockCall(address(_core), probe, hex"01");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), hex"01");
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(
                 IBurnerLoansPayout.BurnerLoansPayout_InvalidCore.selector,
                 address(_core)
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-D01, BLCU-REENABLE-D02, BLCU-REENABLE-D03.
@@ -79,7 +79,7 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
             abi.encodeWithSelector(Kernel.isPolicyActive.selector, address(_core)),
             uint64(0)
         );
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 
     modifier givenLifecycleClaims() {
@@ -88,12 +88,15 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         _creditReferral(_token, 0, _secondKeeper, 7);
         _deferFee(_otherToken, 11);
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(true);
         _;
     }
 
     modifier givenDisabled() {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _;
     }
@@ -106,14 +109,16 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         bool coreActive_,
         bool coreEnabled_
     ) public givenLifecycleClaims {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(loanAdminOnly_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(loanAdminOnly_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
         if (overlap_)
-            _rolesAdmin.grantRole(loanAdminOnly_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
+            _grantFixtureRole(loanAdminOnly_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         // A previous Payout can still manage its local lifecycle and retained claims.
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(_otherPayout));
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         vm.warp(2);
         _transition(caller_);
     }
@@ -144,7 +149,7 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
 
     // Scenarios: BLCU-REENABLE-A01.
     function test_whenUnauthorizedClassesSeeded_reverts() public {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(0x111));
+        _grantFixtureRole(EMERGENCY_ROLE, address(0x111));
         uint256 checkpoint = vm.snapshotState();
         test_givenUnauthorized_whenReEnabled_reverts(address(0));
         _restore(checkpoint);
@@ -158,7 +163,7 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         address caller_,
         bool active_
     ) public givenPendingBuckets {
-        _setState(_payout, active_, true);
+        _setPolicyLifecycle(_payout, active_, true);
         _expectRejected(caller_, abi.encodeWithSelector(IEnabler.NotDisabled.selector));
     }
 
@@ -168,16 +173,16 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         givenPendingBuckets
         givenDisabled
     {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_payout)
             )
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
-        _transition(address(this));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-L03.
@@ -186,7 +191,7 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         bool active_
     ) public {
         BurnerLoansPayout fresh = new BurnerLoansPayout(_kernel, address(_core));
-        if (active_) _kernel.executeAction(Actions.ActivatePolicy, address(fresh));
+        if (active_) _executeFixtureKernelAction(Actions.ActivatePolicy, address(fresh));
         vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(caller_);
         fresh.reEnable();
@@ -202,11 +207,13 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
     ) public givenPendingBuckets {
         uint32 grace = uint32(bound(grace_, 1, type(uint32).max));
         uint48 last = uint48(bound(last_, 1, type(uint48).max - grace));
+        vm.prank(_fixtureAdmin);
         _payout.setGracePeriod(grace);
         vm.warp(last);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.warp(bound(now_, last, uint256(last) + grace));
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-N01.
@@ -233,18 +240,21 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
     ) public givenPendingBuckets {
         uint32 grace = uint32(bound(grace_, 1, type(uint32).max));
         uint48 last = uint48(bound(last_, 1, uint256(type(uint48).max) - grace - 1));
+        vm.prank(_fixtureAdmin);
         _payout.setGracePeriod(grace);
         vm.warp(last);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         uint48 deadline = last + grace;
         vm.warp(bound(now_, uint256(deadline) + 1, type(uint48).max));
         // Grace precedes activation: own inactivity cannot mask expiry.
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, deadline)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
+        vm.prank(_fixtureAdmin);
         _payout.enable("");
         assertTrue(_payout.isEnabled(), "ADMIN retains ordinary enable after grace expires");
     }
@@ -264,11 +274,13 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
     ) public givenPendingBuckets {
         uint32 grace = uint32(bound(grace_, 1, type(uint32).max));
         uint48 last = uint48(bound(last_, uint256(type(uint48).max) - grace + 1, type(uint48).max));
+        vm.prank(_fixtureAdmin);
         _payout.setGracePeriod(grace);
         vm.warp(last);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(
                 SafeCast.SafeCastOverflowedUintDowncast.selector,
                 48,
@@ -295,11 +307,12 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         givenDisabled
     {
         vm.warp(uint256(_payout.lastTransitionAt()) + _payout.gracePeriod());
-        _transition(address(this));
+        _transition(_fixtureAdmin);
         vm.warp(vm.getBlockTimestamp() + 1);
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.warp(vm.getBlockTimestamp() + _payout.gracePeriod());
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-C05.
@@ -308,19 +321,19 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         givenPendingBuckets
         givenDisabled
     {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_payout));
         vm.mockCallRevert(
             address(_core),
             abi.encodeCall(_core.requireNotReentrant, ()),
             abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
         );
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
         );
         vm.clearMockedCalls();
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
-        _transition(address(this));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-L01, BLCU-REENABLE-L03.
@@ -395,22 +408,24 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
     function test_givenMalformedCoreKernel_whenActivated_revertsThenRestored(
         bytes memory data_
     ) public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.assume(data_.length != 32);
         vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), data_);
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
                 address(_core)
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-K03.
     function test_givenMalformedCoreKernelBoundaries_whenActivated_revertsThenRestored() public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         bytes[6] memory responses = [
             new bytes(0),
@@ -425,7 +440,7 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         for (uint256 i; i < responses.length; ++i) {
             vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), responses[i]);
             _expectRejected(
-                address(this),
+                _fixtureAdmin,
                 abi.encodeWithSelector(
                     PolicyDependency.PolicyDependency_InvalidDependency.selector,
                     address(_core)
@@ -433,16 +448,18 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
             );
         }
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-K01.
     function test_givenDifferentCoreKernel_whenActivated_revertsThenRestored() public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
+        vm.prank(_fixtureExecutor);
         address otherKernel = address(new Kernel());
         vm.mockCall(address(_core), abi.encodeWithSignature("kernel()"), abi.encode(otherKernel));
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_KernelMismatch.selector,
                 address(_core),
@@ -451,35 +468,38 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-K02.
     function test_givenRevertingCoreKernel_whenActivated_revertsThenRestored(
         bytes memory data_
     ) public {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         vm.mockCallRevert(address(_core), abi.encodeWithSignature("kernel()"), data_);
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
                 address(_core)
             )
         );
         vm.clearMockedCalls();
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 
     // Scenarios: BLCU-REENABLE-K04.
     function test_givenCoreMigrated_whenActivated_revertsThenRestored() public givenPendingBuckets {
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _core.changeKernel(next);
         assertTrue(_kernel.isPolicyActive(_core), "Old Kernel still records Core membership");
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _expectRejected(
-            address(this),
+            _fixtureAdmin,
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_KernelMismatch.selector,
                 address(_core),
@@ -489,7 +509,7 @@ contract BurnerLoansPayoutReEnableTest is BurnerLoansPayoutTest {
         );
         vm.prank(address(next));
         _core.changeKernel(_kernel);
-        _transition(address(this));
+        _transition(_fixtureAdmin);
     }
 }
 

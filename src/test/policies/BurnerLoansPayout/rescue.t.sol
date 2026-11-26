@@ -74,9 +74,10 @@ contract BurnerLoansPayoutRescueTest is BurnerLoansPayoutTest {
         bool coreEnabled_
     ) public givenPendingBuckets {
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(_otherPayout));
-        _setState(_payout, true, enabled_);
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _token.mint(address(_payout), 7);
         _assertSurplusTransfer(caller_, 7, 60);
     }
@@ -97,6 +98,7 @@ contract BurnerLoansPayoutRescueTest is BurnerLoansPayoutTest {
     // Scenarios: BLCU-RESCUE-A01.
     function test_givenFormerController_whenRescued_reverts() public {
         address former = _controller;
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
         test_givenUnauthorizedCaller_whenRescued_reverts(former);
     }
@@ -623,7 +625,7 @@ contract BurnerLoansPayoutRescueTest is BurnerLoansPayoutTest {
     ) public givenPendingBuckets {
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         _token.mint(address(_payout), 7);
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
         _expectInactivePayout();
         vm.prank(caller_);

@@ -75,10 +75,14 @@ contract BurnerLoansYieldClaimerTaskClaimYieldSharesIntegrationTest is YieldClai
         _deposit(address(token), 2000e18);
         token.mint(address(vault), 100e18);
         RevenueDistributor distributor = new RevenueDistributor(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(distributor));
+        vm.prank(_fixtureAdmin);
         distributor.enable("");
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(distributor));
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(feeFlag_);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(yieldFlag_);
         address recipient = yieldFlag_ ? address(distributor) : _payout.treasury();
         uint256 otherBefore = _yieldAsset.balanceOf(address(_yieldVault));
@@ -117,10 +121,14 @@ contract BurnerLoansYieldClaimerTaskClaimYieldSharesIntegrationTest is YieldClai
         bool yieldFlag_
     ) public {
         RevenueDistributor distributor = new RevenueDistributor(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(distributor));
+        vm.prank(_fixtureAdmin);
         distributor.enable("");
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(distributor));
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(feeFlag_);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(yieldFlag_);
         _yieldAsset.mint(address(_yieldVault), 3);
         address recipient = yieldFlag_ ? address(distributor) : _payout.treasury();
@@ -166,10 +174,14 @@ contract BurnerLoansYieldClaimerTaskClaimYieldSharesIntegrationTest is YieldClai
         _deposit(address(token), 2);
         token.mint(address(vault), 2);
         RevenueDistributor distributor = new RevenueDistributor(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(distributor));
+        vm.prank(_fixtureAdmin);
         distributor.enable("");
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(distributor));
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(feeFlag_);
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(yieldFlag_);
         address recipient = yieldFlag_ ? address(distributor) : _payout.treasury();
         IBurnerLoansYieldClaim.ClaimYieldPreview memory quote = _claimer.previewClaimYield(
@@ -191,7 +203,7 @@ contract BurnerLoansYieldClaimerTaskClaimYieldSharesIntegrationTest is YieldClai
     function test_givenTreasuryUpgraded_whenClaimed() public {
         address oldTreasury = _payout.treasury();
         OlympusTreasury replacement = new OlympusTreasury(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(replacement));
         _yieldAsset.mint(address(_yieldVault), 3);
         assertEq(
             _claimer.previewClaimYield(address(_yieldAsset)).recipient,

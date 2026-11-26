@@ -3,12 +3,10 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansCollateral} from "src/policies/interfaces/burnerloans/IBurnerLoansCollateral.sol";
 import {IBurnerLoansCore} from "src/policies/interfaces/burnerloans/IBurnerLoansCore.sol";
 
 // Contracts
-import {Actions, Policy} from "src/Kernel.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
 
@@ -30,12 +28,6 @@ abstract contract BurnerLoansCollateralActionTest is BurnerLoansModularTest {
         asset_.approve(address(_core), type(uint256).max);
         _collateral.depositCollateral(address(asset_), amount_, borrower_);
         vm.stopPrank();
-    }
-
-    function _setPolicyState(Policy subject_, bool active_, bool enabled_) internal {
-        // Fixtures start active/enabled; lifecycle axes vary independently.
-        if (!enabled_) IEnabler(address(subject_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(subject_));
     }
 
     function _grantOperator(uint48 deadline_) internal {

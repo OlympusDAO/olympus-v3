@@ -219,7 +219,7 @@ contract BurnerLoansPayoutCreditSeizureTest is BurnerLoansPayoutTest {
     function test_givenInactivePayout_whenCredited_reverts(
         bool enabled_
     ) public givenPendingBuckets {
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         _expectSeizureRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -234,7 +234,9 @@ contract BurnerLoansPayoutCreditSeizureTest is BurnerLoansPayoutTest {
         public
         givenPendingBuckets
     {
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(_otherPayout));
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         _expectSeizureRejected(
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
@@ -446,6 +448,7 @@ contract BurnerLoansPayoutCreditSeizureTest is BurnerLoansPayoutTest {
         public
         givenPendingBuckets
     {
+        vm.prank(_fixtureAdmin);
         _payout.disable("");
         bytes32 state = _ledgerDigest();
         vm.expectRevert(IEnabler.NotEnabled.selector);

@@ -121,7 +121,7 @@ The paired HEART row above already tests an ordinary unpranked test contract que
 
 | ID | Convenience caller C | Unpranked For caller | For actor | Expected classification | For consistency | Test |
 | --- | --- | --- | --- | --- | --- | --- |
-| BLLENS-SEIZABLE-A02 | Ordinary caller without protocol roles | Test contract holds HEART_ROLE | C | protocol=false for both calls; test contract role is not forwarded | Same exact tuple; actor=C, no prank | Covered: [test_givenTestContractHasHeartRole_whenOrdinaryActorQuoted][test_givenTestContractHasHeartRole_whenOrdinaryActorQuoted] |
+| BLLENS-SEIZABLE-A02 | Ordinary caller without protocol roles | Named Heart makes the explicit quote call | C | `protocol=false` for both calls | Same exact tuple for actor C | Covered: [test_givenHeartCaller_whenOrdinaryActorQuoted][test_givenHeartCaller_whenOrdinaryActorQuoted] |
 | BLLENS-SEIZABLE-A03 | Zero address without protocol roles, using vm.prank(0) only for convenience call | Ordinary test contract | Zero address | Ordinary classification for both; no ZeroAddress rejection | Same exact tuple; actor=C, no prank | Covered: [test_whenZeroActorQuoted][test_whenZeroActorQuoted] |
 
 ## Dependency failures
@@ -183,7 +183,7 @@ Legacy scans had separate check/return limits and circular traversal. Their elig
 [test_givenShares_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L436
 [test_givenSnapshotFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L570
 [test_givenStaleZeroDebtCandidate_whenScanned]: ./getSeizableBorrowers.t.sol#L402
-[test_givenTestContractHasHeartRole_whenOrdinaryActorQuoted]: ./getSeizableBorrowers.t.sol#L553
+[test_givenHeartCaller_whenOrdinaryActorQuoted]: ./getSeizableBorrowers.t.sol#L554
 [test_givenUnderlying_whenRewardQuoted]: ./getSeizableBorrowers.t.sol#L419
 [test_givenWithdrawalFailure_whenScanned_reverts]: ./getSeizableBorrowers.t.sol#L588
 [test_givenZeroCount_whenFirstOfOneSeeded]: ./getSeizableBorrowers.t.sol#L231

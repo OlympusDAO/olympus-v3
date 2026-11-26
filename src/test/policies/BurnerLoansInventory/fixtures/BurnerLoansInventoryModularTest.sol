@@ -24,12 +24,16 @@ import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures
 /// @dev Inventory integration helpers keep the shared Core deployment fixture unchanged.
 abstract contract BurnerLoansInventoryModularTest is BurnerLoansModularTest {
     function _disableInventory() internal {
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
     }
 
     function _setPolicyActive(address policy_, bool active_) internal {
         if (_kernel.isPolicyActive(Policy(policy_)) == active_) return;
-        _kernel.executeAction(active_ ? Actions.ActivatePolicy : Actions.DeactivatePolicy, policy_);
+        _executeFixtureKernelAction(
+            active_ ? Actions.ActivatePolicy : Actions.DeactivatePolicy,
+            policy_
+        );
     }
 
     function _expectInventoryNotActive() internal {
@@ -51,7 +55,9 @@ abstract contract BurnerLoansInventoryModularTest is BurnerLoansModularTest {
 
     function _replaceCoreController() internal returns (address replacement_) {
         replacement_ = makeAddr("new Core controller");
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(replacement_);
+        vm.prank(_fixtureAdmin);
         _core.setConfigOperator(replacement_);
     }
 
@@ -64,7 +70,7 @@ abstract contract BurnerLoansInventoryModularTest is BurnerLoansModularTest {
         token_.approve(address(_core), type(uint256).max);
         _collateral.depositCollateral(address(token_), 2000e18, _borrower);
         vm.stopPrank();
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(token_));
+        _grantFixtureRole(ADMIN_ROLE, address(token_));
         vm.mockCall(
             address(_risk),
             abi.encodeWithSelector(IBurnerLoansRisk.fee.selector),

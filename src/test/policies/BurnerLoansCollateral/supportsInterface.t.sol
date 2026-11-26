@@ -24,7 +24,7 @@ contract BurnerLoansCollateralSupportsInterfaceTest is BurnerLoansCollateralTest
         bool active_,
         bool enabled_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, active_, enabled_);
+        _setPolicyLifecycle(_collateral, active_, enabled_);
         // The shared binding contains only core(), independently of the collateral action API.
         bytes4 coreBindingId = bytes4(keccak256("core()"));
         assertEq(
@@ -47,7 +47,7 @@ contract BurnerLoansCollateralSupportsInterfaceTest is BurnerLoansCollateralTest
         bool active_,
         bool enabled_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, active_, enabled_);
+        _setPolicyLifecycle(_collateral, active_, enabled_);
         bytes4[8] memory ids = [
             type(IBurnerLoansCollateral).interfaceId,
             type(IBurnerLoansCoreBound).interfaceId,

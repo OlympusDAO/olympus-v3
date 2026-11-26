@@ -34,9 +34,9 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CACHE-AGE-A01, BLRISK-CACHE-AGE-N01, BLRISK-CACHE-AGE-P01, BLRISK-CACHE-AGE-L05.
     function test_givenAdmin_whenAgeBoundaries() public givenOperator {
-        _setAge(address(this), 0);
-        _setAge(address(this), 1);
-        _setAge(address(this), type(uint48).max);
+        _setAge(_riskAdmin, 0);
+        _setAge(_riskAdmin, 1);
+        _setAge(_riskAdmin, type(uint48).max);
     }
 
     // Scenarios: BLRISK-CACHE-AGE-A02, BLRISK-CACHE-AGE-N02, BLRISK-CACHE-AGE-L05.
@@ -65,7 +65,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-CACHE-AGE-L06.
     function test_givenDisabled_whenAdminChangesAge_reverts() public givenOperator givenDisabled {
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(address(this));
+        vm.prank(_riskAdmin);
         _risk.setPriceCacheMaxAge(1);
         assertEq(_risk.priceCacheMaxAge(), 60, "age unchanged");
     }
@@ -85,7 +85,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-CACHE-AGE-L07.
     function test_givenInactive_whenAdminChangesAge_reverts() public givenOperator givenInactive {
         _expectInactive();
-        vm.prank(address(this));
+        vm.prank(_riskAdmin);
         _risk.setPriceCacheMaxAge(1);
         assertEq(_risk.priceCacheMaxAge(), 60, "age unchanged");
     }
@@ -110,7 +110,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
         givenInactive
     {
         _expectInactive();
-        vm.prank(address(this));
+        vm.prank(_riskAdmin);
         _risk.setPriceCacheMaxAge(1);
         assertEq(_risk.priceCacheMaxAge(), 60, "age unchanged");
     }
@@ -133,7 +133,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
         address caller_,
         uint48 age_
     ) public givenOperator {
-        vm.assume(caller_ != address(this) && caller_ != _operator);
+        vm.assume(caller_ != _riskAdmin && caller_ != _operator);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _risk.setPriceCacheMaxAge(age_);
@@ -142,6 +142,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CACHE-AGE-A03, BLRISK-CACHE-AGE-A08.
     function test_givenOperator_whenReplaced_reverts() public givenOperator {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(0xABCD));
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(_operator);
@@ -152,6 +153,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-CACHE-AGE-P02.
     function test_whenAgeIsUnchanged() public {
         vm.recordLogs();
+        vm.prank(_riskAdmin);
         _risk.setPriceCacheMaxAge(60);
         assertEq(vm.getRecordedLogs().length, 0, "same age is event-free");
         assertEq(_risk.priceCacheMaxAge(), 60, "age preserved");
@@ -159,6 +161,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CACHE-AGE-L01, BLRISK-CACHE-AGE-D01.
     function test_givenControllerActiveAndEnabled_whenAgeChanges() public {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(_cache));
         vm.mockCall(
             address(_kernel),
@@ -182,6 +185,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CACHE-AGE-L02, BLRISK-CACHE-AGE-D01.
     function test_givenControllerActiveAndDisabled_whenAgeChanges() public {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(_cache));
         vm.mockCall(
             address(_kernel),
@@ -205,6 +209,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CACHE-AGE-L03, BLRISK-CACHE-AGE-D01.
     function test_givenControllerInactiveAndEnabled_whenAgeChanges() public {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(_cache));
         vm.mockCall(
             address(_kernel),
@@ -228,6 +233,7 @@ contract BurnerLoansRiskSetPriceCacheMaxAgeTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CACHE-AGE-L04, BLRISK-CACHE-AGE-D01.
     function test_givenControllerInactiveAndDisabled_whenAgeChanges() public {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(_cache));
         vm.mockCall(
             address(_kernel),

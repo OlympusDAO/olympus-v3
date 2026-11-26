@@ -11,7 +11,7 @@ contract BurnerLoansConfigTimelockVERSIONTest is BurnerLoansConfigTimelockTest {
         bool active_,
         bool enabled_
     ) public {
-        _setState(_timelock, active_, enabled_);
+        _setPolicyLifecycle(_timelock, active_, enabled_);
         bytes32 beforeState = _lifecycleDigest();
         vm.prank(caller_);
         (uint8 major, uint8 minor) = _timelock.VERSION();

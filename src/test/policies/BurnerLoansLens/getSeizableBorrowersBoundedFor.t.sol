@@ -332,7 +332,7 @@ contract BurnerLoansLensBoundedScanTest is BurnerLoansLensScanTest {
         bool enabled_
     ) public {
         _canonicalScan();
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _mockWithdrawal(100e6, 100e6);
         (address[] memory borrowers, uint256 cursor, ) = _lens.getSeizableBorrowersBoundedFor(
             _ALICE,

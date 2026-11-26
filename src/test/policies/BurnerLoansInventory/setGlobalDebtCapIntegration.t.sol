@@ -41,6 +41,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
         uint128 newCap = _INITIAL_CAP + increase_;
         vm.expectEmit(false, false, false, true, address(_inventory));
         emit IBurnerLoansInventory.GlobalDebtCapSet(newCap);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(newCap);
         assertEq(_inventory.globalDebtCapOhm(), newCap, "cap");
         assertEq(_mintr.mintApproval(address(_inventory)), newCap, "approval");
@@ -48,6 +49,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
     }
 
     function test_givenEqualCap_preservesAccounting() public {
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(_INITIAL_CAP);
 
         assertEq(_inventory.globalDebtCapOhm(), _INITIAL_CAP, "cap");
@@ -58,6 +60,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
     function test_givenLowerCap_reducesApproval(uint128 decrease_) public {
         decrease_ = uint128(bound(decrease_, 1, _INITIAL_CAP));
         uint128 newCap = _INITIAL_CAP - decrease_;
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(newCap);
 
         assertEq(_inventory.globalDebtCapOhm(), newCap, "cap");
@@ -67,6 +70,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
 
     // Scenarios: BLINV-GLOBAL-CAP-N03.
     function test_givenZeroCap_succeeds() public {
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(0);
 
         assertEq(_inventory.globalDebtCapOhm(), 0, "cap");
@@ -78,6 +82,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
         vm.prank(address(_core));
         _inventory.draw(_borrower, 100e9);
 
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(100e9);
 
         assertEq(_inventory.globalDebtCapOhm(), 100e9, "cap");
@@ -96,6 +101,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
                 100e9
             )
         );
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(100e9 - 1);
 
         assertEq(_inventory.globalDebtCapOhm(), _INITIAL_CAP, "cap unchanged");
@@ -105,6 +111,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
     function test_givenSuppliedIdleAboveCap_preservesCustodyAndBoundsCapacity() public {
         _supplyInventory(_recipient, 200e9);
 
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(100e9);
 
         assertEq(_inventory.suppliedIdleOhm(), 200e9, "idle custody");
@@ -126,6 +133,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
         );
 
         vm.expectRevert(failure);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(_INITIAL_CAP + increase);
 
         assertEq(_inventory.globalDebtCapOhm(), _INITIAL_CAP, "cap rolled back");
@@ -143,6 +151,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
         );
 
         vm.expectRevert(failure);
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(_INITIAL_CAP - decrease);
 
         assertEq(_inventory.globalDebtCapOhm(), _INITIAL_CAP, "cap rolled back");
@@ -161,6 +170,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
     function test_givenGloballyDisabled_whenAdminSetsCap_reverts(uint128 newCap_) public {
         _disableInventory();
         _expectNotEnabled();
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(newCap_);
         assertEq(_inventory.globalDebtCapOhm(), _INITIAL_CAP, "Paused call preserves cap");
         assertEq(
@@ -175,6 +185,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
         _disableInventory();
         _setPolicyActive(address(_inventory), false);
         _expectInventoryNotActive();
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(1);
     }
 
@@ -182,6 +193,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
     function test_givenInactiveEnabledInventory_whenAdminSetsCap_reverts() public {
         _setPolicyActive(address(_inventory), false);
         _expectInventoryNotActive();
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(1);
     }
 
@@ -220,6 +232,7 @@ contract BurnerLoansInventorySetGlobalDebtCapIntegrationTest is BurnerLoansInven
             _inventoryConfigurator,
             "Inventory recovery selection unchanged"
         );
+        vm.prank(_fixtureAdmin);
         _inventory.setGlobalDebtCap(1);
         assertEq(
             _inventory.globalDebtCapOhm(),

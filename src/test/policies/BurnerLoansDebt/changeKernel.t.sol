@@ -8,7 +8,7 @@ import {BurnerLoansDebtLifecycleTest} from "src/test/policies/BurnerLoansDebt/fi
 contract BurnerLoansDebtChangeKernelTest is BurnerLoansDebtLifecycleTest {
     // Scenarios: BLDEBT-KERNEL-P01.
     function test_whenKernelChanges_thenOnlyPointerChanges(address next_, bool enabled_) public {
-        _setPolicyState(_debt, true, enabled_);
+        _setPolicyLifecycle(_debt, true, enabled_);
         uint48 beforeTime = _debt.lastTransitionAt();
         vm.prank(address(_kernel));
         _debt.changeKernel(Kernel(next_));

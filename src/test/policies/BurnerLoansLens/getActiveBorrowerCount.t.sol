@@ -101,7 +101,7 @@ contract BurnerLoansLensGetActiveBorrowerCountTest is BurnerLoansLensTest {
         bool enabled_,
         uint256 population_
     ) private {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _mockCount(population_);
         vm.prank(caller_);
         assertEq(

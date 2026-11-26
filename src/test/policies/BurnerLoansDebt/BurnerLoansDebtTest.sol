@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoansRisk.sol";
 
@@ -12,7 +11,6 @@ import {IBurnerLoansRisk} from "src/policies/interfaces/burnerloans/IBurnerLoans
 import {LoanPositions} from "src/policies/burnerloans/libraries/LoanPositions.sol";
 
 // Contracts
-import {Actions, Policy} from "src/Kernel.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
 
 // Test vectors use fixed expected values and bounds-checked casts. Seed loops exercise real dependencies.
@@ -28,11 +26,6 @@ abstract contract BurnerLoansDebtTest is BurnerLoansModularTest {
         vm.prank(_borrower);
         _debt.borrow(address(_asset), 100e9, _borrower, _borrower, 0, address(0));
         _;
-    }
-
-    function _setPolicyState(Policy subject_, bool active_, bool enabled_) internal {
-        if (!enabled_) IEnabler(address(subject_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(subject_));
     }
 
     function _stateDigest(address payer_) internal view returns (bytes32) {

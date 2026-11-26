@@ -37,6 +37,7 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool otherFlag_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(otherFlag_);
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         bytes32 state = _ledgerDigest();
@@ -56,7 +57,9 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool otherFlag_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendYieldToDistributor(otherFlag_);
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         bytes32 state = _ledgerDigest();
@@ -78,11 +81,13 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool coreEnabled_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
+        vm.prank(_fixtureAdmin);
         _distributor.disable("");
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
-        _setState(_payout, true, enabled_);
-        _setState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         bytes32 state = _ledgerDigest();
         vm.mockCallRevert(
             address(_distributor),
@@ -104,6 +109,7 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool overlap_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _distributor.disable("");
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         bytes32 state = _ledgerDigest();
@@ -154,8 +160,9 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool old_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(old_);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_distributor));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_distributor));
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         _expectFlagRejected(
             abi.encodeWithSelector(
@@ -175,7 +182,9 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool old_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(old_);
+        vm.prank(_fixtureAdmin);
         _distributor.disable("");
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
         _expectFlagRejected(
@@ -196,7 +205,9 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool old_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(old_);
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _distributor.changeKernel(next);
@@ -220,7 +231,9 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool overlap_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _distributor.changeKernel(next);
@@ -240,9 +253,11 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
         bool enabled_
     ) public givenPendingBuckets {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(true);
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(address(_config));
-        _setState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("kernel()"), hex"deadbeef");
         vm.mockCallRevert(address(_config), abi.encodeWithSignature("isEnabled()"), hex"deadbeef");
         bytes32 state = _ledgerDigest();
@@ -416,10 +431,12 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
     // Scenarios: BLCU-FEES-P03, BLCU-FEES-P05.
     function test_whenSameFlagValue_thenRoutingSlotNotWritten(bool value_) public {
         _bindDistributor();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(value_);
         uint256 slot = _flagSlot("sendFeesToDistributor()");
         vm.record();
         vm.recordLogs();
+        vm.prank(_fixtureAdmin);
         _payout.setSendFeesToDistributor(value_);
         _assertNoWriteToFlag(slot);
         assertEq(vm.getRecordedLogs().length, 0, "Same value emits no setter event");
@@ -434,7 +451,7 @@ contract BurnerLoansPayoutSetSendFeesToDistributorTest is BurnerLoansPayoutTest 
     ) public givenPendingBuckets {
         _grantRecoveryCaller(caller_, operatorOnly_, overlap_);
 
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         bytes32 state = _ledgerDigest();
 
         _expectInactivePayout();

@@ -31,10 +31,11 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
         address caller_,
         bool inventoryEnabled_
     ) public givenProviderSurplus givenPendingRecovery {
-        vm.assume(caller_ != address(0) && caller_ != address(this) && caller_ != _recipient);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin && caller_ != _recipient);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_inventory, true, inventoryEnabled_);
-        _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        _setPolicyLifecycle(_inventory, true, inventoryEnabled_);
+        _grantFixtureRole(ADMIN_ROLE, caller_);
         bytes32 beforeQueue = _queueDigest(_pendingId);
         vm.warp(2);
         vm.expectEmit(address(_timelock));
@@ -58,6 +59,7 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
         address caller_
     ) public givenPendingRecovery {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _expectActivationRejected(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE),
@@ -67,13 +69,13 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
 
     // Scenarios: BLINCT-ENABLE-L01.
     function test_givenOwnPolicyInactive_whenActivated_reverts() public givenPendingRecovery {
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _expectActivationRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
                 address(_timelock)
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -82,7 +84,7 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
         bool active_,
         address caller_
     ) public givenPendingRecovery {
-        _setState(_timelock, active_, true);
+        _setPolicyLifecycle(_timelock, active_, true);
         _expectActivationRejected(abi.encodeWithSelector(IEnabler.NotDisabled.selector), caller_);
     }
 
@@ -90,40 +92,47 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
     function test_givenInventoryInactive_whenActivated_reverts(
         bool enabled_
     ) public givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_inventory, false, enabled_);
+        _setPolicyLifecycle(_inventory, false, enabled_);
         _expectActivationRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_inventory)
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-ENABLE-D02.
     function test_givenAnotherController_whenActivated_reverts() public givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(_inventoryConfigurator);
         _expectActivationRejected(
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-ENABLE-D06.
     function test_givenClearedController_whenActivated_reverts() public givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(0));
         _expectActivationRejected(
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLINCT-ENABLE-D05.
     function test_givenTargetKernelDrift_whenActivated_reverts() public givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _inventory.changeKernel(next);
@@ -134,7 +143,7 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
                 address(_kernel),
                 address(next)
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
@@ -156,10 +165,14 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
 
     // Scenarios: BLINCT-ENABLE-D01.
     function test_givenInventoryDisabled_whenTimelockEnabled_thenRecoveryRemainsAvailable() public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
         assertTrue(_timelock.isEnabled(), "Paused Inventory can acquire a recovery controller");
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueRescueSurplus();
         assertEq(
             _timelock.getQueuedActionLength(id),
@@ -173,10 +186,12 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
         bytes memory data_
     ) public givenPendingRecovery {
         vm.assume(data_.length > 0 && data_.length <= 256);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         bytes32 state = _queueDigest(_pendingId);
         uint48 last = _timelock.lastTransitionAt();
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector);
+        vm.prank(_fixtureAdmin);
         _timelock.enable(data_);
         assertFalse(_timelock.isEnabled(), "Invalid data cannot activate");
         assertEq(_timelock.lastTransitionAt(), last, "History preserved");
@@ -197,8 +212,9 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
 
     // Scenarios: BLINCT-ENABLE-D07.
     function test_givenMissingConsumedInterface_whenActivated_reverts(bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_inventory, true, enabled_);
+        _setPolicyLifecycle(_inventory, true, enabled_);
         bytes4[3] memory ids = [
             type(IBurnerLoansInventory).interfaceId,
             type(IConfigOperator).interfaceId,
@@ -218,6 +234,7 @@ contract BurnerLoansInventoryConfigTimelockEnableTest is BurnerLoansInventoryCon
                     address(_inventory)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _timelock.enable("");
             assertFalse(_timelock.isEnabled(), "Incompatible target cannot activate queue");
             vm.mockCall(

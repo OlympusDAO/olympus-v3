@@ -18,28 +18,28 @@ import {BurnerLoansLensTest} from "./BurnerLoansLensTest.sol";
 contract BurnerLoansLensIsSeizableTest is BurnerLoansLensTest {
     // Scenarios: BLLENS-IS-SEIZABLE-L01.
     function test_givenActiveEnabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(true, true);
+        _setPolicyLifecycle(_core, true, true);
         _expectNoRiskReads();
         _assertSeizable(caller_, false);
     }
 
     // Scenarios: BLLENS-IS-SEIZABLE-L02.
     function test_givenActiveDisabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(true, false);
+        _setPolicyLifecycle(_core, true, false);
         _expectNoRiskReads();
         _assertSeizable(caller_, false);
     }
 
     // Scenarios: BLLENS-IS-SEIZABLE-L03.
     function test_givenInactiveEnabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(false, true);
+        _setPolicyLifecycle(_core, false, true);
         _expectNoRiskReads();
         _assertSeizable(caller_, false);
     }
 
     // Scenarios: BLLENS-IS-SEIZABLE-L04.
     function test_givenInactiveDisabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(false, false);
+        _setPolicyLifecycle(_core, false, false);
         _expectNoRiskReads();
         _assertSeizable(caller_, false);
     }

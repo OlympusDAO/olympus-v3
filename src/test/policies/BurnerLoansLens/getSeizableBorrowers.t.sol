@@ -23,7 +23,7 @@ import {BurnerLoansLensScanTest} from "./fixtures/BurnerLoansLensScanTest.sol";
 contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
     // Scenarios: BLLENS-SEIZABLE-L01.
     function test_givenActiveEnabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(true, true);
+        _setPolicyLifecycle(_core, true, true);
         _canonicalScan();
         _prepareReward(40e9, 400e6, 77, false, 17);
         _assumeOrdinary(caller_);
@@ -32,7 +32,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
 
     // Scenarios: BLLENS-SEIZABLE-L02.
     function test_givenActiveDisabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(true, false);
+        _setPolicyLifecycle(_core, true, false);
         _canonicalScan();
         _prepareReward(40e9, 400e6, 77, false, 17);
         _assumeOrdinary(caller_);
@@ -41,7 +41,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
 
     // Scenarios: BLLENS-SEIZABLE-L03.
     function test_givenInactiveEnabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(false, true);
+        _setPolicyLifecycle(_core, false, true);
         _canonicalScan();
         _prepareReward(40e9, 400e6, 77, false, 17);
         _assumeOrdinary(caller_);
@@ -50,7 +50,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
 
     // Scenarios: BLLENS-SEIZABLE-L04.
     function test_givenInactiveDisabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(false, false);
+        _setPolicyLifecycle(_core, false, false);
         _canonicalScan();
         _prepareReward(40e9, 400e6, 77, false, 17);
         _assumeOrdinary(caller_);
@@ -459,6 +459,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
             ),
             bytes("")
         );
+        vm.prank(_fixtureAdmin);
         _config.setAssetWithdrawAsShares(address(_asset), true);
         vm.expectCall(
             address(_depositManager),
@@ -503,7 +504,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
     // Scenarios: BLLENS-SEIZABLE-P10.
     function test_givenHeart_whenRewardQuoted(address caller_) public {
         _canonicalScan();
-        _rolesAdmin.grantRole(HEART_ROLE, caller_);
+        _grantFixtureRole(HEART_ROLE, caller_);
         _mockWithdrawal(400e6, 77);
         vm.expectCall(
             address(_risk),
@@ -519,7 +520,7 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
     // Scenarios: BLLENS-SEIZABLE-P11.
     function test_givenSeizer_whenRewardQuoted(address caller_) public {
         _canonicalScan();
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, caller_);
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, caller_);
         _mockWithdrawal(400e6, 77);
         vm.expectCall(
             address(_risk),
@@ -535,8 +536,8 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
     // Scenarios: BLLENS-SEIZABLE-P12.
     function test_givenBothRoles_whenRewardQuoted(address caller_) public {
         _canonicalScan();
-        _rolesAdmin.grantRole(HEART_ROLE, caller_);
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, caller_);
+        _grantFixtureRole(HEART_ROLE, caller_);
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, caller_);
         _mockWithdrawal(400e6, 77);
         vm.expectCall(
             address(_risk),
@@ -550,13 +551,13 @@ contract BurnerLoansLensGetSeizableBorrowersTest is BurnerLoansLensScanTest {
     }
 
     // Scenarios: BLLENS-SEIZABLE-A02.
-    function test_givenTestContractHasHeartRole_whenOrdinaryActorQuoted(address caller_) public {
+    function test_givenHeartCaller_whenOrdinaryActorQuoted(address caller_) public {
         _canonicalScan();
-        vm.assume(caller_ != address(this));
-        _rolesAdmin.grantRole(HEART_ROLE, address(this));
+        address heart = makeAddr("lens Heart");
+        _grantFixtureRole(HEART_ROLE, heart);
         _assumeOrdinary(caller_);
         _prepareReward(40e9, 400e6, 77, false, 17);
-        _assertScan(caller_, 0, 4, _two(_ALICE, _CAROL), 0, 17);
+        _assertScan(caller_, heart, 0, 4, _two(_ALICE, _CAROL), 0, 17);
     }
 
     // Scenarios: BLLENS-SEIZABLE-A03.

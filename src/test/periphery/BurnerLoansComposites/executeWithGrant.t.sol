@@ -419,7 +419,8 @@ contract BurnerLoansCompositesExecuteWithGrantTest is BurnerLoansCompositesTest 
 
     // Scenarios: BLREX-A06.
     function test_whenContractAccountAcceptsErc1271Grant() public {
-        CompositesAccount account = new CompositesAccount(address(this), vm.addr(_SIGNER_KEY));
+        address accountOwner = makeAddr("compositesAccountOwner");
+        CompositesAccount account = new CompositesAccount(accountOwner, vm.addr(_SIGNER_KEY));
         _borrower = address(account);
         _asset.mint(_borrower, 10e6);
         IOperatorAuth.Grant memory grant = _operatorGrant(
@@ -429,6 +430,7 @@ contract BurnerLoansCompositesExecuteWithGrantTest is BurnerLoansCompositesTest 
         );
         grant.multiple = false;
         IExecutor.SignedGrant memory signed = _signedGrant(grant);
+        vm.prank(accountOwner);
         account.run(
             _executor,
             _funding(address(_asset), 10e6),

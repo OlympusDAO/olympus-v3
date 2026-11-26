@@ -26,7 +26,7 @@ contract BurnerLoansDebtSupportsInterfaceTest is BurnerLoansDebtLifecycleTest {
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_debt, active_, enabled_);
+        _setPolicyLifecycle(_debt, active_, enabled_);
         bytes4[8] memory ids = [
             _INTERFACE_ID,
             type(IBurnerLoansCoreBound).interfaceId,

@@ -41,6 +41,7 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         bytes32 beforeCache = keccak256(
             abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))
         );
+        vm.prank(_fixtureAdmin);
         cache.disable("");
         _assertExistingDebtQuoteWithoutPricing();
         vm.prank(_borrower);
@@ -52,6 +53,7 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         assertEq(credit, 1, "Paused optional cache preserves real deposit credit");
         assertEq(collateral, 2000e6 + 1, "Paused optional cache preserves canonical collateral");
         // PriceCache's getter is enabled-only; restore access before inspecting the unchanged round.
+        vm.prank(_fixtureAdmin);
         cache.enable("");
         assertEq(
             keccak256(abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))),
@@ -165,6 +167,7 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         MockERC20 token = new MockERC20("Capped Vault Asset", "CVA", 6);
         MockERC4626 vault = new MockERC4626(OZERC20(address(token)), "Vault", "V");
         _admitVault(token, address(vault), false);
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetDepositCap(IERC20(address(token)), room_);
         token.mint(_borrower, amount_);
         vm.prank(_borrower);
@@ -232,8 +235,14 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         );
         if (state_ == 0) vm.warp(vm.getBlockTimestamp() + 60);
         if (state_ == 1) vm.warp(vm.getBlockTimestamp() + 61);
-        if (state_ == 2) _risk.setPriceCache(address(0));
-        if (state_ == 3) cache.disable("");
+        if (state_ == 2) {
+            vm.prank(_fixtureAdmin);
+            _risk.setPriceCache(address(0));
+        }
+        if (state_ == 3) {
+            vm.prank(_fixtureAdmin);
+            cache.disable("");
+        }
         vm.mockCallRevert(
             address(_risk),
             bytes(""),
@@ -246,7 +255,10 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         );
         _assertDirectDeposit(_borrower, 1, 2000e6);
         vm.clearMockedCalls();
-        if (state_ == 3) cache.enable("");
+        if (state_ == 3) {
+            vm.prank(_fixtureAdmin);
+            cache.enable("");
+        }
         assertEq(
             keccak256(abi.encode(cache.getCachedPrice(address(_ohm), address(_asset)))),
             beforeCache,
@@ -390,6 +402,7 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
 
     function _assertRoundedDepositFitsCap(uint256 cap_) internal {
         (MockERC20 token, MockERC4626 vault) = _seedRoundedVault(6);
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetDepositCap(IERC20(address(token)), cap_);
         // Two shares backed by six assets: input five mints one share; floor(11/3)=3 credit.
         assertEq(
@@ -543,7 +556,10 @@ contract BurnerLoansCollateralDepositCollateralIntegrationTest is BurnerLoansCol
         address caller = delegated_ ? _recipient : _borrower;
         if (delegated_)
             _approveOperatorForAsset(_borrower, caller, type(uint48).max, address(token));
-        if (originationsDisabled_) _config.setAssetOriginationsEnabled(address(token), false);
+        if (originationsDisabled_) {
+            vm.prank(_fixtureAdmin);
+            _config.setAssetOriginationsEnabled(address(token), false);
+        }
         address oracle = _risk.backingOracle();
         if (backingReverts_)
             vm.mockCallRevert(

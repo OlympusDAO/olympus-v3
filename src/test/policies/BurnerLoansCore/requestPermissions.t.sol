@@ -14,7 +14,7 @@ import {BurnerLoansCore} from "src/policies/burnerloans/BurnerLoansCore.sol";
 contract BurnerLoansCoreRequestPermissionsTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-PERMISSIONS-P01.
     function test_whenPermissionsRequested(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.prank(caller_);
         Permissions[] memory result = _core.requestPermissions();
         bytes4[8] memory expected = [

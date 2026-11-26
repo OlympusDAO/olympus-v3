@@ -21,8 +21,8 @@ contract BurnerLoansPayoutConfigTimelockRequestPermissionsTest is
         bool targetActive_,
         bool targetEnabled_
     ) public givenPendingRecovery {
-        _setState(_payoutTimelock, ownActive_, ownEnabled_);
-        _setState(_payout, targetActive_, targetEnabled_);
+        _setPolicyLifecycle(_payoutTimelock, ownActive_, ownEnabled_);
+        _setPolicyLifecycle(_payout, targetActive_, targetEnabled_);
         bytes32 beforeState = _queueDigest(_pendingId);
         vm.mockCallRevert(address(_payout), abi.encodeWithSignature("kernel()"), hex"deadbeef");
         vm.mockCallRevert(address(_payout), abi.encodeWithSignature("isEnabled()"), hex"deadbeef");

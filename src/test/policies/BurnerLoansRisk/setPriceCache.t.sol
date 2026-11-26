@@ -19,15 +19,17 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BurnerLoansRiskTest} from "src/test/policies/BurnerLoansRisk/fixtures/BurnerLoansRiskTest.sol";
 
 contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
-    function _select(address candidate_) private {
+    function _select(address caller_, address candidate_) private {
         vm.expectEmit(true, false, false, true, address(_risk));
         emit IBurnerLoansRisk.PriceCacheSet(candidate_);
+        vm.prank(caller_);
         _risk.setPriceCache(candidate_);
         assertEq(_risk.priceCache(), candidate_, "exact replacement");
     }
 
-    function _reject(address candidate_) private {
+    function _reject(address caller_, address candidate_) private {
         _reject(
+            caller_,
             candidate_,
             abi.encodeWithSelector(
                 IBurnerLoansRisk.BurnerLoans_InvalidPriceCache.selector,
@@ -36,23 +38,24 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
         );
     }
 
-    function _reject(address candidate_, bytes memory reason_) private {
+    function _reject(address caller_, address candidate_, bytes memory reason_) private {
         address previous = _risk.priceCache();
         vm.expectRevert(reason_);
+        vm.prank(caller_);
         _risk.setPriceCache(candidate_);
         assertEq(_risk.priceCache(), previous, "failed setter preserves binding");
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-L01.
     function test_givenEnabled_whenDependencyChanges(address caller_) public givenAdmin(caller_) {
-        _select(address(_cache));
+        _select(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-L02.
     function test_givenDisabled_whenDependencyChanges(
         address caller_
     ) public givenDisabled givenAdmin(caller_) {
-        _select(address(_cache));
+        _select(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-L03.
@@ -60,6 +63,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
         address caller_
     ) public givenInactive givenAdmin(caller_) {
         _expectInactive();
+        vm.prank(caller_);
         _risk.setPriceCache(address(_cache));
     }
 
@@ -68,12 +72,13 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
         address caller_
     ) public givenDisabled givenInactive givenAdmin(caller_) {
         _expectInactive();
+        vm.prank(caller_);
         _risk.setPriceCache(address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-A01.
     function test_whenUnauthorizedCaller_reverts(address caller_) public givenOperator {
-        vm.assume(caller_ != address(this));
+        vm.assume(caller_ != _riskAdmin);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
         _risk.setPriceCache(address(_cache));
@@ -82,13 +87,13 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-PRICE-CACHE-I02.
     function test_whenMissingCacheInterface_reverts(address caller_) public givenAdmin(caller_) {
         _cache.setInterfaceSupport(type(IPriceCache).interfaceId, false);
-        _reject(address(_cache));
+        _reject(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-I03.
     function test_whenMissingEnabler_reverts(address caller_) public givenAdmin(caller_) {
         _cache.setInterfaceSupport(type(IEnabler).interfaceId, false);
-        _reject(address(_cache));
+        _reject(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-P10.
@@ -100,13 +105,13 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encodeWithSignature("VERSION()"),
             abi.encodeWithSelector(DependencyReadFailed.selector)
         );
-        _select(address(_cache));
+        _select(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-I05.
     function test_whenMissingVersionInterface_reverts(address caller_) public givenAdmin(caller_) {
         _cache.setInterfaceSupport(type(IVersioned).interfaceId, false);
-        _reject(address(_cache));
+        _reject(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-I06.
@@ -116,7 +121,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encodeWithSelector(IERC165.supportsInterface.selector),
             abi.encodeWithSelector(DependencyReadFailed.selector)
         );
-        _reject(address(_cache));
+        _reject(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-I07.
@@ -126,7 +131,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encodeWithSelector(IERC165.supportsInterface.selector),
             hex"01"
         );
-        _reject(address(_cache));
+        _reject(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-P03.
@@ -137,6 +142,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encodeWithSelector(DependencyReadFailed.selector)
         );
         _reject(
+            caller_,
             address(_cache),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
@@ -149,6 +155,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
     function test_whenMalformedKernel_reverts(address caller_) public givenAdmin(caller_) {
         vm.mockCall(address(_cache), abi.encodeWithSignature("kernel()"), hex"01");
         _reject(
+            caller_,
             address(_cache),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
@@ -165,6 +172,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encode(type(uint256).max)
         );
         _reject(
+            caller_,
             address(_cache),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_InvalidDependency.selector,
@@ -175,12 +183,12 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-PRICE-CACHE-I04.
     function test_whenEoa_reverts(address caller_) public givenAdmin(caller_) {
-        _reject(address(0xBEEF));
+        _reject(caller_, address(0xBEEF));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-I01.
     function test_whenCleared(address caller_) public givenCache givenAdmin(caller_) {
-        _select(address(0));
+        _select(caller_, address(0));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-D01.
@@ -198,6 +206,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
                 address(0xBAD)
             )
         );
+        vm.prank(caller_);
         _risk.setPriceCache(address(_cache));
     }
 
@@ -209,7 +218,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encode(true)
         );
         vm.mockCall(address(_cache), abi.encodeWithSignature("isEnabled()"), abi.encode(true));
-        _select(address(_cache));
+        _select(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-P05.
@@ -220,7 +229,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encode(true)
         );
         vm.mockCall(address(_cache), abi.encodeWithSignature("isEnabled()"), abi.encode(false));
-        _select(address(_cache));
+        _select(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-P06.
@@ -231,7 +240,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encode(false)
         );
         vm.mockCall(address(_cache), abi.encodeWithSignature("isEnabled()"), abi.encode(true));
-        _select(address(_cache));
+        _select(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-P07.
@@ -242,7 +251,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
             abi.encode(false)
         );
         vm.mockCall(address(_cache), abi.encodeWithSignature("isEnabled()"), abi.encode(false));
-        _select(address(_cache));
+        _select(caller_, address(_cache));
     }
 
     // Scenarios: BLRISK-PRICE-CACHE-P08.
@@ -260,6 +269,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
                 address(_cache)
             )
         );
+        vm.prank(caller_);
         _risk.setPriceCache(address(_cache));
     }
 
@@ -271,6 +281,7 @@ contract BurnerLoansRiskSetPriceCacheTest is BurnerLoansRiskTest {
                 address(0)
             )
         );
+        vm.prank(caller_);
         _risk.setPriceCache(address(0));
     }
 }

@@ -28,9 +28,10 @@ abstract contract YieldClaimerModularTest is BurnerLoansModularTest {
     function setUp() public virtual override {
         super.setUp();
         _claimer = new BurnerLoansYieldClaimerTask(_kernel, address(_core), 2_000_000);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_claimer));
-        _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
-        _rolesAdmin.grantRole(HEART_ROLE, _heart);
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_claimer));
+        _grantFixtureRole(BL_YIELD_CLAIMER_ROLE, address(_claimer));
+        _grantFixtureRole(HEART_ROLE, _heart);
+        vm.prank(_fixtureAdmin);
         _claimer.enable("");
         (_yieldAsset, _yieldVault) = _newVault(false);
         _deposit(address(_yieldAsset), 2000e6);
@@ -46,12 +47,15 @@ abstract contract YieldClaimerModularTest is BurnerLoansModularTest {
 
     function _admitVault(address token_, address vault_, bool shares_) internal {
         _price.setPrice(token_, 1e18);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(IERC20(token_), IERC4626(vault_), type(uint256).max, 0);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(
             IERC20(token_),
             LoanParameters._DEPOSIT_PERIOD,
             address(_core)
         );
+        vm.prank(_fixtureAdmin);
         _config.addAsset(
             token_,
             100_000e9,

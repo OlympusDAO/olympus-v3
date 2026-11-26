@@ -16,8 +16,10 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
     // Scenarios: BLRCT-EXECUTE-P02.
     function test_givenAgeDrift_whenAgeExecuted_thenRejected(address executor_) public {
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(a));
         bytes32 expected = _hash(a);
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(7200);
         _makeReady(id);
         _executeReverts(id, executor_, _stateChanged(id, 0, a, expected));
@@ -26,6 +28,7 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
     // Scenarios: BLRCT-EXECUTE-N02.
     function test_givenDirectRiskDispatch_whenAgeExecuted_thenApplied(address executor_) public {
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(a));
         bytes32 expected = _hash(a);
         _makeReady(id);
@@ -48,8 +51,10 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
         bool zero_
     ) public {
         ITimelockBatchQueue.BatchAction memory a = _ageAction(3600);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(a));
         bytes32 expected = _hash(a);
+        vm.prank(_fixtureAdmin);
         _risk.setConfigOperator(zero_ ? address(0) : _recipient);
         _makeReady(id);
         _executeReverts(
@@ -66,7 +71,9 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
         address executor_,
         uint48 age_
     ) public {
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCacheMaxAge(age_);
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_ageAction(age_)));
         _makeReady(id);
         vm.recordLogs();
@@ -80,8 +87,9 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
     function test_givenRiskActiveFalse_givenRiskEnabledTrue_whenAgeExecuted_reverts(
         address executor_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _setState(_risk, false, true);
+        _setPolicyLifecycle(_risk, false, true);
         _makeReady(id);
         _executeReverts(
             id,
@@ -97,8 +105,9 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
     function test_givenRiskActiveTrue_givenRiskEnabledFalse_whenAgeExecuted_reverts(
         address executor_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _setState(_risk, true, false);
+        _setPolicyLifecycle(_risk, true, false);
         _makeReady(id);
         _executeReverts(
             id,
@@ -114,8 +123,9 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
     function test_givenRiskActiveFalse_givenRiskEnabledFalse_whenAgeExecuted_reverts(
         address executor_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _setState(_risk, false, false);
+        _setPolicyLifecycle(_risk, false, false);
         _makeReady(id);
         _executeReverts(
             id,
@@ -129,6 +139,7 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
 
     // Scenarios: BLRCT-EXECUTE-D05.
     function test_givenRiskKernelDrift_whenAgeExecuted_reverts(address executor_) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
         vm.mockCall(
             address(_risk),
@@ -154,9 +165,11 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
         bool active_,
         bool enabled_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(_recipient);
-        _setState(_config, active_, enabled_);
+        _setPolicyLifecycle(_config, active_, enabled_);
         _makeReady(id);
         _executeAndAssert(id, executor_);
     }
@@ -167,8 +180,9 @@ contract BurnerLoansRiskConfigTimelockExecuteCacheAgeTest is BurnerLoansRiskConf
         bool active_,
         bool enabled_
     ) public {
+        vm.prank(_fixtureAdmin);
         uint64 id = _timelock.queueBatch(_single(_ageAction(3600)));
-        _setState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _makeReady(id);
         _executeAndAssert(id, executor_);
     }

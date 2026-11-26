@@ -18,7 +18,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Actions, Policy} from "src/Kernel.sol";
+import {Actions} from "src/Kernel.sol";
 import {BurnerLoansConfigTimelock} from "src/policies/burnerloans/BurnerLoansConfigTimelock.sol";
 import {BurnerLoansRisk} from "src/policies/burnerloans/BurnerLoansRisk.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
@@ -36,22 +36,18 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
     function setUp() public virtual override {
         super.setUp();
         _timelock = new BurnerLoansConfigTimelock(_kernel, _config);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_timelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_timelock));
+        vm.prank(_fixtureAdmin);
         _config.setConfigOperator(address(_timelock));
+        vm.prank(_fixtureAdmin);
         _timelock.enable("");
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(this));
-    }
-
-    function _setState(Policy policy_, bool active_, bool enabled_) internal {
-        if (!enabled_) IEnabler(address(policy_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(policy_));
     }
 
     function _proposer(address caller_, uint8 role_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
         role_ = uint8(bound(role_, 0, 2));
-        if (role_ != 1) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (role_ != 0) _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller_);
+        if (role_ != 1) _grantFixtureRole(ADMIN_ROLE, caller_);
+        if (role_ != 0) _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, caller_);
     }
 
     function _outsider(address caller_) internal view {
@@ -529,8 +525,11 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
         token = address(collateral);
         vault = address(receipt);
         _price.setPrice(token, 1e18);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(IERC20(token), IERC4626(vault), type(uint256).max, 0);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(token), 1, address(_core));
+        vm.prank(_fixtureAdmin);
         _config.addAsset(token, 100000e9, _riskInput(), _fees(), false);
     }
 
@@ -608,7 +607,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
 
     function _replaceRisk(uint48 age_) internal returns (BurnerLoansRisk replacement) {
         MockBackingOracle oracle = new MockBackingOracle(_kernel, 1e18);
-        _kernel.executeAction(Actions.ActivatePolicy, address(oracle));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(oracle));
         replacement = new BurnerLoansRisk(
             _kernel,
             IERC20(address(_ohm)),
@@ -617,10 +616,14 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
             age_,
             address(_core)
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(replacement));
+        vm.prank(_fixtureAdmin);
         replacement.enable("");
+        vm.prank(_fixtureAdmin);
         replacement.setConfigOperator(address(_config));
+        vm.prank(_fixtureAdmin);
         _core.setRisk(address(replacement));
+        vm.prank(_fixtureAdmin);
         replacement.setConfigOperator(address(_timelock));
     }
 
@@ -661,14 +664,14 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
 
     function _admin(address caller_) internal {
         vm.assume(caller_ != address(0));
-        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
+        if (!_roles.hasRole(caller_, ADMIN_ROLE)) _grantFixtureRole(ADMIN_ROLE, caller_);
     }
 
     function _pauseCaller(address caller_, uint8 role_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
         role_ = uint8(bound(role_, 0, 2));
-        if (role_ != 1) _rolesAdmin.grantRole(ADMIN_ROLE, caller_);
-        if (role_ != 0) _rolesAdmin.grantRole(EMERGENCY_ROLE, caller_);
+        if (role_ != 1) _grantFixtureRole(ADMIN_ROLE, caller_);
+        if (role_ != 0) _grantFixtureRole(EMERGENCY_ROLE, caller_);
     }
 
     function _nonempty(bytes memory data_) internal pure returns (bytes memory) {
@@ -724,8 +727,11 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansModularTest {
         token = address(collateral);
         vault = new MockERC7540ExternalShareVault(OZERC20(token), false, false, true);
         _price.setPrice(token, 1e18);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAsset(IERC20(token), IERC4626(address(vault)), type(uint256).max, 0);
+        vm.prank(_fixtureAdmin);
         _depositManager.addAssetPeriod(IERC20(token), 1, address(_core));
+        vm.prank(_fixtureAdmin);
         _config.addAsset(token, 100000e9, _riskInput(), _fees(), false);
     }
 

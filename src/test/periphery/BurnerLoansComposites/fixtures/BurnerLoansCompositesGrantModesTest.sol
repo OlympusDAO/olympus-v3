@@ -13,10 +13,12 @@ import {CompositesAccount} from "./CompositesAccount.sol";
 ///      transaction. Existing EOA cases remain in execute.t.sol and executeWithGrant.t.sol.
 abstract contract BurnerLoansCompositesGrantModesTest is BurnerLoansCompositesTest {
     CompositesAccount internal _account;
+    address internal _accountOwner;
 
     function setUp() public virtual override {
         super.setUp();
-        _account = new CompositesAccount(address(this), vm.addr(_SIGNER_KEY));
+        _accountOwner = makeAddr("compositesAccountOwner");
+        _account = new CompositesAccount(_accountOwner, vm.addr(_SIGNER_KEY));
         _borrower = address(_account);
         _asset.mint(_borrower, 10_000e6);
         vm.prank(_borrower);
@@ -58,7 +60,10 @@ abstract contract BurnerLoansCompositesGrantModesTest is BurnerLoansCompositesTe
     ) internal returns (IExecutor.SignedGrant memory signed) {
         // Finish signature-domain reads before a test arms its expected execution revert.
         if (inlineGrant_) return _signedGrant(grant_);
-        if (grant_.multiple) _account.approveGrant(_auth, grant_);
+        if (grant_.multiple) {
+            vm.prank(_accountOwner);
+            _account.approveGrant(_auth, grant_);
+        }
         signed.grant = grant_;
     }
 
@@ -71,6 +76,7 @@ abstract contract BurnerLoansCompositesGrantModesTest is BurnerLoansCompositesTe
         IExecutor.Operation[] memory operations_,
         IExecutor.Output[] memory outputs_
     ) internal returns (bytes[] memory) {
+        vm.prank(_accountOwner);
         if (inlineGrant_) return _account.run(_executor, funding_, operations_, outputs_, signed_);
         if (signed_.grant.multiple) {
             // The caller installed reusable direct authority in an earlier account transaction.

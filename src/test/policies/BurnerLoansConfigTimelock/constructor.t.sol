@@ -153,6 +153,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
 
     // Scenarios: BLCT-CONSTRUCTOR-D03.
     function test_givenForeignConfigKernel_whenConstructed_reverts(address deployer_) public {
+        vm.prank(_fixtureExecutor);
         Kernel other = new Kernel();
         vm.mockCall(
             address(_config),
@@ -188,7 +189,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     function test_givenConfigActiveTrue_givenConfigEnabledTrue_whenConstructed_thenDisabledDefaults(
         address deployer_
     ) public {
-        _setState(_config, true, true);
+        _setPolicyLifecycle(_config, true, true);
         vm.prank(deployer_);
         BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
         assertEq(address(fresh.kernel()), address(_kernel), "Immutable Kernel");
@@ -205,7 +206,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     function test_givenConfigActiveTrue_givenConfigEnabledFalse_whenConstructed_thenDisabledDefaults(
         address deployer_
     ) public {
-        _setState(_config, true, false);
+        _setPolicyLifecycle(_config, true, false);
         vm.prank(deployer_);
         BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
         assertEq(address(fresh.kernel()), address(_kernel), "Immutable Kernel");
@@ -222,7 +223,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     function test_givenConfigActiveFalse_givenConfigEnabledTrue_whenConstructed_thenDisabledDefaults(
         address deployer_
     ) public {
-        _setState(_config, false, true);
+        _setPolicyLifecycle(_config, false, true);
         vm.prank(deployer_);
         BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
         assertEq(address(fresh.kernel()), address(_kernel), "Immutable Kernel");
@@ -239,7 +240,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     function test_givenConfigActiveFalse_givenConfigEnabledFalse_whenConstructed_thenDisabledDefaults(
         address deployer_
     ) public {
-        _setState(_config, false, false);
+        _setPolicyLifecycle(_config, false, false);
         vm.prank(deployer_);
         BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
         assertEq(address(fresh.kernel()), address(_kernel), "Immutable Kernel");
@@ -398,7 +399,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
         bool active_,
         bool enabled_
     ) public {
-        _setState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.prank(caller_);
         BurnerLoansConfigTimelock fresh = new BurnerLoansConfigTimelock(_kernel, _config);
         assertEq(address(fresh.burnerLoans()), address(_config), "Config binding preserved");

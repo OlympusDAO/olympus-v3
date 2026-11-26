@@ -18,7 +18,7 @@ contract BurnerLoansSeizeConfigureDependenciesTest is BurnerLoansSeizeLifecycleT
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_liquidation, active_, enabled_);
+        _setPolicyLifecycle(_liquidation, active_, enabled_);
         vm.prank(caller_);
         Keycode[] memory dependencies = _liquidation.configureDependencies();
         assertEq(dependencies.length, 1, "One module dependency");
@@ -37,6 +37,7 @@ contract BurnerLoansSeizeConfigureDependenciesTest is BurnerLoansSeizeLifecycleT
 
     // Scenarios: BLLIQ-DEPENDENCIES-P02.
     function test_givenRolesMissing_whenConfigured_reverts(address caller_) public {
+        vm.prank(_fixtureExecutor);
         Kernel empty = new Kernel();
         vm.prank(address(_kernel));
         _liquidation.changeKernel(empty);
@@ -69,9 +70,9 @@ contract BurnerLoansSeizeConfigureDependenciesTest is BurnerLoansSeizeLifecycleT
 
     // Scenarios: BLLIQ-DEPENDENCIES-P01.
     function test_givenReplacementRoles_whenConfigured_thenCacheRefreshed(address caller_) public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_liquidation));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_liquidation));
         OlympusRoles replacement = new OlympusRoles(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(replacement));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(replacement));
         vm.prank(caller_);
         _liquidation.configureDependencies();
         assertEq(

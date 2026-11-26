@@ -42,6 +42,8 @@ import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {MockBackingOracle} from "src/test/mocks/MockBackingOracle.sol";
 
 contract BurnerLoansLivePriceForkGasTest is Test {
+    address internal _forkAdmin = makeAddr("fork admin");
+    address internal _forkSeizer = makeAddr("fork seizer");
     uint256 internal constant _FORK_BLOCK = 25_894_485;
 
     address internal constant _KERNEL = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
@@ -407,6 +409,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         address[] memory borrowers = new address[](1);
         borrowers[0] = _alice;
 
+        vm.prank(_forkSeizer);
         vm.startSnapshotGas(_snapshotName("seize.single"));
         (address tokenOut, uint256 keeperReward, uint256 collateralToTreasury) = _liquidation.seize(
             _USDS,
@@ -491,14 +494,15 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         RolesAdmin rolesAdmin = RolesAdmin(_ROLES_ADMIN);
         assertEq(rolesAdmin.admin(), _ROLES_ADMIN_ADMIN, "RolesAdmin admin");
         vm.startPrank(_ROLES_ADMIN_ADMIN);
-        rolesAdmin.grantRole(ADMIN_ROLE, address(this));
+        rolesAdmin.grantRole(ADMIN_ROLE, _forkAdmin);
         rolesAdmin.grantRole("deposit_operator", address(_core));
         rolesAdmin.grantRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
         rolesAdmin.grantRole(BL_DEBT_POLICY_ROLE, address(_debt));
         rolesAdmin.grantRole(BL_LIQUIDATION_POLICY_ROLE, address(_liquidation));
-        rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(this));
+        rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, _forkSeizer);
         vm.stopPrank();
 
+        vm.startPrank(_forkAdmin);
         _core.setConfigOperator(address(_burnerLoansConfig));
         _payout.enable("");
         _core.setPayout(address(_payout));
@@ -533,6 +537,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
             _defaultFeeConfig(),
             false
         );
+        vm.stopPrank();
     }
 
     function _defaultRiskConfig()
@@ -621,9 +626,11 @@ contract BurnerLoansFreshPriceCacheForkGasTest is BurnerLoansLivePriceForkGasTes
         vm.prank(kernelExecutor);
         _kernel.executeAction(Actions.ActivatePolicy, address(_priceCache));
 
+        vm.startPrank(_forkAdmin);
         _priceCache.enable("");
         _risk.setPriceCache(address(_priceCache));
         _risk.setPriceCacheMaxAge(_MAX_CACHE_AGE);
+        vm.stopPrank();
         _priceCache.cachePrice(_OHM, _USDS);
     }
 

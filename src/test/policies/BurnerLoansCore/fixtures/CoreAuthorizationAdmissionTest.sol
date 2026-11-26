@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 // Libraries
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {BurnerLoansCoreTest} from "../BurnerLoansCoreTest.sol";
@@ -17,8 +16,14 @@ abstract contract CoreAuthorizationAdmissionTest is BurnerLoansCoreTest {
         _deposit(2000e6);
         _borrow(100e9);
         _admissionLedger = _ledger();
-        _admissionHandler = new CoreAdmissionHandler(_core, _kernel, _auth, address(_asset));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(_admissionHandler));
+        _admissionHandler = new CoreAdmissionHandler(
+            _core,
+            _kernel,
+            _auth,
+            address(_asset),
+            _fixtureExecutor,
+            _fixtureAdmin
+        );
         bytes4[] memory selectors = new bytes4[](4);
         selectors[0] = _admissionHandler.transition.selector;
         selectors[1] = _admissionHandler.grant.selector;

@@ -17,7 +17,7 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
     function test_givenOperator_whenUnauthorizedCallerRequestsSameOperator_reverts(
         address caller_
     ) public givenOperator {
-        vm.assume(caller_ != address(this));
+        vm.assume(caller_ != _riskAdmin);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
         _risk.setConfigOperator(_operator);
@@ -28,7 +28,7 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
     function test_givenNoOperator_whenUnauthorizedCallerRequestsZero_reverts(
         address caller_
     ) public {
-        vm.assume(caller_ != address(this));
+        vm.assume(caller_ != _riskAdmin);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
         _risk.setConfigOperator(address(0));
@@ -36,6 +36,7 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CONFIGURATOR-P05.
     function test_whenOperatorGrantedCacheAgeAuthority() public {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(_operator);
         vm.prank(_operator);
         _risk.setPriceCacheMaxAge(1);
@@ -78,6 +79,7 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-CONFIGURATOR-L03.
     function test_givenInactive_whenOperatorChanges_reverts() public givenInactive {
         _expectInactive();
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(_operator);
         assertEq(_risk.configOperator(), address(0), "operator unchanged");
     }
@@ -89,13 +91,14 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
         givenInactive
     {
         _expectInactive();
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(_operator);
         assertEq(_risk.configOperator(), address(0), "operator unchanged");
     }
 
     // Scenarios: BLRISK-CONFIGURATOR-A01, BLRISK-CONFIGURATOR-A03, BLRISK-CONFIGURATOR-A04.
     function test_whenNonAdminChangesOperator_reverts(address caller_, address next_) public {
-        vm.assume(caller_ != address(this));
+        vm.assume(caller_ != _riskAdmin);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
         _risk.setConfigOperator(next_);
@@ -106,6 +109,7 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
     function test_givenZero_whenUnchanged_reverts() public {
         vm.recordLogs();
         vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(0));
         assertEq(vm.getRecordedLogs().length, 0, "no setter logs");
     }
@@ -114,6 +118,7 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
     function test_givenSelected_whenUnchanged_reverts() public givenOperator {
         vm.recordLogs();
         vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(_operator);
         assertEq(vm.getRecordedLogs().length, 0, "no setter logs");
     }
@@ -126,6 +131,7 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
             bytes(""),
             abi.encodeWithSelector(DependencyReadFailed.selector)
         );
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(controller);
         assertEq(_risk.configOperator(), controller, "opaque controller accepted");
     }
@@ -134,11 +140,13 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
     function test_givenOperator_whenRevoked() public givenOperator {
         vm.expectEmit(true, false, false, true, address(_risk));
         emit IConfigOperator.ConfigOperatorSet(address(0));
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(0));
         assertEq(_risk.configOperator(), address(0), "operator cleared");
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(_operator);
         _risk.setPriceCacheMaxAge(1);
+        vm.prank(_riskAdmin);
         _risk.setPriceCacheMaxAge(1);
         assertEq(_risk.priceCacheMaxAge(), 1, "admin retains authority");
     }
@@ -146,12 +154,14 @@ contract BurnerLoansRiskSetConfigOperatorTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-CONFIGURATOR-P01.
     function test_givenOperator_whenReplaced() public givenOperator {
         address next = address(0xABCD);
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(next);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(_operator);
         _risk.setPriceCacheMaxAge(1);
         vm.prank(next);
         _risk.setPriceCacheMaxAge(1);
+        vm.prank(_riskAdmin);
         _risk.setPriceCacheMaxAge(2);
         assertEq(_risk.priceCacheMaxAge(), 2, "new operator and admin retain authority");
     }

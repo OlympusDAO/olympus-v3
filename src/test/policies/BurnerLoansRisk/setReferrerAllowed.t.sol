@@ -32,7 +32,7 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
         address referrer_,
         bool allowed_
     ) public givenOperator {
-        vm.assume(caller_ != address(this) && caller_ != _operator);
+        vm.assume(caller_ != _riskAdmin && caller_ != _operator);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _risk.setReferrerAllowed(referrer_, allowed_);
@@ -47,6 +47,7 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-REFERRER-I01.
     function test_whenZeroReferrer_reverts(bool allowed_) public {
         vm.expectRevert(IBurnerLoansErrors.BurnerLoans_ZeroAddress.selector);
+        vm.prank(_riskAdmin);
         _risk.setReferrerAllowed(address(0), allowed_);
         assertFalse(_risk.isReferrerAllowed(address(0)), "zero never admitted");
     }
@@ -64,7 +65,10 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
         address operator_
     ) public {
         vm.assume(referrer_ != address(0));
-        if (_risk.configOperator() != operator_) _risk.setConfigOperator(operator_);
+        if (_risk.configOperator() != operator_) {
+            vm.prank(_riskAdmin);
+            _risk.setConfigOperator(operator_);
+        }
         _grantAdmin(caller_);
         _setAllowed(caller_, referrer_, true);
         _setAllowed(caller_, referrer_, false);
@@ -80,8 +84,10 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-REFERRER-P03, BLRISK-REFERRER-P04.
     function test_whenSameMembership(address referrer_, bool allowed_) public {
         vm.assume(referrer_ != address(0));
+        vm.prank(_riskAdmin);
         _risk.setReferrerAllowed(referrer_, allowed_);
         vm.recordLogs();
+        vm.prank(_riskAdmin);
         _risk.setReferrerAllowed(referrer_, allowed_);
         assertEq(_risk.isReferrerAllowed(referrer_), allowed_, "same membership retained");
         assertEq(vm.getRecordedLogs().length, 0, "same membership emits no event");
@@ -91,11 +97,11 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
     function test_whenIndependentReferrersChange() public {
         address r1 = address(0xB0B);
         address r2 = address(_asset);
-        _setAllowed(address(this), r1, true);
-        _setAllowed(address(this), r2, true);
-        _setAllowed(address(this), r1, false);
+        _setAllowed(_riskAdmin, r1, true);
+        _setAllowed(_riskAdmin, r2, true);
+        _setAllowed(_riskAdmin, r1, false);
         assertTrue(_risk.isReferrerAllowed(r2), "other referrer retained");
-        _setAllowed(address(this), r1, true);
+        _setAllowed(_riskAdmin, r1, true);
         assertTrue(_risk.isReferrerAllowed(r2), "readding leaves other referrer unchanged");
     }
 
@@ -104,10 +110,13 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
         bool enabled_,
         bool operator_
     ) public givenOperator {
-        if (!enabled_) _risk.disable("");
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        if (!enabled_) {
+            vm.prank(_riskAdmin);
+            _risk.disable("");
+        }
+        _executeRiskKernelAction(Actions.DeactivatePolicy, address(_risk));
         _expectInactive();
-        vm.prank(operator_ ? _operator : address(this));
+        vm.prank(operator_ ? _operator : _riskAdmin);
         _risk.setReferrerAllowed(address(0), true);
         assertFalse(_risk.isReferrerAllowed(address(0)), "inactive membership unchanged");
     }
@@ -117,16 +126,16 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
         bool operator_
     ) public givenOperator givenDisabled {
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(operator_ ? _operator : address(this));
+        vm.prank(operator_ ? _operator : _riskAdmin);
         _risk.setReferrerAllowed(address(0), true);
     }
 
     // Scenarios: BLRISK-REFERRER-L04.
     function test_givenReEnabled_whenMembershipChanges() public givenReEnabled {
-        _setAllowed(address(this), _operator, true);
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
-        _setAllowed(address(this), _operator, false);
+        _setAllowed(_riskAdmin, _operator, true);
+        _executeRiskKernelAction(Actions.DeactivatePolicy, address(_risk));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(_risk));
+        _setAllowed(_riskAdmin, _operator, false);
     }
 
     // Scenarios: BLRISK-REFERRER-D01.
@@ -162,7 +171,7 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
     // Scenarios: BLRISK-REFERRER-A03, BLRISK-REFERRER-A04.
     function test_givenBlaOnly_whenSettingChanged_reverts(bool allowed_) public givenOperator {
         address caller = address(0xB1A0);
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, caller);
+        _grantRiskRole(BURNER_LOANS_ADMIN_ROLE, caller);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller);
         _risk.setReferrerAllowed(_operator, allowed_);
@@ -173,7 +182,7 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
         bool allowed_
     ) public givenOperator {
         address caller = address(0xE110);
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, caller);
+        _grantRiskRole(EMERGENCY_ROLE, caller);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller);
         _risk.setReferrerAllowed(_operator, allowed_);
@@ -183,6 +192,7 @@ contract BurnerLoansRiskSetReferrerAllowedTest is BurnerLoansRiskTest {
     function test_givenFormerOperator_whenSettingChanged_reverts(
         bool allowed_
     ) public givenOperator {
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(address(0xF000));
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(_operator);

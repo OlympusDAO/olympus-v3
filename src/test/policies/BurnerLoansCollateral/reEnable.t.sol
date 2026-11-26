@@ -29,7 +29,7 @@ import {BurnerLoansCollateralTest} from "src/test/policies/BurnerLoansCollateral
 contract BurnerLoansCollateralReEnableTest is BurnerLoansCollateralTest {
     // Scenarios: BLCOL-REENABLE-L02.
     function test_givenNeverEnabled_whenAnyCaller_reverts(address caller_, bool active_) public {
-        if (!active_) kernel.executeAction(Actions.DeactivatePolicy, address(_collateral));
+        if (!active_) _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_collateral));
         vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(caller_);
         _collateral.reEnable();
@@ -41,7 +41,7 @@ contract BurnerLoansCollateralReEnableTest is BurnerLoansCollateralTest {
         address caller_,
         bool active_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, active_, true);
+        _setPolicyLifecycle(_collateral, active_, true);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _collateral.reEnable();
@@ -85,7 +85,7 @@ contract BurnerLoansCollateralReEnableTest is BurnerLoansCollateralTest {
     ) public givenCollateralDisabledAfterEnable {
         _grantCaller(caller_, uint8(bound(roleMask_, 1, 3)), BURNER_LOANS_ADMIN_ROLE);
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(policy, active_, enabled_);
+        _setPolicyLifecycle(policy, active_, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -130,6 +130,7 @@ contract BurnerLoansCollateralReEnableTest is BurnerLoansCollateralTest {
         uint8 roleMask_
     ) public givenCollateralDisabledAfterEnable {
         _grantCaller(caller_, uint8(bound(roleMask_, 1, 3)), BURNER_LOANS_ADMIN_ROLE);
+        vm.prank(_fixtureExecutor);
         Kernel otherKernel = new Kernel();
         vm.prank(address(kernel));
         policy.changeKernel(otherKernel);
@@ -152,7 +153,7 @@ contract BurnerLoansCollateralReEnableTest is BurnerLoansCollateralTest {
         uint8 roleMask_
     ) public givenCollateralDisabledAfterEnable {
         _grantCaller(caller_, uint8(bound(roleMask_, 1, 3)), BURNER_LOANS_ADMIN_ROLE);
-        rolesAdmin.revokeRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
+        _revokeFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
         );
@@ -339,7 +340,9 @@ contract BurnerLoansCollateralReEnableTest is BurnerLoansCollateralTest {
         address caller_
     ) public givenCollateralEnabled {
         _assumeUnauthorized(caller_, BURNER_LOANS_ADMIN_ROLE);
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         vm.warp(uint256(_collateral.lastTransitionAt()) + _collateral.gracePeriod() + 1);
         vm.expectRevert(PolicyAdmin.NotAuthorised.selector);

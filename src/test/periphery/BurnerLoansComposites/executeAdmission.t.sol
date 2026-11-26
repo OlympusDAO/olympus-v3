@@ -293,9 +293,12 @@ contract BurnerLoansCompositesExecuteAdmissionTest is BurnerLoansCompositesGrant
 
     // Scenarios: BLREX-A08.
     function test_whenNewGrantPredatesReplacement_reverts(bool inlineGrant_) public {
-        _account.approveGrant(_auth, _grant(true));
+        IOperatorAuth.Grant memory first = _grant(true);
+        vm.prank(_accountOwner);
+        _account.approveGrant(_auth, first);
         IOperatorAuth.Grant memory stale = _grant(true);
-        _account.approveGrant(_auth, _grant(true));
+        vm.prank(_accountOwner);
+        _account.approveGrant(_auth, stale);
         _rejectNewGrant(
             inlineGrant_,
             stale,
@@ -334,6 +337,7 @@ contract BurnerLoansCompositesExecuteAdmissionTest is BurnerLoansCompositesGrant
     ) private {
         IExecutor.SignedGrant memory signed = _signedGrant(grant_);
         vm.expectRevert(reason_);
+        vm.prank(_accountOwner);
         if (inlineGrant_) {
             _account.run(
                 _executor,

@@ -28,7 +28,7 @@ contract BurnerLoansCollateralEnableTest is BurnerLoansCollateralTest {
         address caller_,
         bool active_
     ) public givenCollateralEnabled {
-        _setPolicyState(_collateral, active_, true);
+        _setPolicyLifecycle(_collateral, active_, true);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         vm.prank(caller_);
         _collateral.enable("");
@@ -63,7 +63,7 @@ contract BurnerLoansCollateralEnableTest is BurnerLoansCollateralTest {
         bool enabled_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(policy, active_, enabled_);
+        _setPolicyLifecycle(policy, active_, enabled_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -82,6 +82,7 @@ contract BurnerLoansCollateralEnableTest is BurnerLoansCollateralTest {
 
     // Scenarios: BLCOL-ENABLE-D04.
     function test_givenCoreKernelChanged_reverts() public {
+        vm.prank(_fixtureExecutor);
         Kernel otherKernel = new Kernel();
         vm.prank(address(kernel));
         policy.changeKernel(otherKernel);
@@ -100,7 +101,7 @@ contract BurnerLoansCollateralEnableTest is BurnerLoansCollateralTest {
 
     // Scenarios: BLCOL-ENABLE-L03.
     function test_givenSettlementRoleRevoked_reverts() public {
-        rolesAdmin.revokeRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
+        _revokeFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE)
         );
@@ -177,6 +178,7 @@ contract BurnerLoansCollateralEnableTest is BurnerLoansCollateralTest {
         address caller_
     ) public givenCollateralEnabled {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);

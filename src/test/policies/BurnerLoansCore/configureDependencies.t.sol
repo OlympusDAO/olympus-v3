@@ -15,7 +15,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 contract BurnerLoansCoreConfigureDependenciesTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-DEPENDENCIES-P01.
     function test_whenDependenciesRefreshed(address caller_, bool active_, bool enabled_) public {
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         bytes32 before = _state();
         vm.prank(caller_);
         Keycode[] memory deps = _core.configureDependencies();
@@ -96,7 +96,7 @@ contract BurnerLoansCoreConfigureDependenciesTest is BurnerLoansCoreTest {
     // Scenarios: BLCORE-DEPENDENCIES-P01.
     function test_givenModuleUpgrade_whenConfigured(address caller_) public {
         OlympusRoles roles = new OlympusRoles(_kernel);
-        _kernel.executeAction(Actions.UpgradeModule, address(roles));
+        _executeFixtureKernelAction(Actions.UpgradeModule, address(roles));
         vm.prank(caller_);
         _core.configureDependencies();
         assertEq(address(_core.ROLES()), address(roles), "Upgrade refreshes roles");
@@ -109,6 +109,7 @@ contract BurnerLoansCoreConfigureDependenciesTest is BurnerLoansCoreTest {
             abi.encodeWithSignature("configureDependencies()"),
             false
         );
+        vm.prank(_fixtureAdmin);
         _core.rescue(address(token), _recipient);
         assertEq(
             token.callbackRevertSelector(),

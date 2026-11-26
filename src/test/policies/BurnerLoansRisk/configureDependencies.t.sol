@@ -76,13 +76,13 @@ contract BurnerLoansRiskConfigureDependenciesTest is BurnerLoansRiskTest {
 
     // Scenarios: BLRISK-CONSTRUCTOR-D15.
     function test_givenUnsupportedPriceDecimals_whenRiskActivated_reverts() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _executeRiskKernelAction(Actions.DeactivatePolicy, address(_risk));
         _price.setPriceDecimals(78);
 
         vm.expectRevert(
             abi.encodeWithSelector(LoanMath.LoanMath_UnsupportedDecimals.selector, uint8(78))
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(_risk));
+        _executeRiskKernelAction(Actions.ActivatePolicy, address(_risk));
 
         assertFalse(_risk.isActive(), "Failed dependency configuration leaves Risk inactive");
         assertTrue(_risk.isEnabled(), "Failed activation preserves the prior local enabled state");
@@ -198,7 +198,7 @@ contract BurnerLoansRiskConfigureDependenciesTest is BurnerLoansRiskTest {
 
         // UpgradeModule refreshes Risk's dependency bindings through the real Kernel hook.
         // The compatibility implementation reports its actual (1,2) version without a mock.
-        _kernel.executeAction(Actions.UpgradeModule, address(compatiblePrice));
+        _executeRiskKernelAction(Actions.UpgradeModule, address(compatiblePrice));
 
         _assertDependencies(_risk.configureDependencies());
         (uint8 major, uint8 minor) = compatiblePrice.VERSION();
@@ -333,6 +333,7 @@ contract BurnerLoansRiskConfigureDependenciesTest is BurnerLoansRiskTest {
         // Actual reads after configuration prove that the resolved module bindings are usable.
         _assertSnapshot(_risk.snapshot(address(_asset)), 1e18, 2e18, 1e18);
         assertEq(_risk.health(_prices(), _MARKET, 1e6, 1e9), 1e18, "FLOAN binding");
+        vm.prank(_riskAdmin);
         _risk.setConfigOperator(_operator);
     }
 }

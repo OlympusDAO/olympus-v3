@@ -20,28 +20,28 @@ import {BurnerLoansLensTest} from "./BurnerLoansLensTest.sol";
 contract BurnerLoansLensPositionHealthFactorTest is BurnerLoansLensTest {
     // Scenarios: BLLENS-POSITION-HEALTH-L01.
     function test_givenActiveEnabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(true, true);
+        _setPolicyLifecycle(_core, true, true);
         _mockRisk(7e17);
         _assertHealth(caller_, 123, 456, 7e17);
     }
 
     // Scenarios: BLLENS-POSITION-HEALTH-L02.
     function test_givenActiveDisabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(true, false);
+        _setPolicyLifecycle(_core, true, false);
         _mockRisk(7e17);
         _assertHealth(caller_, 123, 456, 7e17);
     }
 
     // Scenarios: BLLENS-POSITION-HEALTH-L03.
     function test_givenInactiveEnabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(false, true);
+        _setPolicyLifecycle(_core, false, true);
         _mockRisk(7e17);
         _assertHealth(caller_, 123, 456, 7e17);
     }
 
     // Scenarios: BLLENS-POSITION-HEALTH-L04.
     function test_givenInactiveDisabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(false, false);
+        _setPolicyLifecycle(_core, false, false);
         _mockRisk(7e17);
         _assertHealth(caller_, 123, 456, 7e17);
     }

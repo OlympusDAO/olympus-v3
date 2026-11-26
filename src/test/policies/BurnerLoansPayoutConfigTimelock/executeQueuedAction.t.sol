@@ -34,6 +34,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         bool payoutPaused_
     ) public {
         _fundPendingReferral(40);
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueRescuePendingPayout(
             address(_asset),
             _recipient,
@@ -41,7 +42,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
             40
         );
         ITimelockBatchQueue.QueuedAction memory q = _payoutTimelock.getQueuedAction(id);
-        if (payoutPaused_) _payout.disable("");
+        _setPolicyLifecycle(_payout, true, !payoutPaused_);
         _makeReady(id);
         uint256 beforeBalance = _asset.balanceOf(_borrower);
         vm.expectEmit(address(_payout));
@@ -80,6 +81,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         address executor_
     ) public {
         _fundPendingReferral(40);
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueRescuePendingPayout(
             address(_asset),
             _recipient,
@@ -132,6 +134,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         ITimelockBatchQueue.QueuedAction memory q = _payoutTimelock.getQueuedAction(_pendingId);
         now_ = uint48(bound(now_, q.executableAt, q.expiresAt));
         vm.warp(now_);
+        vm.prank(_fixtureAdmin);
         uint64 other = _payoutTimelock.queueSetSendYieldToDistributor(false);
         bytes32 retained = _queueDigest(other);
         uint256 beforeBalance = _asset.balanceOf(_borrower);
@@ -225,7 +228,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         uint256 sub_,
         uint256 state_
     ) public {
-        _setState(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
         bytes memory reason = abi.encodeWithSelector(
             ITimelockBatchQueue.ITimelockBatchQueue_ActionNotFound.selector,
             id_
@@ -261,7 +264,9 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         uint256 sub_,
         uint256 state_
     ) public givenPendingRecovery {
-        _rolesAdmin.grantRole(EMERGENCY_ROLE, address(this));
+        address emergencyCanceller = makeAddr("emergencyCanceller");
+        _grantFixtureRole(EMERGENCY_ROLE, emergencyCanceller);
+        vm.prank(emergencyCanceller);
         _payoutTimelock.cancelQueuedAction(_pendingId);
         bytes memory reason = abi.encodeWithSelector(
             ITimelockBatchQueue.ITimelockBatchQueue_ActionCancelled.selector,
@@ -276,7 +281,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         address executor_
     ) public givenPendingRecovery {
         _makeReady(_pendingId);
-        _setState(_payoutTimelock, true, false);
+        _setPolicyLifecycle(_payoutTimelock, true, false);
         _expectExecutionRejected(
             _pendingId,
             abi.encodeWithSelector(IEnabler.NotEnabled.selector),
@@ -289,7 +294,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         address executor_
     ) public givenPendingRecovery {
         _makeReady(_pendingId);
-        _setState(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
         _expectExecutionRejected(
             _pendingId,
             abi.encodeWithSelector(
@@ -305,7 +310,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         address executor_
     ) public givenPendingRecovery {
         _makeReady(_pendingId);
-        _setState(_payoutTimelock, false, true);
+        _setPolicyLifecycle(_payoutTimelock, false, true);
         _expectExecutionRejected(
             _pendingId,
             abi.encodeWithSelector(
@@ -339,6 +344,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         address executor_
     ) public givenPendingRecovery {
         bytes32 key = _scopedKey(_rescueAction());
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
         _makeReady(_pendingId);
         _expectExecutionRejected(
@@ -363,13 +369,16 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         bool payoutEnabled_
     ) public {
         _asset.mint(address(_payout), 123);
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueRescue(address(_asset), _borrower);
         BurnerLoansPayout replacement = new BurnerLoansPayout(_kernel, address(_core));
-        _kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(replacement));
+        vm.prank(_fixtureAdmin);
         replacement.enable("");
+        vm.prank(_fixtureAdmin);
         _core.setPayout(address(replacement));
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, true, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, payoutEnabled_);
         _makeReady(id);
         uint256 beforeBalance = _asset.balanceOf(_borrower);
         vm.prank(executor_);
@@ -386,6 +395,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         bool requested_
     ) public {
         RevenueDistributor first = _distributor();
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueSetSendFeesToDistributor(requested_);
         bytes32 queue = _queueDigest(id);
         RevenueDistributor second = _distributor();
@@ -414,6 +424,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         bool requested_
     ) public {
         RevenueDistributor first = _distributor();
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueSetSendYieldToDistributor(requested_);
         bytes32 queue = _queueDigest(id);
         RevenueDistributor second = _distributor();
@@ -444,6 +455,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         for (uint256 field; field < 3; ++field) {
             _fundPending(20);
             _distributor();
+            vm.prank(_fixtureAdmin);
             uint64 id = _payoutTimelock.queueRescuePendingPayout(
                 address(_asset),
                 _recipient,
@@ -455,10 +467,16 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
                 abi.encode(address(_asset), _recipient, _borrower, uint256(5))
             );
             bytes32 expected = _stateHash(action);
-            if (field == 0) _payout.setSendFeesToDistributor(true);
+            if (field == 0) {
+                vm.prank(_fixtureAdmin);
+                _payout.setSendFeesToDistributor(true);
+            }
             if (field == 1) _distributor();
             if (field == 2)
-                _kernel.executeAction(Actions.UpgradeModule, address(new OlympusTreasury(_kernel)));
+                _executeFixtureKernelAction(
+                    Actions.UpgradeModule,
+                    address(new OlympusTreasury(_kernel))
+                );
             bytes32 current = keccak256(
                 abi.encode(
                     address(_payoutTimelock),
@@ -493,14 +511,20 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         bytes4 selector = yield_
             ? IBurnerLoansPayout.setSendYieldToDistributor.selector
             : IBurnerLoansPayout.setSendFeesToDistributor.selector;
+        vm.prank(_fixtureAdmin);
         uint64 id = yield_
             ? _payoutTimelock.queueSetSendYieldToDistributor(true)
             : _payoutTimelock.queueSetSendFeesToDistributor(true);
         bytes32 expected = keccak256(
             abi.encode(address(_payoutTimelock), false, _payout.revenueDistributor())
         );
-        if (yield_) _payout.setSendYieldToDistributor(true);
-        else _payout.setSendFeesToDistributor(true);
+        if (yield_) {
+            vm.prank(_fixtureAdmin);
+            _payout.setSendYieldToDistributor(true);
+        } else {
+            vm.prank(_fixtureAdmin);
+            _payout.setSendFeesToDistributor(true);
+        }
         bytes32 current = keccak256(
             abi.encode(address(_payoutTimelock), true, _payout.revenueDistributor())
         );
@@ -531,6 +555,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
             abi.encode(true)
         );
         actions[1] = _rescueAction();
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueBatch(actions);
         _makeReady(id);
         vm.mockCallRevert(
@@ -707,7 +732,9 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
     ) internal returns (PayoutRecoveryCallbackToken token, uint64 id, uint64 nested) {
         token = new PayoutRecoveryCallbackToken();
         token.mint(address(_payout), 7);
+        vm.prank(_fixtureAdmin);
         id = _payoutTimelock.queueRescue(address(token), _borrower);
+        vm.prank(_fixtureAdmin);
         nested = other_ ? _payoutTimelock.queueSetSendFeesToDistributor(false) : id;
         _makeReady(id);
         token.setCallbackFrom(
@@ -726,17 +753,21 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
     ) public {
         live_ = uint8(bound(live_, 5, 30));
         _fundPending(20);
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueRescuePendingPayout(
             address(_asset),
             _recipient,
             _borrower,
             5
         );
+        vm.prank(_fixtureAdmin);
         uint64 other = _payoutTimelock.queueSetSendYieldToDistributor(false);
         bytes32 otherQueue = _queueDigest(other);
         if (live_ > 20) _fundPending(live_ - 20);
-        if (live_ < 20)
+        if (live_ < 20) {
+            vm.prank(_fixtureAdmin);
             _payout.rescuePendingPayout(address(_asset), _recipient, _recipient, 20 - live_);
+        }
         _makeReady(id);
         uint256 beforeBalance = _asset.balanceOf(_borrower);
         vm.expectCall(
@@ -772,12 +803,14 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         address executor_
     ) public {
         _fundPending(20);
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueRescuePendingPayout(
             address(_asset),
             _recipient,
             _borrower,
             5
         );
+        vm.prank(_fixtureAdmin);
         _payout.rescuePendingPayout(address(_asset), _recipient, _recipient, 16);
         _makeReady(id);
         _expectExecutionRejected(
@@ -890,8 +923,9 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
         address executor_
     ) public {
         _asset.mint(address(_payout), 123);
+        vm.prank(_fixtureAdmin);
         uint64 id = _payoutTimelock.queueRescue(address(_asset), _borrower);
-        _setState(_payout, false, true);
+        _setPolicyLifecycle(_payout, false, true);
         _makeReady(id);
         _expectExecutionRejected(
             id,
@@ -901,7 +935,7 @@ contract BurnerLoansPayoutConfigTimelockExecuteQueuedActionTest is
             ),
             executor_
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payout));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payout));
         uint256 beforeBalance = _asset.balanceOf(_borrower);
         vm.prank(executor_);
         _payoutTimelock.executeQueuedAction(id);

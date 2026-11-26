@@ -19,9 +19,11 @@ import {Actions} from "src/Kernel.sol";
 // Raw units, tiny populations and numeric maxima are explicit test boundaries.
 // forge-lint: disable-start(literal-instead-of-constant,unsafe-typecast,calls-loop,unused-return)
 contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTest {
+    address internal _seizerActor = makeAddr("lens seizer");
+
     function setUp() public override {
         super.setUp();
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(this));
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, _seizerActor);
         vm.mockCall(
             address(_depositManager),
             abi.encodeWithSelector(IDepositManagerV1_1.previewWithdraw.selector),
@@ -41,7 +43,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
         (address[] memory borrowers, uint256 cursor, uint256 reward) = IBurnerLoansLens(
             address(_lens)
         ).getUnhealthyBorrowersBoundedFor(
-                address(this),
+                _seizerActor,
                 address(_asset),
                 0,
                 type(uint256).max,
@@ -189,7 +191,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
                 asset_
             )
         );
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), asset_, 0, 0, 0);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, asset_, 0, 0, 0);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-I02.
@@ -200,7 +202,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
                 address(0)
             )
         );
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(0), 0, 0, 0);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(0), 0, 0, 0);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-D01.
@@ -211,7 +213,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
             abi.encodeWithSelector(FloanReadFailed.selector)
         );
         vm.expectRevert(FloanReadFailed.selector);
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(_asset), 0, 0, 0);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), 0, 0, 0);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-D01.
@@ -226,7 +228,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
             abi.encodeWithSelector(FloanReadFailed.selector)
         );
         vm.expectRevert(FloanReadFailed.selector);
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(_asset), 0, 1, 1);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), 0, 1, 1);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-D01.
@@ -238,7 +240,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
             abi.encodeWithSelector(FloanReadFailed.selector)
         );
         vm.expectRevert(FloanReadFailed.selector);
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(_asset), 0, 1, 1);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), 0, 1, 1);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-D02.
@@ -254,7 +256,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
             abi.encodeWithSelector(SnapshotReadFailed.selector)
         );
         vm.expectRevert(SnapshotReadFailed.selector);
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(_asset), 0, 4, 4);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), 0, 4, 4);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-P01, BLLENS-UNHEALTHY-N01.
@@ -279,7 +281,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
             abi.encodeWithSelector(RiskHealthFailed.selector)
         );
         vm.expectRevert(RiskHealthFailed.selector);
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(_asset), 0, 4, 4);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), 0, 4, 4);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-D03.
@@ -291,7 +293,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
             abi.encodeWithSelector(WithdrawalPreviewFailed.selector)
         );
         vm.expectRevert(WithdrawalPreviewFailed.selector);
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(_asset), 0, 4, 4);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), 0, 4, 4);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-D03.
@@ -303,7 +305,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
             abi.encodeWithSelector(RewardQuoteFailed.selector)
         );
         vm.expectRevert(RewardQuoteFailed.selector);
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(_asset), 0, 4, 4);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), 0, 4, 4);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-A01.
@@ -318,7 +320,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
     // Scenarios: BLLENS-UNHEALTHY-A01.
     function test_givenProtocolCaller_whenZeroOrdinaryActorQuoted() public {
         _mixed();
-        _assertActorQuote(address(this), address(0), false, 7);
+        _assertActorQuote(_seizerActor, address(0), false, 7);
     }
 
     // Scenarios: BLLENS-UNHEALTHY-A01.
@@ -333,8 +335,8 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
                 !_roles.hasRole(actor_, BURNER_LOANS_SEIZER_ROLE)
         );
         roleClass_ = uint8(bound(roleClass_, 0, 2));
-        if (roleClass_ != 1) _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, actor_);
-        if (roleClass_ != 0) _rolesAdmin.grantRole(HEART_ROLE, actor_);
+        if (roleClass_ != 1) _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, actor_);
+        if (roleClass_ != 0) _grantFixtureRole(HEART_ROLE, actor_);
         _mixed();
         _assertActorQuote(caller_, actor_, true, 0);
     }
@@ -361,11 +363,14 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
         bool enabled_
     ) public {
         _mixed();
-        _setCoreLifecycle(active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         vm.prank(caller_);
         _assertPage(0, 4, 4, _two(_ALICE, _DAVE), 0);
-        if (!active_) _kernel.executeAction(Actions.ActivatePolicy, address(_core));
-        if (!enabled_) _core.reEnable();
+        if (!active_) _executeFixtureKernelAction(Actions.ActivatePolicy, address(_core));
+        if (!enabled_) {
+            vm.prank(_fixtureAdmin);
+            _core.reEnable();
+        }
         _assertPage(0, 4, 4, _two(_ALICE, _DAVE), 0);
     }
 
@@ -392,13 +397,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
         uint256 next_
     ) private view {
         (address[] memory borrowers, uint256 cursor, uint256 reward) = _lens
-            .getUnhealthyBorrowersBoundedFor(
-                address(this),
-                address(_asset),
-                start_,
-                count_,
-                limit_
-            );
+            .getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), start_, count_, limit_);
         assertEq(borrowers, expected_, "Exact unexpired unhealthy selection");
         assertEq(cursor, next_, "Exact first unexamined active-list index");
         assertEq(reward, 0, "Protocol actor quote remains zero");
@@ -412,7 +411,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
                 population_
             )
         );
-        _lens.getUnhealthyBorrowersBoundedFor(address(this), address(_asset), start_, 0, 0);
+        _lens.getUnhealthyBorrowersBoundedFor(_seizerActor, address(_asset), start_, 0, 0);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoansLens.BurnerLoansLens_InvalidStart.selector,
@@ -421,7 +420,7 @@ contract BurnerLoansLensGetUnhealthyBorrowersBoundedForTest is BurnerLoansLensTe
             )
         );
         _lens.getUnhealthyBorrowersBoundedFor(
-            address(this),
+            _seizerActor,
             address(_asset),
             start_,
             type(uint256).max,

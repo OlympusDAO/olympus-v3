@@ -28,9 +28,10 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         bool coreEnabled_
     ) public givenPendingRecovery {
         _grantProposer(caller_, false, false);
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
-        _setState(_core, coreActive_, coreEnabled_);
-        _setState(_payout, true, payoutEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_payout, true, payoutEnabled_);
         vm.mockCallRevert(address(_payout), abi.encodeWithSignature("isEnabled()"), hex"deadbeef");
         bytes32 beforeQueue = _queueDigest(_pendingId);
         bytes32 funds = _payoutDigest();
@@ -54,6 +55,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         address caller_
     ) public givenPendingRecovery {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.enable, ("")),
@@ -67,7 +69,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         address caller_,
         bool active_
     ) public givenPendingRecovery {
-        _setState(_payoutTimelock, active_, true);
+        _setPolicyLifecycle(_payoutTimelock, active_, true);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.enable, ("")),
             abi.encodeWithSelector(IEnabler.NotDisabled.selector),
@@ -80,7 +82,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         address caller_
     ) public givenPendingRecovery {
         _grantProposer(caller_, false, false);
-        _setState(_payoutTimelock, false, false);
+        _setPolicyLifecycle(_payoutTimelock, false, false);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.enable, ("")),
             abi.encodeWithSelector(
@@ -98,6 +100,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
     ) public givenPendingRecovery {
         _grantProposer(caller_, false, false);
         vm.assume(other_ != address(_kernel));
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
         _mockPayoutKernel(other_);
         _expectLocalRejected(
@@ -117,7 +120,9 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         address caller_
     ) public givenPendingRecovery {
         _grantProposer(caller_, false, false);
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(_recipient);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.enable, ("")),
@@ -133,6 +138,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         address caller_
     ) public givenPendingRecovery {
         _grantProposer(caller_, false, false);
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
         vm.mockCallRevert(address(_payout), abi.encodeWithSignature("kernel()"), hex"deadbeef");
         _expectLocalRejected(
@@ -150,6 +156,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
         address caller_
     ) public givenPendingRecovery {
         _grantProposer(caller_, false, false);
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
         vm.mockCallRevert(
             address(_payout),
@@ -173,6 +180,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
     ) public givenPendingRecovery {
         vm.assume(data_.length > 0 && data_.length <= 256);
         _grantProposer(caller_, false, false);
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.enable, (data_)),
@@ -196,22 +204,24 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
     function test_givenInactivePayout_whenActivated_reverts(
         bool enabled_
     ) public givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
-        _setState(_payout, false, enabled_);
+        _setPolicyLifecycle(_payout, false, enabled_);
         _expectLocalRejected(
             abi.encodeCall(_payoutTimelock.enable, (bytes(""))),
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
                 address(_payout)
             ),
-            address(this)
+            _fixtureAdmin
         );
     }
 
     // Scenarios: BLCUCT-ENABLE-D07.
     function test_givenMissingConsumedInterface_whenActivated_reverts(bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.disable("");
-        _setState(_payout, true, enabled_);
+        _setPolicyLifecycle(_payout, true, enabled_);
         bytes4[3] memory ids = [
             type(IBurnerLoansPayout).interfaceId,
             type(IConfigOperator).interfaceId,
@@ -231,6 +241,7 @@ contract BurnerLoansPayoutConfigTimelockEnableTest is BurnerLoansPayoutConfigTim
                     address(_payout)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _payoutTimelock.enable("");
             assertFalse(_payoutTimelock.isEnabled(), "Incompatible target cannot activate queue");
             vm.mockCall(

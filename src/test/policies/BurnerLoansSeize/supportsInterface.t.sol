@@ -25,7 +25,7 @@ contract BurnerLoansSeizeSupportsInterfaceTest is BurnerLoansSeizeLifecycleTest 
         bool active_,
         bool enabled_
     ) public {
-        _setPolicyState(_liquidation, active_, enabled_);
+        _setPolicyLifecycle(_liquidation, active_, enabled_);
         bytes4[8] memory ids = [
             _INTERFACE_ID,
             type(IBurnerLoansCoreBound).interfaceId,

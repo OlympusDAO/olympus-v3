@@ -58,7 +58,7 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
         _ohmUsdFeed = _newPriceFeed(10e8);
         _usdsUsdFeed = _newPriceFeed(1e8);
 
-        vm.startPrank(address(this));
+        vm.startPrank(_fixtureExecutor);
         _kernel.executeAction(Actions.UpgradeModule, address(_productionPrice));
         _kernel.executeAction(Actions.ActivatePolicy, _moduleWriter);
         _kernel.executeAction(Actions.ActivatePolicy, _priceWriter);
@@ -200,7 +200,6 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
         PriceCacherTask cacher;
         MockPeriodicTaskManager directPriceBeat;
         MockPeriodicTaskManager cachedPriceBeat;
-        vm.startPrank(address(this));
         seizer = new BurnerLoansSeizerTask(
             _kernel,
             IBurnerLoansSeize(address(_liquidation)),
@@ -213,13 +212,14 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
         cacher = new PriceCacherTask(_kernel, cache, 2_000_000, 800_000);
         directPriceBeat = new MockPeriodicTaskManager(_kernel);
         cachedPriceBeat = new MockPeriodicTaskManager(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(seizer));
-        _kernel.executeAction(Actions.ActivatePolicy, address(cacher));
-        _kernel.executeAction(Actions.ActivatePolicy, address(directPriceBeat));
-        _kernel.executeAction(Actions.ActivatePolicy, address(cachedPriceBeat));
-        _rolesAdmin.grantRole(HEART_ROLE, address(directPriceBeat));
-        _rolesAdmin.grantRole(HEART_ROLE, address(cachedPriceBeat));
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(seizer));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(cacher));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(directPriceBeat));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(cachedPriceBeat));
+        _grantFixtureRole(HEART_ROLE, address(directPriceBeat));
+        _grantFixtureRole(HEART_ROLE, address(cachedPriceBeat));
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
+        vm.startPrank(_fixtureAdmin);
         seizer.addAsset(address(_asset));
         seizer.enable("");
         cacher.addAssetPair(address(_ohm), address(_asset));
@@ -230,7 +230,7 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
         cachedPriceBeat.addPeriodicTask(address(seizer));
         vm.stopPrank();
 
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCache(address(0));
 
         uint256 state = vm.snapshotState();
@@ -240,7 +240,7 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
         assertEq(_core.totalActiveDebtOhm(), 0, "Direct PRICE beat actually seizes the position");
 
         assertTrue(vm.revertToState(state), "state snapshot should restore Seizer baseline");
-        vm.prank(address(this));
+        vm.prank(_fixtureAdmin);
         _risk.setPriceCache(address(cache));
 
         assertEq(
@@ -368,10 +368,12 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansModularTest {
 
     function _installOperationalPriceCache(uint48 maxAge_) internal returns (PriceCache cache) {
         cache = new PriceCache(_kernel, 18, "USD");
-        _kernel.executeAction(Actions.ActivatePolicy, address(cache));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(cache));
+        vm.startPrank(_fixtureAdmin);
         cache.enable("");
         _risk.setPriceCache(address(cache));
         _risk.setPriceCacheMaxAge(maxAge_);
+        vm.stopPrank();
     }
 
     function _cacheConfiguredPair(PriceCache cache_) internal {

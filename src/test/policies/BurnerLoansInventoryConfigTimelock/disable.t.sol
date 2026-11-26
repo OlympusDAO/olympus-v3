@@ -26,10 +26,10 @@ contract BurnerLoansInventoryConfigTimelockDisableTest is BurnerLoansInventoryCo
         bool overlap_,
         bool active_
     ) public givenProviderSurplus givenPendingRecovery {
-        vm.assume(caller_ != address(0) && caller_ != address(this));
-        _rolesAdmin.grantRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_) _rolesAdmin.grantRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
-        _setState(_timelock, active_, true);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin);
+        _grantFixtureRole(emergency_ ? EMERGENCY_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantFixtureRole(emergency_ ? ADMIN_ROLE : EMERGENCY_ROLE, caller_);
+        _setPolicyLifecycle(_timelock, active_, true);
         bytes32 state = _queueDigest(_pendingId);
         vm.warp(2);
         vm.expectEmit(address(_timelock));
@@ -61,7 +61,7 @@ contract BurnerLoansInventoryConfigTimelockDisableTest is BurnerLoansInventoryCo
         bool active_,
         address caller_
     ) public givenPendingRecovery {
-        _setState(_timelock, active_, false);
+        _setPolicyLifecycle(_timelock, active_, false);
         _expectDisableRejected(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_, "");
     }
 
@@ -72,7 +72,7 @@ contract BurnerLoansInventoryConfigTimelockDisableTest is BurnerLoansInventoryCo
         vm.assume(data_.length > 0 && data_.length <= 256);
         _expectDisableRejected(
             abi.encodeWithSelector(IBurnerLoansErrors.BurnerLoans_InvalidEnablerData.selector),
-            address(this),
+            _fixtureAdmin,
             data_
         );
     }
@@ -98,7 +98,7 @@ contract BurnerLoansInventoryConfigTimelockDisableTest is BurnerLoansInventoryCo
         public
         givenPendingRecovery
     {
-        _setState(_inventory, false, true);
+        _setPolicyLifecycle(_inventory, false, true);
         _disableWithoutReadiness();
     }
 
@@ -107,6 +107,7 @@ contract BurnerLoansInventoryConfigTimelockDisableTest is BurnerLoansInventoryCo
         public
         givenPendingRecovery
     {
+        vm.prank(_fixtureAdmin);
         _inventory.disable("");
         _disableWithoutReadiness();
     }
@@ -125,6 +126,7 @@ contract BurnerLoansInventoryConfigTimelockDisableTest is BurnerLoansInventoryCo
         public
         givenPendingRecovery
     {
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(_inventoryConfigurator);
         _disableWithoutReadiness();
     }
@@ -177,6 +179,7 @@ contract BurnerLoansInventoryConfigTimelockDisableTest is BurnerLoansInventoryCo
     function _disableWithoutReadiness() internal {
         _rejectInventoryReadinessReads();
         bytes32 state = _queueDigest(_pendingId);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         assertFalse(_timelock.isEnabled(), "Broken target cannot prevent pause");
         assertEq(_queueDigest(_pendingId), state, "Pause preserves pending work and key");

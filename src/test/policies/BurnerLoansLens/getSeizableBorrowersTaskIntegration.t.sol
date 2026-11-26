@@ -18,6 +18,8 @@ import {BurnerLoansLensTest} from "./BurnerLoansLensTest.sol";
 // forge-lint: disable-start(literal-instead-of-constant,unsafe-typecast,calls-loop,unused-return)
 
 contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLensTest {
+    address internal _seizerHeart;
+
     function test_givenTaskCheckLimitAboveSettlementLimit_whenExecuted() public {
         BurnerLoansSeizerTask task = _task(500);
         vm.mockCall(
@@ -36,6 +38,7 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
             ),
             uint64(1)
         );
+        vm.prank(_seizerHeart);
         task.execute();
     }
 
@@ -52,6 +55,7 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
             ),
             abi.encode(new address[](0), uint256(3), uint256(0))
         );
+        vm.prank(_seizerHeart);
         task.execute();
         assertEq(
             task.unhealthyAssetCursor(address(_asset)),
@@ -72,6 +76,7 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
         vm.clearMockedCalls();
         vm.warp(_position(_ALICE).maturity);
         _price.setTimestamp(uint48(block.timestamp));
+        vm.prank(_seizerHeart);
         task.execute();
         assertEq(
             task.expiredAssetCursor(address(_asset)),
@@ -103,6 +108,7 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
         );
         vm.mockCall(address(_lens), callData, abi.encode(new address[](0), uint256(0), uint256(0)));
         vm.expectCall(address(_lens), callData, uint64(1));
+        vm.prank(_seizerHeart);
         task.execute();
     }
 
@@ -115,10 +121,13 @@ contract BurnerLoansLensGetSeizableBorrowersTaskIntegrationTest is BurnerLoansLe
             50,
             2_000_000
         );
-        _kernel.executeAction(Actions.ActivatePolicy, address(task));
-        _rolesAdmin.grantRole(HEART_ROLE, address(this));
-        _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(task));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(task));
+        _seizerHeart = makeAddr("seizerHeart");
+        _grantFixtureRole(HEART_ROLE, _seizerHeart);
+        _grantFixtureRole(BURNER_LOANS_SEIZER_ROLE, address(task));
+        vm.prank(_fixtureAdmin);
         task.enable("");
+        vm.prank(_fixtureAdmin);
         task.addAsset(address(_asset));
         return task;
     }

@@ -225,6 +225,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         uint128 amount_,
         uint128 minimum_
     ) public givenOriginationsDisabled {
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetMinimumDeposit(IERC20(address(_asset)), minimum_);
         amount_ = uint128(bound(amount_, minimum_ == 0 ? 1 : minimum_, type(uint128).max));
         _blockPricing();
@@ -236,6 +237,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         uint128 amount_,
         uint128 minimum_
     ) public givenOriginationsDisabled {
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetMinimumDeposit(IERC20(address(_asset)), minimum_);
         amount_ = uint128(bound(amount_, minimum_ == 0 ? 1 : minimum_, type(uint128).max));
         _grantOperator(type(uint48).max);
@@ -255,6 +257,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         for (uint256 i; i < callers.length; ++i) {
             for (uint256 j; j < amounts.length; ++j) {
                 uint256 snapshot = vm.snapshotState();
+                vm.prank(_fixtureAdmin);
                 _depositManager.setAssetMinimumDeposit(IERC20(address(_asset)), amounts[j]);
                 _assertPausedFirstDeposit(callers[i], amounts[j]);
                 assertTrue(vm.revertToState(snapshot), "Restore absent-position seed state");
@@ -288,6 +291,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     }
 
     modifier givenOriginationsDisabled() {
+        vm.prank(_fixtureAdmin);
         _config.setAssetOriginationsEnabled(address(_asset), false);
         _;
     }
@@ -520,6 +524,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     ) public {
         cap_ = uint64(bound(cap_, 0, 10_000e6 - 1));
         amount_ = uint64(bound(amount_, uint256(cap_) + 1, 10_000e6));
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetDepositCap(IERC20(address(_asset)), cap_);
         _expectDepositRevert(
             abi.encodeWithSelector(
@@ -733,7 +738,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-D04.
     function test_givenDepositManagerInactive_whenDeposited_reverts() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_depositManager));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_depositManager));
         _expectDeposit(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -745,6 +750,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-I04.
     function test_givenDepositManagerDisabled_whenDeposited_reverts() public {
+        vm.prank(_fixtureAdmin);
         IEnabler(address(_depositManager)).disable("");
         _expectDeposit(_invalidManager(), 1);
     }
@@ -788,6 +794,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-I07.
     function test_givenCoreDepositPeriodDisabled_whenDeposited_reverts() public {
+        vm.prank(_fixtureAdmin);
         _depositManager.disableAssetPeriod(IERC20(address(_asset)), 1, address(_core));
         _expectDeposit(_invalidManager(), 1);
     }
@@ -801,6 +808,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         uint256 upper = minimum_ - 1;
         if (upper > type(uint128).max) upper = type(uint128).max;
         amount_ = uint128(bound(amount_, 1, upper));
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetMinimumDeposit(IERC20(address(_asset)), minimum_);
         _expectDeposit(
             abi.encodeWithSelector(
@@ -817,6 +825,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     function test_givenExactDepositCapRoom_whenDeposited_thenCapReached(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         _asset.mint(_borrower, amount_);
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetDepositCap(IERC20(address(_asset)), amount_);
         vm.prank(_borrower);
         (uint256 quote, ) = _collateral.previewDepositCollateral(
@@ -1057,8 +1066,8 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         bool coreActive_,
         bool coreEnabled_
     ) public {
-        _setPolicyState(_collateral, false, enabled_);
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_collateral, false, enabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         bytes memory reason = abi.encodeWithSelector(
             IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
             address(_collateral)
@@ -1073,8 +1082,9 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         bool coreActive_,
         bool coreEnabled_
     ) public {
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
-        _setPolicyState(_core, coreActive_, coreEnabled_);
+        _setPolicyLifecycle(_core, coreActive_, coreEnabled_);
         _expectDepositRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_, 1);
         _expectDepositRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector), caller_, 0);
     }
@@ -1086,7 +1096,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         bool enabled_
     ) public {
         vm.assume(!active_ || !enabled_);
-        _setPolicyState(_core, active_, enabled_);
+        _setPolicyLifecycle(_core, active_, enabled_);
         _expectDepositRevert(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -1257,7 +1267,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-A09.
     function test_givenSettlementRoleRevoked_whenDepositing_thenBothPathsReject() public {
-        _rolesAdmin.revokeRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
+        _revokeFixtureRole(BL_COLLATERAL_POLICY_ROLE, address(_collateral));
         _expectDepositRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BL_COLLATERAL_POLICY_ROLE),
             _borrower,
@@ -1296,6 +1306,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     // Scenarios: BLCOL-DEPOSIT-I08.
     function test_givenMinimumDeposit_whenImmediatelyBelowMinimum_reverts(uint128 minimum_) public {
         minimum_ = uint128(bound(minimum_, 2, type(uint128).max));
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetMinimumDeposit(IERC20(address(_asset)), minimum_);
         _expectDepositRevert(
             abi.encodeWithSelector(
@@ -1314,6 +1325,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
         uint128 minimum_
     ) public {
         minimum_ = uint128(bound(minimum_, 1, type(uint128).max));
+        vm.prank(_fixtureAdmin);
         _depositManager.setAssetMinimumDeposit(IERC20(address(_asset)), minimum_);
         _assertDirectDeposit(_borrower, minimum_, 0);
     }
@@ -1346,15 +1358,17 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-L01.
     function test_givenReEnabledAction_whenDeposited_thenOperational() public {
+        vm.prank(_fixtureAdmin);
         _collateral.disable("");
+        vm.prank(_fixtureAdmin);
         _collateral.reEnable();
         _assertDirectDeposit(_borrower, 1, 0);
     }
 
     // Scenarios: BLCOL-DEPOSIT-L01.
     function test_givenReactivatedAction_whenDeposited_thenOperational() public {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_collateral));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_collateral));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_collateral));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_collateral));
         _assertDirectDeposit(_borrower, 1, 0);
     }
 
@@ -1646,6 +1660,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-P23.
     function test_givenDebtAndRiskDisabled_whenDeposited() public givenDebtBearingPosition {
+        vm.prank(_fixtureAdmin);
         _risk.disable("");
         vm.expectCall(address(_risk), bytes(""), uint64(0));
         _assertDirectDeposit(_borrower, 1e6, 2000e6);
@@ -1653,7 +1668,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
 
     // Scenarios: BLCOL-DEPOSIT-P23.
     function test_givenDebtAndRiskInactive_whenDeposited() public givenDebtBearingPosition {
-        _kernel.executeAction(Actions.DeactivatePolicy, address(_risk));
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, address(_risk));
         vm.expectCall(address(_risk), bytes(""), uint64(0));
         _assertDirectDeposit(_borrower, 1e6, 2000e6);
     }
@@ -1661,7 +1676,7 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
     // Scenarios: BLCOL-DEPOSIT-D07.
     function test_givenDebtAndBackingInactive_whenDeposited() public givenDebtBearingPosition {
         address oracle = _risk.backingOracle();
-        _kernel.executeAction(Actions.DeactivatePolicy, oracle);
+        _executeFixtureKernelAction(Actions.DeactivatePolicy, oracle);
         vm.expectCall(oracle, bytes(""), uint64(0));
         _assertDirectDeposit(_borrower, 1e6, 2000e6);
     }
@@ -1700,7 +1715,10 @@ contract BurnerLoansCollateralDepositCollateralTest is BurnerLoansCollateralActi
                 abi.encodeWithSelector(UnexpectedPricingCall.selector)
             );
         else MockBackingOracle(oracle).setEnabled(false);
-        if (originationsDisabled_) _config.setAssetOriginationsEnabled(address(_asset), false);
+        if (originationsDisabled_) {
+            vm.prank(_fixtureAdmin);
+            _config.setAssetOriginationsEnabled(address(_asset), false);
+        }
         if (delegated_) _grantOperator(type(uint48).max);
         _blockPricing();
         _assertDirectDeposit(delegated_ ? _recipient : _borrower, 1e6, 2000e6);

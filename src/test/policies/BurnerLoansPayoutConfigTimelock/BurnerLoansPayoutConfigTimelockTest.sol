@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {Vm} from "@forge-std-1.16.2/Vm.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansPayout} from "src/policies/interfaces/burnerloans/IBurnerLoansPayout.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
@@ -13,7 +12,7 @@ import {StdStorage, stdStorage} from "@forge-std-1.16.2/StdStorage.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Actions, Policy} from "src/Kernel.sol";
+import {Actions} from "src/Kernel.sol";
 import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
 import {BurnerLoansPayoutConfigTimelock} from "src/policies/burnerloans/BurnerLoansPayoutConfigTimelock.sol";
 import {BurnerLoansModularTest} from "src/test/policies/BurnerLoansCore/fixtures/BurnerLoansModularTest.sol";
@@ -24,6 +23,7 @@ abstract contract BurnerLoansPayoutConfigTimelockTest is BurnerLoansModularTest 
     uint64 internal _pendingId;
 
     modifier givenPendingRecovery() {
+        vm.prank(_fixtureAdmin);
         _pendingId = _payoutTimelock.queueRescue(address(_asset), _borrower);
         _;
     }
@@ -31,27 +31,23 @@ abstract contract BurnerLoansPayoutConfigTimelockTest is BurnerLoansModularTest 
     function setUp() public virtual override {
         super.setUp();
         _payoutTimelock = new BurnerLoansPayoutConfigTimelock(_kernel, _payout);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_payoutTimelock));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(_payoutTimelock));
+        vm.prank(_fixtureAdmin);
         _payout.setConfigOperator(address(_payoutTimelock));
+        vm.prank(_fixtureAdmin);
         _payoutTimelock.enable("");
-        _rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
+        _grantFixtureRole(BURNER_LOANS_ADMIN_ROLE, _recipient);
     }
 
     function _grantProposer(address caller_, bool blOnly_, bool overlap_) internal {
-        vm.assume(caller_ != address(0) && caller_ != address(this) && caller_ != _recipient);
-        _rolesAdmin.grantRole(blOnly_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
-        if (overlap_)
-            _rolesAdmin.grantRole(blOnly_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
+        vm.assume(caller_ != address(0) && caller_ != _fixtureAdmin && caller_ != _recipient);
+        _grantFixtureRole(blOnly_ ? BURNER_LOANS_ADMIN_ROLE : ADMIN_ROLE, caller_);
+        if (overlap_) _grantFixtureRole(blOnly_ ? ADMIN_ROLE : BURNER_LOANS_ADMIN_ROLE, caller_);
     }
 
     function _excludeProposers(address caller_) internal view {
         vm.assume(!_roles.hasRole(caller_, ADMIN_ROLE));
         vm.assume(!_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE));
-    }
-
-    function _setState(Policy policy_, bool active_, bool enabled_) internal {
-        if (!enabled_) IEnabler(address(policy_)).disable("");
-        if (!active_) _kernel.executeAction(Actions.DeactivatePolicy, address(policy_));
     }
 
     function _restore(uint256 snapshot_) internal {
@@ -61,8 +57,10 @@ abstract contract BurnerLoansPayoutConfigTimelockTest is BurnerLoansModularTest 
 
     function _distributor() internal returns (RevenueDistributor next) {
         next = new RevenueDistributor(_kernel);
-        _kernel.executeAction(Actions.ActivatePolicy, address(next));
+        _executeFixtureKernelAction(Actions.ActivatePolicy, address(next));
+        vm.prank(_fixtureAdmin);
         next.enable("");
+        vm.prank(_fixtureAdmin);
         _payout.setRevenueDistributor(address(next));
     }
 

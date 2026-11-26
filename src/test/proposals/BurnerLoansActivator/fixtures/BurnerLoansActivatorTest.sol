@@ -33,6 +33,9 @@ import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
 /// @dev Real Burner Loans policies and custody, with a local price module and periodic-task manager.
 abstract contract BurnerLoansActivatorTest is Test {
+    address internal _launchExecutor = makeAddr("launch executor");
+    address internal _launchRolesAdministrator = makeAddr("launch roles administrator");
+    address internal _launchAdmin = makeAddr("launch admin");
     Kernel internal _kernel;
     OlympusRoles internal _roles;
     RolesAdmin internal _rolesAdmin;
@@ -55,6 +58,7 @@ abstract contract BurnerLoansActivatorTest is Test {
     // Fixture setup deploys and activates the finite saved launch graph through trusted helpers.
     // forge-lint: disable-next-item(calls-loop)
     function setUp() public virtual {
+        vm.prank(_launchExecutor);
         _kernel = new Kernel();
         _roles = new OlympusRoles(_kernel);
         _ohm = new MockERC20("OHM", "OHM", 9);
@@ -140,24 +144,26 @@ abstract contract BurnerLoansActivatorTest is Test {
         _graph.backingOracle = address(_oracle);
         _graph.backingOracleTimelock = address(_oracleQueue);
         _activator = new BurnerLoansActivator(_timelock, _graph);
+        vm.prank(_launchRolesAdministrator);
         _rolesAdmin = new RolesAdmin(_kernel);
-        _kernel.executeAction(Actions.InstallModule, address(_roles));
-        _kernel.executeAction(
+        _executeLaunchKernelAction(Actions.InstallModule, address(_roles));
+        _executeLaunchKernelAction(
             Actions.InstallModule,
             address(new OlympusMinter(_kernel, address(_ohm)))
         );
-        _kernel.executeAction(Actions.InstallModule, address(new OlympusTreasury(_kernel)));
-        _kernel.executeAction(Actions.InstallModule, address(_price));
-        _kernel.executeAction(Actions.InstallModule, _graph.floan);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_rolesAdmin));
-        _kernel.executeAction(Actions.ActivatePolicy, _graph.priceConfig);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_oracle));
-        _kernel.executeAction(Actions.ActivatePolicy, address(_oracleQueue));
+        _executeLaunchKernelAction(Actions.InstallModule, address(new OlympusTreasury(_kernel)));
+        _executeLaunchKernelAction(Actions.InstallModule, address(_price));
+        _executeLaunchKernelAction(Actions.InstallModule, _graph.floan);
+        _executeLaunchKernelAction(Actions.ActivatePolicy, address(_rolesAdmin));
+        _executeLaunchKernelAction(Actions.ActivatePolicy, _graph.priceConfig);
+        _executeLaunchKernelAction(Actions.ActivatePolicy, address(_oracle));
+        _executeLaunchKernelAction(Actions.ActivatePolicy, address(_oracleQueue));
         address[] memory targets = _deployer.policies();
         for (uint256 i; i < targets.length; ++i)
-            _kernel.executeAction(Actions.ActivatePolicy, targets[i]);
-        _kernel.executeAction(Actions.ActivatePolicy, address(_heart));
-        _rolesAdmin.grantRole(ADMIN_ROLE, address(this));
+            _executeLaunchKernelAction(Actions.ActivatePolicy, targets[i]);
+        _executeLaunchKernelAction(Actions.ActivatePolicy, address(_heart));
+        vm.startPrank(_launchRolesAdministrator);
+        _rolesAdmin.grantRole(ADMIN_ROLE, _launchAdmin);
         _rolesAdmin.grantRole(ADMIN_ROLE, _timelock);
         _rolesAdmin.grantRole(ADMIN_ROLE, address(_activator));
         _rolesAdmin.grantRole(DEPOSIT_OPERATOR_ROLE, _graph.core);
@@ -167,10 +173,13 @@ abstract contract BurnerLoansActivatorTest is Test {
         _rolesAdmin.grantRole(BL_YIELD_CLAIMER_ROLE, _graph.yieldClaimerTask);
         _rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, _graph.seizerTask);
         _rolesAdmin.grantRole(HEART_ROLE, address(_heart));
+        vm.stopPrank();
+        vm.startPrank(_launchAdmin);
         _heart.enable("");
         // Use the six reviewed mainnet identities and their exact stored selectors.
         for (uint256 i; i < 6; ++i)
             _heart.addPeriodicTaskAtIndex(_reviewedHeartTasks[i], _reviewedSelector(i), i);
+        vm.stopPrank();
         _price.setPrice(address(_ohm), 20e18);
         _price.setPrice(address(_usds), 1e18);
         _price.setPrice(address(_usde), 1e18);
@@ -221,5 +230,10 @@ abstract contract BurnerLoansActivatorTest is Test {
     function _activate() internal {
         vm.prank(_timelock);
         _activator.activate();
+    }
+
+    function _executeLaunchKernelAction(Actions action_, address target_) internal {
+        vm.prank(_launchExecutor);
+        _kernel.executeAction(action_, target_);
     }
 }

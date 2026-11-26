@@ -37,8 +37,9 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         bool blAdmin_,
         bool overlap_
     ) public givenProviderSurplus givenPendingRecovery {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_inventory, true, inventoryEnabled_);
+        _setPolicyLifecycle(_inventory, true, inventoryEnabled_);
         _grantRecoveryAdmin(caller_, blAdmin_, overlap_);
         bytes32 beforeQueue = _queueDigest(_pendingId);
         vm.warp(2);
@@ -66,6 +67,7 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
             !_roles.hasRole(caller_, ADMIN_ROLE) &&
                 !_roles.hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)
         );
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _expectActivationRejected(
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
@@ -80,7 +82,7 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         bool overlap_
     ) public givenPendingRecovery {
         _grantRecoveryAdmin(caller_, blAdmin_, overlap_);
-        _setState(_timelock, false, false);
+        _setPolicyLifecycle(_timelock, false, false);
         _expectActivationRejected(
             abi.encodeWithSelector(
                 IBurnerLoansErrors.BurnerLoans_PolicyNotActive.selector,
@@ -98,7 +100,7 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         bool overlap_
     ) public givenPendingRecovery {
         _grantRecoveryAdmin(caller_, blAdmin_, overlap_);
-        _setState(_timelock, active_, true);
+        _setPolicyLifecycle(_timelock, active_, true);
         _expectActivationRejected(abi.encodeWithSelector(IEnabler.NotDisabled.selector), caller_);
     }
 
@@ -110,8 +112,9 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         bool overlap_
     ) public givenPendingRecovery {
         _grantRecoveryAdmin(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_inventory, false, enabled_);
+        _setPolicyLifecycle(_inventory, false, enabled_);
         _expectActivationRejected(
             abi.encodeWithSelector(
                 PolicyDependency.PolicyDependency_NotActive.selector,
@@ -128,7 +131,9 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         bool overlap_
     ) public givenPendingRecovery {
         _grantRecoveryAdmin(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(_inventoryConfigurator);
         _expectActivationRejected(
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
@@ -143,7 +148,9 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         bool overlap_
     ) public givenPendingRecovery {
         _grantRecoveryAdmin(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureAdmin);
         _inventory.setConfigOperator(address(0));
         _expectActivationRejected(
             abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector),
@@ -158,7 +165,9 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         bool overlap_
     ) public givenPendingRecovery {
         _grantRecoveryAdmin(caller_, blAdmin_, overlap_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
+        vm.prank(_fixtureExecutor);
         Kernel next = new Kernel();
         vm.prank(address(_kernel));
         _inventory.changeKernel(next);
@@ -201,7 +210,7 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
             _kernel,
             _inventory
         );
-        if (active_) _kernel.executeAction(Actions.ActivatePolicy, address(fresh));
+        if (active_) _executeFixtureKernelAction(Actions.ActivatePolicy, address(fresh));
         vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(caller_);
         fresh.reEnable();
@@ -223,7 +232,9 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         last_ = SafeCast.toUint48(bound(last_, 1, uint256(type(uint48).max) - grace_));
         now_ = SafeCast.toUint48(bound(now_, last_, uint256(last_) + grace_));
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(grace_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.warp(now_);
         bytes32 beforeQueue = _queueDigest(_pendingId);
@@ -253,7 +264,9 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         uint48 deadline = last_ + grace_;
         now_ = SafeCast.toUint48(bound(now_, uint256(deadline) + 1, type(uint48).max));
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(grace_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         vm.warp(now_);
         _expectActivationRejected(
@@ -275,8 +288,10 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
         last_ = SafeCast.toUint48(
             bound(last_, uint256(type(uint48).max) - grace_ + 1, type(uint48).max)
         );
+        vm.prank(_fixtureAdmin);
         _timelock.setGracePeriod(grace_);
         vm.warp(last_);
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
         _expectActivationRejected(
             abi.encodeWithSelector(
@@ -517,8 +532,9 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
 
     // Scenarios: BLINCT-REENABLE-D07.
     function test_givenMissingConsumedInterface_whenActivated_reverts(bool enabled_) public {
+        vm.prank(_fixtureAdmin);
         _timelock.disable("");
-        _setState(_inventory, true, enabled_);
+        _setPolicyLifecycle(_inventory, true, enabled_);
         bytes4[3] memory ids = [
             type(IBurnerLoansInventory).interfaceId,
             type(IConfigOperator).interfaceId,
@@ -538,6 +554,7 @@ contract BurnerLoansInventoryConfigTimelockReEnableTest is BurnerLoansInventoryC
                     address(_inventory)
                 )
             );
+            vm.prank(_fixtureAdmin);
             _timelock.reEnable();
             assertFalse(_timelock.isEnabled(), "Incompatible target cannot activate queue");
             vm.mockCall(

@@ -15,25 +15,25 @@ import {BurnerLoansLensTest} from "./BurnerLoansLensTest.sol";
 contract BurnerLoansLensGetPositionTest is BurnerLoansLensTest {
     // Scenarios: BLLENS-POSITION-L01.
     function test_givenActiveEnabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(true, true);
+        _setPolicyLifecycle(_core, true, true);
         _assertPosition(caller_, _ALICE, 0, 0, 0, 0);
     }
 
     // Scenarios: BLLENS-POSITION-L02.
     function test_givenActiveDisabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(true, false);
+        _setPolicyLifecycle(_core, true, false);
         _assertPosition(caller_, _ALICE, 0, 0, 0, 0);
     }
 
     // Scenarios: BLLENS-POSITION-L03.
     function test_givenInactiveEnabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(false, true);
+        _setPolicyLifecycle(_core, false, true);
         _assertPosition(caller_, _ALICE, 0, 0, 0, 0);
     }
 
     // Scenarios: BLLENS-POSITION-L04.
     function test_givenInactiveDisabledCore_whenQueried(address caller_) public {
-        _setCoreLifecycle(false, false);
+        _setPolicyLifecycle(_core, false, false);
         _assertPosition(caller_, _ALICE, 0, 0, 0, 0);
     }
 
@@ -231,6 +231,7 @@ contract BurnerLoansLensGetPositionTest is BurnerLoansLensTest {
         public
         givenDebtBearingPosition
     {
+        vm.prank(_fixtureAdmin);
         _core.disable("");
         assertEq(
             _lens.getPosition(address(_asset), _borrower).depositedCollateral,
