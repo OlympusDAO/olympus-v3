@@ -107,17 +107,17 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
         // Verify cloned ERC20 attributes
         IDepositReceiptToken wrappedTokenContract = IDepositReceiptToken(wrappedToken);
         assertEq(
-            wrappedTokenContract.name(),
+            IERC20(wrappedToken).name(),
             expectedName,
             "Wrapped token name should match expected name"
         );
         assertEq(
-            wrappedTokenContract.symbol(),
+            IERC20(wrappedToken).symbol(),
             expectedSymbol,
             "Wrapped token symbol should match expected symbol"
         );
         assertEq(
-            wrappedTokenContract.decimals(),
+            IERC20(wrappedToken).decimals(),
             asset.decimals(),
             "Wrapped token decimals should match asset decimals"
         );
@@ -548,11 +548,7 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
         // Verify wrapped token has correct decimals
         address wrappedToken = receiptTokenManager.getWrappedToken(tokenId);
         assertNotEq(wrappedToken, address(0), "Wrapped token should exist");
-        assertEq(
-            IDepositReceiptToken(wrappedToken).decimals(),
-            0,
-            "Wrapped token should have 0 decimals"
-        );
+        assertEq(IERC20(wrappedToken).decimals(), 0, "Wrapped token should have 0 decimals");
 
         // Test minting ERC6909 tokens
         uint256 mintAmount = 100; // No decimals, so just use whole number
@@ -570,7 +566,7 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
         receiptTokenManager.mint(OWNER, tokenId, mintAmount, true);
 
         assertEq(
-            IDepositReceiptToken(wrappedToken).balanceOf(OWNER),
+            IERC20(wrappedToken).balanceOf(OWNER),
             mintAmount,
             "Wrapped token balance should match minted amount"
         );

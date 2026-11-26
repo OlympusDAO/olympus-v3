@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.24;
+pragma solidity >=0.8.24;
 
 import {IConfigTimelockBatchQueueHarness} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/IConfigTimelockBatchQueueHarness.sol";
 

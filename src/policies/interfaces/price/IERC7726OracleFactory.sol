@@ -46,12 +46,6 @@ interface IERC7726OracleFactory {
     /// @notice  Thrown when this policy is no longer active in Kernel
     error ERC7726OracleFactory_PolicyNotActive();
 
-    /// @notice  Thrown when module does not support interface
-    ///
-    /// @param   keycode        The keycode of the module
-    /// @param   interfaceId    The interface identifier, as specified in ERC-165
-    error ERC7726OracleFactory_UnsupportedModuleInterface(bytes5 keycode, bytes4 interfaceId);
-
     /// @notice  Thrown when oracle creation is disabled
     error ERC7726OracleFactory_CreationDisabled();
 
@@ -95,6 +89,10 @@ interface IERC7726OracleFactory {
     ///
     /// @param   policy  The invalid price cache policy address
     error ERC7726OracleFactory_InvalidPriceCache(address policy);
+
+    /// @notice The requested contract address is already selected.
+    /// @param policy Unchanged contract address.
+    error ERC7726OracleFactory_UnchangedAddress(address policy);
 
     /// @notice  Thrown when re-enable pair arrays are malformed
     ///

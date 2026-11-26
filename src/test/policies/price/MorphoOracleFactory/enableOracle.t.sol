@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity ^0.8.15;
+import {Actions} from "src/Kernel.sol";
 
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
@@ -244,6 +245,26 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
             .updatedAt;
 
         assertGt(newTimestamp, 0, "Collateral price should be re-cached");
+    }
+
+    // Scenarios: MORPHO-ENABLE-ORACLE-L01.
+    function test_givenInactive_whenAnyCallerChangesFactory_revertsActivityFirst(
+        address caller_,
+        bool enabled_
+    ) public givenFactoryIsEnabled givenOracleIsCreated givenFactoryIsDisabled {
+        if (enabled_) _enableFactory();
+        vm.prank(kernel.executor());
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
+
+        vm.prank(caller_);
+        factory.enableOracle(oracle);
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

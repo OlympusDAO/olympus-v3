@@ -2,6 +2,7 @@ src/test/lib/larping.sol
 src/test/mocks/MockModuleWriter.sol
 src/test/sim/RangeSim.sol
 cache/
+.context/
 # Legacy generated coverage HTML
 coverage/
 docs/

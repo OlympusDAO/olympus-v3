@@ -1,0 +1,84 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusFixedTermLoan",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansCore",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansAuth",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansInventory",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansPayout",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansRisk",
+            "args": {
+                "priceCacheMaxAge": 300
+            }
+        },
+        {
+            "name": "BurnerLoansConfig",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansCollateral",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansDebt",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansSeize",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansLens",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansConfigTimelock",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansRiskConfigTimelock",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansPayoutConfigTimelock",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansInventoryConfigTimelock",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansSeizerTask",
+            "args": {
+                "maxBorrowersToCheck": 100,
+                "maxBorrowersToSeize": 25,
+                "executionGasLimit": 10000000
+            }
+        },
+        {
+            "name": "BurnerLoansYieldClaimerTask",
+            "args": {
+                "executionGasLimit": 1000000
+            }
+        },
+        {
+            "name": "BurnerLoansActivator",
+            "args": {}
+        }
+    ]
+}

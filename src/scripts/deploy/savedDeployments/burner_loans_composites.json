@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "BurnerLoansUniswapV3Adapter",
+            "args": {}
+        },
+        {
+            "name": "BurnerLoansComposites",
+            "args": {}
+        }
+    ]
+}

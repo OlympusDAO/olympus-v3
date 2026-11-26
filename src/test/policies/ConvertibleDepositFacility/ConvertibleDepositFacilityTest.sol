@@ -1,9 +1,10 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
 // solhint-disable custom-errors
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {stdError} from "@forge-std-1.16.2/StdError.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -727,7 +728,7 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     function _expectRevertReserveTokenInsufficientAllowance() internal {
-        vm.expectRevert("TRANSFER_FROM_FAILED");
+        vm.expectRevert(stdError.arithmeticError);
     }
 
     function _expectRevertReceiptTokenInsufficientBalance(

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.27;
 
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 
-contract MockERC20FeeOnTransfer is MockERC20 {
+contract MockERC20FeeOnTransfer is ERC20 {
+    error InvalidFeeRecipient();
     uint256 public constant FEE = 1000; // 10%
     uint256 public constant FEE_DENOMINATOR = 100e2;
 
@@ -13,8 +14,13 @@ contract MockERC20FeeOnTransfer is MockERC20 {
         string memory name,
         string memory symbol,
         address feeRecipient_
-    ) MockERC20(name, symbol, 18) {
+    ) ERC20(name, symbol) {
+        if (feeRecipient_ == address(0)) revert InvalidFeeRecipient();
         FEE_RECIPIENT = feeRecipient_;
+    }
+
+    function mint(address recipient_, uint256 amount_) public {
+        _mint(recipient_, amount_);
     }
 
     function transfer(address to, uint256 value) public override returns (bool) {

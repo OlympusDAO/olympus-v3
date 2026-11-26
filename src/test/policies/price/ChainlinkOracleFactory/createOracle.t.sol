@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity ^0.8.15;
+import {Actions} from "src/Kernel.sol";
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {ChainlinkOracleFactoryTest} from "./ChainlinkOracleFactoryTest.sol";
+// Interfaces
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
-import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+
+// Libraries
+import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+
+// Contracts
+import {ChainlinkOracleFactoryTest} from "./ChainlinkOracleFactoryTest.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 
 contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
     // ========== TESTS ========== //
@@ -460,6 +468,106 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         );
 
         assertEq(IChainlinkOracle(oracle).decimals(), 9, "Oracle decimals should come from cache");
+    }
+
+    function test_whenMaxAgeInUint48Range_thenImmutableMetadataRoundTrips(
+        uint48 maxAge_
+    ) public givenFactoryIsEnabled {
+        _assertImmutableMetadata(maxAge_);
+    }
+
+    function test_whenMaxAgeBoundariesSeeded_thenImmutableMetadataRoundTrips()
+        public
+        givenFactoryIsEnabled
+    {
+        _assertImmutableMetadata(0);
+        _assertImmutableMetadata(1);
+        _assertImmutableMetadata(type(uint48).max);
+    }
+
+    function _assertImmutableMetadata(uint48 maxAge_) private {
+        vm.prank(admin);
+        address created = factory.createOracle(
+            address(baseToken),
+            address(quoteToken),
+            maxAge_,
+            bytes("")
+        );
+        assertEq(
+            IChainlinkOracle(created).maxAge(),
+            maxAge_,
+            "Immutable age round-trips the full uint48 domain"
+        );
+        assertEq(
+            IChainlinkOracle(created).name(),
+            string.concat("BASE/QUOTE CL ", vm.toString(uint256(maxAge_)), "s"),
+            "Immutable age does not overwrite the display name"
+        );
+    }
+
+    function test_givenLongSymbol_whenCreated_thenNameUsesFirstThirtyTwoBytes()
+        public
+        givenFactoryIsEnabled
+    {
+        string memory symbol = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456EXTRA";
+        MockERC20 longToken = new MockERC20("Long symbol", symbol, 18);
+        _setPRICEPrices(address(longToken), 1e18);
+        vm.prank(admin);
+        address created = factory.createOracle(
+            address(longToken),
+            address(quoteToken),
+            1,
+            bytes("")
+        );
+        assertEq(
+            IChainlinkOracle(created).name(),
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",
+            "Display names retain exactly the first 32 bytes"
+        );
+    }
+
+    function test_givenMalformedImmutableAge_whenRead_reverts(uint64 rawAge_) public {
+        rawAge_ = SafeCast.toUint64(
+            bound(rawAge_, uint256(type(uint48).max) + 1, type(uint64).max)
+        );
+        address malformed = ClonesWithImmutableArgs.clone(
+            address(factory.ORACLE_IMPLEMENTATION()),
+            abi.encodePacked(
+                address(factory),
+                address(baseToken),
+                address(quoteToken),
+                uint8(18),
+                rawAge_,
+                bytes32("BOUNDARY")
+            )
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SafeCast.SafeCastOverflowedUintDowncast.selector,
+                uint8(48),
+                uint256(rawAge_)
+            )
+        );
+        IChainlinkOracle(malformed).maxAge();
+    }
+
+    function test_whenMalformedAgeBoundariesSeeded_reverts() public {
+        test_givenMalformedImmutableAge_whenRead_reverts(uint64(type(uint48).max) + 1);
+        test_givenMalformedImmutableAge_whenRead_reverts(type(uint64).max);
+    }
+
+    // Scenarios: CHAINLINK-CREATE-ORACLE-L01.
+    function test_givenInactive_whenAnyCallerChangesFactory_revertsActivityFirst(
+        address caller_,
+        bool enabled_
+    ) public {
+        if (enabled_) _enableFactory();
+        vm.prank(kernel.executor());
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
+
+        vm.prank(caller_);
+        factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

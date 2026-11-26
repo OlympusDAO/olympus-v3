@@ -2,12 +2,18 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity ^0.8.15;
 
-import {Actions} from "src/Kernel.sol";
-import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+// Interfaces
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+
+// Libraries
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+
+// Contracts
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
+import {Actions} from "src/Kernel.sol";
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 
 contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneableTest {
     // ========== TESTS ========== //
@@ -77,7 +83,9 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         _setPRICEPrices(address(quoteToken), QUOTE_PRICE);
         _storePrices();
 
-        vm.expectRevert(bytes("SafeCast: value doesn't fit in an int256"));
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintToInt.selector, overflowPrice)
+        );
         oracle.latestRoundData();
     }
 

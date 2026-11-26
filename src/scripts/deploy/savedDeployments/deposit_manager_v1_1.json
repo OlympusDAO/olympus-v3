@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "DepositManager",
+            "args": {}
+        },
+        {
+            "name": "DepositManagerConfigTimelock",
+            "args": {}
+        }
+    ]
+}

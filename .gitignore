@@ -1,8 +1,9 @@
 /out/
+.context/
 cache/
 .gen-perms/
 .gen_perms.*.sol
-node_modules/
+node_modules
 .pnpm-store/
 .env
 .env.*
@@ -50,7 +51,7 @@ lcov.info
 coverage.log
 genhtml.log
 /solidity-metrics.html
-dependencies/
+dependencies
 
 .idea
 

@@ -8,7 +8,7 @@ import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // Interfaces
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";

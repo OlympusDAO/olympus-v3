@@ -3,7 +3,7 @@
 pragma solidity ^0.8.15;
 
 import {AggregatorV2V3Interface, AggregatorV3Interface, AggregatorInterface} from "src/interfaces/AggregatorV2V3Interface.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";

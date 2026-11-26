@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity ^0.8.15;
+import {Actions} from "src/Kernel.sol";
 
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
@@ -114,6 +115,21 @@ contract ERC7726OracleFactoryDisableOracleTest is ERC7726OracleFactoryTest {
         address oracle = factory.getOracle(DEFAULT_MAX_AGE);
 
         vm.prank(emergency);
+        factory.disableOracle(oracle);
+    }
+
+    // Scenarios: ERC7726-DISABLE-ORACLE-L01.
+    function test_givenInactive_whenAnyCallerChangesFactory_revertsActivityFirst(
+        address caller_,
+        bool enabled_
+    ) public givenFactoryIsEnabled givenOracleIsCreated givenFactoryIsDisabled {
+        if (enabled_) _enableFactory();
+        vm.prank(kernel.executor());
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+        address oracle = factory.getOracle(DEFAULT_MAX_AGE);
+
+        vm.expectRevert(IERC7726OracleFactory.ERC7726OracleFactory_PolicyNotActive.selector);
+        vm.prank(caller_);
         factory.disableOracle(oracle);
     }
 }

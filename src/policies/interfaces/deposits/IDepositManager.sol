@@ -197,8 +197,9 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param asset        The underlying ERC20 asset
     /// @param payer        The address making the repayment
-    /// @param amount       The amount of principal to repay
-    /// @param maxAmount    The maximum amount that can be repaid
+    /// @param amount       The amount of underlying assets to transfer from the payer
+    /// @param maxAmount    The nonzero cap on the calling operator's principal reduction; excess
+    ///                     credited assets remain in that operator's custody namespace
     struct BorrowingRepayParams {
         IERC20 asset;
         address payer;

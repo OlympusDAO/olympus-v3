@@ -7,7 +7,7 @@ import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 import {IOracle} from "src/interfaces/morpho/IOracle.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/utils/introspection/IERC165.sol";
 
 contract MorphoOracleCloneableSupportsInterfaceTest is MorphoOracleCloneableTest {
     // ========== TESTS ========== //
