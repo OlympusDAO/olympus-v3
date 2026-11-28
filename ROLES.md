@@ -12,12 +12,14 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | ChainlinkOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
 | admin | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods, enable/disable contract |
 | admin | ConvertibleDepositFacility | Authorize/deauthorize operators, enable/disable contract |
+| admin | ConvertibleOHMTeller | Set min duration, set min eligible delay, set per-creator mint cap, enable/disable contract |
 | admin | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
 | admin | CoolerTreasuryBorrower | Allows setting parameters on the CoolerTreasuryBorrower |
 | admin | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate, enable/disable contract |
 | admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
-| admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
+| admin | Heart | Reset the heartbeat, enable/disable the contract, set the distributor, set auction rewards |
+| admin | IncentiveDistributorConvertible | Enable/disable contract |
 | admin | LZBridgeAndDelegateConfig | Enable / disable the policy, queue timelocked actions on the bridge stack, rotate the policy's gateway / delegate / facilitator target variables, and change the timelock delay |
 | admin | LZBridgeGateway | Set peers, set enforced options, set whether receiving is enabled, enable / disable the gateway, rescue accidentally-sent assets, and the one-shot `initializeBridgedSupply` bootstrap |
 | admin | LZEndpointDelegate | Enable / disable the policy and call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint |
@@ -43,6 +45,7 @@ This document describes the roles that are used in the Olympus protocol.
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |
 | cd_emissionmanager | ConvertibleDepositAuctioneer | Calls the setAuctionParameters() function |
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
+| convertible_distributor | ConvertibleOHMTeller | Call deploy() and create() to deploy/mint convertible tokens |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
@@ -54,12 +57,14 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | ChainlinkOracleFactory | Allows disable of oracles, disable of new oracle creation, enable/disable the contract |
 | emergency | ConvertibleDepositAuctioneer | Disable the contract |
 | emergency | ConvertibleDepositFacility | Deauthorize operators, disable contract |
+| emergency | ConvertibleOHMTeller | Disable contract |
 | emergency | CoolerLtvOracle | Allows enable/disable on the CoolerLtvOracle |
 | emergency | CoolerTreasuryBorrower | Allows enable/disable on the CoolerTreasuryBorrower |
 | emergency | DepositManager | Disable contract |
 | emergency | DepositRedemptionVault | Deauthorize facilities, disable contract |
 | emergency | EmissionManager | Disable the contract |
 | emergency | Heart | Disable the contract |
+| emergency | IncentiveDistributorConvertible | Disable contract |
 | emergency | LZEndpointDelegate | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency | MorphoOracleFactory | Allows disable of oracles, disable of new oracle creation, disable the contract |
@@ -69,10 +74,12 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
 | heart | ConvertibleDepositFacility | Calls the execute() function |
+| heart | ConvertibleOHMTeller | Calls the execute() function to sweep expired convOHM tokens |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
+| incentive_manager | IncentiveDistributorConvertible | Call endEpoch() to post merkle roots |
 | legacy_migration_admin | V1Migrator | Set the merkle root and rescue tokens |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
 | manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
